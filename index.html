@@ -105,7 +105,7 @@
                 db = await response.json();
             }
         } catch (err) {
-            console.log("Premier démarrage ou fichier championship.json absent. Utilisation d'une base vide.");
+            console.log("Premier démarrage ou fichier championship.json absent. Base vide.");
         }
         initApp();
     }
@@ -135,11 +135,11 @@
             let sortedStandings = [...db.standings];
             sortedStandings.sort((a,b) => b.points - a.points).forEach((p, idx) => {
                 html += `<tr>
-                    <td><b>${idx + 1}</b></td>
-                    <td>${p.name}</td>
-                    <td>${p.points} pts</td>
-                    <td>${p.races}</td>
-                    <td>${p.wins} 🥇</td>
+                    <td><b>\${idx + 1}</b></td>
+                    <td>\${p.name}</td>
+                    <td>\${p.points} pts</td>
+                    <td>\${p.races}</td>
+                    <td>\${p.wins} 🥇</td>
                 </tr>`;
             });
         }
@@ -159,7 +159,7 @@
         comp2.innerHTML = '';
 
         if (db.races && db.races.length > 0) {
-            db.races.forEach(r => raceSel.innerHTML += `<option value="${r.id}">${r.name}</option>`);
+            db.races.forEach(r => raceSel.innerHTML += `<option value="\${r.id}">\${r.name}</option>`);
         } else {
             raceSel.innerHTML = '<option value="">Aucune course disponible</option>';
         }
@@ -167,7 +167,7 @@
         if (db.standings && db.standings.length > 0) {
             let sortedNames = [...db.standings].sort((a,b) => a.name.localeCompare(b.name));
             sortedNames.forEach(p => {
-                const opt = `<option value="${p.name}">${p.name}</option>`;
+                const opt = `<option value="\${p.name}">\${p.name}</option>`;
                 drvSel.innerHTML += opt;
                 comp1.innerHTML += opt;
                 comp2.innerHTML += opt;
@@ -196,15 +196,15 @@
 
         let rows = '';
         race.results.forEach((res, i) => {
-            rows += `<tr><td>${i+1}</td><td>${res.name}</td><td>${res.timeOrGap}</td><td>+${res.ptsEarned}</td></tr>`;
+            rows += `<tr><td>\${i+1}</td><td>\${res.name}</td><td>\${res.timeOrGap}</td><td>+\${res.ptsEarned}</td></tr>`;
         });
 
         document.getElementById('race-details').innerHTML = `
-            <h3>${race.name} — Circuit : ${race.track}</h3>
-            <p><b>Résumé :</b> ${race.summary}</p>
+            <h3>\${race.name} — Circuit : \${race.track}</h3>
+            <p><b>Résumé :</b> \${race.summary}</p>
             <table>
                 <thead><tr><th>Pos</th><th>Pilote</th><th>Temps / Écart</th><th>Points</th></tr></thead>
-                <tbody>${rows}</tbody>
+                <tbody>\${rows}</tbody>
             </table>`;
     }
 
@@ -228,14 +228,14 @@
             <div class="flex-grid"> 
                 <div class="card"> 
                     <h3>Statistiques Globales</h3> 
-                    <p><b>Points totaux :</b> ${stats.points} pts</p> 
-                    <p><b>Courses complétées :</b> ${stats.races}</p> 
-                    <p><b>Victoires :</b> ${stats.wins}</p> 
+                    <p><b>Points totaux :</b> \${stats.points} pts</p> 
+                    <p><b>Courses complétées :</b> \${stats.races}</p> 
+                    <p><b>Victoires :</b> \${stats.wins}</p> 
                 </div> 
                 <div class="card"> 
                     <h3>Analyse automatique</h3> 
-                    <p><b>💪 Point Fort détecté :</b> <span class="badge-good">${goodTrait}</span></p> 
-                    <p><b>⚠️ Point Faible détecté :</b> <span class="badge-bad">${badTrait}</span></p> 
+                    <p><b>💪 Point Fort détecté :</b> <span class="badge-good">\${goodTrait}</span></p> 
+                    <p><b>⚠️ Point Faible détecté :</b> <span class="badge-bad">\${badTrait}</span></p> 
                 </div> 
             </div>`;
     }
@@ -258,10 +258,10 @@
 
         const buildBlock = (s) => `
             <div class="card"> 
-                <h3>${s.name}</h3> 
-                <p><b>Points :</b> ${s.points} pts</p> 
-                <p><b>Courses disputées :</b> ${s.races}</p> 
-                <p><b>Victoires :</b> ${s.wins}</p> 
+                <h3>\${s.name}</h3> 
+                <p><b>Points :</b> \${s.points} pts</p> 
+                <p><b>Courses disputées :</b> \${s.races}</p> 
+                <p><b>Victoires :</b> \${s.wins}</p> 
             </div>`;
             
         document.getElementById('comparison-results').innerHTML = buildBlock(s1) + buildBlock(s2);
@@ -285,8 +285,7 @@
                 }
                 
                 let raceResults = [];
-                // Barème F1 standard injecté ici
-                const bareme =;
+                const bareme = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
                 
                 rawResults.forEach((driver, pos) => {
                     const ptsEarned = bareme[pos] || 0;
@@ -318,9 +317,9 @@
                 const nextId = db.races.length + 1;
                 db.races.push({
                     id: nextId,
-                    name: `Manche ${nextId} — ${trackName}`,
+                    name: `Manche \${nextId} — \${trackName}`,
                     track: trackName,
-                    summary: `Course complétée avec ${rawResults.length} pilotes classés au drapeau à damier.`,
+                    summary: `Course complétée avec \${rawResults.length} pilotes classés au drapeau à damier.`,
                     results: raceResults
                 });
                 
@@ -334,7 +333,7 @@
                 
                 if (result.status === "success") {
                     initApp();
-                    alert(`Félicitations ! La course à ${trackName} a été intégrée et sauvegardée de manière permanente !`);
+                    alert(`Félicitations ! La course à \${trackName} a été intégrée et sauvegardée de manière permanente !`);
                 } else {
                     alert("Avertissement : Les données s'affichent temporairement mais le serveur a refusé de les sauvegarder.");
                 }
@@ -347,3 +346,6 @@
     }
     
     window.onload = loadData;
+</script>
+</body>
+</html>
