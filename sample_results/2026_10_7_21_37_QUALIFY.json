@@ -1,0 +1,5211 @@
+{
+  "Version": 7,
+  "Cars": [
+    {
+      "BallastKG": 0,
+      "CarId": 0,
+      "Driver": {
+        "Guid": "76561197968560375",
+        "GuidsList": [
+          "76561197968560375"
+        ],
+        "Name": "pistol",
+        "Nation": "FRA",
+        "Team": "",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "01_Pistol",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 16,
+      "MaxPing": 33
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 1,
+      "Driver": {
+        "Guid": "76561197962251151",
+        "GuidsList": [
+          "76561197962251151"
+        ],
+        "Name": "51R Gilles",
+        "Nation": "FRA",
+        "Team": "51 Racing",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "55_Gilles",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 16,
+      "MaxPing": 19
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 2,
+      "Driver": {
+        "Guid": "76561197973673730",
+        "GuidsList": [
+          "76561197973673730"
+        ],
+        "Name": "Orthopedux",
+        "Nation": "",
+        "Team": "",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "49_Victor Orthopedux",
+      "ClassID": "00000000-0000-0000-0000-000000000000",
+      "ClassColour": "",
+      "MinPing": 0,
+      "MaxPing": 0
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 3,
+      "Driver": {
+        "Guid": "76561198015862674",
+        "GuidsList": [
+          "76561198015862674"
+        ],
+        "Name": "aSSaSSins_strEEt",
+        "Nation": "FRA",
+        "Team": "Ecurie GDSP #2",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "25_Assassins Street",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 16,
+      "MaxPing": 512
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 4,
+      "Driver": {
+        "Guid": "76561198022149307",
+        "GuidsList": [
+          "76561198022149307"
+        ],
+        "Name": "Elouan",
+        "Nation": "",
+        "Team": "Erminig Gwenn",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "27_Elouan",
+      "ClassID": "00000000-0000-0000-0000-000000000000",
+      "ClassColour": "",
+      "MinPing": 0,
+      "MaxPing": 0
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 5,
+      "Driver": {
+        "Guid": "76561197972822145",
+        "GuidsList": [
+          "76561197972822145"
+        ],
+        "Name": "Alan Mc Wrecker",
+        "Nation": "FRA",
+        "Team": "Absolute Loosers",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "84_Alan Mc Wrecker",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 17,
+      "MaxPing": 27
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 6,
+      "Driver": {
+        "Guid": "76561198124771615",
+        "GuidsList": [
+          "76561198124771615"
+        ],
+        "Name": "cheucheu91",
+        "Nation": "",
+        "Team": "Les Bananes Flambées",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "69_Cheucheu91",
+      "ClassID": "00000000-0000-0000-0000-000000000000",
+      "ClassColour": "",
+      "MinPing": 0,
+      "MaxPing": 0
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 7,
+      "Driver": {
+        "Guid": "76561198157550304",
+        "GuidsList": [
+          "76561198157550304"
+        ],
+        "Name": "Pikoupok",
+        "Nation": "PLA",
+        "Team": "Réserviste",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "14_Yohana",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 13,
+      "MaxPing": 23
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 8,
+      "Driver": {
+        "Guid": "76561198148830572",
+        "GuidsList": [
+          "76561198148830572"
+        ],
+        "Name": "SuperSlipos",
+        "Nation": "FRA",
+        "Team": "Les Bananes Flambées",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "42_Superslipos",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 15,
+      "MaxPing": 431
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 9,
+      "Driver": {
+        "Guid": "76561198023166815",
+        "GuidsList": [
+          "76561198023166815"
+        ],
+        "Name": "fmherrou",
+        "Nation": "FRA",
+        "Team": "FK Racing",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "10_Fmherrou",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 13,
+      "MaxPing": 29
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 10,
+      "Driver": {
+        "Guid": "76561197983426917",
+        "GuidsList": [
+          "76561197983426917"
+        ],
+        "Name": "[APR] Christophe",
+        "Nation": "FRA",
+        "Team": "Absolute Loosers",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "23_Christophe Legendre",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 16,
+      "MaxPing": 21
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 11,
+      "Driver": {
+        "Guid": "76561199492825219",
+        "GuidsList": [
+          "76561199492825219"
+        ],
+        "Name": "Yohana.L",
+        "Nation": "",
+        "Team": "Vroom Racing Team",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "14_Yohana",
+      "ClassID": "00000000-0000-0000-0000-000000000000",
+      "ClassColour": "",
+      "MinPing": 0,
+      "MaxPing": 0
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 12,
+      "Driver": {
+        "Guid": "76561199042511252",
+        "GuidsList": [
+          "76561199042511252"
+        ],
+        "Name": "[APR] Pierre",
+        "Nation": "FRA",
+        "Team": "Alpha Performance Racing",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "86_Pierre",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 14,
+      "MaxPing": 21
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 13,
+      "Driver": {
+        "Guid": "76561198133910174",
+        "GuidsList": [
+          "76561198133910174"
+        ],
+        "Name": "Tx3Rony68z",
+        "Nation": "FRA",
+        "Team": "Réserviste #2",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "49_Victor Orthopedux",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 14,
+      "MaxPing": 21
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 14,
+      "Driver": {
+        "Guid": "76561199224754319",
+        "GuidsList": [
+          "76561199224754319"
+        ],
+        "Name": "Richard Rossier",
+        "Nation": "",
+        "Team": "Les Brasseurs de la Mine",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "66_Richard",
+      "ClassID": "00000000-0000-0000-0000-000000000000",
+      "ClassColour": "",
+      "MinPing": 0,
+      "MaxPing": 0
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 15,
+      "Driver": {
+        "Guid": "76561198042197341",
+        "GuidsList": [
+          "76561198042197341"
+        ],
+        "Name": "Neutraliz",
+        "Nation": "FRA",
+        "Team": "Erminig Gwenn",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "77_Neutraliz",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 13,
+      "MaxPing": 23
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 16,
+      "Driver": {
+        "Guid": "76561198078021973",
+        "GuidsList": [
+          "76561198078021973"
+        ],
+        "Name": "Jim ZPLOUCH",
+        "Nation": "FRA",
+        "Team": "Gitane Maïs",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "8_Jim Zplouch",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 16,
+      "MaxPing": 53
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 17,
+      "Driver": {
+        "Guid": "76561198022928394",
+        "GuidsList": [
+          "76561198022928394"
+        ],
+        "Name": "LeNainPosteur",
+        "Nation": "FRA",
+        "Team": "Gitane Maïs",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "11_Le Nain Posteur",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 12,
+      "MaxPing": 53
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 18,
+      "Driver": {
+        "Guid": "76561199162864808",
+        "GuidsList": [
+          "76561199162864808"
+        ],
+        "Name": "Kimy Hoyer",
+        "Nation": "FRA",
+        "Team": "Ecurie GDSP #1",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "7_Kimy",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 13,
+      "MaxPing": 31
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 19,
+      "Driver": {
+        "Guid": "76561198062399161",
+        "GuidsList": [
+          "76561198062399161"
+        ],
+        "Name": "Harrythmetique ",
+        "Nation": "FRA",
+        "Team": "Les Brasseurs de la Mine",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "28_Harrythmetique",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 20,
+      "MaxPing": 63
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 20,
+      "Driver": {
+        "Guid": "76561198033054324",
+        "GuidsList": [
+          "76561198033054324"
+        ],
+        "Name": "Karl74",
+        "Nation": "FRA",
+        "Team": "Fk Racing",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "74_Karl74",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 20,
+      "MaxPing": 27
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 21,
+      "Driver": {
+        "Guid": "76561198023525085",
+        "GuidsList": [
+          "76561198023525085"
+        ],
+        "Name": "kant-1",
+        "Nation": "PLA",
+        "Team": "Ecurie GDSP #1",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "88_kant-1",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 11,
+      "MaxPing": 33
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 22,
+      "Driver": {
+        "Guid": "76561198137168868",
+        "GuidsList": [
+          "76561198137168868"
+        ],
+        "Name": "[APR] Alexou33",
+        "Nation": "FRA",
+        "Team": "Alpha Performance Racing",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "33_Alexou",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 14,
+      "MaxPing": 17
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 23,
+      "Driver": {
+        "Guid": "76561198091861503",
+        "GuidsList": [
+          "76561198091861503"
+        ],
+        "Name": "51R Sherman",
+        "Nation": "FRA",
+        "Team": "51 Racing",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "56_Sherman",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 18,
+      "MaxPing": 21
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 24,
+      "Driver": {
+        "Guid": "76561199167900834",
+        "GuidsList": [
+          "76561199167900834"
+        ],
+        "Name": "Tofusan",
+        "Nation": "FRA",
+        "Team": "ECURIE GDSP #2",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "21_Tofusan",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 15,
+      "MaxPing": 73
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 25,
+      "Driver": {
+        "Guid": "76561199247959520",
+        "GuidsList": [
+          "76561199247959520"
+        ],
+        "Name": "Thomas PONGE",
+        "Nation": "",
+        "Team": "Online Passion Competition",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "13_Thomas Ponge",
+      "ClassID": "00000000-0000-0000-0000-000000000000",
+      "ClassColour": "",
+      "MinPing": 0,
+      "MaxPing": 0
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 26,
+      "Driver": {
+        "Guid": "76561198910594990",
+        "GuidsList": [
+          "76561198910594990"
+        ],
+        "Name": "Streetbike",
+        "Nation": "FRA",
+        "Team": "Scuderia Tolosa",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "9_Streetbike",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 21,
+      "MaxPing": 56
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 27,
+      "Driver": {
+        "Guid": "76561198870993027",
+        "GuidsList": [
+          "76561198870993027"
+        ],
+        "Name": "Jenkweed",
+        "Nation": "",
+        "Team": "",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "29_Jenkweed",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 45,
+      "MaxPing": 73
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 28,
+      "Driver": {
+        "Guid": "76561198273668543",
+        "GuidsList": [
+          "76561198273668543"
+        ],
+        "Name": "BROADCAST TV - Luc",
+        "Nation": "FRA",
+        "Team": "ALL SIM TV",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "dodge_monaco_police",
+      "Restrictor": 0,
+      "Skin": "Staff Car GDSP",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 19,
+      "MaxPing": 42
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 29,
+      "Driver": {
+        "Guid": "76561198137988519",
+        "GuidsList": [
+          "76561198137988519"
+        ],
+        "Name": "BROADCAST TV - Plonk76",
+        "Nation": "PLA",
+        "Team": "ALL SIM TV",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "dodge_monaco_police",
+      "Restrictor": 0,
+      "Skin": "Staff Car GDSP",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ClassColour": "#5085fa",
+      "MinPing": 9,
+      "MaxPing": 17
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 30,
+      "Driver": {
+        "Guid": "76561199118757986",
+        "GuidsList": [
+          "76561199118757986"
+        ],
+        "Name": "Arthur MAUS #67",
+        "Nation": "",
+        "Team": "Saucisse_Squad",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "31_Arthur Maus",
+      "ClassID": "00000000-0000-0000-0000-000000000000",
+      "ClassColour": "",
+      "MinPing": 0,
+      "MaxPing": 0
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 31,
+      "Driver": {
+        "Guid": "76561199485564734",
+        "GuidsList": [
+          "76561199485564734"
+        ],
+        "Name": "Erwann la banane",
+        "Nation": "",
+        "Team": "Saucisse-Squad",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "Model": "actk_lola_t290",
+      "Restrictor": 0,
+      "Skin": "30_Erwann La Banane",
+      "ClassID": "00000000-0000-0000-0000-000000000000",
+      "ClassColour": "",
+      "MinPing": 0,
+      "MaxPing": 0
+    }
+  ],
+  "Events": [
+    {
+      "CarId": 24,
+      "Driver": {
+        "Guid": "76561199167900834",
+        "GuidsList": [
+          "76561199167900834"
+        ],
+        "Name": "Tofusan",
+        "Nation": "FRA",
+        "Team": "ECURIE GDSP #2",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "ImpactSpeed": 5.016507,
+      "OtherCarId": 0,
+      "OtherDriver": {
+        "Guid": "",
+        "GuidsList": null,
+        "Name": "",
+        "Nation": "",
+        "Team": "",
+        "ClassID": "00000000-0000-0000-0000-000000000000"
+      },
+      "RelPosition": {
+        "X": 0.90498424,
+        "Y": -0.25326228,
+        "Z": -0.68254286
+      },
+      "Type": "COLLISION_WITH_ENV",
+      "WorldPosition": {
+        "X": 85.5761,
+        "Y": 0.11502309,
+        "Z": 8.052255
+      },
+      "Timestamp": 1791400633,
+      "AfterSessionEnd": false,
+      "ReplayURL": ""
+    },
+    {
+      "CarId": 15,
+      "Driver": {
+        "Guid": "76561198042197341",
+        "GuidsList": [
+          "76561198042197341"
+        ],
+        "Name": "Neutraliz",
+        "Nation": "FRA",
+        "Team": "Erminig Gwenn",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "ImpactSpeed": 17.941938,
+      "OtherCarId": 0,
+      "OtherDriver": {
+        "Guid": "",
+        "GuidsList": null,
+        "Name": "",
+        "Nation": "",
+        "Team": "",
+        "ClassID": "00000000-0000-0000-0000-000000000000"
+      },
+      "RelPosition": {
+        "X": 0.8254608,
+        "Y": -0.02283019,
+        "Z": 1.5747112
+      },
+      "Type": "COLLISION_WITH_ENV",
+      "WorldPosition": {
+        "X": 370.03503,
+        "Y": 0.33572787,
+        "Z": -41.683777
+      },
+      "Timestamp": 1791400812,
+      "AfterSessionEnd": false,
+      "ReplayURL": ""
+    },
+    {
+      "CarId": 23,
+      "Driver": {
+        "Guid": "76561198091861503",
+        "GuidsList": [
+          "76561198091861503"
+        ],
+        "Name": "51R Sherman",
+        "Nation": "FRA",
+        "Team": "51 Racing",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "ImpactSpeed": 4.638131,
+      "OtherCarId": 0,
+      "OtherDriver": {
+        "Guid": "",
+        "GuidsList": null,
+        "Name": "",
+        "Nation": "",
+        "Team": "",
+        "ClassID": "00000000-0000-0000-0000-000000000000"
+      },
+      "RelPosition": {
+        "X": 0.83754957,
+        "Y": -0.016364591,
+        "Z": 1.5498785
+      },
+      "Type": "COLLISION_WITH_ENV",
+      "WorldPosition": {
+        "X": 132.22755,
+        "Y": 0.2689522,
+        "Z": -10.12668
+      },
+      "Timestamp": 1791401176,
+      "AfterSessionEnd": false,
+      "ReplayURL": ""
+    },
+    {
+      "CarId": 19,
+      "Driver": {
+        "Guid": "76561198062399161",
+        "GuidsList": [
+          "76561198062399161"
+        ],
+        "Name": "Harrythmetique ",
+        "Nation": "FRA",
+        "Team": "Les Brasseurs de la Mine",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "ImpactSpeed": 42.979347,
+      "OtherCarId": 0,
+      "OtherDriver": {
+        "Guid": "",
+        "GuidsList": null,
+        "Name": "",
+        "Nation": "",
+        "Team": "",
+        "ClassID": "00000000-0000-0000-0000-000000000000"
+      },
+      "RelPosition": {
+        "X": -0.907043,
+        "Y": -0.2532696,
+        "Z": -0.6635219
+      },
+      "Type": "COLLISION_WITH_ENV",
+      "WorldPosition": {
+        "X": 76.30366,
+        "Y": -0.08404929,
+        "Z": -381.2505
+      },
+      "Timestamp": 1791401230,
+      "AfterSessionEnd": false,
+      "ReplayURL": ""
+    },
+    {
+      "CarId": 27,
+      "Driver": {
+        "Guid": "76561198870993027",
+        "GuidsList": [
+          "76561198870993027"
+        ],
+        "Name": "Jenkweed",
+        "Nation": "",
+        "Team": "",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "ImpactSpeed": 66.62248,
+      "OtherCarId": 0,
+      "OtherDriver": {
+        "Guid": "",
+        "GuidsList": null,
+        "Name": "",
+        "Nation": "",
+        "Team": "",
+        "ClassID": "00000000-0000-0000-0000-000000000000"
+      },
+      "RelPosition": {
+        "X": 0.7405948,
+        "Y": -0.25555062,
+        "Z": 1.8867389
+      },
+      "Type": "COLLISION_WITH_ENV",
+      "WorldPosition": {
+        "X": -513.7637,
+        "Y": 0.019947998,
+        "Z": 102.53495
+      },
+      "Timestamp": 1791401248,
+      "AfterSessionEnd": false,
+      "ReplayURL": ""
+    },
+    {
+      "CarId": 24,
+      "Driver": {
+        "Guid": "76561199167900834",
+        "GuidsList": [
+          "76561199167900834"
+        ],
+        "Name": "Tofusan",
+        "Nation": "FRA",
+        "Team": "ECURIE GDSP #2",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "ImpactSpeed": 4.806515,
+      "OtherCarId": 0,
+      "OtherDriver": {
+        "Guid": "",
+        "GuidsList": null,
+        "Name": "",
+        "Nation": "",
+        "Team": "",
+        "ClassID": "00000000-0000-0000-0000-000000000000"
+      },
+      "RelPosition": {
+        "X": 0.83755034,
+        "Y": -0.016364617,
+        "Z": 1.5498776
+      },
+      "Type": "COLLISION_WITH_ENV",
+      "WorldPosition": {
+        "X": 45.425434,
+        "Y": 0.27244613,
+        "Z": -9.946099
+      },
+      "Timestamp": 1791401448,
+      "AfterSessionEnd": false,
+      "ReplayURL": ""
+    },
+    {
+      "CarId": 5,
+      "Driver": {
+        "Guid": "76561197972822145",
+        "GuidsList": [
+          "76561197972822145"
+        ],
+        "Name": "Alan Mc Wrecker",
+        "Nation": "FRA",
+        "Team": "Absolute Loosers",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "ImpactSpeed": 3.0046234,
+      "OtherCarId": 0,
+      "OtherDriver": {
+        "Guid": "",
+        "GuidsList": null,
+        "Name": "",
+        "Nation": "",
+        "Team": "",
+        "ClassID": "00000000-0000-0000-0000-000000000000"
+      },
+      "RelPosition": {
+        "X": 0.8375553,
+        "Y": -0.016364945,
+        "Z": 1.5498718
+      },
+      "Type": "COLLISION_WITH_ENV",
+      "WorldPosition": {
+        "X": 372.46902,
+        "Y": 0.3014698,
+        "Z": -44.068153
+      },
+      "Timestamp": 1791401549,
+      "AfterSessionEnd": false,
+      "ReplayURL": ""
+    },
+    {
+      "CarId": 16,
+      "Driver": {
+        "Guid": "76561198078021973",
+        "GuidsList": [
+          "76561198078021973"
+        ],
+        "Name": "Jim ZPLOUCH",
+        "Nation": "FRA",
+        "Team": "Gitane Maïs",
+        "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+      },
+      "ImpactSpeed": 11.881624,
+      "OtherCarId": 0,
+      "OtherDriver": {
+        "Guid": "",
+        "GuidsList": null,
+        "Name": "",
+        "Nation": "",
+        "Team": "",
+        "ClassID": "00000000-0000-0000-0000-000000000000"
+      },
+      "RelPosition": {
+        "X": 0.8245281,
+        "Y": -0.022915158,
+        "Z": 1.5748255
+      },
+      "Type": "COLLISION_WITH_ENV",
+      "WorldPosition": {
+        "X": 390.18518,
+        "Y": 0.27638754,
+        "Z": -74.189766
+      },
+      "Timestamp": 1791401786,
+      "AfterSessionEnd": true,
+      "ReplayURL": ""
+    }
+  ],
+  "Laps": [
+    {
+      "BallastKG": 0,
+      "CarId": 3,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198015862674",
+      "DriverName": "aSSaSSins_strEEt",
+      "LapTime": 144451,
+      "Restrictor": 0,
+      "Sectors": [
+        61620,
+        68071,
+        14760
+      ],
+      "Timestamp": 1791400759,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98098016,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 23,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198091861503",
+      "DriverName": "51R Sherman",
+      "LapTime": 154565,
+      "Restrictor": 0,
+      "Sectors": [
+        72409,
+        67414,
+        14742
+      ],
+      "Timestamp": 1791400769,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9810802,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 24,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199167900834",
+      "DriverName": "Tofusan",
+      "LapTime": 155592,
+      "Restrictor": 0,
+      "Sectors": [
+        72999,
+        67819,
+        14774
+      ],
+      "Timestamp": 1791400770,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9811802,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 18,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199162864808",
+      "DriverName": "Kimy Hoyer",
+      "LapTime": 158334,
+      "Restrictor": 0,
+      "Sectors": [
+        74337,
+        69196,
+        14801
+      ],
+      "Timestamp": 1791400773,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9812802,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 22,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198137168868",
+      "DriverName": "[APR] Alexou33",
+      "LapTime": 158879,
+      "Restrictor": 0,
+      "Sectors": [
+        71300,
+        72793,
+        14786
+      ],
+      "Timestamp": 1791400773,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9813802,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 16,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198078021973",
+      "DriverName": "Jim ZPLOUCH",
+      "LapTime": 162656,
+      "Restrictor": 0,
+      "Sectors": [
+        74790,
+        72117,
+        15749
+      ],
+      "Timestamp": 1791400777,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98148024,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 26,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198910594990",
+      "DriverName": "Streetbike",
+      "LapTime": 167599,
+      "Restrictor": 0,
+      "Sectors": [
+        76938,
+        75402,
+        15259
+      ],
+      "Timestamp": 1791400782,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98158026,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 17,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198022928394",
+      "DriverName": "LeNainPosteur",
+      "LapTime": 169596,
+      "Restrictor": 0,
+      "Sectors": [
+        85374,
+        69214,
+        15008
+      ],
+      "Timestamp": 1791400784,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9816803,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 7,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198157550304",
+      "DriverName": "Pikoupok",
+      "LapTime": 173931,
+      "Restrictor": 0,
+      "Sectors": [
+        88250,
+        70466,
+        15215
+      ],
+      "Timestamp": 1791400788,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9817803,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 13,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198133910174",
+      "DriverName": "Tx3Rony68z",
+      "LapTime": 177609,
+      "Restrictor": 0,
+      "Sectors": [
+        91605,
+        70974,
+        15030
+      ],
+      "Timestamp": 1791400792,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9818803,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 19,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198062399161",
+      "DriverName": "Harrythmetique ",
+      "LapTime": 179217,
+      "Restrictor": 0,
+      "Sectors": [
+        92124,
+        71698,
+        15395
+      ],
+      "Timestamp": 1791400794,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9819803,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 10,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197983426917",
+      "DriverName": "[APR] Christophe",
+      "LapTime": 185051,
+      "Restrictor": 0,
+      "Sectors": [
+        96532,
+        73327,
+        15192
+      ],
+      "Timestamp": 1791400799,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98208034,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 15,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 1,
+      "DriverGuid": "76561198042197341",
+      "DriverName": "Neutraliz",
+      "LapTime": 186108,
+      "Restrictor": 0,
+      "Sectors": [
+        97475,
+        73360,
+        15273
+      ],
+      "Timestamp": 1791400800,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98218036,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 1,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 1,
+      "DriverGuid": "76561197962251151",
+      "DriverName": "51R Gilles",
+      "LapTime": 172716,
+      "Restrictor": 0,
+      "Sectors": [
+        77698,
+        79970,
+        15048
+      ],
+      "Timestamp": 1791400806,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9822804,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 12,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199042511252",
+      "DriverName": "[APR] Pierre",
+      "LapTime": 194481,
+      "Restrictor": 0,
+      "Sectors": [
+        98464,
+        81095,
+        14922
+      ],
+      "Timestamp": 1791400809,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9823804,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 0,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197968560375",
+      "DriverName": "pistol",
+      "LapTime": 197506,
+      "Restrictor": 0,
+      "Sectors": [
+        109077,
+        72985,
+        15444
+      ],
+      "Timestamp": 1791400812,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9824804,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 21,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198023525085",
+      "DriverName": "kant-1",
+      "LapTime": 198712,
+      "Restrictor": 0,
+      "Sectors": [
+        115799,
+        68144,
+        14769
+      ],
+      "Timestamp": 1791400813,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9825804,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 27,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 1,
+      "DriverGuid": "76561198870993027",
+      "DriverName": "Jenkweed",
+      "LapTime": 218052,
+      "Restrictor": 0,
+      "Sectors": [
+        117746,
+        85258,
+        15048
+      ],
+      "Timestamp": 1791400832,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98268044,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 5,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197972822145",
+      "DriverName": "Alan Mc Wrecker",
+      "LapTime": 236063,
+      "Restrictor": 0,
+      "Sectors": [
+        151733,
+        69125,
+        15205
+      ],
+      "Timestamp": 1791400850,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98278046,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 3,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198015862674",
+      "DriverName": "aSSaSSins_strEEt",
+      "LapTime": 135725,
+      "Restrictor": 0,
+      "Sectors": [
+        53276,
+        67636,
+        14813
+      ],
+      "Timestamp": 1791400895,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9828805,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 23,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198091861503",
+      "DriverName": "51R Sherman",
+      "LapTime": 133185,
+      "Restrictor": 0,
+      "Sectors": [
+        51239,
+        67276,
+        14670
+      ],
+      "Timestamp": 1791400902,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9829805,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 24,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199167900834",
+      "DriverName": "Tofusan",
+      "LapTime": 134014,
+      "Restrictor": 0,
+      "Sectors": [
+        51686,
+        67545,
+        14783
+      ],
+      "Timestamp": 1791400904,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9830805,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 18,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199162864808",
+      "DriverName": "Kimy Hoyer",
+      "LapTime": 134743,
+      "Restrictor": 0,
+      "Sectors": [
+        52064,
+        67905,
+        14774
+      ],
+      "Timestamp": 1791400907,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9831805,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 22,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198137168868",
+      "DriverName": "[APR] Alexou33",
+      "LapTime": 134746,
+      "Restrictor": 0,
+      "Sectors": [
+        51924,
+        67887,
+        14935
+      ],
+      "Timestamp": 1791400908,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98328054,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 16,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198078021973",
+      "DriverName": "Jim ZPLOUCH",
+      "LapTime": 136177,
+      "Restrictor": 0,
+      "Sectors": [
+        52540,
+        68620,
+        15017
+      ],
+      "Timestamp": 1791400913,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98338056,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 17,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198022928394",
+      "DriverName": "LeNainPosteur",
+      "LapTime": 135859,
+      "Restrictor": 0,
+      "Sectors": [
+        53009,
+        68153,
+        14697
+      ],
+      "Timestamp": 1791400920,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9834806,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 26,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198910594990",
+      "DriverName": "Streetbike",
+      "LapTime": 142692,
+      "Restrictor": 0,
+      "Sectors": [
+        51845,
+        68081,
+        22766
+      ],
+      "Timestamp": 1791400925,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9835806,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 7,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198157550304",
+      "DriverName": "Pikoupok",
+      "LapTime": 139031,
+      "Restrictor": 0,
+      "Sectors": [
+        54004,
+        69835,
+        15192
+      ],
+      "Timestamp": 1791400927,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9836806,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 19,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198062399161",
+      "DriverName": "Harrythmetique ",
+      "LapTime": 134721,
+      "Restrictor": 0,
+      "Sectors": [
+        52083,
+        67837,
+        14801
+      ],
+      "Timestamp": 1791400928,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9837806,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 13,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198133910174",
+      "DriverName": "Tx3Rony68z",
+      "LapTime": 141682,
+      "Restrictor": 0,
+      "Sectors": [
+        51623,
+        74777,
+        15282
+      ],
+      "Timestamp": 1791400934,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98388064,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 15,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198042197341",
+      "DriverName": "Neutraliz",
+      "LapTime": 136966,
+      "Restrictor": 0,
+      "Sectors": [
+        52906,
+        68962,
+        15098
+      ],
+      "Timestamp": 1791400937,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98398066,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 1,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197962251151",
+      "DriverName": "51R Gilles",
+      "LapTime": 136908,
+      "Restrictor": 0,
+      "Sectors": [
+        53091,
+        68931,
+        14886
+      ],
+      "Timestamp": 1791400943,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9840807,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 12,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199042511252",
+      "DriverName": "[APR] Pierre",
+      "LapTime": 136601,
+      "Restrictor": 0,
+      "Sectors": [
+        53765,
+        67937,
+        14899
+      ],
+      "Timestamp": 1791400945,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9841807,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 21,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198023525085",
+      "DriverName": "kant-1",
+      "LapTime": 136148,
+      "Restrictor": 0,
+      "Sectors": [
+        52899,
+        68440,
+        14809
+      ],
+      "Timestamp": 1791400949,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9842807,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 0,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197968560375",
+      "DriverName": "pistol",
+      "LapTime": 139483,
+      "Restrictor": 0,
+      "Sectors": [
+        53906,
+        70471,
+        15106
+      ],
+      "Timestamp": 1791400951,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9843807,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 10,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 1,
+      "DriverGuid": "76561197983426917",
+      "DriverName": "[APR] Christophe",
+      "LapTime": 153462,
+      "Restrictor": 0,
+      "Sectors": [
+        67386,
+        71054,
+        15022
+      ],
+      "Timestamp": 1791400953,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98448074,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 27,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198870993027",
+      "DriverName": "Jenkweed",
+      "LapTime": 139419,
+      "Restrictor": 0,
+      "Sectors": [
+        54476,
+        69940,
+        15003
+      ],
+      "Timestamp": 1791400972,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98458076,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 5,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 1,
+      "DriverGuid": "76561197972822145",
+      "DriverName": "Alan Mc Wrecker",
+      "LapTime": 140106,
+      "Restrictor": 0,
+      "Sectors": [
+        53021,
+        71843,
+        15242
+      ],
+      "Timestamp": 1791400991,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9846808,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 3,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198015862674",
+      "DriverName": "aSSaSSins_strEEt",
+      "LapTime": 134417,
+      "Restrictor": 0,
+      "Sectors": [
+        51775,
+        67864,
+        14778
+      ],
+      "Timestamp": 1791401029,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9847808,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 23,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198091861503",
+      "DriverName": "51R Sherman",
+      "LapTime": 133145,
+      "Restrictor": 0,
+      "Sectors": [
+        51155,
+        67163,
+        14827
+      ],
+      "Timestamp": 1791401035,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9848808,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 24,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199167900834",
+      "DriverName": "Tofusan",
+      "LapTime": 134146,
+      "Restrictor": 0,
+      "Sectors": [
+        51922,
+        67639,
+        14585
+      ],
+      "Timestamp": 1791401038,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9849808,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 22,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198137168868",
+      "DriverName": "[APR] Alexou33",
+      "LapTime": 134285,
+      "Restrictor": 0,
+      "Sectors": [
+        51864,
+        67617,
+        14804
+      ],
+      "Timestamp": 1791401042,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98508084,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 18,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199162864808",
+      "DriverName": "Kimy Hoyer",
+      "LapTime": 135316,
+      "Restrictor": 0,
+      "Sectors": [
+        51953,
+        68418,
+        14945
+      ],
+      "Timestamp": 1791401043,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98518085,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 16,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198078021973",
+      "DriverName": "Jim ZPLOUCH",
+      "LapTime": 136014,
+      "Restrictor": 0,
+      "Sectors": [
+        52637,
+        68500,
+        14877
+      ],
+      "Timestamp": 1791401049,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9852809,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 17,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198022928394",
+      "DriverName": "LeNainPosteur",
+      "LapTime": 136050,
+      "Restrictor": 0,
+      "Sectors": [
+        52611,
+        68539,
+        14900
+      ],
+      "Timestamp": 1791401056,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9853809,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 26,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198910594990",
+      "DriverName": "Streetbike",
+      "LapTime": 134289,
+      "Restrictor": 0,
+      "Sectors": [
+        51866,
+        67469,
+        14954
+      ],
+      "Timestamp": 1791401059,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9854809,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 19,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198062399161",
+      "DriverName": "Harrythmetique ",
+      "LapTime": 134496,
+      "Restrictor": 0,
+      "Sectors": [
+        52258,
+        67518,
+        14720
+      ],
+      "Timestamp": 1791401063,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9855809,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 13,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198133910174",
+      "DriverName": "Tx3Rony68z",
+      "LapTime": 132908,
+      "Restrictor": 0,
+      "Sectors": [
+        51630,
+        66672,
+        14606
+      ],
+      "Timestamp": 1791401067,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98568094,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 15,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198042197341",
+      "DriverName": "Neutraliz",
+      "LapTime": 136067,
+      "Restrictor": 0,
+      "Sectors": [
+        52467,
+        68539,
+        15061
+      ],
+      "Timestamp": 1791401073,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98578095,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 1,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197962251151",
+      "DriverName": "51R Gilles",
+      "LapTime": 136224,
+      "Restrictor": 0,
+      "Sectors": [
+        52645,
+        68472,
+        15107
+      ],
+      "Timestamp": 1791401079,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.985881,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 12,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199042511252",
+      "DriverName": "[APR] Pierre",
+      "LapTime": 135695,
+      "Restrictor": 0,
+      "Sectors": [
+        52941,
+        67968,
+        14786
+      ],
+      "Timestamp": 1791401081,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.985981,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 21,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198023525085",
+      "DriverName": "kant-1",
+      "LapTime": 135079,
+      "Restrictor": 0,
+      "Sectors": [
+        52027,
+        68139,
+        14913
+      ],
+      "Timestamp": 1791401084,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.986081,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 0,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197968560375",
+      "DriverName": "pistol",
+      "LapTime": 138120,
+      "Restrictor": 0,
+      "Sectors": [
+        53519,
+        69328,
+        15273
+      ],
+      "Timestamp": 1791401089,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.986181,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 10,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197983426917",
+      "DriverName": "[APR] Christophe",
+      "LapTime": 137524,
+      "Restrictor": 0,
+      "Sectors": [
+        53801,
+        68896,
+        14827
+      ],
+      "Timestamp": 1791401090,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98628104,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 27,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198870993027",
+      "DriverName": "Jenkweed",
+      "LapTime": 137709,
+      "Restrictor": 0,
+      "Sectors": [
+        53216,
+        69539,
+        14954
+      ],
+      "Timestamp": 1791401110,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98638105,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 5,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197972822145",
+      "DriverName": "Alan Mc Wrecker",
+      "LapTime": 136998,
+      "Restrictor": 0,
+      "Sectors": [
+        53558,
+        68288,
+        15152
+      ],
+      "Timestamp": 1791401128,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9864811,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 3,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198015862674",
+      "DriverName": "aSSaSSins_strEEt",
+      "LapTime": 133567,
+      "Restrictor": 0,
+      "Sectors": [
+        51635,
+        67267,
+        14665
+      ],
+      "Timestamp": 1791401163,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9865811,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 23,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198091861503",
+      "DriverName": "51R Sherman",
+      "LapTime": 132437,
+      "Restrictor": 0,
+      "Sectors": [
+        51068,
+        66722,
+        14647
+      ],
+      "Timestamp": 1791401168,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9866811,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 24,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199167900834",
+      "DriverName": "Tofusan",
+      "LapTime": 134529,
+      "Restrictor": 0,
+      "Sectors": [
+        51728,
+        67996,
+        14805
+      ],
+      "Timestamp": 1791401173,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9867811,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 22,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198137168868",
+      "DriverName": "[APR] Alexou33",
+      "LapTime": 136240,
+      "Restrictor": 0,
+      "Sectors": [
+        53634,
+        67887,
+        14719
+      ],
+      "Timestamp": 1791401178,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98688114,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 18,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199162864808",
+      "DriverName": "Kimy Hoyer",
+      "LapTime": 137539,
+      "Restrictor": 0,
+      "Sectors": [
+        54213,
+        68215,
+        15111
+      ],
+      "Timestamp": 1791401180,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98698115,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 17,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198022928394",
+      "DriverName": "LeNainPosteur",
+      "LapTime": 135603,
+      "Restrictor": 0,
+      "Sectors": [
+        52686,
+        68256,
+        14661
+      ],
+      "Timestamp": 1791401191,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98708117,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 26,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198910594990",
+      "DriverName": "Streetbike",
+      "LapTime": 133802,
+      "Restrictor": 0,
+      "Sectors": [
+        51803,
+        66915,
+        15084
+      ],
+      "Timestamp": 1791401193,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9871812,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 19,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198062399161",
+      "DriverName": "Harrythmetique ",
+      "LapTime": 134302,
+      "Restrictor": 0,
+      "Sectors": [
+        52100,
+        67406,
+        14796
+      ],
+      "Timestamp": 1791401197,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9872812,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 13,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198133910174",
+      "DriverName": "Tx3Rony68z",
+      "LapTime": 132167,
+      "Restrictor": 0,
+      "Sectors": [
+        50920,
+        66573,
+        14674
+      ],
+      "Timestamp": 1791401199,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9873812,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 7,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198157550304",
+      "DriverName": "Pikoupok",
+      "LapTime": 277995,
+      "Restrictor": 0,
+      "Sectors": [
+        194290,
+        68751,
+        14954
+      ],
+      "Timestamp": 1791401205,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98748124,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 15,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198042197341",
+      "DriverName": "Neutraliz",
+      "LapTime": 136213,
+      "Restrictor": 0,
+      "Sectors": [
+        52297,
+        68926,
+        14990
+      ],
+      "Timestamp": 1791401210,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98758125,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 12,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199042511252",
+      "DriverName": "[APR] Pierre",
+      "LapTime": 134642,
+      "Restrictor": 0,
+      "Sectors": [
+        52248,
+        67495,
+        14899
+      ],
+      "Timestamp": 1791401216,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98768127,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 21,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198023525085",
+      "DriverName": "kant-1",
+      "LapTime": 134614,
+      "Restrictor": 0,
+      "Sectors": [
+        52161,
+        67886,
+        14567
+      ],
+      "Timestamp": 1791401219,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9877813,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 5,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197972822145",
+      "DriverName": "Alan Mc Wrecker",
+      "LapTime": 135607,
+      "Restrictor": 0,
+      "Sectors": [
+        52640,
+        67802,
+        15165
+      ],
+      "Timestamp": 1791401263,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9878813,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 3,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198015862674",
+      "DriverName": "aSSaSSins_strEEt",
+      "LapTime": 133341,
+      "Restrictor": 0,
+      "Sectors": [
+        51602,
+        67050,
+        14689
+      ],
+      "Timestamp": 1791401296,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9879813,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 10,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 1,
+      "DriverGuid": "76561197983426917",
+      "DriverName": "[APR] Christophe",
+      "LapTime": 210938,
+      "Restrictor": 0,
+      "Sectors": [
+        127117,
+        68926,
+        14895
+      ],
+      "Timestamp": 1791401301,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98808134,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 24,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199167900834",
+      "DriverName": "Tofusan",
+      "LapTime": 133964,
+      "Restrictor": 0,
+      "Sectors": [
+        51907,
+        67365,
+        14692
+      ],
+      "Timestamp": 1791401307,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98818135,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 1,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 1,
+      "DriverGuid": "76561197962251151",
+      "DriverName": "51R Gilles",
+      "LapTime": 229887,
+      "Restrictor": 0,
+      "Sectors": [
+        147316,
+        67667,
+        14904
+      ],
+      "Timestamp": 1791401309,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98828137,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 22,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198137168868",
+      "DriverName": "[APR] Alexou33",
+      "LapTime": 134097,
+      "Restrictor": 0,
+      "Sectors": [
+        51589,
+        67756,
+        14752
+      ],
+      "Timestamp": 1791401313,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9883814,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 18,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199162864808",
+      "DriverName": "Kimy Hoyer",
+      "LapTime": 134569,
+      "Restrictor": 0,
+      "Sectors": [
+        52395,
+        67585,
+        14589
+      ],
+      "Timestamp": 1791401315,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9884814,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 26,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198910594990",
+      "DriverName": "Streetbike",
+      "LapTime": 133225,
+      "Restrictor": 0,
+      "Sectors": [
+        51649,
+        66951,
+        14625
+      ],
+      "Timestamp": 1791401326,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9885814,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 23,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198091861503",
+      "DriverName": "51R Sherman",
+      "LapTime": 160166,
+      "Restrictor": 0,
+      "Sectors": [
+        78456,
+        67122,
+        14588
+      ],
+      "Timestamp": 1791401328,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98868144,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 19,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198062399161",
+      "DriverName": "Harrythmetique ",
+      "LapTime": 133827,
+      "Restrictor": 0,
+      "Sectors": [
+        51594,
+        67499,
+        14734
+      ],
+      "Timestamp": 1791401331,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98878145,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 17,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198022928394",
+      "DriverName": "LeNainPosteur",
+      "LapTime": 146762,
+      "Restrictor": 0,
+      "Sectors": [
+        55908,
+        70523,
+        20331
+      ],
+      "Timestamp": 1791401338,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98888147,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 13,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198133910174",
+      "DriverName": "Tx3Rony68z",
+      "LapTime": 142562,
+      "Restrictor": 0,
+      "Sectors": [
+        52103,
+        69737,
+        20722
+      ],
+      "Timestamp": 1791401341,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9889815,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 7,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198157550304",
+      "DriverName": "Pikoupok",
+      "LapTime": 137177,
+      "Restrictor": 0,
+      "Sectors": [
+        53163,
+        69151,
+        14863
+      ],
+      "Timestamp": 1791401343,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9890815,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 15,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198042197341",
+      "DriverName": "Neutraliz",
+      "LapTime": 135626,
+      "Restrictor": 0,
+      "Sectors": [
+        52210,
+        68692,
+        14724
+      ],
+      "Timestamp": 1791401345,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9891815,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 12,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199042511252",
+      "DriverName": "[APR] Pierre",
+      "LapTime": 134715,
+      "Restrictor": 0,
+      "Sectors": [
+        52230,
+        67756,
+        14729
+      ],
+      "Timestamp": 1791401350,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98928154,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 21,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198023525085",
+      "DriverName": "kant-1",
+      "LapTime": 133885,
+      "Restrictor": 0,
+      "Sectors": [
+        51575,
+        67518,
+        14792
+      ],
+      "Timestamp": 1791401353,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98938155,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 16,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 1,
+      "DriverGuid": "76561198078021973",
+      "DriverName": "Jim ZPLOUCH",
+      "LapTime": 318028,
+      "Restrictor": 0,
+      "Sectors": [
+        235147,
+        67982,
+        14899
+      ],
+      "Timestamp": 1791401367,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98948157,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 5,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197972822145",
+      "DriverName": "Alan Mc Wrecker",
+      "LapTime": 136230,
+      "Restrictor": 0,
+      "Sectors": [
+        52957,
+        68247,
+        15026
+      ],
+      "Timestamp": 1791401399,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9895816,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 3,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198015862674",
+      "DriverName": "aSSaSSins_strEEt",
+      "LapTime": 134127,
+      "Restrictor": 0,
+      "Sectors": [
+        52222,
+        67239,
+        14666
+      ],
+      "Timestamp": 1791401430,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9896816,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 10,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197983426917",
+      "DriverName": "[APR] Christophe",
+      "LapTime": 137086,
+      "Restrictor": 0,
+      "Sectors": [
+        53152,
+        68891,
+        15043
+      ],
+      "Timestamp": 1791401438,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9897816,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 24,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199167900834",
+      "DriverName": "Tofusan",
+      "LapTime": 133607,
+      "Restrictor": 0,
+      "Sectors": [
+        51581,
+        67357,
+        14669
+      ],
+      "Timestamp": 1791401440,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98988163,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 22,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198137168868",
+      "DriverName": "[APR] Alexou33",
+      "LapTime": 133951,
+      "Restrictor": 0,
+      "Sectors": [
+        51642,
+        67603,
+        14706
+      ],
+      "Timestamp": 1791401447,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.98998165,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 18,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199162864808",
+      "DriverName": "Kimy Hoyer",
+      "LapTime": 133723,
+      "Restrictor": 0,
+      "Sectors": [
+        51702,
+        67419,
+        14602
+      ],
+      "Timestamp": 1791401449,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99008167,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 1,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 2,
+      "DriverGuid": "76561197962251151",
+      "DriverName": "51R Gilles",
+      "LapTime": 145840,
+      "Restrictor": 0,
+      "Sectors": [
+        52254,
+        78542,
+        15044
+      ],
+      "Timestamp": 1791401455,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9901817,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 23,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198091861503",
+      "DriverName": "51R Sherman",
+      "LapTime": 132923,
+      "Restrictor": 0,
+      "Sectors": [
+        51312,
+        67067,
+        14544
+      ],
+      "Timestamp": 1791401461,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9902817,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 9,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198023166815",
+      "DriverName": "fmherrou",
+      "LapTime": 170695,
+      "Restrictor": 0,
+      "Sectors": [
+        87486,
+        68400,
+        14809
+      ],
+      "Timestamp": 1791401465,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": null,
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9903817,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 19,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198062399161",
+      "DriverName": "Harrythmetique ",
+      "LapTime": 143225,
+      "Restrictor": 0,
+      "Sectors": [
+        51839,
+        68135,
+        23251
+      ],
+      "Timestamp": 1791401474,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99048173,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 7,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198157550304",
+      "DriverName": "Pikoupok",
+      "LapTime": 136825,
+      "Restrictor": 0,
+      "Sectors": [
+        53085,
+        68778,
+        14962
+      ],
+      "Timestamp": 1791401479,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99058175,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 15,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198042197341",
+      "DriverName": "Neutraliz",
+      "LapTime": 134795,
+      "Restrictor": 0,
+      "Sectors": [
+        52148,
+        67838,
+        14809
+      ],
+      "Timestamp": 1791401480,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99068177,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 26,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198910594990",
+      "DriverName": "Streetbike",
+      "LapTime": 156390,
+      "Restrictor": 0,
+      "Sectors": [
+        73504,
+        67239,
+        15647
+      ],
+      "Timestamp": 1791401482,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9907818,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 12,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199042511252",
+      "DriverName": "[APR] Pierre",
+      "LapTime": 134653,
+      "Restrictor": 0,
+      "Sectors": [
+        52155,
+        67661,
+        14837
+      ],
+      "Timestamp": 1791401485,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9908818,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 16,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198078021973",
+      "DriverName": "Jim ZPLOUCH",
+      "LapTime": 134843,
+      "Restrictor": 0,
+      "Sectors": [
+        51846,
+        67959,
+        15038
+      ],
+      "Timestamp": 1791401502,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9909818,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 5,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197972822145",
+      "DriverName": "Alan Mc Wrecker",
+      "LapTime": 135436,
+      "Restrictor": 0,
+      "Sectors": [
+        52600,
+        67752,
+        15084
+      ],
+      "Timestamp": 1791401535,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99108183,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 3,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198015862674",
+      "DriverName": "aSSaSSins_strEEt",
+      "LapTime": 133100,
+      "Restrictor": 0,
+      "Sectors": [
+        51313,
+        66996,
+        14791
+      ],
+      "Timestamp": 1791401563,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99118185,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 13,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198133910174",
+      "DriverName": "Tx3Rony68z",
+      "LapTime": 225866,
+      "Restrictor": 0,
+      "Sectors": [
+        142864,
+        68224,
+        14778
+      ],
+      "Timestamp": 1791401567,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99128187,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 10,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197983426917",
+      "DriverName": "[APR] Christophe",
+      "LapTime": 137831,
+      "Restrictor": 0,
+      "Sectors": [
+        53339,
+        69561,
+        14931
+      ],
+      "Timestamp": 1791401576,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9913819,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 22,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198137168868",
+      "DriverName": "[APR] Alexou33",
+      "LapTime": 133359,
+      "Restrictor": 0,
+      "Sectors": [
+        51513,
+        67225,
+        14621
+      ],
+      "Timestamp": 1791401580,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9914819,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 1,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197962251151",
+      "DriverName": "51R Gilles",
+      "LapTime": 134699,
+      "Restrictor": 0,
+      "Sectors": [
+        52305,
+        67599,
+        14795
+      ],
+      "Timestamp": 1791401590,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9915819,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 23,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198091861503",
+      "DriverName": "51R Sherman",
+      "LapTime": 132294,
+      "Restrictor": 0,
+      "Sectors": [
+        51041,
+        66691,
+        14562
+      ],
+      "Timestamp": 1791401593,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99168193,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 9,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198023166815",
+      "DriverName": "fmherrou",
+      "LapTime": 134322,
+      "Restrictor": 0,
+      "Sectors": [
+        51836,
+        67699,
+        14787
+      ],
+      "Timestamp": 1791401599,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99178195,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 26,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198910594990",
+      "DriverName": "Streetbike",
+      "LapTime": 134208,
+      "Restrictor": 0,
+      "Sectors": [
+        51435,
+        68152,
+        14621
+      ],
+      "Timestamp": 1791401617,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99188197,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 15,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198042197341",
+      "DriverName": "Neutraliz",
+      "LapTime": 137666,
+      "Restrictor": 0,
+      "Sectors": [
+        52841,
+        69840,
+        14985
+      ],
+      "Timestamp": 1791401618,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.991982,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 12,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199042511252",
+      "DriverName": "[APR] Pierre",
+      "LapTime": 134583,
+      "Restrictor": 0,
+      "Sectors": [
+        52043,
+        67852,
+        14688
+      ],
+      "Timestamp": 1791401620,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.992082,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 7,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198157550304",
+      "DriverName": "Pikoupok",
+      "LapTime": 142898,
+      "Restrictor": 0,
+      "Sectors": [
+        53583,
+        74074,
+        15241
+      ],
+      "Timestamp": 1791401622,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.992182,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 24,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199167900834",
+      "DriverName": "Tofusan",
+      "LapTime": 189561,
+      "Restrictor": 0,
+      "Sectors": [
+        107543,
+        67330,
+        14688
+      ],
+      "Timestamp": 1791401630,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99228203,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 18,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 1,
+      "DriverGuid": "76561199162864808",
+      "DriverName": "Kimy Hoyer",
+      "LapTime": 182647,
+      "Restrictor": 0,
+      "Sectors": [
+        92616,
+        75442,
+        14589
+      ],
+      "Timestamp": 1791401631,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99238205,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 16,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198078021973",
+      "DriverName": "Jim ZPLOUCH",
+      "LapTime": 135826,
+      "Restrictor": 0,
+      "Sectors": [
+        51851,
+        68958,
+        15017
+      ],
+      "Timestamp": 1791401638,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99248207,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 5,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197972822145",
+      "DriverName": "Alan Mc Wrecker",
+      "LapTime": 136104,
+      "Restrictor": 0,
+      "Sectors": [
+        53069,
+        68027,
+        15008
+      ],
+      "Timestamp": 1791401671,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9925821,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 3,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198015862674",
+      "DriverName": "aSSaSSins_strEEt",
+      "LapTime": 132811,
+      "Restrictor": 0,
+      "Sectors": [
+        51159,
+        67000,
+        14652
+      ],
+      "Timestamp": 1791401696,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9926821,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 13,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198133910174",
+      "DriverName": "Tx3Rony68z",
+      "LapTime": 132199,
+      "Restrictor": 0,
+      "Sectors": [
+        51123,
+        66419,
+        14657
+      ],
+      "Timestamp": 1791401699,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9927821,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 1,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561197962251151",
+      "DriverName": "51R Gilles",
+      "LapTime": 134606,
+      "Restrictor": 0,
+      "Sectors": [
+        51788,
+        67887,
+        14931
+      ],
+      "Timestamp": 1791401724,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99288213,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 23,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198091861503",
+      "DriverName": "51R Sherman",
+      "LapTime": 131894,
+      "Restrictor": 0,
+      "Sectors": [
+        50849,
+        66501,
+        14544
+      ],
+      "Timestamp": 1791401725,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99298215,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 9,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198023166815",
+      "DriverName": "fmherrou",
+      "LapTime": 133208,
+      "Restrictor": 0,
+      "Sectors": [
+        51273,
+        67090,
+        14845
+      ],
+      "Timestamp": 1791401732,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99308217,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 26,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198910594990",
+      "DriverName": "Streetbike",
+      "LapTime": 132876,
+      "Restrictor": 0,
+      "Sectors": [
+        51803,
+        66412,
+        14661
+      ],
+      "Timestamp": 1791401749,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9931822,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 15,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198042197341",
+      "DriverName": "Neutraliz",
+      "LapTime": 135511,
+      "Restrictor": 0,
+      "Sectors": [
+        52351,
+        68126,
+        15034
+      ],
+      "Timestamp": 1791401753,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9932822,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 12,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199042511252",
+      "DriverName": "[APR] Pierre",
+      "LapTime": 134774,
+      "Restrictor": 0,
+      "Sectors": [
+        52325,
+        67599,
+        14850
+      ],
+      "Timestamp": 1791401754,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9933822,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 7,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198157550304",
+      "DriverName": "Pikoupok",
+      "LapTime": 137059,
+      "Restrictor": 0,
+      "Sectors": [
+        53409,
+        68849,
+        14801
+      ],
+      "Timestamp": 1791401759,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99348223,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 24,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199167900834",
+      "DriverName": "Tofusan",
+      "LapTime": 133811,
+      "Restrictor": 0,
+      "Sectors": [
+        51691,
+        67324,
+        14796
+      ],
+      "Timestamp": 1791401764,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99358225,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 18,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561199162864808",
+      "DriverName": "Kimy Hoyer",
+      "LapTime": 133394,
+      "Restrictor": 0,
+      "Sectors": [
+        51368,
+        67455,
+        14571
+      ],
+      "Timestamp": 1791401765,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": true,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.99368227,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    },
+    {
+      "BallastKG": 0,
+      "CarId": 16,
+      "CarModel": "actk_lola_t290",
+      "Cuts": 0,
+      "DriverGuid": "76561198078021973",
+      "DriverName": "Jim ZPLOUCH",
+      "LapTime": 136059,
+      "Restrictor": 0,
+      "Sectors": [
+        52691,
+        68157,
+        15211
+      ],
+      "Timestamp": 1791401774,
+      "Tyre": "V70",
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "ContributedToFastestLap": false,
+      "SpeedTrapHits": [],
+      "Conditions": {
+        "Ambient": 26,
+        "Road": 34,
+        "Grip": 0.9937823,
+        "WindSpeed": 6,
+        "WindDirection": 23,
+        "RainIntensity": 0,
+        "RainWetness": 0,
+        "RainWater": 0
+      }
+    }
+  ],
+  "Result": [
+    {
+      "BallastKG": 0,
+      "BestLap": 131894,
+      "CarId": 23,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198091861503",
+      "DriverName": "51R Sherman",
+      "Restrictor": 0,
+      "TotalTime": 1110688,
+      "NumLaps": 8,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 8
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 132167,
+      "CarId": 13,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198133910174",
+      "DriverName": "Tx3Rony68z",
+      "Restrictor": 0,
+      "TotalTime": 1085036,
+      "NumLaps": 7,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 14
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 132811,
+      "CarId": 3,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198015862674",
+      "DriverName": "aSSaSSins_strEEt",
+      "Restrictor": 0,
+      "TotalTime": 1081592,
+      "NumLaps": 8,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 2
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 132876,
+      "CarId": 26,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198910594990",
+      "DriverName": "Streetbike",
+      "Restrictor": 0,
+      "TotalTime": 1135113,
+      "NumLaps": 8,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 20
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 133208,
+      "CarId": 9,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198023166815",
+      "DriverName": "fmherrou",
+      "Restrictor": 0,
+      "TotalTime": 1118147,
+      "NumLaps": 3,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 27
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 133359,
+      "CarId": 22,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198137168868",
+      "DriverName": "[APR] Alexou33",
+      "Restrictor": 0,
+      "TotalTime": 965568,
+      "NumLaps": 7,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 7
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 133394,
+      "CarId": 18,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561199162864808",
+      "DriverName": "Kimy Hoyer",
+      "Restrictor": 0,
+      "TotalTime": 1150288,
+      "NumLaps": 8,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 6
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 133607,
+      "CarId": 24,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561199167900834",
+      "DriverName": "Tofusan",
+      "Restrictor": 0,
+      "TotalTime": 1149317,
+      "NumLaps": 8,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 19
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 133827,
+      "CarId": 19,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198062399161",
+      "DriverName": "Harrythmetique ",
+      "Restrictor": 0,
+      "TotalTime": 859856,
+      "NumLaps": 6,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 17
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 133885,
+      "CarId": 21,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198023525085",
+      "DriverName": "kant-1",
+      "Restrictor": 0,
+      "TotalTime": 738445,
+      "NumLaps": 5,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 18
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 134583,
+      "CarId": 12,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561199042511252",
+      "DriverName": "[APR] Pierre",
+      "Restrictor": 0,
+      "TotalTime": 1140183,
+      "NumLaps": 8,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 5
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 134606,
+      "CarId": 1,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561197962251151",
+      "DriverName": "51R Gilles",
+      "Restrictor": 0,
+      "TotalTime": 1109988,
+      "NumLaps": 7,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 23
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 134795,
+      "CarId": 15,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198042197341",
+      "DriverName": "Neutraliz",
+      "Restrictor": 0,
+      "TotalTime": 1138993,
+      "NumLaps": 8,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 1
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 134843,
+      "CarId": 16,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198078021973",
+      "DriverName": "Jim ZPLOUCH",
+      "Restrictor": 0,
+      "TotalTime": 1159640,
+      "NumLaps": 7,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 15
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 135436,
+      "CarId": 5,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561197972822145",
+      "DriverName": "Alan Mc Wrecker",
+      "Restrictor": 0,
+      "TotalTime": 1056581,
+      "NumLaps": 7,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 12
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 135603,
+      "CarId": 17,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198022928394",
+      "DriverName": "LeNainPosteur",
+      "Restrictor": 0,
+      "TotalTime": 723904,
+      "NumLaps": 5,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 16
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 136825,
+      "CarId": 7,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198157550304",
+      "DriverName": "Pikoupok",
+      "Restrictor": 0,
+      "TotalTime": 1145013,
+      "NumLaps": 7,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 3
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 137086,
+      "CarId": 10,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561197983426917",
+      "DriverName": "[APR] Christophe",
+      "Restrictor": 0,
+      "TotalTime": 961943,
+      "NumLaps": 6,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 4
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 137709,
+      "CarId": 27,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561198870993027",
+      "DriverName": "Jenkweed",
+      "Restrictor": 0,
+      "TotalTime": 495221,
+      "NumLaps": 3,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 9
+    },
+    {
+      "BallastKG": 0,
+      "BestLap": 138120,
+      "CarId": 0,
+      "CarModel": "actk_lola_t290",
+      "DriverGuid": "76561197968560375",
+      "DriverName": "pistol",
+      "Restrictor": 0,
+      "TotalTime": 475152,
+      "NumLaps": 3,
+      "HasPenalty": false,
+      "PenaltyTime": 0,
+      "LapPenalty": 0,
+      "Disqualified": false,
+      "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854",
+      "GridPosition": 11
+    }
+  ],
+  "Penalties": null,
+  "TrackConfig": "",
+  "TrackName": "sebring_90s",
+  "Type": "QUALIFY",
+  "Date": "2026-10-07T21:37:00+02:00",
+  "SessionFile": "2026_10_7_21_37_QUALIFY",
+  "SessionConfig": {
+    "session_type": 2,
+    "name": "Qualifying",
+    "time": 18,
+    "laps": 0,
+    "is_open": 1,
+    "wait_time": 0,
+    "visibility_mode": 0,
+    "qualifying_type": 0,
+    "qualifying_number_of_laps_to_average": 0,
+    "count_out_lap": false,
+    "disable_push_to_pass": false
+  },
+  "ChampionshipID": "a0f0e152-704f-4957-85b5-802171547049",
+  "RaceWeekendID": "",
+  "EventName": "Sebring - Manche 3 - 1h00"
+}
