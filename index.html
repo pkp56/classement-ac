@@ -38,10 +38,10 @@ ul.traits{margin:0;padding-left:18px}
 <body>
 <header><h1>Assetto Corsa : classement et championnat</h1></header>
 
-<section class="admin" id="admin" hidden>
-  <p style="margin-top:0"><b>Zone organisateur.</b> Ajoutez le fichier <code>.json</code> d’une session de <b>course</b> (les essais et qualifs sont refusés).</p>
+<section class="admin" id="admin">
+  <p style="margin-top:0"><b>Zone organisateur.</b> Ajoutez un ou plusieurs fichiers <code>.json</code> : une session de course, ou l’export complet d’un championnat (seules les courses sont retenues).</p>
   <div class="row" style="justify-content:center;align-items:center">
-    <label class="file-label">Choisir un fichier de course<input type="file" id="file" accept=".json"></label>
+    <label class="file-label">Choisir des fichiers<input type="file" id="file" accept=".json" multiple></label>
     <input type="password" id="admin-key" placeholder="Clé organisateur (si requise)" autocomplete="off">
   </div>
   <p id="admin-msg" role="status" aria-live="polite" style="margin-bottom:0"></p>
@@ -162,11 +162,11 @@ function computeDrivers() {
 }
 
 // ---------- Import d'une course ----------
-function parseRace(data) {
+function parseRace(data, existing) {
   if (data.Type && data.Type !== "RACE") throw new Error("Ce fichier est une session « " + data.Type + " ». Seules les courses (RACE) sont acceptées.");
   if (!Array.isArray(data.Result) || !data.Result.length) throw new Error("Aucun résultat de course dans ce fichier.");
   const sessionFile = data.SessionFile || (data.TrackName + "_" + data.Date);
-  if (db.races.some(r => r.sessionFile === sessionFile)) throw new Error("Cette course est déjà enregistrée.");
+  if (existing.some(r => r.sessionFile === sessionFile)) throw Object.assign(new Error("Cette course est déjà enregistrée."), { duplicate: true });
 
   const maxLaps = Math.max(...data.Result.map(x => x.NumLaps));
   const results = data.Result.map((x, i) => {
@@ -200,7 +200,7 @@ function parseRace(data) {
     });
   }
 
-  const id = Math.max(0, ...db.races.map(r => Number(r.id) || 0)) + 1;
+  const id = Math.max(0, ...existing.map(r => Number(r.id) || 0)) + 1;
   const track = data.TrackName || "Circuit";
   const best = results.filter(r => r.bestLapMs > 0).sort((a, b) => a.bestLapMs - b.bestLapMs)[0];
   const podium = results.slice(0, 3).map(r => r.name);
@@ -211,28 +211,62 @@ function parseRace(data) {
   return { id, sessionFile, name: "Manche " + id + " – " + track, track, date: data.Date || "", summary, results, collisions };
 }
 
+// Une session de course seule, ou un export de championnat qui en contient plusieurs
+function extractSessions(data) {
+  if (Array.isArray(data.Result)) return [data];
+  const out = [];
+  const push = s => { const r = s && s.Results; if (r && r.Type === "RACE" && Array.isArray(r.Result)) out.push(r); };
+  for (const ev of data.Events || []) {
+    [ev.RaceWeekend && ev.RaceWeekend.Sessions, ev.Sessions].forEach(x => {
+      if (Array.isArray(x)) x.forEach(push);
+      else if (x && typeof x === "object") Object.values(x).forEach(push);
+    });
+  }
+  return out.sort((a, b) => String(a.Date).localeCompare(String(b.Date)));
+}
+
 async function save(next, adminKey) {
-  const res = await fetch(SAVE_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...(adminKey ? { "x-admin-key": adminKey } : {}) },
-    body: JSON.stringify(next)
-  });
+  let res;
+  try {
+    res = await fetch(SAVE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(adminKey ? { "x-admin-key": adminKey } : {}) },
+      body: JSON.stringify(next)
+    });
+  } catch (e) { throw new Error("Impossible de joindre le serveur."); }
+  if (res.status === 401 || res.status === 403) throw new Error("Clé organisateur refusée par le serveur.");
+  if (res.status === 404) throw new Error("Le serveur ne connaît pas la route " + SAVE_URL + ".");
+  if (!res.ok) throw new Error("Le serveur a répondu " + res.status + ".");
   const out = await res.json().catch(() => ({}));
-  if (!res.ok || out.status !== "success") throw new Error(out.message || "Le serveur a refusé l’enregistrement.");
+  if (out.status !== "success") throw new Error(out.message || "Le serveur a refusé l’enregistrement.");
 }
 
 async function onFileChosen(e) {
-  const file = e.target.files[0];
-  if (!file) return;
+  const files = [...e.target.files];
+  if (!files.length) return;
   const msg = $("admin-msg");
   msg.className = ""; msg.textContent = "Analyse en cours…";
   try {
-    const race = parseRace(JSON.parse(await file.text()));
-    const next = { races: [...db.races, race] };
+    const existing = [...db.races];
+    let added = 0, skipped = 0;
+    for (const file of files) {
+      const data = JSON.parse(await file.text());
+      const sessions = extractSessions(data);
+      if (!sessions.length) {
+        throw new Error(file.name + " : aucune course trouvée" + (data.Type && data.Type !== "RACE" ? " (session « " + data.Type + " »)" : "") + ".");
+      }
+      for (const s of sessions) {
+        try { existing.push(parseRace(s, existing)); added++; }
+        catch (err) { if (err.duplicate) skipped++; else throw err; }
+      }
+    }
+    if (!added) throw new Error("Aucune nouvelle course : " + skipped + " déjà enregistrée" + plural(skipped, "", "s") + ".");
+    const next = { races: existing };
     await save(next, $("admin-key").value.trim());
-    db = next; // on ne modifie l'écran qu'une fois la sauvegarde acceptée
+    db = next; // l'écran ne change qu'une fois la sauvegarde acceptée
     refresh();
-    msg.className = "ok"; msg.textContent = "Course ajoutée : " + race.name + ".";
+    msg.className = "ok";
+    msg.textContent = added + " course" + plural(added, "", "s") + " ajoutée" + plural(added, "", "s") + (skipped ? ", " + skipped + " déjà présente" + plural(skipped, "", "s") : "") + ".";
   } catch (err) {
     msg.className = "ko";
     msg.textContent = err instanceof SyntaxError ? "Fichier illisible : ce n’est pas un JSON valide." : err.message;
@@ -357,7 +391,6 @@ $("driver-select").addEventListener("change", renderDriver);
 $("cmp1").addEventListener("change", renderCompare);
 $("cmp2").addEventListener("change", renderCompare);
 $("file").addEventListener("change", onFileChosen);
-$("admin").hidden = location.hash !== "#admin"; // zone organisateur : ajouter #admin à l'adresse
 window.addEventListener("load", loadData);
 </script>
 </body>
