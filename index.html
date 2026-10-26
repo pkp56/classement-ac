@@ -43,10 +43,10 @@
 </div>
 
 <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('classement')">Classement</button>
-    <button class="tab-btn" onclick="switchTab('courses')">Résumés Courses</button>
-    <button class="tab-btn" onclick="switchTab('pilotes')">Fiches Pilotes</button>
-    <button class="tab-btn" onclick="switchTab('comparateur')">Comparateur</button>
+    <button id="btn-classement" class="tab-btn active" onclick="switchTab('classement')">Classement</button>
+    <button id="btn-courses" class="tab-btn" onclick="switchTab('courses')">Résumés Courses</button>
+    <button id="btn-pilotes" class="tab-btn" onclick="switchTab('pilotes')">Fiches Pilotes</button>
+    <button id="btn-comparateur" class="tab-btn" onclick="switchTab('comparateur')">Comparateur</button>
 </div>
 
 <!-- SECTION 1 : CLASSEMENT GENERAL -->
@@ -105,7 +105,7 @@
                 db = await response.json();
             }
         } catch (err) {
-            console.log("Premier démarrage ou fichier championship.json pas encore créé. Utilisation d'une base vide.");
+            console.log("Premier démarrage ou fichier championship.json absent. Utilisation d'une base vide.");
         }
         initApp();
     }
@@ -119,10 +119,14 @@
     }
 
     function switchTab(tabId) {
+        // Masquer toutes les sections
         document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+        // Désactiver tous les boutons
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        
+        // Activer la section et le bouton ciblés de façon sécurisée
         document.getElementById(tabId).classList.add('active');
-        if (event && event.currentTarget) event.currentTarget.classList.add('active');
+        document.getElementById('btn-' + tabId).classList.add('active');
     }
 
     // 1. Rendu du Classement Général
@@ -131,7 +135,9 @@
         if (!db.standings || db.standings.length === 0) {
             html = `<tr><td colspan="5" style="text-align:center;">Aucune course enregistrée. Importez un fichier JSON pour commencer !</td></tr>`;
         } else {
-            db.standings.sort((a,b) => b.points - a.points).forEach((p, idx) => {
+            // Copie superficielle du tableau pour trier proprement sans altérer la base
+            let sortedStandings = [...db.standings];
+            sortedStandings.sort((a,b) => b.points - a.points).forEach((p, idx) => {
                 html += `<tr>
                     <td><b>${idx + 1}</b></td>
                     <td>${p.name}</td>
@@ -158,15 +164,23 @@
 
         if (db.races && db.races.length > 0) {
             db.races.forEach(r => raceSel.innerHTML += `<option value="${r.id}">${r.name}</option>`);
+        } else {
+            raceSel.innerHTML = '<option value="">Aucune course disponible</option>';
         }
         
         if (db.standings && db.standings.length > 0) {
-            db.standings.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
+            let sortedNames = [...db.standings].sort((a,b) => a.name.localeCompare(b.name));
+            sortedNames.forEach(p => {
                 const opt = `<option value="${p.name}">${p.name}</option>`;
                 drvSel.innerHTML += opt;
                 comp1.innerHTML += opt;
                 comp2.innerHTML += opt;
             });
+        } else {
+            const noDriverOpt = '<option value="">Aucun pilote disponible</option>';
+            drvSel.innerHTML = noDriverOpt;
+            comp1.innerHTML = noDriverOpt;
+            comp2.innerHTML = noDriverOpt;
         }
         if(comp2.options.length > 1) comp2.selectedIndex = 1;
     }
@@ -174,6 +188,10 @@
     // 2. Rendu des Résumés de Course
     function renderRaceSummary() {
         const id = document.getElementById('race-selector').value;
+        if(!id || !db.races) {
+            document.getElementById('race-details').innerHTML = "<p>Aucune course sélectionnée.</p>";
+            return;
+        }
         const race = db.races.find(r => r.id == id);
         if(!race) {
             document.getElementById('race-details').innerHTML = "<p>Aucune course sélectionnée.</p>";
@@ -197,28 +215,32 @@
     // 3. Rendu des Fiches Pilotes
     function renderDriverProfile() {
         const name = document.getElementById('driver-selector').value;
+        if(!name || !db.standings) {
+            document.getElementById('driver-profile-content').innerHTML = "<p>Veuillez sélectionner un pilote.</p>";
+            return;
+        }
         const stats = db.standings.find(p => p.name === name);
-        if(!name || !stats) {
+        if(!stats) {
             document.getElementById('driver-profile-content').innerHTML = "<p>Veuillez sélectionner un pilote.</p>";
             return;
         }
 
         let goodTrait = stats.wins > 0 ? "Finition (Gagne des courses)" : "Régularité dans les points";
         let badTrait = stats.wins === 0 && stats.points > 50 ? "Vitesse de pointe pour décrocher la victoire" : "Manque d'expérience sur ce championnat";
-
+        
         document.getElementById('driver-profile-content').innerHTML = `
-            <div class="flex-grid">
-                <div class="card">
-                    <h3>Statistiques Globales</h3>
-                    <p><b>Points totaux :</b> ${stats.points} pts</p>
-                    <p><b>Courses complétées :</b> ${stats.races}</p>
-                    <p><b>Victoires :</b> ${stats.wins}</p>
-                </div>
-                <div class="card">
-                    <h3>Analyse automatique</h3>
-                    <p><b>💪 Point Fort détecté :</b> <span class="badge-good">${goodTrait}</span></p>
-                    <p><b>⚠️ Point Faible détecté :</b> <span class="badge-bad">${badTrait}</span></p>
-                </div>
+            <div class="flex-grid"> 
+                <div class="card"> 
+                    <h3>Statistiques Globales</h3> 
+                    <p><b>Points totaux :</b> ${stats.points} pts</p> 
+                    <p><b>Courses complétées :</b> ${stats.races}</p> 
+                    <p><b>Victoires :</b> ${stats.wins}</p> 
+                </div> 
+                <div class="card"> 
+                    <h3>Analyse automatique</h3> 
+                    <p><b>💪 Point Fort détecté :</b> <span class="badge-good">${goodTrait}</span></p> 
+                    <p><b>⚠️ Point Faible détecté :</b> <span class="badge-bad">${badTrait}</span></p> 
+                </div> 
             </div>`;
     }
 
@@ -226,20 +248,26 @@
     function runComparison() {
         const p1 = document.getElementById('compare-1').value;
         const p2 = document.getElementById('compare-2').value;
+        
+        if(!p1 || !p2 || p1 === p2 || !db.standings) {
+            document.getElementById('comparison-results').innerHTML = "Sélectionnez deux pilotes différents pour lancer la comparaison.";
+            return;
+        }
+        
         const s1 = db.standings.find(p => p.name === p1);
         const s2 = db.standings.find(p => p.name === p2);
         
-        if(!s1 || !s2 || p1 === p2) {
-            document.getElementById('comparison-results').innerHTML = "<p>Sélectionnez deux pilotes différents pour lancer la comparaison.</p>";
+        if(!s1 || !s2) {
+            document.getElementById('comparison-results').innerHTML = "Sélectionnez deux pilotes différents pour lancer la comparaison.";
             return;
         }
         
         const buildBlock = (s) => `
-            <div class="card">
-                <h3>${s.name}</h3>
-                <p><b>Points :</b> ${s.points} pts</p>
-                <p><b>Courses disputées :</b> ${s.races}</p>
-                <p><b>Victoires :</b> ${s.wins}</p>
+            <div class="card"> 
+                <h3>${s.name}</h3> 
+                <p><b>Points :</b> ${s.points} pts</p> 
+                <p><b>Courses disputées :</b> ${s.races}</p> 
+                <p><b>Victoires :</b> ${s.wins}</p> 
             </div>`;
             
         document.getElementById('comparison-results').innerHTML = buildBlock(s1) + buildBlock(s2);
@@ -263,14 +291,13 @@
                 }
                 
                 let raceResults = [];
-                // Barème F1 standard (25, 18, 15, 12, 10, 8, 6, 4, 2, 1)
+                // Barème F1 standard
                 const bareme =;
                 
                 rawResults.forEach((driver, pos) => {
                     const ptsEarned = bareme[pos] || 0;
                     const isWin = pos === 0 ? 1 : 0;
                     
-                    // Nettoyage de l'affichage du temps
                     let formattedTime = "Fini";
                     if (driver.TotalTime) {
                         formattedTime = (driver.TotalTime / 1000).toFixed(2) + "s";
@@ -303,7 +330,7 @@
                     results: raceResults
                 });
                 
-                // Envoi de la base mise à jour vers le serveur de Render
+                // Envoi vers le serveur Render
                 const response = await fetch('/api/save-championship', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -327,3 +354,4 @@
     }
     
     window.onload = loadData;
+
