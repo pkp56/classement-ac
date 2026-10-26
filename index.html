@@ -22,6 +22,9 @@
         .badge-good { color: #2ecc71; font-weight: bold; }
         .badge-bad { color: #e74c3c; font-weight: bold; }
         .compare-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; }
+        .admin-zone { background: #222; border: 1px dashed var(--accent); padding: 15px; margin-bottom: 20px; border-radius: 6px; text-align: center; }
+        .file-input { display: none; }
+        .file-label { background: var(--accent); padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; display: inline-block; }
     </style>
 </head>
 <body>
@@ -29,6 +32,15 @@
 <header>
     <h1>🏆 Assetto Corsa — Classement & Championnat</h1>
 </header>
+
+<!-- ZONE ADMINISTRATEUR POUR IMPORTER LE FICHIER ASSETTOHOSTING -->
+<div class="admin-zone">
+    <p style="margin-top:0;">🔧 <b>Zone Organisateur :</b> Glissez le fichier <code>.json</code> d'AssettoHosting pour ajouter une course automatiquement.</p>
+    <label class="file-label">
+        📂 Sélectionner le fichier de course .json
+        <input type="file" id="json-file-picker" class="file-input" accept=".json" onchange="importAssettoJson(this)">
+    </label>
+</div>
 
 <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('classement')">Classement</button>
@@ -79,17 +91,23 @@
 </div>
 
 <script>
-    let db = { standings: [], races: [], driversData: {} };
+    // Structure de données de secours
+    let db = {
+        standings: [],
+        driversData: {},
+        races: []
+    };
 
-    // Chargement des données JSON depuis le dossier data/
+    // Chargement initial
     async function loadData() {
         try {
+            // Tente de charger les données sauvegardées (s'il y en a)
             const response = await fetch('data/championship.json');
             db = await response.json();
-            initApp();
         } catch (err) {
-            document.getElementById('leaderboard-data').innerHTML = `<tr><td colspan="5" style="color:red">Erreur : Le fichier data/championship.json est introuvable ou mal configuré.</td></tr>`;
+            console.log("Premier démarrage ou fichier data/championship.json manquant. Utilisation de données vides.");
         }
+        initApp();
     }
 
     function initApp() {
@@ -104,21 +122,25 @@
         document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(tabId).classList.add('active');
-        event.currentTarget.classList.add('active');
+        if (event) event.currentTarget.classList.add('active');
     }
 
     // 1. Rendu du Classement Général
     function renderLeaderboard() {
         let html = '';
-        db.standings.sort((a,b) => b.points - a.points).forEach((p, idx) => {
-            html += `<tr>
-                <td><b>${idx + 1}</b></td>
-                <td>${p.name}</td>
-                <td>${p.points} pts</td>
-                <td>${p.races}</td>
-                <td>${p.wins} 🥇</td>
-            </tr>`;
-        });
+        if (db.standings.length === 0) {
+            html = `<tr><td colspan="5" style="text-align:center;">Aucune course enregistrée. Importez un fichier JSON pour commencer !</td></tr>`;
+        } else {
+            db.standings.sort((a,b) => b.points - a.points).forEach((p, idx) => {
+                html += `<tr>
+                    <td><b>${idx + 1}</b></td>
+                    <td>${p.name}</td>
+                    <td>${p.points} pts</td>
+                    <td>${p.races}</td>
+                    <td>${p.wins} 🥇</td>
+                </tr>`;
+            });
+        }
         document.getElementById('leaderboard-data').innerHTML = html;
     }
 
@@ -129,21 +151,29 @@
         const comp1 = document.getElementById('compare-1');
         const comp2 = document.getElementById('compare-2');
         
+        raceSel.innerHTML = '';
+        drvSel.innerHTML = '';
+        comp1.innerHTML = '';
+        comp2.innerHTML = '';
+
         db.races.forEach(r => raceSel.innerHTML += `<option value="${r.id}">${r.name}</option>`);
-        db.standings.forEach(p => {
+        db.standings.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
             const opt = `<option value="${p.name}">${p.name}</option>`;
             drvSel.innerHTML += opt;
             comp1.innerHTML += opt;
             comp2.innerHTML += opt;
         });
-        if(comp2.options[1]) comp2.selectedIndex = 1; // Sélectionne le 2e pilote par défaut pour comparer
+        if(comp2.options.length > 1) comp2.selectedIndex = 1;
     }
 
     // 2. Rendu des Résumés de Course
     function renderRaceSummary() {
         const id = document.getElementById('race-selector').value;
         const race = db.races.find(r => r.id == id);
-        if(!race) return;
+        if(!race) {
+            document.getElementById('race-details').innerHTML = "<p>Aucune course sélectionnée.</p>";
+            return;
+        }
 
         let rows = '';
         race.results.forEach((res, i) => {
@@ -152,7 +182,7 @@
 
         document.getElementById('race-details').innerHTML = `
             <h3>${race.name} — Circuit : ${race.track}</h3>
-            <p><b>Résumé :</b> ${race.summary}</p>
+            <p><b>Résumé automatique :</b> ${race.summary}</p>
             <table>
                 <thead><tr><th>Pos</th><th>Pilote</th><th>Temps / Écart</th><th>Points</th></tr></thead>
                 <tbody>${rows}</tbody>
@@ -163,8 +193,14 @@
     function renderDriverProfile() {
         const name = document.getElementById('driver-selector').value;
         const stats = db.standings.find(p => p.name === name);
-        const bio = db.driversData[name] || { good: "Régularité", bad: "Qualifications" };
-        if(!stats) return;
+        if(!name || !stats) {
+            document.getElementById('driver-profile-content').innerHTML = "<p>Veuillez sélectionner un pilote.</p>";
+            return;
+        }
+
+        // Analyse ultra-simple des points forts/faibles calculée automatiquement
+        let goodTrait = stats.wins > 0 ? "Finition (Gagne des courses)" : "Régularité au classement";
+        let badTrait = stats.wins === 0 && stats.points > 50 ? "Manque de vitesse de pointe pour la gagne" : "Doit participer à plus de manches";
 
         document.getElementById('driver-profile-content').innerHTML = `
             <div class="flex-grid">
@@ -175,9 +211,9 @@
                     <p><b>Victoires :</b> ${stats.wins}</p>
                 </div>
                 <div class="card">
-                    <h3>Analyse des Performances</h3>
-                    <p><b>💪 Point Fort :</b> <span class="badge-good">${bio.good}</span></p>
-                    <p><b>⚠️ Point Faible :</b> <span class="badge-bad">${bio.bad}</span></p>
+                    <h3>Analyse automatique</h3>
+                    <p><b>💪 Point Fort détecté :</b> <span class="badge-good">${goodTrait}</span></p>
+                    <p><b>⚠️ Point Faible détecté :</b> <span class="badge-bad">${badTrait}</span></p>
                 </div>
             </div>`;
     }
@@ -185,22 +221,3 @@
     // 4. Comparateur de pilotes
     function runComparison() {
         const p1 = document.getElementById('compare-1').value;
-        const p2 = document.getElementById('compare-2').value;
-        const s1 = db.standings.find(p => p.name === p1);
-        const s2 = db.standings.find(p => p.name === p2);
-        if(!s1 || !s2) return;
-
-        const buildBlock = (s) => `
-            <div class="card">
-                <h3>${s.name}</h3>
-                <p><b>Points :</b> ${s.points} pts</p>
-                <p><b>Courses :</b> ${s.races}</p>
-                <p><b>Victoires :</b> ${s.wins}</p>
-            </div>`;
-        document.getElementById('comparison-results').innerHTML = buildBlock(s1) + buildBlock(s2);
-    }
-
-    window.onload = loadData;
-</script>
-</body>
-</html>
