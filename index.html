@@ -13,7 +13,7 @@
         .tab-btn.active { background: var(--accent); border-color: var(--accent); }
         .content-section { display: none; background: var(--card); padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .content-section.active { display: block; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 25px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
         th { background: rgba(0,0,0,0.2); color: var(--accent); }
         .select-box { background: var(--bg); color: var(--text); padding: 8px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 15px; width: 250px; }
@@ -25,6 +25,7 @@
         .admin-zone { background: #222; border: 1px dashed var(--accent); padding: 15px; margin-bottom: 20px; border-radius: 6px; text-align: center; }
         .file-input { display: none; }
         .file-label { background: var(--accent); padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; display: inline-block; }
+        .badge-collision { background: #e74c3c; color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -35,7 +36,7 @@
 
 <!-- ZONE ADMINISTRATEUR POUR IMPORTER LE FICHIER ASSETTOHOSTING -->
 <div class="admin-zone">
-    <p style="margin-top:0;">🔧 <b>Zone Organisateur :</b> Sélectionnez le fichier <code>.json</code> brut d'Assetto Corsa pour ajouter une course et mettre à jour le serveur.</p>
+    <p style="margin-top:0;">🔧 <b>Zone Organisateur :</b> Sélectionnez le fichier de log <code>.json</code> brut pour ajouter une course avec ses collisions et la sauvegarder.</p>
     <label class="file-label">
         📂 Sélectionner le fichier de course .json
         <input type="file" id="json-file-picker" class="file-input" accept=".json" onchange="importAssettoJson(this)">
@@ -91,16 +92,21 @@
 </div>
 
 <script>
-    let db = { standings: [], driversData: {}, races: [] };
+    var db = {
+        standings: [],
+        driversData: {},
+        races: []
+    };
 
+    // Chargement initial des données enregistrées sur Render
     async function loadData() {
         try {
-            const response = await fetch('data/championship.json');
+            var response = await fetch('data/championship.json');
             if (response.ok) {
                 db = await response.json();
             }
         } catch (err) {
-            console.log("Fichier championship.json absent. Base vide.");
+            console.log("Premier démarrage ou fichier championship.json absent.");
         }
         initApp();
     }
@@ -114,36 +120,38 @@
     }
 
     function switchTab(tabId) {
-        document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.content-section').forEach(function(s) { s.classList.remove('active'); });
+        document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
         document.getElementById(tabId).classList.add('active');
         document.getElementById('btn-' + tabId).classList.add('active');
     }
 
+    // 1. Rendu du Classement Général
     function renderLeaderboard() {
-        let html = '';
+        var html = '';
         if (!db.standings || db.standings.length === 0) {
-            html = `<tr><td colspan="5" style="text-align:center;">Aucune course enregistrée. Importez un fichier JSON pour commencer !</td></tr>`;
+            html = '<tr><td colspan="5" style="text-align:center;">Aucune course enregistrée. Importez un fichier JSON pour commencer !</td></tr>';
         } else {
-            let sortedStandings = [...db.standings];
-            sortedStandings.sort((a,b) => b.points - a.points).forEach((p, idx) => {
-                html += `<tr>
-                    <td><b>\${idx + 1}</b></td>
-                    <td>\${p.name}</td>
-                    <td>\${p.points} pts</td>
-                    <td>\${p.races}</td>
-                    <td>\${p.wins} 🥇</td>
-                </tr>`;
+            var sortedStandings = db.standings.slice().sort(function(a, b) { return b.points - a.points; });
+            sortedStandings.forEach(function(p, idx) {
+                html += '<tr>' +
+                    '<td><b>' + (idx + 1) + '</b></td>' +
+                    '<td>' + p.name + '</td>' +
+                    '<td>' + p.points + ' pts</td>' +
+                    '<td>' + p.races + '</td>' +
+                    '<td>' + p.wins + ' 🥇</td>' +
+                '</tr>';
             });
         }
         document.getElementById('leaderboard-data').innerHTML = html;
     }
 
+    // Remplissage des menus déroulants
     function populateSelectors() {
-        const raceSel = document.getElementById('race-selector');
-        const drvSel = document.getElementById('driver-selector');
-        const comp1 = document.getElementById('compare-1');
-        const comp2 = document.getElementById('compare-2');
+        var raceSel = document.getElementById('race-selector');
+        var drvSel = document.getElementById('driver-selector');
+        var comp1 = document.getElementById('compare-1');
+        var comp2 = document.getElementById('compare-2');
         
         raceSel.innerHTML = '';
         drvSel.innerHTML = '';
@@ -151,221 +159,327 @@
         comp2.innerHTML = '';
 
         if (db.races && db.races.length > 0) {
-            db.races.forEach(r => raceSel.innerHTML += `<option value="\${r.id}">\${r.name}</option>`);
+            db.races.forEach(function(r) { raceSel.innerHTML += '<option value="' + r.id + '">' + r.name + '</option>'; });
         } else {
             raceSel.innerHTML = '<option value="">Aucune course disponible</option>';
         }
         
         if (db.standings && db.standings.length > 0) {
-            let sortedNames = [...db.standings].sort((a,b) => a.name.localeCompare(b.name));
-            sortedNames.forEach(p => {
-                const opt = `<option value="\${p.name}">\${p.name}</option>`;
+            var sortedNames = db.standings.slice().sort(function(a, b) { return a.name.localeCompare(b.name); });
+            sortedNames.forEach(function(p) {
+                var opt = '<option value="' + p.name + '">' + p.name + '</option>';
                 drvSel.innerHTML += opt;
                 comp1.innerHTML += opt;
                 comp2.innerHTML += opt;
             });
         } else {
-            const noDriverOpt = '<option value="">Aucun pilote disponible</option>';
+            var noDriverOpt = '<option value="">Aucun pilote disponible</option>';
             drvSel.innerHTML = noDriverOpt;
             comp1.innerHTML = noDriverOpt;
             comp2.innerHTML = noDriverOpt;
         }
-        if(comp2.options.length > 1) comp2.selectedIndex = 1;
+        if (comp2.options.length > 1) comp2.selectedIndex = 1;
     }
 
+    // 2. Rendu des Résumés de Course et des Collisions
     function renderRaceSummary() {
-        const id = document.getElementById('race-selector').value;
-        if(!id || !db.races || db.races.length === 0) {
-            document.getElementById('race-details').innerHTML = "<p>Aucune course sélectionnée.</p>";
+        var id = document.getElementById('race-selector').value;
+        if (!id || !db.races || db.races.length === 0) {
+            document.getElementById('race-details').innerHTML = '<p>Aucune course sélectionnée.</p>';
             return;
         }
-        const race = db.races.find(r => r.id == id);
-        if(!race) {
-            document.getElementById('race-details').innerHTML = "<p>Aucune course sélectionnée.</p>";
+        var race = db.races.find(function(r) { return r.id == id; });
+        if (!race) {
+            document.getElementById('race-details').innerHTML = '<p>Aucune course sélectionnée.</p>';
             return;
         }
 
-        let rows = '';
-        race.results.forEach((res, i) => {
-            rows += `<tr><td>\${i+1}</td><td>\${res.name}</td><td>\${res.timeOrGap}</td><td>+\${res.ptsEarned}</td></tr>`;
+        var rows = '';
+        race.results.forEach(function(res, i) {
+            rows += '<tr><td>' + (i + 1) + '</td><td>' + res.name + '</td><td>' + res.timeOrGap + '</td><td>+' + res.ptsEarned + '</td></tr>';
         });
 
-        document.getElementById('race-details').innerHTML = `
-            <h3>\${race.name} — Circuit : \${race.track}</h3>
-            <p><b>Résumé :</b> \${race.summary}</p>
-            <table>
-                <thead><tr><th>Pos</th><th>Pilote</th><th>Temps / Écart</th><th>Points</th></tr></thead>
-                <tbody>\${rows}</tbody>
-            </table>`;
+        var collisionRows = '';
+        if (race.collisions && race.collisions.length > 0) {
+            race.collisions.forEach(function(c) {
+                collisionRows += '<tr>' +
+                    '<td>' + c.time + '</td>' +
+                    '<td><span class="badge-collision">' + c.type + '</span></td>' +
+                    '<td><b>' + c.driver + '</b></td>' +
+                    '<td>' + c.target + '</td>' +
+                    '<td>' + c.speed + ' km/h</td>' +
+                '</tr>';
+            });
+        } else {
+            collisionRows = '<tr><td colspan="5" style="text-align:center; color:#2ecc71;">🥇 Une course propre ! Aucune collision enregistrée.</td></tr>';
+        }
+
+        document.getElementById('race-details').innerHTML = 
+    // 2. Rendu des Résumés de Course et des Collisions
+    function renderRaceSummary() {
+        var id = document.getElementById('race-selector').value;
+        if (!id || !db.races || db.races.length === 0) {
+            document.getElementById('race-details').innerHTML = '<p>Aucune course sélectionnée.</p>';
+            return;
+        }
+        var race = db.races.find(function(r) { return r.id == id; });
+        if (!race) {
+            document.getElementById('race-details').innerHTML = '<p>Aucune course sélectionnée.</p>';
+            return;
+        }
+
+        var rows = '';
+        race.results.forEach(function(res, i) {
+            rows += '<tr><td>' + (i + 1) + '</td><td>' + res.name + '</td><td>' + res.timeOrGap + '</td><td>+' + res.ptsEarned + '</td></tr>';
+        });
+
+        var collisionRows = '';
+        if (race.collisions && race.collisions.length > 0) {
+            race.collisions.forEach(function(c) {
+                collisionRows += '<tr>' +
+                    '<td>' + c.time + '</td>' +
+                    '<td><span class="badge-collision">' + c.type + '</span></td>' +
+                    '<td><b>' + c.driver + '</b></td>' +
+                    '<td>' + c.target + '</td>' +
+                    '<td>' + c.speed + ' km/h</td>' +
+                '</tr>';
+            });
+        } else {
+            collisionRows = '<tr><td colspan="5" style="text-align:center; color:#2ecc71;">🥇 Une course propre ! Aucune collision enregistrée.</td></tr>';
+        }
+
+        document.getElementById('race-details').innerHTML = 
+            '<h3>' + race.name + ' — Circuit : ' + race.track + '</h3>' +
+            '<p><b>Résumé :</b> ' + race.summary + '</p>' +
+            '<h4>📊 Grille des Résultats</h4>' +
+            '<table>' +
+                '<thead><tr><th>Pos</th><th>Pilote</th><th>Chrono / Écart</th><th>Points</th></tr></thead>' +
+                '<tbody>' + rows + '</tbody>' +
+            '</table>' +
+            '<h4>💥 Rapport détaillé des Collisions</h4>' +
+            '<table>' +
+                '<thead><tr><th>Instant</th><th>Type</th><th>Pilote Impliqué</th><th>Cible / Obstacle</th><th>Vitesse</th></tr></thead>' +
+                '<tbody>' + collisionRows + '</tbody>' +
+            '</table>';
     }
 
+    // 3. Rendu des Fiches Pilotes
     function renderDriverProfile() {
-        const name = document.getElementById('driver-selector').value;
-        if(!name || !db.standings || db.standings.length === 0) {
-            document.getElementById('driver-profile-content').innerHTML = "<p>Veuillez sélectionner un pilote.</p>";
+        var name = document.getElementById('driver-selector').value;
+        if (!name || !db.standings || db.standings.length === 0) {
+            document.getElementById('driver-profile-content').innerHTML = '<p>Veuillez sélectionner un pilote.</p>';
             return;
         }
-        const stats = db.standings.find(p => p.name === name);
-        if(!stats) {
-            document.getElementById('driver-profile-content').innerHTML = "<p>Veuillez sélectionner un pilote.</p>";
+        var stats = db.standings.find(function(p) { return p.name === name; });
+        if (!stats) {
+            document.getElementById('driver-profile-content').innerHTML = '<p>Veuillez sélectionner un pilote.</p>';
             return;
         }
 
-        let goodTrait = stats.wins > 0 ? "Finition (Gagne des courses)" : "Régularité dans les points";
-        let badTrait = stats.wins === 0 && stats.points > 50 ? "Vitesse de pointe pour décrocher la victoire" : "Manque d'expérience sur ce championnat";
+        var goodTrait = stats.wins > 0 ? "Finition (Décroche des victoires)" : "Régularité dans le Top 10";
+        var badTrait = stats.wins === 0 && stats.points > 40 ? "Vitesse de pointe pour la gagne" : "Doit accumuler plus de roulage";
 
-        document.getElementById('driver-profile-content').innerHTML = `
-            <div class="flex-grid"> 
-                <div class="card"> 
-                    <h3>Statistiques Globales</h3> 
-                    <p><b>Points totaux :</b> \${stats.points} pts</p> 
-                    <p><b>Courses complétées :</b> \${stats.races}</p> 
-                    <p><b>Victoires :</b> \${stats.wins}</p> 
-                </div> 
-                <div class="card"> 
-                    <h3>Analyse automatique</h3> 
-                    <p><b>💪 Point Fort détecté :</b> <span class="badge-good">\${goodTrait}</span></p> 
-                    <p><b>⚠️ Point Faible détecté :</b> <span class="badge-bad">\${badTrait}</span></p> 
-                </div> 
-            </div>`;
+        document.getElementById('driver-profile-content').innerHTML = 
+            '<div class="flex-grid">' +
+                '<div class="card">' +
+                    '<h3>Statistiques Globales</h3>' +
+                    '<p><b>Points totaux :</b> ' + stats.points + ' pts</p>' +
+                    '<p><b>Courses complétées :</b> ' + stats.races + '</p>' +
+                    '<p><b>Victoires :</b> ' + stats.wins + '</p>' +
+                '</div>' +
+                '<div class="card">' +
+                    '<h3>Analyse automatique Performance</h3>' +
+                    '<p><b>💪 Point Fort détecté :</b> <span class="badge-good">' + goodTrait + '</span></p>' +
+                    '<p><b>⚠️ Point Faible détecté :</b> <span class="badge-bad">' + badTrait + '</span></p>' +
+                '</div>' +
+            '</div>';
     }
 
+    // 4. Comparateur de pilotes
     function runComparison() {
-        const p1 = document.getElementById('compare-1').value;
-        const p2 = document.getElementById('compare-2').value;
-        if(!p1 || !p2 || p1 === p2 || !db.standings || db.standings.length === 0) {
-            document.getElementById('comparison-results').innerHTML = "<p>Sélectionnez deux pilotes différents pour lancer la comparaison.</p>";
+        var p1 = document.getElementById('compare-1').value;
+        var p2 = document.getElementById('compare-2').value;
+        if (!p1 || !p2 || p1 === p2 || !db.standings || db.standings.length === 0) {
+            document.getElementById('comparison-results').innerHTML = '<p>Sélectionnez deux pilotes différents pour lancer la comparaison.</p>';
             return;
         }
-        const s1 = db.standings.find(p => p.name === p1);
-        const s2 = db.standings.find(p => p.name === p2);
+        var s1 = db.standings.find(function(p) { return p.name === p1; });
+        var s2 = db.standings.find(function(p) { return p.name === p2; });
         
-        if(!s1 || !s2) {
-            document.getElementById('comparison-results').innerHTML = "<p>Sélectionnez deux pilotes différents pour lancer la comparaison.</p>";
+        if (!s1 || !s2) {
+            document.getElementById('comparison-results').innerHTML = '<p>Sélectionnez deux pilotes différents pour lancer la comparaison.</p>';
             return;
         }
 
-        const buildBlock = (s) => `
-            <div class="card"> 
-                <h3>\${s.name}</h3> 
-                <p><b>Points :</b> \${s.points} pts</p> 
-                <p><b>Courses disputées :</b> \${s.races}</p> 
-                <p><b>Victoires :</b> \${s.wins}</p> 
-            </div>`;
+        var buildBlock = function(s) {
+            return '<div class="card">' +
+                '<h3>' + s.name + '</h3>' +
+                '<p><b>Points :</b> ' + s.points + ' pts</p>' +
+                '<p><b>Courses disputées :</b> ' + s.races + '</p>' +
+                '<p><b>Victoires :</b> ' + s.wins + '</p>' +
+            '</div>';
+        };
             
         document.getElementById('comparison-results').innerHTML = buildBlock(s1) + buildBlock(s2);
     }
 
+    // LECTURE ET TRAITEMENT ADAPTATIF DES LOGS BRUTS ASSETTO CORSA
     function importAssettoJson(input) {
-        const file = input.files[0];
+        var file = input.files[0];
         if (!file) return;
         
-        const reader = new FileReader();
+        var reader = new FileReader();
         reader.onload = async function(e) {
             try {
-                const data = JSON.parse(e.target.result);
+                var data = JSON.parse(e.target.result);
                 
-                // Analyse d'un fichier de log brut d'un serveur Assetto Corsa
-                let trackName = "Circuit inconnu";
-                let rawLaps = [];
+                var rawCars = data.Cars || [];
+                var rawLaps = data.Laps || [];
+                var rawEvents = data.Events || [];
                 
-                // Détection de la structure des Laps
-                if (data.Laps && Array.isArray(data.Laps)) {
-                    rawLaps = data.Laps;
-                } else if (data.laps && Array.isArray(data.laps)) {
-                    rawLaps = data.laps;
-                }
+                var driversFound = [];
                 
-                // Extraction du circuit depuis les objets de voiture s'il n'est pas à la racine
-                if (rawLaps.length > 0 && rawLaps[0].CarModel) {
-                    trackName = rawLaps[0].CarModel.replace('actk_', '').toUpperCase();
-                }
-                
-                if (rawLaps.length === 0) {
-                    alert("Erreur : Impossible de trouver le tableau des temps ('Laps') dans ce fichier log.");
-                    return;
-                }
-                
-                // Extraire le meilleur temps de chaque pilote unique pour simuler les positions finales
-                let bestLapsMap = {};
-                rawLaps.forEach(lap => {
-                    const name = lap.DriverName || lap.driverName;
-                    const time = lap.LapTime || lap.lapTime;
-                    if (name && time > 0) {
-                        if (!bestLapsMap[name] || time < bestLapsMap[name]) {
-                            bestLapsMap[name] = time;
-                        }
+                // Extraction des pilotes uniques depuis les tours de piste
+                rawLaps.forEach(function(lap) {
+                    if (lap.DriverName && driversFound.indexOf(lap.DriverName) === -1) {
+                        driversFound.push(lap.DriverName);
                     }
                 });
-                
-                // Créer le classement de la course (le plus rapide gagne)
-                let raceLeaderboard = Object.keys(bestLapsMap).map(name => {
-                    return { name: name, bestTime: bestLapsMap[name] };
-                }).sort((a, b) => a.bestTime - b.bestTime);
-                
-                let raceResults = [];
-                const bareme = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
-                
-                raceLeaderboard.forEach((driver, pos) => {
-                    const ptsEarned = bareme[pos] || 0;
-                    const isWin = pos === 0 ? 1 : 0;
-                    
-                    // Conversion du temps au format MM:SS.mmm
-                    const totalMs = driver.bestTime;
-                    const mins = Math.floor(totalMs / 60000);
-                    const secs = ((totalMs % 60000) / 1000).toFixed(3);
-                    const formattedTime = `\${mins}:\${secs < 10 ? '0' : ''}\${secs}`;
-                    
-                    raceResults.push({
-                        name: driver.name,
-                        timeOrGap: formattedTime,
-                        ptsEarned: ptsEarned
+
+                // Secours : extraction depuis l'inventaire des voitures
+                if (driversFound.length === 0) {
+                    rawCars.forEach(function(c) {
+                        if (c.Driver && c.Driver.Name && driversFound.indexOf(c.Driver.Name) === -1) {
+                            driversFound.push(c.Driver.Name);
+                        }
+                    });
+                }
+
+                if (driversFound.length === 0) {
+                    alert("Impossible de localiser des sessions ou des pilotes valides dans ce fichier.");
+                    return;
+                }
+
+                // Extraire le meilleur temps de course de chaque pilote
+                var resultsList = [];
+                driversFound.forEach(function(driverName) {
+                    var bestTime = Infinity;
+                    rawLaps.forEach(function(lap) {
+                        if (lap.DriverName === driverName && lap.LapTime < bestTime) {
+                            bestTime = lap.LapTime;
+                        }
                     });
                     
+                    resultsList.push({
+                        name: driverName,
+                        rawTime: bestTime === Infinity ? 9999999 : bestTime
+                    });
+                });
+
+                // Trier pour établir le classement de la manche
+                resultsList.sort(function(a, b) { return a.rawTime - b.rawTime; });
+
+                var bareme =;
+                var processedResults = [];
+
+                resultsList.forEach(function(driver, pos) {
+                    var pts = bareme[pos] || 0;
+                    var isWin = pos === 0 ? 1 : 0;
+                    
+                    var displayTime = "Fini";
+                    if (driver.rawTime !== 9999999) {
+                        var min = Math.floor(driver.rawTime / 60000);
+                        var sec = ((driver.rawTime % 60000) / 1000).toFixed(3);
+                        displayTime = min + ":" + (sec < 10 ? "0" : "") + sec;
+                    }
+
+                    processedResults.push({
+                        name: driver.name,
+                        timeOrGap: displayTime,
+                        ptsEarned: pts
+                    });
+
+                    // Cumuler au classement général de la base
                     if (!db.standings) db.standings = [];
-                    let pGeneral = db.standings.find(p => p.name === driver.name);
+                    var pGeneral = db.standings.find(function(p) { return p.name === driver.name; });
                     if (!pGeneral) {
                         pGeneral = { name: driver.name, points: 0, races: 0, wins: 0 };
                         db.standings.push(pGeneral);
                     }
-                    pGeneral.points += ptsEarned;
+                    pGeneral.points += pts;
                     pGeneral.races += 1;
                     pGeneral.wins += isWin;
                 });
-                
+
+                // Décodage et traitement des collisions
+                var processedCollisions = [];
+                if (rawEvents && rawEvents.length > 0) {
+                    rawEvents.forEach(function(ev) {
+                        if (ev.Type === "COLLISION_WITH_CAR" || ev.Type === "COLLISION_WITH_ENV") {
+                            var driverName = (ev.Driver && ev.Driver.Name) ? ev.Driver.Name : "Inconnu";
+                            var targetName = "Décor / Mur";
+                            if (ev.Type === "COLLISION_WITH_CAR" && ev.OtherDriver && ev.OtherDriver.Name) {
+                                targetName = ev.OtherDriver.Name;
+                            }
+                            
+                            var crashTimeStr = "00:00";
+                            if (ev.Timestamp) {
+                                var sTotal = Math.floor(ev.Timestamp / 1000);
+                                var m = Math.floor(sTotal / 60);
+                                var s = sTotal % 60;
+                            var speedKmh = ev.ImpactSpeed ? Math.round(ev.ImpactSpeed * 3.6) : 0;
+
+                            processedCollisions.push({
+                                time: crashTimeStr,
+                                type: ev.Type === "COLLISION_WITH_CAR" ? "CONTACT CHASSIS" : "CHOC DECOR",
+                                driver: driverName,
+                                target: targetName,
+                                speed: speedKmh
+                            });
+                        }
+                    });
+                }
+
+                // Intégration de la course dans la base
                 if (!db.races) db.races = [];
-                const nextId = db.races.length + 1;
+                var nextId = db.races.length + 1;
+                var trackName = data.TrackName || "Circuit Principal";
+                
                 db.races.push({
                     id: nextId,
-                    name: `Manche \${nextId} — \${trackName}`,
+                    name: "Manche " + nextId + " — " + trackName,
                     track: trackName,
-                    summary: `Course complétée. Traitement automatique de \${raceLeaderboard.length} pilotes uniques.`,
-                    results: raceResults
+                    summary: "Course bouclée. " + processedResults.length + " pilotes classés au drapeau à damier et " + processedCollisions.length + " chocs analysés.",
+                    results: processedResults,
+                    collisions: processedCollisions
                 });
-                
-                const response = await fetch('/api/save-championship', {
+
+                // Sauvegarde durable sur le serveur Render via Express
+                var response = await fetch('/api/save-championship', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(db)
                 });
                 
-                const result = await response.json();
+                var result = await response.json();
                 
                 if (result.status === "success") {
                     initApp();
-                    alert(`Félicitations ! La course à \${trackName} a été lue et sauvegardée sur Render !`);
+                    alert("Parfait ! Les logs d'Assetto Corsa comprenant les classements et le journal complet des collisions ont été enregistrés définitivement.");
                 } else {
-                    alert("Avertissement : Les données s'affichent mais la sauvegarde sur le serveur a échoué.");
+                    alert("Le classement a changé à l'écran mais le serveur a refusé de le stocker.");
                 }
+
             } catch (err) {
-                alert("Erreur lors de la lecture du fichier : assurez-vous qu'il s'agit d'un JSON valide.");
+                alert("Erreur fatale d'analyse : vérifiez la structure de votre fichier JSON de log.");
                 console.error(err);
             }
         };
         reader.readAsText(file);
     }
-    
+
     window.onload = loadData;
 </script>
 </body>
 </html>
+
