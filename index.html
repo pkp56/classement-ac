@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -33,7 +34,6 @@
     <h1>🏆 Assetto Corsa — Classement & Championnat</h1>
 </header>
 
-<!-- ZONE ADMINISTRATEUR POUR IMPORTER LE FICHIER ASSETTOHOSTING -->
 <div class="admin-zone">
     <p style="margin-top:0;">🔧 <b>Zone Organisateur :</b> Sélectionnez le fichier <code>.json</code> d'AssettoHosting pour ajouter une course et la sauvegarder sur le serveur.</p>
     <label class="file-label">
@@ -49,7 +49,6 @@
     <button id="btn-comparateur" class="tab-btn" onclick="switchTab('comparateur')">Comparateur</button>
 </div>
 
-<!-- SECTION 1 : CLASSEMENT GENERAL -->
 <div id="classement" class="content-section active">
     <h2>Classement Général des Pilotes</h2>
     <table>
@@ -66,21 +65,18 @@
     </table>
 </div>
 
-<!-- SECTION 2 : RESUMES DE COURSES -->
 <div id="courses" class="content-section">
     <h2>Historique & Résumés des Courses</h2>
     <select id="race-selector" class="select-box" onchange="renderRaceSummary()"></select>
     <div id="race-details"></div>
 </div>
 
-<!-- SECTION 3 : FICHES PILOTES -->
 <div id="pilotes" class="content-section">
     <h2>Profil Individuel du Pilote</h2>
     <select id="driver-selector" class="select-box" onchange="renderDriverProfile()"></select>
     <div id="driver-profile-content"></div>
 </div>
 
-<!-- SECTION 4 : COMPARATEUR DE PILOTES -->
 <div id="comparateur" class="content-section">
     <h2>Comparer deux Pilotes</h2>
     <div style="display:flex; gap: 20px;">
@@ -97,7 +93,6 @@
         races: []
     };
 
-    // Chargement initial des données enregistrées sur Render
     async function loadData() {
         try {
             const response = await fetch('data/championship.json');
@@ -126,7 +121,6 @@
         document.getElementById('btn-' + tabId).classList.add('active');
     }
 
-    // 1. Rendu du Classement Général
     function renderLeaderboard() {
         let html = '';
         if (!db.standings || db.standings.length === 0) {
@@ -146,7 +140,6 @@
         document.getElementById('leaderboard-data').innerHTML = html;
     }
 
-    // Remplissage des menus déroulants
     function populateSelectors() {
         const raceSel = document.getElementById('race-selector');
         const drvSel = document.getElementById('driver-selector');
@@ -181,7 +174,6 @@
         if(comp2.options.length > 1) comp2.selectedIndex = 1;
     }
 
-    // 2. Rendu des Résumés de Course
     function renderRaceSummary() {
         const id = document.getElementById('race-selector').value;
         if(!id || !db.races || db.races.length === 0) {
@@ -208,7 +200,6 @@
             </table>`;
     }
 
-    // 3. Rendu des Fiches Pilotes
     function renderDriverProfile() {
         const name = document.getElementById('driver-selector').value;
         if(!name || !db.standings || db.standings.length === 0) {
@@ -240,7 +231,6 @@
             </div>`;
     }
 
-    // 4. Comparateur de pilotes
     function runComparison() {
         const p1 = document.getElementById('compare-1').value;
         const p2 = document.getElementById('compare-2').value;
@@ -267,7 +257,6 @@
         document.getElementById('comparison-results').innerHTML = buildBlock(s1) + buildBlock(s2);
     }
 
-    // LECTURE, CALCUL ET ENVOI AU SERVEUR RENDER POUR SAUVEGARDE EN DUR
     function importAssettoJson(input) {
         const file = input.files[0];
         if (!file) return;
@@ -276,11 +265,21 @@
         reader.onload = async function(e) {
             try {
                 const data = JSON.parse(e.target.result);
-                const trackName = data.TrackName || "Circuit inconnu";
-                const rawResults = data.Result || [];
+                console.log("Structure du fichier reçue :", data);
+                
+                // Gestion de la structure AssettoHosting (parfois encapsulée ou en tableau)
+                let sessionData = data;
+                if (Array.isArray(data)) {
+                    sessionData = data[0];
+                }
+                
+                const trackName = sessionData.TrackName || sessionData.track || "Circuit inconnu";
+                
+                // Assetto Server Manager utilise souvent 'Result' ou 'results'
+                const rawResults = sessionData.Result || sessionData.results || [];
                 
                 if (rawResults.length === 0) {
-                    alert("Ce fichier JSON ne contient aucun résultat de pilote valide.");
+                    alert("Ce fichier JSON ne contient aucun résultat de pilote valide (clé 'Result' ou 'results' manquante ou vide).");
                     return;
                 }
                 
@@ -291,21 +290,26 @@
                     const ptsEarned = bareme[pos] || 0;
                     const isWin = pos === 0 ? 1 : 0;
                     
+                    // Récupération sécurisée du nom du pilote
+                    const driverName = driver.DriverName || driver.name || driver.driverName || "Pilote inconnu";
+                    
                     let formattedTime = "Fini";
                     if (driver.TotalTime) {
                         formattedTime = (driver.TotalTime / 1000).toFixed(2) + "s";
+                    } else if (driver.time) {
+                        formattedTime = driver.time;
                     }
                     
                     raceResults.push({
-                        name: driver.DriverName,
+                        name: driverName,
                         timeOrGap: formattedTime,
                         ptsEarned: ptsEarned
                     });
                     
                     if (!db.standings) db.standings = [];
-                    let pGeneral = db.standings.find(p => p.name === driver.DriverName);
+                    let pGeneral = db.standings.find(p => p.name === driverName);
                     if (!pGeneral) {
-                        pGeneral = { name: driver.DriverName, points: 0, races: 0, wins: 0 };
+                        pGeneral = { name: driverName, points: 0, races: 0, wins: 0 };
                         db.standings.push(pGeneral);
                     }
                     pGeneral.points += ptsEarned;
@@ -349,3 +353,4 @@
 </script>
 </body>
 </html>
+
