@@ -35,7 +35,7 @@
 
 <!-- ZONE ADMINISTRATEUR POUR IMPORTER LE FICHIER ASSETTOHOSTING -->
 <div class="admin-zone">
-    <p style="margin-top:0;">🔧 <b>Zone Organisateur :</b> Glissez le fichier <code>.json</code> d'AssettoHosting pour ajouter une course automatiquement.</p>
+    <p style="margin-top:0;">🔧 <b>Zone Organisateur :</b> Sélectionnez le fichier <code>.json</code> d'AssettoHosting pour ajouter une course et la sauvegarder sur le serveur.</p>
     <label class="file-label">
         📂 Sélectionner le fichier de course .json
         <input type="file" id="json-file-picker" class="file-input" accept=".json" onchange="importAssettoJson(this)">
@@ -91,21 +91,21 @@
 </div>
 
 <script>
-    // Structure de données de secours
     let db = {
         standings: [],
         driversData: {},
         races: []
     };
 
-    // Chargement initial
+    // Chargement initial des données enregistrées sur Render
     async function loadData() {
         try {
-            // Tente de charger les données sauvegardées (s'il y en a)
             const response = await fetch('data/championship.json');
-            db = await response.json();
+            if (response.ok) {
+                db = await response.json();
+            }
         } catch (err) {
-            console.log("Premier démarrage ou fichier data/championship.json manquant. Utilisation de données vides.");
+            console.log("Premier démarrage ou fichier championship.json pas encore créé. Utilisation d'une base vide.");
         }
         initApp();
     }
@@ -122,13 +122,13 @@
         document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(tabId).classList.add('active');
-        if (event) event.currentTarget.classList.add('active');
+        if (event && event.currentTarget) event.currentTarget.classList.add('active');
     }
 
     // 1. Rendu du Classement Général
     function renderLeaderboard() {
         let html = '';
-        if (db.standings.length === 0) {
+        if (!db.standings || db.standings.length === 0) {
             html = `<tr><td colspan="5" style="text-align:center;">Aucune course enregistrée. Importez un fichier JSON pour commencer !</td></tr>`;
         } else {
             db.standings.sort((a,b) => b.points - a.points).forEach((p, idx) => {
@@ -156,13 +156,18 @@
         comp1.innerHTML = '';
         comp2.innerHTML = '';
 
-        db.races.forEach(r => raceSel.innerHTML += `<option value="${r.id}">${r.name}</option>`);
-        db.standings.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
-            const opt = `<option value="${p.name}">${p.name}</option>`;
-            drvSel.innerHTML += opt;
-            comp1.innerHTML += opt;
-            comp2.innerHTML += opt;
-        });
+        if (db.races) {
+            db.races.forEach(r => raceSel.innerHTML += `<option value="${r.id}">${r.name}</option>`);
+        }
+        
+        if (db.standings) {
+            db.standings.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
+                const opt = `<option value="${p.name}">${p.name}</option>`;
+                drvSel.innerHTML += opt;
+                comp1.innerHTML += opt;
+                comp2.innerHTML += opt;
+            });
+        }
         if(comp2.options.length > 1) comp2.selectedIndex = 1;
     }
 
@@ -182,7 +187,7 @@
 
         document.getElementById('race-details').innerHTML = `
             <h3>${race.name} — Circuit : ${race.track}</h3>
-            <p><b>Résumé automatique :</b> ${race.summary}</p>
+            <p><b>Résumé :</b> ${race.summary}</p>
             <table>
                 <thead><tr><th>Pos</th><th>Pilote</th><th>Temps / Écart</th><th>Points</th></tr></thead>
                 <tbody>${rows}</tbody>
@@ -198,9 +203,8 @@
             return;
         }
 
-        // Analyse ultra-simple des points forts/faibles calculée automatiquement
-        let goodTrait = stats.wins > 0 ? "Finition (Gagne des courses)" : "Régularité au classement";
-        let badTrait = stats.wins === 0 && stats.points > 50 ? "Manque de vitesse de pointe pour la gagne" : "Doit participer à plus de manches";
+        let goodTrait = stats.wins > 0 ? "Finition (Gagne des courses)" : "Régularité dans les points";
+        let badTrait = stats.wins === 0 && stats.points > 50 ? "Vitesse de pointe pour décrocher la victoire" : "Manque d'expérience sur ce championnat";
 
         document.getElementById('driver-profile-content').innerHTML = `
             <div class="flex-grid">
@@ -220,4 +224,79 @@
 
     // 4. Comparateur de pilotes
     function runComparison() {
-        const p1 = document.getElementById('compare-1').value;
+const p1 = document.getElementById('compare-1').value;
+const p2 = document.getElementById('compare-2').value;
+const s1 = db.standings.find(p => p.name === p1);
+const s2 = db.standings.find(p => p.name === p2);
+if(!s1 || !s2 || p1 === p2) {
+document.getElementById('comparison-results').innerHTML = "Sélectionnez deux pilotes différents pour lancer la comparaison.";
+return;
+}
+const buildBlock = (s) =>  <div class="card"> <h3>${s.name}</h3> <p><b>Points :</b> ${s.points} pts</p> <p><b>Courses disputées :</b> ${s.races}</p> <p><b>Victoires :</b> ${s.wins}</p> </div>;
+document.getElementById('comparison-results').innerHTML = buildBlock(s1) + buildBlock(s2);
+}
+// LECTURE, CALCUL ET ENVOI AU SERVEUR RENDER POUR SAUVEGARDE EN DUR
+function importAssettoJson(input) {
+const file = input.files[0];
+if (!file) return;
+const reader = new FileReader();
+reader.onload = async function(e) {
+try {
+const data = JSON.parse(e.target.result);
+const trackName = data.TrackName || "Circuit inconnu";
+const rawResults = data.Result || [];
+if (rawResults.length === 0) {
+alert("Ce fichier JSON ne contient aucun résultat de pilote valide.");
+return;
+}
+let raceResults = [];
+// Barème F1 standard (25, 18, 15, 12, 10, 8, 6, 4, 2, 1)
+const bareme =;
+rawResults.forEach((driver, pos) => {
+const ptsEarned = bareme[pos] || 0;
+const isWin = pos === 0 ? 1 : 0;
+raceResults.push({
+name: driver.DriverName,
+timeOrGap: driver.TotalTime ? (driver.TotalTime / 1000).toFixed(2) + "s" : "Fini",
+ptsEarned: ptsEarned
+});
+if (!db.standings) db.standings = [];
+let pGeneral = db.standings.find(p => p.name === driver.DriverName);
+if (!pGeneral) {
+pGeneral = { name: driver.DriverName, points: 0, races: 0, wins: 0 };
+db.standings.push(pGeneral);
+}
+pGeneral.points += ptsEarned;
+pGeneral.races += 1;
+pGeneral.wins += isWin;
+});
+if (!db.races) db.races = [];
+const nextId = db.races.length + 1;
+db.races.push({
+id: nextId,
+name: Manche ${nextId} — ${trackName},
+track: trackName,
+summary: Course complétée avec ${rawResults.length} pilotes classés au drapeau à damier.,
+results: raceResults
+});
+// Envoi de la base mise à jour vers le serveur de Render
+const response = await fetch('/api/save-championship', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(db)
+});
+const result = await response.json();
+if (result.status === "success") {
+initApp();
+alert(Félicitations ! La course à ${trackName} a été intégrée et sauvegardée de manière permanente !);
+} else {
+alert("Avertissement : Les données s'affichent temporairement mais le serveur a refusé de les sauvegarder.");
+}
+} catch (err) {
+alert("Erreur lors de la lecture du fichier : assurez-vous qu'il s'agit bien d'un JSON de course valide.");
+console.error(err);
+}
+};
+reader.readAsText(file);
+}
+window.onload = loadData;
