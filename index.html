@@ -156,11 +156,11 @@
         comp1.innerHTML = '';
         comp2.innerHTML = '';
 
-        if (db.races) {
+        if (db.races && db.races.length > 0) {
             db.races.forEach(r => raceSel.innerHTML += `<option value="${r.id}">${r.name}</option>`);
         }
         
-        if (db.standings) {
+        if (db.standings && db.standings.length > 0) {
             db.standings.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
                 const opt = `<option value="${p.name}">${p.name}</option>`;
                 drvSel.innerHTML += opt;
@@ -224,79 +224,106 @@
 
     // 4. Comparateur de pilotes
     function runComparison() {
-const p1 = document.getElementById('compare-1').value;
-const p2 = document.getElementById('compare-2').value;
-const s1 = db.standings.find(p => p.name === p1);
-const s2 = db.standings.find(p => p.name === p2);
-if(!s1 || !s2 || p1 === p2) {
-document.getElementById('comparison-results').innerHTML = "Sélectionnez deux pilotes différents pour lancer la comparaison.";
-return;
-}
-const buildBlock = (s) =>  <div class="card"> <h3>${s.name}</h3> <p><b>Points :</b> ${s.points} pts</p> <p><b>Courses disputées :</b> ${s.races}</p> <p><b>Victoires :</b> ${s.wins}</p> </div>;
-document.getElementById('comparison-results').innerHTML = buildBlock(s1) + buildBlock(s2);
-}
-// LECTURE, CALCUL ET ENVOI AU SERVEUR RENDER POUR SAUVEGARDE EN DUR
-function importAssettoJson(input) {
-const file = input.files[0];
-if (!file) return;
-const reader = new FileReader();
-reader.onload = async function(e) {
-try {
-const data = JSON.parse(e.target.result);
-const trackName = data.TrackName || "Circuit inconnu";
-const rawResults = data.Result || [];
-if (rawResults.length === 0) {
-alert("Ce fichier JSON ne contient aucun résultat de pilote valide.");
-return;
-}
-let raceResults = [];
-// Barème F1 standard (25, 18, 15, 12, 10, 8, 6, 4, 2, 1)
-const bareme =;
-rawResults.forEach((driver, pos) => {
-const ptsEarned = bareme[pos] || 0;
-const isWin = pos === 0 ? 1 : 0;
-raceResults.push({
-name: driver.DriverName,
-timeOrGap: driver.TotalTime ? (driver.TotalTime / 1000).toFixed(2) + "s" : "Fini",
-ptsEarned: ptsEarned
-});
-if (!db.standings) db.standings = [];
-let pGeneral = db.standings.find(p => p.name === driver.DriverName);
-if (!pGeneral) {
-pGeneral = { name: driver.DriverName, points: 0, races: 0, wins: 0 };
-db.standings.push(pGeneral);
-}
-pGeneral.points += ptsEarned;
-pGeneral.races += 1;
-pGeneral.wins += isWin;
-});
-if (!db.races) db.races = [];
-const nextId = db.races.length + 1;
-db.races.push({
-id: nextId,
-name: Manche ${nextId} — ${trackName},
-track: trackName,
-summary: Course complétée avec ${rawResults.length} pilotes classés au drapeau à damier.,
-results: raceResults
-});
-// Envoi de la base mise à jour vers le serveur de Render
-const response = await fetch('/api/save-championship', {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify(db)
-});
-const result = await response.json();
-if (result.status === "success") {
-initApp();
-alert(Félicitations ! La course à ${trackName} a été intégrée et sauvegardée de manière permanente !);
-} else {
-alert("Avertissement : Les données s'affichent temporairement mais le serveur a refusé de les sauvegarder.");
-}
-} catch (err) {
-alert("Erreur lors de la lecture du fichier : assurez-vous qu'il s'agit bien d'un JSON de course valide.");
-console.error(err);
-}
-};
-reader.readAsText(file);
-}
-window.onload = loadData;
+        const p1 = document.getElementById('compare-1').value;
+        const p2 = document.getElementById('compare-2').value;
+        const s1 = db.standings.find(p => p.name === p1);
+        const s2 = db.standings.find(p => p.name === p2);
+        
+        if(!s1 || !s2 || p1 === p2) {
+            document.getElementById('comparison-results').innerHTML = "<p>Sélectionnez deux pilotes différents pour lancer la comparaison.</p>";
+            return;
+        }
+        
+        const buildBlock = (s) => `
+            <div class="card">
+                <h3>${s.name}</h3>
+                <p><b>Points :</b> ${s.points} pts</p>
+                <p><b>Courses disputées :</b> ${s.races}</p>
+                <p><b>Victoires :</b> ${s.wins}</p>
+            </div>`;
+            
+        document.getElementById('comparison-results').innerHTML = buildBlock(s1) + buildBlock(s2);
+    }
+
+    // LECTURE, CALCUL ET ENVOI AU SERVEUR RENDER POUR SAUVEGARDE EN DUR
+    function importAssettoJson(input) {
+        const file = input.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                const trackName = data.TrackName || "Circuit inconnu";
+                const rawResults = data.Result || [];
+                
+                if (rawResults.length === 0) {
+                    alert("Ce fichier JSON ne contient aucun résultat de pilote valide.");
+                    return;
+                }
+                
+                let raceResults = [];
+                // Barème F1 standard (25, 18, 15, 12, 10, 8, 6, 4, 2, 1)
+                const bareme =;
+                
+                rawResults.forEach((driver, pos) => {
+                    const ptsEarned = bareme[pos] || 0;
+                    const isWin = pos === 0 ? 1 : 0;
+                    
+                    // Nettoyage de l'affichage du temps
+                    let formattedTime = "Fini";
+                    if (driver.TotalTime) {
+                        formattedTime = (driver.TotalTime / 1000).toFixed(2) + "s";
+                    }
+                    
+                    raceResults.push({
+                        name: driver.DriverName,
+                        timeOrGap: formattedTime,
+                        ptsEarned: ptsEarned
+                    });
+                    
+                    if (!db.standings) db.standings = [];
+                    let pGeneral = db.standings.find(p => p.name === driver.DriverName);
+                    if (!pGeneral) {
+                        pGeneral = { name: driver.DriverName, points: 0, races: 0, wins: 0 };
+                        db.standings.push(pGeneral);
+                    }
+                    pGeneral.points += ptsEarned;
+                    pGeneral.races += 1;
+                    pGeneral.wins += isWin;
+                });
+                
+                if (!db.races) db.races = [];
+                const nextId = db.races.length + 1;
+                db.races.push({
+                    id: nextId,
+                    name: `Manche ${nextId} — ${trackName}`,
+                    track: trackName,
+                    summary: `Course complétée avec ${rawResults.length} pilotes classés au drapeau à damier.`,
+                    results: raceResults
+                });
+                
+                // Envoi de la base mise à jour vers le serveur de Render
+                const response = await fetch('/api/save-championship', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(db)
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === "success") {
+                    initApp();
+                    alert(`Félicitations ! La course à ${trackName} a été intégrée et sauvegardée de manière permanente !`);
+                } else {
+                    alert("Avertissement : Les données s'affichent temporairement mais le serveur a refusé de les sauvegarder.");
+                }
+            } catch (err) {
+                alert("Erreur lors de la lecture du fichier : assurez-vous qu'il s'agit bien d'un JSON de course valide.");
+                console.error(err);
+            }
+        };
+        reader.readAsText(file);
+    }
+    
+    window.onload = loadData;
