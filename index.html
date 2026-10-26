@@ -1,485 +1,364 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestionnaire de Championnat Assetto Corsa</title>
-    <style>
-        :root { --bg: #1a1a1a; --card: #2d2d2d; --text: #ffffff; --accent: #e50914; --border: #444; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
-        header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid var(--accent); padding-bottom: 10px; }
-        .tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
-        .tab-btn { background: var(--card); color: var(--text); border: 1px solid var(--border); padding: 10px 20px; cursor: pointer; font-weight: bold; border-radius: 4px; }
-        .tab-btn.active { background: var(--accent); border-color: var(--accent); }
-        .content-section { display: none; background: var(--card); padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .content-section.active { display: block; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 25px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
-        th { background: rgba(0,0,0,0.2); color: var(--accent); }
-        .select-box { background: var(--bg); color: var(--text); padding: 8px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 15px; width: 250px; }
-        .flex-grid { display: flex; gap: 20px; flex-wrap: wrap; }
-        .card { flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 6px; border-left: 4px solid var(--accent); }
-        .badge-good { color: #2ecc71; font-weight: bold; }
-        .badge-bad { color: #e74c3c; font-weight: bold; }
-        .compare-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; }
-        .admin-zone { background: #222; border: 1px dashed var(--accent); padding: 15px; margin-bottom: 20px; border-radius: 6px; text-align: center; }
-        .file-input { display: none; }
-        .file-label { background: var(--accent); padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; display: inline-block; }
-        .badge-collision { background: #e74c3c; color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Championnat Assetto Corsa</title>
+<style>
+:root{--bg:#1a1a1a;--card:#2d2d2d;--text:#fff;--muted:#a8a8a8;--accent:#e50914;--border:#444;--good:#2ecc71;--bad:#e74c3c}
+*{box-sizing:border-box}
+body{font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text);margin:0 auto;padding:20px;max-width:1000px}
+header{text-align:center;margin-bottom:24px;border-bottom:3px solid var(--accent);padding-bottom:10px}
+h1{margin:0 0 8px}
+.tabs{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.tab-btn{background:var(--card);color:var(--text);border:1px solid var(--border);padding:10px 18px;cursor:pointer;font-weight:bold;border-radius:4px}
+.tab-btn[aria-selected="true"]{background:var(--accent);border-color:var(--accent)}
+.tab-btn:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.panel{display:none;background:var(--card);padding:20px;border-radius:8px}
+.panel.active{display:block}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;margin:12px 0 24px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+th{background:rgba(0,0,0,.2);color:var(--accent)}
+select,input[type=password]{background:var(--bg);color:var(--text);padding:8px;border:1px solid var(--border);border-radius:4px;width:250px;max-width:100%}
+.row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.card{background:rgba(0,0,0,.2);padding:15px;border-radius:6px;border-left:4px solid var(--accent)}
+.card h3{margin-top:0}
+.good{color:var(--good)}.bad{color:var(--bad)}.muted{color:var(--muted)}
+ul.traits{margin:0;padding-left:18px}
+.badge{background:var(--bad);padding:2px 6px;border-radius:4px;font-size:12px;font-weight:bold}
+.admin{background:#222;border:1px dashed var(--accent);padding:15px;margin-bottom:20px;border-radius:6px;text-align:center}
+.file-label{background:var(--accent);padding:10px 15px;border-radius:4px;cursor:pointer;font-weight:bold;display:inline-block}
+.file-label:focus-within{outline:3px solid #fff;outline-offset:2px}
+.file-label input{position:absolute;opacity:0;width:1px;height:1px}
+.ok{color:var(--good)}.ko{color:var(--bad)}
+</style>
 </head>
 <body>
+<header><h1>Assetto Corsa : classement et championnat</h1></header>
 
-<header>
-    <h1>🏆 Assetto Corsa — Classement & Championnat</h1>
-</header>
+<section class="admin" id="admin" hidden>
+  <p style="margin-top:0"><b>Zone organisateur.</b> Ajoutez le fichier <code>.json</code> d’une session de <b>course</b> (les essais et qualifs sont refusés).</p>
+  <div class="row" style="justify-content:center;align-items:center">
+    <label class="file-label">Choisir un fichier de course<input type="file" id="file" accept=".json"></label>
+    <input type="password" id="admin-key" placeholder="Clé organisateur (si requise)" autocomplete="off">
+  </div>
+  <p id="admin-msg" role="status" aria-live="polite" style="margin-bottom:0"></p>
+</section>
 
-<!-- ZONE ADMINISTRATEUR POUR IMPORTER LE FICHIER ASSETTOHOSTING -->
-<div class="admin-zone">
-    <p style="margin-top:0;">🔧 <b>Zone Organisateur :</b> Sélectionnez le fichier de log <code>.json</code> brut pour ajouter une course avec ses collisions et la sauvegarder.</p>
-    <label class="file-label">
-        📂 Sélectionner le fichier de course .json
-        <input type="file" id="json-file-picker" class="file-input" accept=".json" onchange="importAssettoJson(this)">
-    </label>
+<div class="tabs" role="tablist">
+  <button class="tab-btn" role="tab" data-tab="classement" aria-selected="true">Classement</button>
+  <button class="tab-btn" role="tab" data-tab="courses" aria-selected="false">Courses</button>
+  <button class="tab-btn" role="tab" data-tab="pilotes" aria-selected="false">Pilotes</button>
+  <button class="tab-btn" role="tab" data-tab="comparateur" aria-selected="false">Comparateur</button>
 </div>
 
-<div class="tabs">
-    <button id="btn-classement" class="tab-btn active" onclick="switchTab('classement')">Classement</button>
-    <button id="btn-courses" class="tab-btn" onclick="switchTab('courses')">Résumés Courses</button>
-    <button id="btn-pilotes" class="tab-btn" onclick="switchTab('pilotes')">Fiches Pilotes</button>
-    <button id="btn-comparateur" class="tab-btn" onclick="switchTab('comparateur')">Comparateur</button>
-</div>
+<section id="classement" class="panel active" role="tabpanel">
+  <h2>Classement général</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Pos</th><th>Pilote</th><th>Points</th><th>Courses</th><th>Victoires</th><th>Podiums</th></tr></thead>
+    <tbody id="leaderboard"></tbody>
+  </table></div>
+</section>
 
-<!-- SECTION 1 : CLASSEMENT GENERAL -->
-<div id="classement" class="content-section active">
-    <h2>Classement Général des Pilotes</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Pos</th>
-                <th>Pilote</th>
-                <th>Points</th>
-                <th>Courses Disputées</th>
-                <th>Victoires</th>
-            </tr>
-        </thead>
-        <tbody id="leaderboard-data"></tbody>
-    </table>
-</div>
+<section id="courses" class="panel" role="tabpanel">
+  <h2>Résumés des courses</h2>
+  <select id="race-select" aria-label="Course"></select>
+  <div id="race-details"></div>
+</section>
 
-<!-- SECTION 2 : RESUMES DE COURSES -->
-<div id="courses" class="content-section">
-    <h2>Historique & Résumés des Courses</h2>
-    <select id="race-selector" class="select-box" onchange="renderRaceSummary()"></select>
-    <div id="race-details"></div>
-</div>
+<section id="pilotes" class="panel" role="tabpanel">
+  <h2>Fiche pilote</h2>
+  <select id="driver-select" aria-label="Pilote"></select>
+  <div id="driver-details"></div>
+</section>
 
-<!-- SECTION 3 : FICHES PILOTES -->
-<div id="pilotes" class="content-section">
-    <h2>Profil Individuel du Pilote</h2>
-    <select id="driver-selector" class="select-box" onchange="renderDriverProfile()"></select>
-    <div id="driver-profile-content"></div>
-</div>
-
-<!-- SECTION 4 : COMPARATEUR DE PILOTES -->
-<div id="comparateur" class="content-section">
-    <h2>Comparer deux Pilotes</h2>
-    <div style="display:flex; gap: 20px;">
-        <select id="compare-1" class="select-box" onchange="runComparison()"></select>
-        <select id="compare-2" class="select-box" onchange="runComparison()"></select>
-    </div>
-    <div class="compare-container" id="comparison-results"></div>
-</div>
+<section id="comparateur" class="panel" role="tabpanel">
+  <h2>Comparer deux pilotes</h2>
+  <div class="row">
+    <select id="cmp1" aria-label="Premier pilote"></select>
+    <select id="cmp2" aria-label="Second pilote"></select>
+  </div>
+  <div id="cmp-details"></div>
+</section>
 
 <script>
-    var db = {
-        standings: [],
-        driversData: {},
-        races: []
+"use strict";
+
+// ---------- Réglages ----------
+const DATA_URL = "data/championship.json";
+const SAVE_URL = "/api/save-championship";
+const SCORING = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1]; // points par place, 0 au-delà
+const FINISH_RATIO = 0.75;      // sous 75 % des tours du leader : 0 point
+const MIN_IMPACT = 5;           // chocs plus faibles ignorés
+const IMPACT_SPEED_FACTOR = 1;  // mettre 3.6 si le serveur fournit des m/s
+
+// ---------- Utilitaires ----------
+let db = { races: [] };
+let drivers = [];
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const f1 = n => n.toFixed(1).replace(".", ",");
+const plural = (n, a, b) => (n > 1 ? b : a);
+const fmtLap = ms => {
+  if (!(ms > 0)) return "–";
+  return Math.floor(ms / 60000) + ":" + ((ms % 60000) / 1000).toFixed(3).padStart(6, "0");
+};
+const fmtClock = ms => {
+  const s = Math.floor(ms / 1000);
+  return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+};
+const median = a => {
+  const s = [...a].sort((x, y) => x - y), m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+// ---------- Données ----------
+function normalize(raw) {
+  const races = Array.isArray(raw && raw.races) ? raw.races : [];
+  return {
+    races: races.map((r, i) => ({
+      ...r,
+      id: r.id ?? i + 1,
+      results: (r.results || []).map((x, j) => ({ pos: j + 1, ...x })),
+      collisions: r.collisions || []
+    }))
+  };
+}
+
+async function loadData() {
+  try {
+    const res = await fetch(DATA_URL, { cache: "no-store" });
+    if (res.ok) db = normalize(await res.json());
+  } catch (e) { /* premier démarrage : pas encore de fichier */ }
+  refresh();
+}
+
+// Le classement est recalculé à partir des courses : rien n'est cumulé à la main.
+function computeDrivers() {
+  const map = new Map();
+  for (const race of db.races) {
+    for (const r of race.results) {
+      const d = map.get(r.name) || { name: r.name, points: 0, races: 0, wins: 0, podiums: 0, dnf: 0, collisions: 0, positions: [] };
+      d.points += r.ptsEarned || 0;
+      d.races++;
+      d.positions.push(r.pos);
+      if (r.pos === 1) d.wins++;
+      if (r.pos <= 3) d.podiums++;
+      if (r.dnf) d.dnf++;
+      map.set(r.name, d);
+    }
+  }
+  for (const race of db.races) {
+    for (const c of race.collisions) {
+      if (map.has(c.driver)) map.get(c.driver).collisions++;
+      if (c.target !== c.driver && map.has(c.target)) map.get(c.target).collisions++;
+    }
+  }
+  return [...map.values()]
+    .map(d => ({ ...d, avgPos: d.positions.reduce((a, b) => a + b, 0) / d.positions.length, bestPos: Math.min(...d.positions) }))
+    .sort((a, b) => b.points - a.points || b.wins - a.wins || a.avgPos - b.avgPos);
+}
+
+// ---------- Import d'une course ----------
+function parseRace(data) {
+  if (data.Type && data.Type !== "RACE") throw new Error("Ce fichier est une session « " + data.Type + " ». Seules les courses (RACE) sont acceptées.");
+  if (!Array.isArray(data.Result) || !data.Result.length) throw new Error("Aucun résultat de course dans ce fichier.");
+  const sessionFile = data.SessionFile || (data.TrackName + "_" + data.Date);
+  if (db.races.some(r => r.sessionFile === sessionFile)) throw new Error("Cette course est déjà enregistrée.");
+
+  const maxLaps = Math.max(...data.Result.map(x => x.NumLaps));
+  const results = data.Result.map((x, i) => {
+    const dnf = x.NumLaps < FINISH_RATIO * maxLaps;
+    const scored = !dnf && !x.Disqualified;
+    return {
+      pos: i + 1, name: x.DriverName, guid: x.DriverGuid, laps: x.NumLaps,
+      totalMs: x.TotalTime, bestLapMs: x.BestLap, grid: x.GridPosition,
+      ptsEarned: scored ? (SCORING[i] || 0) : 0, dnf
     };
+  });
 
-    // Chargement initial des données enregistrées sur Render
-    async function loadData() {
-        try {
-            var response = await fetch('data/championship.json');
-            if (response.ok) {
-                db = await response.json();
-            }
-        } catch (err) {
-            console.log("Premier démarrage ou fichier championship.json absent.");
-        }
-        initApp();
-    }
+  // Départ de la course estimé à partir des tours, pour dater les chocs
+  const starts = (data.Laps || []).filter(l => l.Timestamp && l.LapTime > 0).map(l => l.Timestamp * 1000 - l.LapTime);
+  const t0 = starts.length ? Math.min(...starts) : null;
 
-    function initApp() {
-        renderLeaderboard();
-        populateSelectors();
-        renderRaceSummary();
-        renderDriverProfile();
-        runComparison();
-    }
+  const collisions = [];
+  for (const ev of data.Events || []) {
+    const isCar = ev.Type === "COLLISION_WITH_CAR";
+    if (ev.AfterSessionEnd || (!isCar && ev.Type !== "COLLISION_WITH_ENV")) continue;
+    const speed = Math.round((ev.ImpactSpeed || 0) * IMPACT_SPEED_FACTOR);
+    if (speed < MIN_IMPACT) continue;
+    const driver = (ev.Driver && ev.Driver.Name) || "Inconnu";
+    const target = isCar ? ((ev.OtherDriver && ev.OtherDriver.Name) || "Autre voiture") : "Décor / mur";
+    // Un contact entre deux voitures est enregistré deux fois : on n'en garde qu'un
+    const duplicate = isCar && collisions.some(c => c.type === "car" && c.driver === target && c.target === driver && Math.abs(c.ts - ev.Timestamp) <= 2);
+    if (duplicate) continue;
+    collisions.push({
+      ts: ev.Timestamp, type: isCar ? "car" : "env", driver, target, speed,
+      time: t0 ? fmtClock(Math.max(0, ev.Timestamp * 1000 - t0)) : "–"
+    });
+  }
 
-    function switchTab(tabId) {
-        document.querySelectorAll('.content-section').forEach(function(s) { s.classList.remove('active'); });
-        document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
-        document.getElementById(tabId).classList.add('active');
-        document.getElementById('btn-' + tabId).classList.add('active');
-    }
+  const id = Math.max(0, ...db.races.map(r => Number(r.id) || 0)) + 1;
+  const track = data.TrackName || "Circuit";
+  const best = results.filter(r => r.bestLapMs > 0).sort((a, b) => a.bestLapMs - b.bestLapMs)[0];
+  const podium = results.slice(0, 3).map(r => r.name);
+  const summary = podium[0] + " s’impose" + (podium[1] ? ", devant " + podium.slice(1).join(" et ") : "") + ". "
+    + results.length + " pilotes classés, " + collisions.length + " choc" + plural(collisions.length, "", "s") + " relevé" + plural(collisions.length, "", "s") + "."
+    + (best ? " Meilleur tour : " + best.name + " (" + fmtLap(best.bestLapMs) + ")." : "");
 
-    // 1. Rendu du Classement Général
-    function renderLeaderboard() {
-        var html = '';
-        if (!db.standings || db.standings.length === 0) {
-            html = '<tr><td colspan="5" style="text-align:center;">Aucune course enregistrée. Importez un fichier JSON pour commencer !</td></tr>';
-        } else {
-            var sortedStandings = db.standings.slice().sort(function(a, b) { return b.points - a.points; });
-            sortedStandings.forEach(function(p, idx) {
-                html += '<tr>' +
-                    '<td><b>' + (idx + 1) + '</b></td>' +
-                    '<td>' + p.name + '</td>' +
-                    '<td>' + p.points + ' pts</td>' +
-                    '<td>' + p.races + '</td>' +
-                    '<td>' + p.wins + ' 🥇</td>' +
-                '</tr>';
-            });
-        }
-        document.getElementById('leaderboard-data').innerHTML = html;
-    }
+  return { id, sessionFile, name: "Manche " + id + " – " + track, track, date: data.Date || "", summary, results, collisions };
+}
 
-    // Remplissage des menus déroulants
-    function populateSelectors() {
-        var raceSel = document.getElementById('race-selector');
-        var drvSel = document.getElementById('driver-selector');
-        var comp1 = document.getElementById('compare-1');
-        var comp2 = document.getElementById('compare-2');
-        
-        raceSel.innerHTML = '';
-        drvSel.innerHTML = '';
-        comp1.innerHTML = '';
-        comp2.innerHTML = '';
+async function save(next, adminKey) {
+  const res = await fetch(SAVE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(adminKey ? { "x-admin-key": adminKey } : {}) },
+    body: JSON.stringify(next)
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok || out.status !== "success") throw new Error(out.message || "Le serveur a refusé l’enregistrement.");
+}
 
-        if (db.races && db.races.length > 0) {
-            db.races.forEach(function(r) { raceSel.innerHTML += '<option value="' + r.id + '">' + r.name + '</option>'; });
-        } else {
-            raceSel.innerHTML = '<option value="">Aucune course disponible</option>';
-        }
-        
-        if (db.standings && db.standings.length > 0) {
-            var sortedNames = db.standings.slice().sort(function(a, b) { return a.name.localeCompare(b.name); });
-            sortedNames.forEach(function(p) {
-                var opt = '<option value="' + p.name + '">' + p.name + '</option>';
-                drvSel.innerHTML += opt;
-                comp1.innerHTML += opt;
-                comp2.innerHTML += opt;
-            });
-        } else {
-            var noDriverOpt = '<option value="">Aucun pilote disponible</option>';
-            drvSel.innerHTML = noDriverOpt;
-            comp1.innerHTML = noDriverOpt;
-            comp2.innerHTML = noDriverOpt;
-        }
-        if (comp2.options.length > 1) comp2.selectedIndex = 1;
-    }
+async function onFileChosen(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const msg = $("admin-msg");
+  msg.className = ""; msg.textContent = "Analyse en cours…";
+  try {
+    const race = parseRace(JSON.parse(await file.text()));
+    const next = { races: [...db.races, race] };
+    await save(next, $("admin-key").value.trim());
+    db = next; // on ne modifie l'écran qu'une fois la sauvegarde acceptée
+    refresh();
+    msg.className = "ok"; msg.textContent = "Course ajoutée : " + race.name + ".";
+  } catch (err) {
+    msg.className = "ko";
+    msg.textContent = err instanceof SyntaxError ? "Fichier illisible : ce n’est pas un JSON valide." : err.message;
+  }
+  e.target.value = "";
+}
 
-    // 2. Rendu des Résumés de Course et des Collisions
-    function renderRaceSummary() {
-        var id = document.getElementById('race-selector').value;
-        if (!id || !db.races || db.races.length === 0) {
-            document.getElementById('race-details').innerHTML = '<p>Aucune course sélectionnée.</p>';
-            return;
-        }
-        var race = db.races.find(function(r) { return r.id == id; });
-        if (!race) {
-            document.getElementById('race-details').innerHTML = '<p>Aucune course sélectionnée.</p>';
-            return;
-        }
+// ---------- Affichage ----------
+function refresh() {
+  drivers = computeDrivers();
+  renderLeaderboard();
+  fillSelectors();
+  renderRace(); renderDriver(); renderCompare();
+}
 
-        var rows = '';
-        race.results.forEach(function(res, i) {
-            rows += '<tr><td>' + (i + 1) + '</td><td>' + res.name + '</td><td>' + res.timeOrGap + '</td><td>+' + res.ptsEarned + '</td></tr>';
-        });
+function fill(sel, items, empty) {
+  const prev = sel.value;
+  sel.innerHTML = items.length
+    ? items.map(([v, l]) => '<option value="' + esc(v) + '">' + esc(l) + "</option>").join("")
+    : '<option value="">' + empty + "</option>";
+  if (items.some(([v]) => String(v) === prev)) sel.value = prev;
+}
 
-        var collisionRows = '';
-        if (race.collisions && race.collisions.length > 0) {
-            race.collisions.forEach(function(c) {
-                collisionRows += '<tr>' +
-                    '<td>' + c.time + '</td>' +
-                    '<td><span class="badge-collision">' + c.type + '</span></td>' +
-                    '<td><b>' + c.driver + '</b></td>' +
-                    '<td>' + c.target + '</td>' +
-                    '<td>' + c.speed + ' km/h</td>' +
-                '</tr>';
-            });
-        } else {
-            collisionRows = '<tr><td colspan="5" style="text-align:center; color:#2ecc71;">🥇 Une course propre ! Aucune collision enregistrée.</td></tr>';
-        }
+function fillSelectors() {
+  fill($("race-select"), [...db.races].reverse().map(r => [r.id, r.name]), "Aucune course");
+  const names = drivers.map(d => d.name).sort((a, b) => a.localeCompare(b)).map(n => [n, n]);
+  ["driver-select", "cmp1", "cmp2"].forEach(id => fill($(id), names, "Aucun pilote"));
+  const c1 = $("cmp1"), c2 = $("cmp2");
+  if (c1.value === c2.value && names.length > 1) c2.selectedIndex = (c1.selectedIndex + 1) % names.length;
+}
 
-        document.getElementById('race-details').innerHTML = 
-    // 2. Rendu des Résumés de Course et des Collisions
-    function renderRaceSummary() {
-        var id = document.getElementById('race-selector').value;
-        if (!id || !db.races || db.races.length === 0) {
-            document.getElementById('race-details').innerHTML = '<p>Aucune course sélectionnée.</p>';
-            return;
-        }
-        var race = db.races.find(function(r) { return r.id == id; });
-        if (!race) {
-            document.getElementById('race-details').innerHTML = '<p>Aucune course sélectionnée.</p>';
-            return;
-        }
+function renderLeaderboard() {
+  $("leaderboard").innerHTML = drivers.length
+    ? drivers.map((d, i) => "<tr><td><b>" + (i + 1) + "</b></td><td>" + esc(d.name) + "</td><td>" + d.points + "</td><td>" + d.races + "</td><td>" + d.wins + "</td><td>" + d.podiums + "</td></tr>").join("")
+    : '<tr><td colspan="6" class="muted">Aucune course enregistrée.</td></tr>';
+}
 
-        var rows = '';
-        race.results.forEach(function(res, i) {
-            rows += '<tr><td>' + (i + 1) + '</td><td>' + res.name + '</td><td>' + res.timeOrGap + '</td><td>+' + res.ptsEarned + '</td></tr>';
-        });
+function gapText(r, lead) {
+  if (r.timeOrGap) return r.timeOrGap; // anciennes données
+  if (!r.totalMs) return "–";
+  if (r.pos === 1) return fmtLap(r.totalMs);
+  if (r.laps === lead.laps) return "+" + ((r.totalMs - lead.totalMs) / 1000).toFixed(3) + " s";
+  const d = lead.laps - r.laps;
+  return "+" + d + " tour" + plural(d, "", "s");
+}
 
-        var collisionRows = '';
-        if (race.collisions && race.collisions.length > 0) {
-            race.collisions.forEach(function(c) {
-                collisionRows += '<tr>' +
-                    '<td>' + c.time + '</td>' +
-                    '<td><span class="badge-collision">' + c.type + '</span></td>' +
-                    '<td><b>' + c.driver + '</b></td>' +
-                    '<td>' + c.target + '</td>' +
-                    '<td>' + c.speed + ' km/h</td>' +
-                '</tr>';
-            });
-        } else {
-            collisionRows = '<tr><td colspan="5" style="text-align:center; color:#2ecc71;">🥇 Une course propre ! Aucune collision enregistrée.</td></tr>';
-        }
+function renderRace() {
+  const race = db.races.find(r => String(r.id) === $("race-select").value);
+  if (!race) { $("race-details").innerHTML = '<p class="muted">Aucune course sélectionnée.</p>'; return; }
+  const lead = race.results[0];
+  const rows = race.results.map(r =>
+    "<tr><td>" + r.pos + "</td><td>" + esc(r.name) + (r.dnf ? ' <span class="muted">(non classé)</span>' : "") + "</td><td>" + (r.laps ?? "–") + "</td><td>" + esc(gapText(r, lead)) + "</td><td>" + fmtLap(r.bestLapMs) + "</td><td>+" + (r.ptsEarned || 0) + "</td></tr>").join("");
+  const crashes = race.collisions.length
+    ? race.collisions.map(c => "<tr><td>" + esc(c.time) + '</td><td><span class="badge">' + (c.type === "car" ? "Contact" : c.type === "env" ? "Choc décor" : esc(c.type)) + "</span></td><td><b>" + esc(c.driver) + "</b></td><td>" + esc(c.target) + "</td><td>" + c.speed + " km/h</td></tr>").join("")
+    : '<tr><td colspan="5" class="good">Course propre : aucun choc relevé.</td></tr>';
+  $("race-details").innerHTML =
+    "<h3>" + esc(race.name) + "</h3><p>" + esc(race.summary || "") + "</p>" +
+    '<h4>Résultats</h4><div class="table-wrap"><table><thead><tr><th>Pos</th><th>Pilote</th><th>Tours</th><th>Temps / écart</th><th>Meilleur tour</th><th>Points</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
+    '<h4>Collisions</h4><div class="table-wrap"><table><thead><tr><th>Instant</th><th>Type</th><th>Pilote</th><th>Cible</th><th>Vitesse</th></tr></thead><tbody>' + crashes + "</tbody></table></div>";
+}
 
-        document.getElementById('race-details').innerHTML = 
-            '<h3>' + race.name + ' — Circuit : ' + race.track + '</h3>' +
-            '<p><b>Résumé :</b> ' + race.summary + '</p>' +
-            '<h4>📊 Grille des Résultats</h4>' +
-            '<table>' +
-                '<thead><tr><th>Pos</th><th>Pilote</th><th>Chrono / Écart</th><th>Points</th></tr></thead>' +
-                '<tbody>' + rows + '</tbody>' +
-            '</table>' +
-            '<h4>💥 Rapport détaillé des Collisions</h4>' +
-            '<table>' +
-                '<thead><tr><th>Instant</th><th>Type</th><th>Pilote Impliqué</th><th>Cible / Obstacle</th><th>Vitesse</th></tr></thead>' +
-                '<tbody>' + collisionRows + '</tbody>' +
-            '</table>';
-    }
+// Points forts et faibles : comparés au reste du peloton, jamais inventés
+function traits(d) {
+  const medPos = median(drivers.map(x => x.avgPos));
+  const medCol = median(drivers.map(x => x.collisions / x.races));
+  const perRace = d.collisions / d.races;
+  const good = [], bad = [];
+  if (d.wins) good.push(d.wins + " victoire" + plural(d.wins, "", "s"));
+  else if (d.podiums) good.push(d.podiums + " podium" + plural(d.podiums, "", "s"));
+  if (d.avgPos < medPos) good.push("Position moyenne " + f1(d.avgPos) + ", meilleure que la médiane du peloton (" + f1(medPos) + ")");
+  if (perRace < medCol) good.push("Course plutôt propre : " + f1(perRace) + " choc par course");
+  if (d.dnf) bad.push(d.dnf + " course" + plural(d.dnf, "", "s") + " sous les " + FINISH_RATIO * 100 + " % des tours, sans point");
+  if (d.avgPos > medPos) bad.push("Position moyenne " + f1(d.avgPos) + ", derrière la médiane du peloton (" + f1(medPos) + ")");
+  if (perRace > medCol && perRace >= 2) bad.push("Nombreux chocs : " + f1(perRace) + " par course");
+  return { good, bad };
+}
 
-    // 3. Rendu des Fiches Pilotes
-    function renderDriverProfile() {
-        var name = document.getElementById('driver-selector').value;
-        if (!name || !db.standings || db.standings.length === 0) {
-            document.getElementById('driver-profile-content').innerHTML = '<p>Veuillez sélectionner un pilote.</p>';
-            return;
-        }
-        var stats = db.standings.find(function(p) { return p.name === name; });
-        if (!stats) {
-            document.getElementById('driver-profile-content').innerHTML = '<p>Veuillez sélectionner un pilote.</p>';
-            return;
-        }
+function renderDriver() {
+  const d = drivers.find(x => x.name === $("driver-select").value);
+  if (!d) { $("driver-details").innerHTML = '<p class="muted">Aucun pilote sélectionné.</p>'; return; }
+  const t = traits(d);
+  const list = (a, cls, none) => a.length ? '<ul class="traits ' + cls + '">' + a.map(x => "<li>" + esc(x) + "</li>").join("") + "</ul>" : '<p class="muted">' + none + "</p>";
+  $("driver-details").innerHTML =
+    '<div class="grid"><div class="card"><h3>Statistiques</h3>' +
+    "<p><b>Points :</b> " + d.points + "</p><p><b>Courses :</b> " + d.races + "</p><p><b>Victoires :</b> " + d.wins + " &nbsp; <b>Podiums :</b> " + d.podiums + "</p>" +
+    "<p><b>Position moyenne :</b> " + f1(d.avgPos) + " (meilleure : " + d.bestPos + ")</p><p><b>Chocs :</b> " + d.collisions + "</p></div>" +
+    '<div class="card"><h3>Points forts</h3>' + list(t.good, "good", "Aucun point fort net pour l’instant.") +
+    "<h3>Points faibles</h3>" + list(t.bad, "bad", "Aucun point faible net pour l’instant.") +
+    (d.races < 3 ? '<p class="muted">Moins de 3 courses : à prendre avec prudence.</p>' : "") + "</div></div>";
+}
 
-        var goodTrait = stats.wins > 0 ? "Finition (Décroche des victoires)" : "Régularité dans le Top 10";
-        var badTrait = stats.wins === 0 && stats.points > 40 ? "Vitesse de pointe pour la gagne" : "Doit accumuler plus de roulage";
+function renderCompare() {
+  const A = drivers.find(d => d.name === $("cmp1").value), B = drivers.find(d => d.name === $("cmp2").value);
+  if (!A || !B || A === B) { $("cmp-details").innerHTML = '<p class="muted">Choisissez deux pilotes différents.</p>'; return; }
+  const lines = [
+    ["Points", A.points, B.points, 1], ["Courses", A.races, B.races, 0], ["Victoires", A.wins, B.wins, 1], ["Podiums", A.podiums, B.podiums, 1],
+    ["Position moyenne", f1(A.avgPos), f1(B.avgPos), -1, A.avgPos, B.avgPos], ["Meilleure place", A.bestPos, B.bestPos, -1],
+    ["Chocs par course", f1(A.collisions / A.races), f1(B.collisions / B.races), -1, A.collisions / A.races, B.collisions / B.races]
+  ];
+  const cell = (v, mine, other, dir) => '<td class="' + (dir && mine < other ? (dir > 0 ? "bad" : "good") : dir && mine > other ? (dir > 0 ? "good" : "bad") : "") + '">' + v + "</td>";
+  const rows = lines.map(([label, a, b, dir, na, nb]) => {
+    const x = na ?? a, y = nb ?? b;
+    return "<tr><th>" + label + "</th>" + cell(a, x, y, dir) + cell(b, y, x, dir) + "</tr>";
+  }).join("");
+  let wa = 0, wb = 0;
+  for (const race of db.races) {
+    const x = race.results.find(r => r.name === A.name), y = race.results.find(r => r.name === B.name);
+    if (x && y) { if (x.pos < y.pos) wa++; else wb++; }
+  }
+  $("cmp-details").innerHTML =
+    '<div class="table-wrap"><table><thead><tr><th></th><th>' + esc(A.name) + "</th><th>" + esc(B.name) + "</th></tr></thead><tbody>" + rows + "</tbody></table></div>" +
+    "<p><b>Duel direct :</b> " + esc(A.name) + " devant " + wa + " fois, " + esc(B.name) + " devant " + wb + " fois" + (wa + wb ? " sur " + (wa + wb) + " course" + plural(wa + wb, "", "s") + " communes." : " (aucune course commune).") + "</p>";
+}
 
-        document.getElementById('driver-profile-content').innerHTML = 
-            '<div class="flex-grid">' +
-                '<div class="card">' +
-                    '<h3>Statistiques Globales</h3>' +
-                    '<p><b>Points totaux :</b> ' + stats.points + ' pts</p>' +
-                    '<p><b>Courses complétées :</b> ' + stats.races + '</p>' +
-                    '<p><b>Victoires :</b> ' + stats.wins + '</p>' +
-                '</div>' +
-                '<div class="card">' +
-                    '<h3>Analyse automatique Performance</h3>' +
-                    '<p><b>💪 Point Fort détecté :</b> <span class="badge-good">' + goodTrait + '</span></p>' +
-                    '<p><b>⚠️ Point Faible détecté :</b> <span class="badge-bad">' + badTrait + '</span></p>' +
-                '</div>' +
-            '</div>';
-    }
-
-    // 4. Comparateur de pilotes
-    function runComparison() {
-        var p1 = document.getElementById('compare-1').value;
-        var p2 = document.getElementById('compare-2').value;
-        if (!p1 || !p2 || p1 === p2 || !db.standings || db.standings.length === 0) {
-            document.getElementById('comparison-results').innerHTML = '<p>Sélectionnez deux pilotes différents pour lancer la comparaison.</p>';
-            return;
-        }
-        var s1 = db.standings.find(function(p) { return p.name === p1; });
-        var s2 = db.standings.find(function(p) { return p.name === p2; });
-        
-        if (!s1 || !s2) {
-            document.getElementById('comparison-results').innerHTML = '<p>Sélectionnez deux pilotes différents pour lancer la comparaison.</p>';
-            return;
-        }
-
-        var buildBlock = function(s) {
-            return '<div class="card">' +
-                '<h3>' + s.name + '</h3>' +
-                '<p><b>Points :</b> ' + s.points + ' pts</p>' +
-                '<p><b>Courses disputées :</b> ' + s.races + '</p>' +
-                '<p><b>Victoires :</b> ' + s.wins + '</p>' +
-            '</div>';
-        };
-            
-        document.getElementById('comparison-results').innerHTML = buildBlock(s1) + buildBlock(s2);
-    }
-
-    // LECTURE ET TRAITEMENT ADAPTATIF DES LOGS BRUTS ASSETTO CORSA
-    function importAssettoJson(input) {
-        var file = input.files[0];
-        if (!file) return;
-        
-        var reader = new FileReader();
-        reader.onload = async function(e) {
-            try {
-                var data = JSON.parse(e.target.result);
-                
-                var rawCars = data.Cars || [];
-                var rawLaps = data.Laps || [];
-                var rawEvents = data.Events || [];
-                
-                var driversFound = [];
-                
-                // Extraction des pilotes uniques depuis les tours de piste
-                rawLaps.forEach(function(lap) {
-                    if (lap.DriverName && driversFound.indexOf(lap.DriverName) === -1) {
-                        driversFound.push(lap.DriverName);
-                    }
-                });
-
-                // Secours : extraction depuis l'inventaire des voitures
-                if (driversFound.length === 0) {
-                    rawCars.forEach(function(c) {
-                        if (c.Driver && c.Driver.Name && driversFound.indexOf(c.Driver.Name) === -1) {
-                            driversFound.push(c.Driver.Name);
-                        }
-                    });
-                }
-
-                if (driversFound.length === 0) {
-                    alert("Impossible de localiser des sessions ou des pilotes valides dans ce fichier.");
-                    return;
-                }
-
-                // Extraire le meilleur temps de course de chaque pilote
-                var resultsList = [];
-                driversFound.forEach(function(driverName) {
-                    var bestTime = Infinity;
-                    rawLaps.forEach(function(lap) {
-                        if (lap.DriverName === driverName && lap.LapTime < bestTime) {
-                            bestTime = lap.LapTime;
-                        }
-                    });
-                    
-                    resultsList.push({
-                        name: driverName,
-                        rawTime: bestTime === Infinity ? 9999999 : bestTime
-                    });
-                });
-
-                // Trier pour établir le classement de la manche
-                resultsList.sort(function(a, b) { return a.rawTime - b.rawTime; });
-
-                var bareme =;
-                var processedResults = [];
-
-                resultsList.forEach(function(driver, pos) {
-                    var pts = bareme[pos] || 0;
-                    var isWin = pos === 0 ? 1 : 0;
-                    
-                    var displayTime = "Fini";
-                    if (driver.rawTime !== 9999999) {
-                        var min = Math.floor(driver.rawTime / 60000);
-                        var sec = ((driver.rawTime % 60000) / 1000).toFixed(3);
-                        displayTime = min + ":" + (sec < 10 ? "0" : "") + sec;
-                    }
-
-                    processedResults.push({
-                        name: driver.name,
-                        timeOrGap: displayTime,
-                        ptsEarned: pts
-                    });
-
-                    // Cumuler au classement général de la base
-                    if (!db.standings) db.standings = [];
-                    var pGeneral = db.standings.find(function(p) { return p.name === driver.name; });
-                    if (!pGeneral) {
-                        pGeneral = { name: driver.name, points: 0, races: 0, wins: 0 };
-                        db.standings.push(pGeneral);
-                    }
-                    pGeneral.points += pts;
-                    pGeneral.races += 1;
-                    pGeneral.wins += isWin;
-                });
-
-                // Décodage et traitement des collisions
-                var processedCollisions = [];
-                if (rawEvents && rawEvents.length > 0) {
-                    rawEvents.forEach(function(ev) {
-                        if (ev.Type === "COLLISION_WITH_CAR" || ev.Type === "COLLISION_WITH_ENV") {
-                            var driverName = (ev.Driver && ev.Driver.Name) ? ev.Driver.Name : "Inconnu";
-                            var targetName = "Décor / Mur";
-                            if (ev.Type === "COLLISION_WITH_CAR" && ev.OtherDriver && ev.OtherDriver.Name) {
-                                targetName = ev.OtherDriver.Name;
-                            }
-                            
-                            var crashTimeStr = "00:00";
-                            if (ev.Timestamp) {
-                                var sTotal = Math.floor(ev.Timestamp / 1000);
-                                var m = Math.floor(sTotal / 60);
-                                var s = sTotal % 60;
-                            var speedKmh = ev.ImpactSpeed ? Math.round(ev.ImpactSpeed * 3.6) : 0;
-
-                            processedCollisions.push({
-                                time: crashTimeStr,
-                                type: ev.Type === "COLLISION_WITH_CAR" ? "CONTACT CHASSIS" : "CHOC DECOR",
-                                driver: driverName,
-                                target: targetName,
-                                speed: speedKmh
-                            });
-                        }
-                    });
-                }
-
-                // Intégration de la course dans la base
-                if (!db.races) db.races = [];
-                var nextId = db.races.length + 1;
-                var trackName = data.TrackName || "Circuit Principal";
-                
-                db.races.push({
-                    id: nextId,
-                    name: "Manche " + nextId + " — " + trackName,
-                    track: trackName,
-                    summary: "Course bouclée. " + processedResults.length + " pilotes classés au drapeau à damier et " + processedCollisions.length + " chocs analysés.",
-                    results: processedResults,
-                    collisions: processedCollisions
-                });
-
-                // Sauvegarde durable sur le serveur Render via Express
-                var response = await fetch('/api/save-championship', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(db)
-                });
-                
-                var result = await response.json();
-                
-                if (result.status === "success") {
-                    initApp();
-                    alert("Parfait ! Les logs d'Assetto Corsa comprenant les classements et le journal complet des collisions ont été enregistrés définitivement.");
-                } else {
-                    alert("Le classement a changé à l'écran mais le serveur a refusé de le stocker.");
-                }
-
-            } catch (err) {
-                alert("Erreur fatale d'analyse : vérifiez la structure de votre fichier JSON de log.");
-                console.error(err);
-            }
-        };
-        reader.readAsText(file);
-    }
-
-    window.onload = loadData;
+// ---------- Démarrage ----------
+document.querySelectorAll(".tab-btn").forEach(btn => btn.addEventListener("click", () => {
+  document.querySelectorAll(".tab-btn").forEach(b => b.setAttribute("aria-selected", String(b === btn)));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === btn.dataset.tab));
+}));
+$("race-select").addEventListener("change", renderRace);
+$("driver-select").addEventListener("change", renderDriver);
+$("cmp1").addEventListener("change", renderCompare);
+$("cmp2").addEventListener("change", renderCompare);
+$("file").addEventListener("change", onFileChosen);
+$("admin").hidden = location.hash !== "#admin"; // zone organisateur : ajouter #admin à l'adresse
+window.addEventListener("load", loadData);
 </script>
 </body>
 </html>
-
