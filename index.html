@@ -119,12 +119,9 @@
     }
 
     function switchTab(tabId) {
-        // Masquer toutes les sections
         document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-        // Désactiver tous les boutons
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         
-        // Activer la section et le bouton ciblés de façon sécurisée
         document.getElementById(tabId).classList.add('active');
         document.getElementById('btn-' + tabId).classList.add('active');
     }
@@ -135,7 +132,6 @@
         if (!db.standings || db.standings.length === 0) {
             html = `<tr><td colspan="5" style="text-align:center;">Aucune course enregistrée. Importez un fichier JSON pour commencer !</td></tr>`;
         } else {
-            // Copie superficielle du tableau pour trier proprement sans altérer la base
             let sortedStandings = [...db.standings];
             sortedStandings.sort((a,b) => b.points - a.points).forEach((p, idx) => {
                 html += `<tr>
@@ -188,7 +184,7 @@
     // 2. Rendu des Résumés de Course
     function renderRaceSummary() {
         const id = document.getElementById('race-selector').value;
-        if(!id || !db.races) {
+        if(!id || !db.races || db.races.length === 0) {
             document.getElementById('race-details').innerHTML = "<p>Aucune course sélectionnée.</p>";
             return;
         }
@@ -215,7 +211,7 @@
     // 3. Rendu des Fiches Pilotes
     function renderDriverProfile() {
         const name = document.getElementById('driver-selector').value;
-        if(!name || !db.standings) {
+        if(!name || !db.standings || db.standings.length === 0) {
             document.getElementById('driver-profile-content').innerHTML = "<p>Veuillez sélectionner un pilote.</p>";
             return;
         }
@@ -227,7 +223,7 @@
 
         let goodTrait = stats.wins > 0 ? "Finition (Gagne des courses)" : "Régularité dans les points";
         let badTrait = stats.wins === 0 && stats.points > 50 ? "Vitesse de pointe pour décrocher la victoire" : "Manque d'expérience sur ce championnat";
-        
+
         document.getElementById('driver-profile-content').innerHTML = `
             <div class="flex-grid"> 
                 <div class="card"> 
@@ -248,20 +244,18 @@
     function runComparison() {
         const p1 = document.getElementById('compare-1').value;
         const p2 = document.getElementById('compare-2').value;
-        
-        if(!p1 || !p2 || p1 === p2 || !db.standings) {
-            document.getElementById('comparison-results').innerHTML = "Sélectionnez deux pilotes différents pour lancer la comparaison.";
+        if(!p1 || !p2 || p1 === p2 || !db.standings || db.standings.length === 0) {
+            document.getElementById('comparison-results').innerHTML = "<p>Sélectionnez deux pilotes différents pour lancer la comparaison.</p>";
             return;
         }
-        
         const s1 = db.standings.find(p => p.name === p1);
         const s2 = db.standings.find(p => p.name === p2);
         
         if(!s1 || !s2) {
-            document.getElementById('comparison-results').innerHTML = "Sélectionnez deux pilotes différents pour lancer la comparaison.";
+            document.getElementById('comparison-results').innerHTML = "<p>Sélectionnez deux pilotes différents pour lancer la comparaison.</p>";
             return;
         }
-        
+
         const buildBlock = (s) => `
             <div class="card"> 
                 <h3>${s.name}</h3> 
@@ -291,7 +285,7 @@
                 }
                 
                 let raceResults = [];
-                // Barème F1 standard
+                // Barème F1 standard injecté ici
                 const bareme =;
                 
                 rawResults.forEach((driver, pos) => {
@@ -330,7 +324,6 @@
                     results: raceResults
                 });
                 
-                // Envoi vers le serveur Render
                 const response = await fetch('/api/save-championship', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -354,4 +347,3 @@
     }
     
     window.onload = loadData;
-
