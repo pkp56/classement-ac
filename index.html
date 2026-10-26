@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -34,8 +33,9 @@
     <h1>🏆 Assetto Corsa — Classement & Championnat</h1>
 </header>
 
+<!-- ZONE ADMINISTRATEUR POUR IMPORTER LE FICHIER ASSETTOHOSTING -->
 <div class="admin-zone">
-    <p style="margin-top:0;">🔧 <b>Zone Organisateur :</b> Sélectionnez le fichier <code>.json</code> d'AssettoHosting pour ajouter une course et la sauvegarder sur le serveur.</p>
+    <p style="margin-top:0;">🔧 <b>Zone Organisateur :</b> Sélectionnez le fichier <code>.json</code> brut d'Assetto Corsa pour ajouter une course et mettre à jour le serveur.</p>
     <label class="file-label">
         📂 Sélectionner le fichier de course .json
         <input type="file" id="json-file-picker" class="file-input" accept=".json" onchange="importAssettoJson(this)">
@@ -49,6 +49,7 @@
     <button id="btn-comparateur" class="tab-btn" onclick="switchTab('comparateur')">Comparateur</button>
 </div>
 
+<!-- SECTION 1 : CLASSEMENT GENERAL -->
 <div id="classement" class="content-section active">
     <h2>Classement Général des Pilotes</h2>
     <table>
@@ -65,18 +66,21 @@
     </table>
 </div>
 
+<!-- SECTION 2 : RESUMES DE COURSES -->
 <div id="courses" class="content-section">
     <h2>Historique & Résumés des Courses</h2>
     <select id="race-selector" class="select-box" onchange="renderRaceSummary()"></select>
     <div id="race-details"></div>
 </div>
 
+<!-- SECTION 3 : FICHES PILOTES -->
 <div id="pilotes" class="content-section">
     <h2>Profil Individuel du Pilote</h2>
     <select id="driver-selector" class="select-box" onchange="renderDriverProfile()"></select>
     <div id="driver-profile-content"></div>
 </div>
 
+<!-- SECTION 4 : COMPARATEUR DE PILOTES -->
 <div id="comparateur" class="content-section">
     <h2>Comparer deux Pilotes</h2>
     <div style="display:flex; gap: 20px;">
@@ -87,11 +91,7 @@
 </div>
 
 <script>
-    let db = {
-        standings: [],
-        driversData: {},
-        races: []
-    };
+    let db = { standings: [], driversData: {}, races: [] };
 
     async function loadData() {
         try {
@@ -100,7 +100,7 @@
                 db = await response.json();
             }
         } catch (err) {
-            console.log("Premier démarrage ou fichier championship.json absent. Base vide.");
+            console.log("Fichier championship.json absent. Base vide.");
         }
         initApp();
     }
@@ -116,7 +116,6 @@
     function switchTab(tabId) {
         document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        
         document.getElementById(tabId).classList.add('active');
         document.getElementById('btn-' + tabId).classList.add('active');
     }
@@ -265,51 +264,68 @@
         reader.onload = async function(e) {
             try {
                 const data = JSON.parse(e.target.result);
-                console.log("Structure du fichier reçue :", data);
                 
-                // Gestion de la structure AssettoHosting (parfois encapsulée ou en tableau)
-                let sessionData = data;
-                if (Array.isArray(data)) {
-                    sessionData = data[0];
+                // Analyse d'un fichier de log brut d'un serveur Assetto Corsa
+                let trackName = "Circuit inconnu";
+                let rawLaps = [];
+                
+                // Détection de la structure des Laps
+                if (data.Laps && Array.isArray(data.Laps)) {
+                    rawLaps = data.Laps;
+                } else if (data.laps && Array.isArray(data.laps)) {
+                    rawLaps = data.laps;
                 }
                 
-                const trackName = sessionData.TrackName || sessionData.track || "Circuit inconnu";
+                // Extraction du circuit depuis les objets de voiture s'il n'est pas à la racine
+                if (rawLaps.length > 0 && rawLaps[0].CarModel) {
+                    trackName = rawLaps[0].CarModel.replace('actk_', '').toUpperCase();
+                }
                 
-                // Assetto Server Manager utilise souvent 'Result' ou 'results'
-                const rawResults = sessionData.Result || sessionData.results || [];
-                
-                if (rawResults.length === 0) {
-                    alert("Ce fichier JSON ne contient aucun résultat de pilote valide (clé 'Result' ou 'results' manquante ou vide).");
+                if (rawLaps.length === 0) {
+                    alert("Erreur : Impossible de trouver le tableau des temps ('Laps') dans ce fichier log.");
                     return;
                 }
+                
+                // Extraire le meilleur temps de chaque pilote unique pour simuler les positions finales
+                let bestLapsMap = {};
+                rawLaps.forEach(lap => {
+                    const name = lap.DriverName || lap.driverName;
+                    const time = lap.LapTime || lap.lapTime;
+                    if (name && time > 0) {
+                        if (!bestLapsMap[name] || time < bestLapsMap[name]) {
+                            bestLapsMap[name] = time;
+                        }
+                    }
+                });
+                
+                // Créer le classement de la course (le plus rapide gagne)
+                let raceLeaderboard = Object.keys(bestLapsMap).map(name => {
+                    return { name: name, bestTime: bestLapsMap[name] };
+                }).sort((a, b) => a.bestTime - b.bestTime);
                 
                 let raceResults = [];
                 const bareme = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
                 
-                rawResults.forEach((driver, pos) => {
+                raceLeaderboard.forEach((driver, pos) => {
                     const ptsEarned = bareme[pos] || 0;
                     const isWin = pos === 0 ? 1 : 0;
                     
-                    // Récupération sécurisée du nom du pilote
-                    const driverName = driver.DriverName || driver.name || driver.driverName || "Pilote inconnu";
-                    
-                    let formattedTime = "Fini";
-                    if (driver.TotalTime) {
-                        formattedTime = (driver.TotalTime / 1000).toFixed(2) + "s";
-                    } else if (driver.time) {
-                        formattedTime = driver.time;
-                    }
+                    // Conversion du temps au format MM:SS.mmm
+                    const totalMs = driver.bestTime;
+                    const mins = Math.floor(totalMs / 60000);
+                    const secs = ((totalMs % 60000) / 1000).toFixed(3);
+                    const formattedTime = `\${mins}:\${secs < 10 ? '0' : ''}\${secs}`;
                     
                     raceResults.push({
-                        name: driverName,
+                        name: driver.name,
                         timeOrGap: formattedTime,
                         ptsEarned: ptsEarned
                     });
                     
                     if (!db.standings) db.standings = [];
-                    let pGeneral = db.standings.find(p => p.name === driverName);
+                    let pGeneral = db.standings.find(p => p.name === driver.name);
                     if (!pGeneral) {
-                        pGeneral = { name: driverName, points: 0, races: 0, wins: 0 };
+                        pGeneral = { name: driver.name, points: 0, races: 0, wins: 0 };
                         db.standings.push(pGeneral);
                     }
                     pGeneral.points += ptsEarned;
@@ -323,7 +339,7 @@
                     id: nextId,
                     name: `Manche \${nextId} — \${trackName}`,
                     track: trackName,
-                    summary: `Course complétée avec \${rawResults.length} pilotes classés au drapeau à damier.`,
+                    summary: `Course complétée. Traitement automatique de \${raceLeaderboard.length} pilotes uniques.`,
                     results: raceResults
                 });
                 
@@ -337,12 +353,12 @@
                 
                 if (result.status === "success") {
                     initApp();
-                    alert(`Félicitations ! La course à \${trackName} a été intégrée et sauvegardée de manière permanente !`);
+                    alert(`Félicitations ! La course à \${trackName} a été lue et sauvegardée sur Render !`);
                 } else {
-                    alert("Avertissement : Les données s'affichent temporairement mais le serveur a refusé de les sauvegarder.");
+                    alert("Avertissement : Les données s'affichent mais la sauvegarde sur le serveur a échoué.");
                 }
             } catch (err) {
-                alert("Erreur lors de la lecture du fichier : assurez-vous qu'il s'agit bien d'un JSON de course valide.");
+                alert("Erreur lors de la lecture du fichier : assurez-vous qu'il s'agit d'un JSON valide.");
                 console.error(err);
             }
         };
@@ -353,4 +369,3 @@
 </script>
 </body>
 </html>
-
