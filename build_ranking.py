@@ -57,7 +57,7 @@ def parse_session(path, cfg):
     laps = data.get("Laps", [])
     ignore_cuts = cfg.get("ignoreCutLaps", True)
 
-    lap_count = Counter(l.get("DriverGuid") for l in laps)
+    lap_count = Counter(str(l.get("DriverGuid") or "").strip() for l in laps if isinstance(l, dict))
     clean_best = {}
     for l in laps:
         t = l.get("LapTime", 0)
@@ -65,7 +65,7 @@ def parse_session(path, cfg):
             continue
         if ignore_cuts and l.get("Cuts", 0) > 0:
             continue
-        g = l.get("DriverGuid")
+        g = str(l.get("DriverGuid") or "").strip()
         if g not in clean_best or t < clean_best[g]:
             clean_best[g] = t
 
@@ -74,7 +74,7 @@ def parse_session(path, cfg):
         guid = str(r.get("DriverGuid") or "").strip()
         if not guid:
             continue
-        best = clean_best.get(r.get("DriverGuid"))
+        best = clean_best.get(guid)
         if best is None:
             rb = r.get("BestLap", 0)
             best = rb if 0 < rb < NO_LAP and not ignore_cuts else 0
@@ -82,7 +82,7 @@ def parse_session(path, cfg):
             "guid": guid,
             "name": (r.get("DriverName") or guid).strip(),
             "car": pretty(r.get("CarModel", "")),
-            "laps": lap_count.get(r.get("DriverGuid"), 0),
+            "laps": lap_count.get(guid, 0),
             "totalTime": int(r.get("TotalTime", 0) or 0),
             "bestLap": int(best or 0),
         })
@@ -122,7 +122,8 @@ def classify(entries, min_ratio):
     for e in entries:
         ok = e["totalTime"] > 0 and max_laps > 0 and e["laps"] >= min_ratio * max_laps
         (finished if ok else dnf).append(e)
-    dnf.sort(key=lambda e: -e["laps"])
+    finished.sort(key=lambda e: (-e["laps"], e["totalTime"], e["guid"]))
+    dnf.sort(key=lambda e: (-e["laps"], e["guid"]))
     return finished, dnf
 
 
