@@ -211,7 +211,7 @@
   }
 
   async function save() {
-    const r = await fetch('/api/save-championship', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken }, body: JSON.stringify(db) });
+    const r = await fetch('https://gdsp-render-backend.onrender.com/api/save-championship', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken }, body: JSON.stringify(db) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.message || 'Erreur HTTP ' + r.status);
   }
