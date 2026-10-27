@@ -385,7 +385,11 @@ def build(champ):
     # Classement alternatif : même calcul que le classement officiel, mais
     # retrait de la manche la moins bien marquée par pilote. Le classement
     # officiel ci-dessus reste inchangé et conserve toutes les manches joker.
+    all_event_ids = [str(i) for i in range(1, len(champ.get("Events", [])) + 1)]
     by_event = defaultdict(lambda: defaultdict(int))
+    for guid in drivers:
+        for event_id in all_event_ids:
+            by_event[guid][event_id] = 0
     for rc in races:
         for result in rc["results"]:
             by_event[result["driver"]][str(rc["event"])] += result["points"]
@@ -408,6 +412,11 @@ def build(champ):
     # Classements équipe : les points des pilotes sont additionnés par manche.
     team_by_event = defaultdict(lambda: defaultdict(int))
     team_totals = defaultdict(int)
+    all_teams = {d.get("team") or "Équipe non renseignée" for d in drivers.values()}
+    all_event_ids = [str(i) for i in range(1, len(champ.get("Events", [])) + 1)]
+    for team in all_teams:
+        for event_id in all_event_ids:
+            team_by_event[team][event_id] = 0
     for rc in races:
         for row in rc["results"]:
             team = drivers[row["driver"]].get("team") or "Équipe non renseignée"
