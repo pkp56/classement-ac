@@ -12,12 +12,20 @@
   function parseSession(d) {
     const type = String(d.Type || d.SessionType || '').toUpperCase();
     const laps = Array.isArray(d.Laps) ? d.Laps : [];
+    const evAll = Array.isArray(d.Events) ? d.Events.filter(e => e && (e.Type || e.type)) : [];
+    const nm = v => String(v && typeof v === 'object' ? (v.Name || v.Guid) : (v || '')).trim();
     const results = (d.Result || []).map((r, i) => {
       const name = r.DriverName || (r.Driver && r.Driver.Name) || 'Inconnu';
       const mine = laps.filter(l => (l.DriverGuid && l.DriverGuid === r.DriverGuid) || l.DriverName === name);
-      return { pos: i + 1, name, car: r.CarModel || '—', best: Number(r.BestLap) || 0, total: Number(r.TotalTime) || 0, laps: mine.length, dsq: !!(r.Disqualified || r.IsDisqualified) };
+      const t = mine.map(l => Number(l.LapTime)).filter(x => x > 0 && x < 3600000);
+      const clean = t.filter(x => x <= Math.min(...t) * 1.07);
+      let cons = null;
+      if (clean.length > 2) { const m = clean.reduce((a, b) => a + b, 0) / clean.length; cons = Math.sqrt(clean.reduce((a, b) => a + (b - m) ** 2, 0) / clean.length) / m * 100; }
+      const mineEv = evAll.filter(e => nm(e.Driver || e.driver) === name);
+      const b = Number(r.BestLap) || 0;
+      return { pos: i + 1, name, guid: r.DriverGuid || '', car: r.CarModel || '—', best: b > 0 && b < 3600000 ? b : 0, total: Number(r.TotalTime) || 0, laps: mine.length, dsq: !!(r.Disqualified || r.IsDisqualified), consistency: cons, contacts: mineEv.filter(e => /CAR/.test(e.Type || e.type)).length, envHits: mineEv.filter(e => /ENV/.test(e.Type || e.type)).length };
     });
-    const events = Array.isArray(d.Events) ? d.Events.filter(e => e && (e.Type || e.type)) : [];
+    const events = /QUALIF|PRACT/.test(type) ? [] : evAll; // pas de collisions pour les qualifs
     return { id: [d.Date || d.Timestamp || '', d.TrackName || '', type, results.length].join('|'), type, track: [d.TrackName, d.TrackConfig].filter(Boolean).join(' · ') || 'Piste inconnue', date: d.Date || '', results, events };
   }
 
@@ -30,7 +38,7 @@
     const isRace = s && /RACE/.test(s.type);
     $('sessRace').innerHTML = s && isRace ? table(s, true) : '';
     $('sessQualif').innerHTML = s && !isRace ? table(s, false) : '<div class="message">Importez le JSON de résultats d’une qualification (fichier du serveur AC) depuis l’administration, puis choisissez-la dans la liste des sessions.</div>';
-    if (s && s.events.length) { incidentData = normIncidents(s.events); renderIncidentTools(); }
+    if (s && isRace && s.events.length) { incidentData = normIncidents(s.events); renderIncidentTools(); }
   }
 
   function renderSessions() {
@@ -38,6 +46,35 @@
     sel.innerHTML = list.length ? list.map((s, i) => '<option value="' + i + '">' + esc(typeLabel(s.type) + ' · ' + s.track + when(s.date)) + '</option>').join('') : '<option value="">Aucune session importée</option>';
     if (prev && list[prev]) sel.value = prev;
     showSession();
+  }
+
+  // Barème des points par place (à adapter à ton championnat)
+  const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
+
+  // Reconstruit classement + fiches pilotes à partir des courses importées
+  function rebuild() {
+    const races = (db.sessions || []).filter(s => /RACE/.test(s.type)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const dr = {}, st = {};
+    db.races = [];
+    races.forEach((s, n) => {
+      const key = 'm' + (n + 1) + '-race', rr = [];
+      s.results.forEach((r, i) => {
+        const id = r.guid || r.name;
+        dr[id] = dr[id] || { name: r.name, team: '' };
+        const e = st[id] = st[id] || { driver: id, points: 0, wins: 0, podiums: 0, races: 0, byRace: {} };
+        const pts = r.dsq ? 0 : (POINTS[i] || 0);
+        e.points += pts; e.races++; e.byRace[key] = pts;
+        if (i === 0 && !r.dsq) e.wins++;
+        if (i < 3 && !r.dsq) e.podiums++;
+        rr.push({ driver: id, bestLap: r.best, consistency: r.consistency, contacts: r.contacts, envHits: r.envHits });
+      });
+      db.races.push({ eventName: s.track, raceNo: n + 1, results: rr });
+    });
+    db.drivers = dr;
+    db.standings = Object.values(st);
+    db.meta = Object.assign({}, db.meta, { eventsCompleted: races.length, updated: new Date().toISOString() });
+    db.auto = true;
+    normalizeData(db);
   }
 
   async function save() {
@@ -62,6 +99,7 @@
         if (!s.results.length) throw new Error('Aucun résultat dans cette session.');
         if (!db) normalizeData({ drivers: {}, standings: [], meta: {}, sessions: [] });
         db.sessions = (db.sessions || []).filter(x => x.id !== s.id).concat(s);
+        if (db.auto || !(db.standings || []).length) rebuild(); // classement calculé depuis les courses
         text = typeLabel(s.type) + ' importée : ' + s.results.length + ' pilotes, ' + s.events.length + ' incident(s).';
       } else if (d && Array.isArray(d.Classes)) {
         throw new Error('Export Server Manager détecté : convertissez-le d’abord avec build_championship.py, puis importez data/championship.json.');
