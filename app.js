@@ -4,7 +4,7 @@ const fs = require('fs');
 const app = express();
 
 // Permet au serveur de lire les données JSON envoyées par le site
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(__dirname));
 
 // Route pour charger la page principale
