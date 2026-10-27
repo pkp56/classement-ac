@@ -94,6 +94,31 @@
     showSession();
   }
 
+  function clearDerived() {
+    if (!db) db = { drivers: {}, standings: [], sessions: [], meta: {} };
+    db.drivers = {};
+    db.standings = [];
+    db.standingsDropWorst = [];
+    db.teamStandings = [];
+    db.teamStandingsDropWorst = [];
+    db.meritStandings = [];
+    db.races = [];
+    db.auto = true;
+    db.meta = Object.assign({}, db.meta, {
+      eventsCompleted: 0, races: 0, drivers: 0,
+      updated: new Date().toISOString(),
+      source: 'sessions',
+      message: 'Aucun résultat : importez les JSON de qualification et de course.'
+    });
+    normalizeData(db);
+  }
+
+  function refreshDerived() {
+    const list = (db && db.sessions) || [];
+    if (list.some(s => /RACE/.test(String(s.type)) && !/QUALIF/.test(String(s.type)))) rebuild();
+    else clearDerived();
+  }
+
   // Barème GDSP : 30, 26, 23, 21, 20, 19 puis -1 par place jusqu'à P24.
   const POINTS = [30, 26, 23, 21, 20, 19, ...Array.from({length:18}, (_,i)=>18-i)];
   const racePoints = (pos, duration) => (pos >= 1 && pos <= 24 ? POINTS[pos-1] : 0) * (duration >= 50 ? 2 : 1);
@@ -138,16 +163,19 @@
       const d = JSON.parse(await f.text());
       let text;
       if (d && d.drivers && Array.isArray(d.standings)) {            // championnat (format du site)
-        d.sessions = d.sessions || (db && db.sessions) || [];
-        normalizeData(d);
-        text = 'Championnat importé (' + d.standings.length + ' pilotes).';
+        // Un ancien JSON de classement ne doit jamais être la source des résultats.
+        // On ne garde que les sessions déjà importées, puis on reconstruit les données dérivées.
+        d.sessions = (db && db.sessions) || d.sessions || [];
+        db = d;
+        refreshDerived();
+        text = 'Fichier championnat reçu : les classements ont été reconstruits à partir des sessions de course et de qualification importées.';
       } else if (d && (Array.isArray(d.Result) || Array.isArray(d.Laps))) { // course / qualification AC
         const s = parseSession(d);
         if (!s.results.length) throw new Error('Aucun résultat dans cette session.');
         if (!db) normalizeData({ drivers: {}, standings: [], meta: {}, sessions: [] });
         db.sessions = (db.sessions || []).filter(x => x.id !== s.id).concat(s);
-        if (db.auto || !(db.standings || []).length) rebuild(); // classement calculé depuis les courses
-        text = typeLabel(s.type) + ' importée : ' + s.results.length + ' pilotes. Les événements de collision sont ignorés.';
+        refreshDerived();
+        text = typeLabel(s.type) + ' importée : ' + s.results.length + ' pilotes. Les classements et fiches sont calculés uniquement depuis les sessions importées.';
       } else if (d && Array.isArray(d.Classes)) {
         throw new Error('Export Server Manager détecté : convertissez-le d’abord avec build_championship.py, puis importez data/championship.json.');
       } else {                                                       // simple log de collisions
@@ -170,6 +198,10 @@
   old.replaceWith(btn);
   btn.addEventListener('click', smartImport);
   const baseRenderAll = renderAll;
-  renderAll = function () { baseRenderAll(); renderSessions(); };
+  renderAll = function () {
+    if (db) refreshDerived();
+    baseRenderAll();
+    renderSessions();
+  };
   renderSessions();
 })();
