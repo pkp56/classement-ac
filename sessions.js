@@ -316,7 +316,7 @@
   }
 
   // Deux sélecteurs cohérents : manche, puis séance (qualification/course).
-  document.querySelector('.race-tabs').insertAdjacentHTML('beforebegin', '<div class="toolbar" style="margin-top:16px"><label for="sessionSelect" class="muted">Séance</label><select id="sessionSelect" aria-label="Choisir qualification ou course"></select></div><div id="sessionDetail" style="margin-top:16px"></div>');
+  document.querySelector('.race-tabs').insertAdjacentHTML('afterend', '<div class="toolbar" style="margin-top:16px"><label for="sessionSelect" class="muted">Séance</label><select id="sessionSelect" aria-label="Choisir qualification ou course"></select></div><div id="sessionDetail" style="margin-top:16px"></div>');
   $('raceSelect').addEventListener('change', renderSessions);
   $('sessionSelect').addEventListener('change', showSession);
   document.querySelectorAll('[data-race-tab]').forEach(tab => tab.addEventListener('click', () => {
