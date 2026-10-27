@@ -11,6 +11,7 @@ Seule la fonction parse_session() dépend du format des fichiers de résultats.
 Tout le reste (barème, poles, meilleurs tours, championnats) est générique.
 """
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -213,7 +214,7 @@ def build(results_dir, cfg):
         label = f"{track} — {layout}" if layout and layout.lower() != track.lower() else track
         stamp = s["date"].astimezone(tz).strftime("%Y%m%d-%H%M")
         races.append({
-            "id": f"{stamp}-{s['trackId']}",
+            "id": f"{stamp}-{s['trackId']}-{hashlib.sha256(s['path'].encode('utf-8')).hexdigest()[:12]}",
             "date": s["date"].strftime("%Y-%m-%dT%H:%M:%SZ"),
             "championship": champ["id"],
             "championshipName": champ["name"],
