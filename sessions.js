@@ -13,26 +13,63 @@
     const type = String(d.Type || d.SessionType || '').toUpperCase();
     const laps = Array.isArray(d.Laps) ? d.Laps : [];
     const evAll = Array.isArray(d.Events) ? d.Events.filter(e => e && (e.Type || e.type)) : [];
-    const nm = v => String(v && typeof v === 'object' ? (v.Name || v.Guid) : (v || '')).trim();
-    const results = (d.Result || []).map((r, i) => {
-      const name = r.DriverName || (r.Driver && r.Driver.Name) || 'Inconnu';
-      const mine = laps.filter(l => (l.DriverGuid && l.DriverGuid === r.DriverGuid) || l.DriverName === name);
+    const normalizeName = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr');
+    const person = value => value && typeof value === 'object' ? value : {};
+    const cars = Array.isArray(d.Cars) ? d.Cars : [];
+    const byGuid = new Map(), byCar = new Map(), byName = new Map();
+    const remember = (driver, carId) => {
+      const v = person(driver), name = String(v.Name || v.DriverName || '').trim();
+      const guid = String(v.Guid || v.DriverGuid || '').trim();
+      const team = String(v.TeamName || v.Team || v.TeamShortName || '').trim();
+      if (guid) {
+        const old = byGuid.get(guid) || {};
+        byGuid.set(guid, { name: name || old.name || '', team: team || old.team || '', guid });
+      }
+      if (name) {
+        const key = normalizeName(name), old = byName.get(key) || {};
+        byName.set(key, { name: name || old.name || '', team: team || old.team || '', guid: guid || old.guid || '' });
+      }
+      if (carId !== undefined && carId !== null) {
+        const old = byCar.get(String(carId)) || {};
+        byCar.set(String(carId), { name: name || old.name || '', team: team || old.team || '', guid: guid || old.guid || '' });
+      }
+    };
+    cars.forEach(c => remember(c.Driver || c, c.CarId));
+    (Array.isArray(d.Entrants) ? d.Entrants : []).forEach(e => remember(e.Driver || e, e.CarId));
+    const resultRows = Array.isArray(d.Result) ? d.Result : [];
+    resultRows.forEach(r => remember(r.Driver || { Name: r.DriverName, Guid: r.DriverGuid, Team: r.Team || r.TeamName }, r.CarId));
+    const results = resultRows.map((r, i) => {
+      const guid = String(r.DriverGuid || person(r.Driver).Guid || '').trim();
+      const name = String(r.DriverName || person(r.Driver).Name || byGuid.get(guid)?.name || 'Inconnu').trim();
+      const carDriver = byGuid.get(guid) || byName.get(normalizeName(name)) || byCar.get(String(r.CarId)) || {};
+      const previous = (db && db.drivers && (db.drivers[guid] || Object.values(db.drivers).find(x => normalizeName(x.name) === normalizeName(name)))) || {};
+      const team = String(r.TeamName || r.Team || person(r.Driver).TeamName || person(r.Driver).Team || carDriver.team || previous.team || '').trim();
+      const mine = laps.filter(l => (l.DriverGuid && l.DriverGuid === guid) || normalizeName(l.DriverName || person(l.Driver).Name) === normalizeName(name));
       const t = mine.map(l => Number(l.LapTime)).filter(x => x > 0 && x < 3600000);
-      const clean = t.filter(x => x <= Math.min(...t) * 1.07);
+      const clean = t.length ? t.filter(x => x <= Math.min(...t) * 1.07) : [];
       let cons = null;
       if (clean.length > 2) { const m = clean.reduce((a, b) => a + b, 0) / clean.length; cons = Math.sqrt(clean.reduce((a, b) => a + (b - m) ** 2, 0) / clean.length) / m * 100; }
-      // Les événements de collision ne sont pas exploités ni conservés.
       const b = Number(r.BestLap) || 0;
-      return { pos: i + 1, name, guid: r.DriverGuid || '', team: r.TeamName || r.Team || (r.Driver && (r.Driver.TeamName || r.Driver.Team)) || '', car: r.CarModel || '—', best: b > 0 && b < 3600000 ? b : 0, total: Number(r.TotalTime) || 0, laps: mine.length, dsq: !!(r.Disqualified || r.IsDisqualified), consistency: cons, contacts: 0, envHits: 0 };
+      return { pos: i + 1, name, guid, team, car: r.CarModel || r.Car || '—', best: b > 0 && b < 3600000 ? b : 0, total: Number(r.TotalTime) || 0, laps: mine.length || Number(r.NumLaps) || 0, dsq: !!(r.Disqualified || r.IsDisqualified), consistency: cons, contacts: 0, envHits: 0 };
     });
-    // Les événements (collisions, contacts, sorties) ne sont pas conservés dans les sessions importées.
+    // Conserver uniquement les vitesses et les noms nécessaires aux statistiques : aucun GUID n'est exporté ici.
+    const speedStats = [];
+    evAll.forEach(ev => {
+      const speed = Number(ev.ImpactSpeed ?? ev.impactSpeed ?? ev.impact_speed ?? 0);
+      if (!(speed > 0) || ev.AfterSessionEnd) return;
+      const driverRaw = person(ev.Driver), otherRaw = person(ev.OtherDriver);
+      const driver = String(driverRaw.Name || (typeof ev.Driver === 'string' ? ev.Driver : '') || byCar.get(String(ev.CarId))?.name || '').trim();
+      const otherDriver = String(otherRaw.Name || (typeof ev.OtherDriver === 'string' ? ev.OtherDriver : '') || byCar.get(String(ev.OtherCarId))?.name || '').trim();
+      if (!driver && !otherDriver) return;
+      speedStats.push({ driver: driver || 'Inconnu', otherDriver: otherDriver || '—', speed, type: String(ev.Type || ev.type || 'EVENT'), timestamp: Number(ev.Timestamp || ev.timestamp || 0) });
+    });
     const eventName = d.EventName || (d.SessionConfig && d.SessionConfig.name) || '';
     const durationMinutes = Number((d.SessionConfig && (d.SessionConfig.time || d.SessionConfig.duration)) || d.DurationMinutes || 0);
-    return { id: [d.ChampionshipID || '', eventName, d.Date || d.Timestamp || '', d.TrackName || '', type].join('|'), type, track: [d.TrackName, d.TrackConfig].filter(Boolean).join(' · ') || 'Piste inconnue', eventName, date: d.Date || '', durationMinutes, results, events: [] };
+    return { id: [d.ChampionshipID || '', eventName, d.Date || d.Timestamp || '', d.TrackName || '', type].join('|'), type, track: [d.TrackName, d.TrackConfig].filter(Boolean).join(' · ') || 'Piste inconnue', eventName, date: d.Date || '', durationMinutes, results, speedStats, events: [] };
   }
 
-  const table = (s, race) => '<div class="message">' + esc(typeLabel(s.type) + ' · ' + s.track) + ' · ' + s.results.length + ' pilotes' + '</div><div class="table-wrap"><table><thead><tr><th>Pos.</th><th>Pilote</th><th>Voiture</th>' + (race ? '<th>Tours</th><th>Temps total</th><th>Écart</th>' : '') + '<th>Meilleur tour</th>' + (race ? '' : '<th>Écart</th>') + '</tr></thead><tbody>' +
-    s.results.map(r => '<tr><td class="rank">' + r.pos + '</td><td><b>' + esc(r.name) + '</b>' + (r.dsq ? ' <span class="tag">DSQ</span>' : '') + '</td><td>' + esc(r.car) + '</td>' + (race ? '<td>' + r.laps + '</td><td>' + fmt(r.total) + '</td><td>' + gap(r.total, s.results[0].total) + '</td>' : '') + '<td class="points">' + fmt(r.best) + '</td>' + (race ? '' : '<td>' + gap(r.best, s.results[0].best) + '</td>') + '</tr>').join('') + '</tbody></table></div>';
+  const table = (s, race) => '<div class="message">' + esc(typeLabel(s.type) + ' · ' + s.track) + ' · ' + s.results.length + ' pilotes' + '</div><div class="table-wrap"><table><thead><tr><th>Pos.</th><th>Pilote</th><th>Équipe</th><th>Voiture</th>' + (race ? '<th>Tours</th><th>Temps total</th><th>Écart</th>' : '') + '<th>Meilleur tour</th>' + (race ? '' : '<th>Écart</th>') + '</tr></thead><tbody>' +
+    s.results.map(r => '<tr><td class="rank">' + r.pos + '</td><td><b>' + esc(r.name) + '</b>' + (r.dsq ? ' <span class="tag">DSQ</span>' : '') + '</td><td>' + esc(r.team || '—') + '</td><td>' + esc(r.car) + '</td>' + (race ? '<td>' + r.laps + '</td><td>' + fmt(r.total) + '</td><td>' + gap(r.total, s.results[0].total) + '</td>' : '') + '<td class="points">' + fmt(r.best) + '</td>' + (race ? '' : '<td>' + gap(r.best, s.results[0].best) + '</td>') + '</tr>').join('') + '</tbody></table></div>';
 
   const sessionLabel = (s, index, group) => {
     if (/QUALIF/.test(s.type)) return 'Qualification';
@@ -174,7 +211,7 @@
   }
 
   async function save() {
-    const r = await fetch('/api/save-championship', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken }, body: JSON.stringify(db) });
+    const r = await fetch('https://gdsp-render-backend.onrender.com/api/save-championship', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken }, body: JSON.stringify(db) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.message || 'Erreur HTTP ' + r.status);
   }
@@ -213,7 +250,7 @@
               team: String(e.Team || e.TeamName || '').trim()
             })).filter(e => e.name && e.team);
             if (!entrants.length) throw new Error('aucun pilote avec une équipe renseignée dans Entrants');
-            const normalizeName = value => String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().replace(/\\s+/g, ' ').toLocaleLowerCase('fr');
+            const normalizeName = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr');
             const teamsByName = new Map(entrants.map(e => [normalizeName(e.name), e.team]));
             let matched = 0;
             const currentDrivers = (db && db.drivers) || {};
@@ -242,6 +279,20 @@
         }
       }
       if (imported.length) {
+        // Réconcilier les équipes entre course et qualification, même si une seule source contient l'équipe.
+        const normalizeTeamName = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr');
+        const teamsByGuid = new Map(), teamsByName = new Map();
+        ((db && db.sessions) || []).forEach(session => (session.results || []).forEach(result => {
+          if (!result.team) return;
+          if (result.guid) teamsByGuid.set(result.guid, result.team);
+          if (result.name) teamsByName.set(normalizeTeamName(result.name), result.team);
+        }));
+        ((db && db.sessions) || []).forEach(session => (session.results || []).forEach(result => {
+          result.team = result.team || teamsByGuid.get(result.guid) || teamsByName.get(normalizeTeamName(result.name)) || '';
+        }));
+        Object.entries((db && db.drivers) || {}).forEach(([id, driver]) => {
+          driver.team = driver.team || teamsByGuid.get(id) || teamsByName.get(normalizeTeamName(driver.name)) || '';
+        });
         refreshDerived();
         renderAll();
         await save();
