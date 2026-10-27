@@ -6,6 +6,10 @@ app.disable('x-powered-by');
 
 // Permet au serveur de lire les données JSON envoyées par le site
 app.use(express.json({ limit: '5mb' }));
+app.use((req, res, next) => {
+    if (/^\/(?:data\/backups|node_modules)(?:\/|$)/i.test(req.path)) return res.sendStatus(404);
+    next();
+});
 app.use(express.static(__dirname, { dotfiles: 'deny' }));
 
 // Route pour charger la page principale
