@@ -136,7 +136,8 @@
     }
     const isRace = /RACE/.test(s.type);
     $('sessionDetail').innerHTML = '<div class="message"><b>' + esc(sessionLabel(s, Number(sel.value), group)) + '</b> · ' + esc(s.track) + when(s.date) + ' · ' + s.results.length + ' pilotes</div>' + table(s, isRace);
-    if (s.events && s.events.length) { incidentData = normIncidents(s.events); renderIncidentTools(); }
+    const impactEvents = Array.isArray(s.speedStats) ? s.speedStats.map(x => ({Type:x.type,Driver:x.driver,OtherDriver:x.otherDriver,ImpactSpeed:x.speed,Timestamp:x.timestamp})) : [];
+    if (impactEvents.length || (s.events && s.events.length)) { incidentData = normIncidents((s.events && s.events.length) ? s.events : impactEvents); renderIncidentTools(); }
   }
 
   function renderSessions() {
@@ -318,6 +319,17 @@
   document.querySelector('.race-tabs').insertAdjacentHTML('beforebegin', '<div class="toolbar" style="margin-top:16px"><label for="sessionSelect" class="muted">Séance</label><select id="sessionSelect" aria-label="Choisir qualification ou course"></select></div><div id="sessionDetail" style="margin-top:16px"></div>');
   $('raceSelect').addEventListener('change', renderSessions);
   $('sessionSelect').addEventListener('change', showSession);
+  document.querySelectorAll('[data-race-tab]').forEach(tab => tab.addEventListener('click', () => {
+    const isIncident = tab.dataset.raceTab === 'incidents';
+    $('sessionDetail').hidden = isIncident;
+    $('sessionSelect').closest('.toolbar').hidden = isIncident;
+    if (!isIncident) {
+      const group = currentGroup();
+      const idx = group.findIndex(x => tab.dataset.raceTab === 'qualif' ? /QUALIF/.test(x.type) : /RACE/.test(x.type) && !/QUALIF/.test(x.type));
+      if (idx >= 0) $('sessionSelect').value = String(idx);
+      showSession();
+    }
+  }));
   const old = $('importBtn'), btn = old.cloneNode(true);
   old.replaceWith(btn);
   btn.addEventListener('click', smartImport);
