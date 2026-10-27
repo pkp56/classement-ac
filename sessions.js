@@ -13,7 +13,7 @@
     const type = String(d.Type || d.SessionType || '').toUpperCase();
     const laps = Array.isArray(d.Laps) ? d.Laps : [];
     const evAll = Array.isArray(d.Events) ? d.Events.filter(e => e && (e.Type || e.type)) : [];
-    const normalizeName = value => String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().replace(/\\s+/g, ' ').toLocaleLowerCase('fr');
+    const normalizeName = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr');
     const person = value => value && typeof value === 'object' ? value : {};
     const cars = Array.isArray(d.Cars) ? d.Cars : [];
     const byGuid = new Map(), byCar = new Map(), byName = new Map();
@@ -250,7 +250,7 @@
               team: String(e.Team || e.TeamName || '').trim()
             })).filter(e => e.name && e.team);
             if (!entrants.length) throw new Error('aucun pilote avec une équipe renseignée dans Entrants');
-            const normalizeName = value => String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().replace(/\\s+/g, ' ').toLocaleLowerCase('fr');
+            const normalizeName = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr');
             const teamsByName = new Map(entrants.map(e => [normalizeName(e.name), e.team]));
             let matched = 0;
             const currentDrivers = (db && db.drivers) || {};
@@ -280,7 +280,7 @@
       }
       if (imported.length) {
         // Réconcilier les équipes entre course et qualification, même si une seule source contient l'équipe.
-        const normalizeTeamName = value => String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().replace(/\\s+/g, ' ').toLocaleLowerCase('fr');
+        const normalizeTeamName = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr');
         const teamsByGuid = new Map(), teamsByName = new Map();
         ((db && db.sessions) || []).forEach(session => (session.results || []).forEach(result => {
           if (!result.team) return;
