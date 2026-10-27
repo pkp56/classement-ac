@@ -7,7 +7,7 @@
   "minDrivers": 2,
   "ignoreCutLaps": true,
   "poleMaxHoursBeforeRace": 6,
-  "endurance": { "minMinutes": 90, "multiplier": 1.5 },
+  "endurance": { "minMinutes": 60, "multiplier": 1.5 },
 
   "scoring": {
     "baseScale": [100, 70, 56, 48, 42, 36, 30, 26, 22, 20, 16, 15, 14, 13, 12, 12, 12, 12, 12, 12],
