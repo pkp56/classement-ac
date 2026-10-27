@@ -270,6 +270,20 @@
         }
       }
       if (imported.length) {
+        // Réconcilier les équipes entre course et qualification, même si une seule source contient l'équipe.
+        const normalizeTeamName = value => String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().replace(/\\s+/g, ' ').toLocaleLowerCase('fr');
+        const teamsByGuid = new Map(), teamsByName = new Map();
+        ((db && db.sessions) || []).forEach(session => (session.results || []).forEach(result => {
+          if (!result.team) return;
+          if (result.guid) teamsByGuid.set(result.guid, result.team);
+          if (result.name) teamsByName.set(normalizeTeamName(result.name), result.team);
+        }));
+        ((db && db.sessions) || []).forEach(session => (session.results || []).forEach(result => {
+          result.team = result.team || teamsByGuid.get(result.guid) || teamsByName.get(normalizeTeamName(result.name)) || '';
+        }));
+        Object.entries((db && db.drivers) || {}).forEach(([id, driver]) => {
+          driver.team = driver.team || teamsByGuid.get(id) || teamsByName.get(normalizeTeamName(driver.name)) || '';
+        });
         refreshDerived();
         renderAll();
         await save();
