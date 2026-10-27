@@ -23,7 +23,7 @@
       if (clean.length > 2) { const m = clean.reduce((a, b) => a + b, 0) / clean.length; cons = Math.sqrt(clean.reduce((a, b) => a + (b - m) ** 2, 0) / clean.length) / m * 100; }
       // Les événements de collision ne sont pas exploités ni conservés.
       const b = Number(r.BestLap) || 0;
-      return { pos: i + 1, name, guid: r.DriverGuid || '', car: r.CarModel || '—', best: b > 0 && b < 3600000 ? b : 0, total: Number(r.TotalTime) || 0, laps: mine.length, dsq: !!(r.Disqualified || r.IsDisqualified), consistency: cons, contacts: 0, envHits: 0 };
+      return { pos: i + 1, name, guid: r.DriverGuid || '', team: r.TeamName || r.Team || (r.Driver && (r.Driver.TeamName || r.Driver.Team)) || '', car: r.CarModel || '—', best: b > 0 && b < 3600000 ? b : 0, total: Number(r.TotalTime) || 0, laps: mine.length, dsq: !!(r.Disqualified || r.IsDisqualified), consistency: cons, contacts: 0, envHits: 0 };
     });
     // Les événements (collisions, contacts, sorties) ne sont pas conservés dans les sessions importées.
     const eventName = d.EventName || (d.SessionConfig && d.SessionConfig.name) || '';
@@ -127,12 +127,15 @@
   function rebuild() {
     const races = (db.sessions || []).filter(s => /RACE/.test(s.type) && !/QUALIF/.test(s.type)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
     const dr = {}, st = {};
+    const previousDrivers = (db && db.drivers) || {};
     db.races = [];
     races.forEach((s, n) => {
       const key = 'm' + (n + 1) + '-race', rr = [];
       s.results.forEach((r, i) => {
         const id = r.guid || r.name;
-        dr[id] = dr[id] || { name: r.name, team: '' };
+        const previous = previousDrivers[id] || {};
+        dr[id] = dr[id] || { name: r.name, team: r.team || previous.team || '' };
+        if (!dr[id].team && (r.team || previous.team)) dr[id].team = r.team || previous.team;
         const e = st[id] = st[id] || { driver: id, points: 0, wins: 0, podiums: 0, races: 0, byRace: {} };
         const pts = r.dsq ? 0 : racePoints(i + 1, s.durationMinutes);
         e.points += pts; e.races++; e.byRace[key] = pts;
