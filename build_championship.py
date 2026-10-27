@@ -140,6 +140,8 @@ def build(champ):
 
         res = r["Result"]
         winner = res[0]
+        raw_duration = (r.get("SessionConfig") or {}).get("time") or 0
+        duration = raw_duration / 60 if raw_duration > 180 else raw_duration
         wl = winner["NumLaps"]
         by_laps, order_by_lap = lap_tables(r.get("Laps", []), wl)
         has_quali = ev_i in qualifs
@@ -199,13 +201,14 @@ def build(champ):
             finished = (
                 x["TotalTime"] > 0
                 and not x.get("Disqualified")
-                and laps_done >= wl * (need_pct / 100.0 if need_pct else 0)
+                and laps_done >= wl * (need_pct / 100.0)
             )
-            pts = places[pos - 1] if finished and pos - 1 < len(places) else 0
+            base_points = [30, 26, 23, 21, 20, 19][pos - 1] if pos <= 6 else max(1, 25 - pos)
+            pts = (base_points * (2 if duration >= 50 else 1)) if finished else 0
             if finished and pole_guid == g and first_race_of_event:
-                pts += pole_pts
-            if finished and best_lap_pts and fastest and fastest["DriverGuid"] == g:
-                pts += best_lap_pts
+                pts += 2 if duration >= 50 else 1
+            if finished and fastest and fastest["DriverGuid"] == g:
+                pts += 2 if duration >= 50 else 1
             if laps_done == wl:
                 gap = x["TotalTime"] - winner["TotalTime"]
                 gap_laps = 0
@@ -273,7 +276,7 @@ def build(champ):
             "date": r.get("Date"),
             "track": pretty_track(r.get("TrackName")),
             "layout": pretty_track(r.get("TrackConfig")),
-            "durationMinutes": sc.get("time") or 0,
+            "durationMinutes": duration,
             "laps": wl,
             "pole": pole_guid,
             "poleTime": pole_time,
