@@ -160,46 +160,60 @@
   }
 
   async function smartImport() {
-    if (!adminToken) return msg('Connexion administrateur requise pour importer un JSON.');
-    const f = $('importFile').files[0];
-    if (!f) return msg('Choisissez d’abord un fichier JSON.');
+    if (!adminToken) return msg('Connexion administrateur requise pour importer des JSON.');
+    const files = Array.from($('importFile').files || []);
+    if (!files.length) return msg('Choisissez un ou plusieurs fichiers JSON.');
+    const errors = [], imported = [], incidentFiles = [];
     try {
-      const d = JSON.parse(await f.text());
-      let text;
-      if (d && d.drivers && Array.isArray(d.standings)) {            // championnat (format du site)
-        // Le fichier importé est la source de vérité s'il contient des sessions.
-        // Si ce fichier n'en contient pas, conserver les sessions déjà importées.
-        const importedSessions = Array.isArray(d.sessions) ? d.sessions : [];
-        const currentSessions = (db && Array.isArray(db.sessions)) ? db.sessions : [];
-        d.sessions = importedSessions.length ? importedSessions : currentSessions;
-        // Préserver les équipes déjà connues quand le JSON importé n'en contient pas.
-        const oldDrivers = (db && db.drivers) || {};
-        d.drivers = d.drivers || {};
-        Object.entries(oldDrivers).forEach(([id, driver]) => {
-          if (d.drivers[id] && !d.drivers[id].team && driver && driver.team) d.drivers[id].team = driver.team;
-        });
-        db = d;
+      for (const f of files) {
+        try {
+          const d = JSON.parse(await f.text());
+          if (d && d.drivers && Array.isArray(d.standings)) {
+            const importedSessions = Array.isArray(d.sessions) ? d.sessions : [];
+            const currentSessions = (db && Array.isArray(db.sessions)) ? db.sessions : [];
+            const oldDrivers = (db && db.drivers) || {};
+            d.sessions = importedSessions.length ? importedSessions : currentSessions;
+            d.drivers = d.drivers || {};
+            Object.entries(oldDrivers).forEach(([id, driver]) => {
+              if (d.drivers[id] && !d.drivers[id].team && driver && driver.team) d.drivers[id].team = driver.team;
+            });
+            db = d;
+            imported.push(f.name + ' (championnat)');
+          } else if (d && (Array.isArray(d.Result) || Array.isArray(d.Laps))) {
+            const s = parseSession(d);
+            if (!s.results.length) throw new Error('aucun résultat dans cette session');
+            if (!db) normalizeData({ drivers: {}, standings: [], meta: {}, sessions: [] });
+            db.sessions = (db.sessions || []).filter(x => x.id !== s.id).concat(s);
+            imported.push(f.name + ' (' + typeLabel(s.type) + ', ' + s.results.length + ' pilotes)');
+          } else if (d && Array.isArray(d.Classes)) {
+            throw new Error('export Server Manager détecté : convertissez-le d’abord avec build_championship.py');
+          } else {
+            incidentFiles.push({ name: f.name, data: d });
+          }
+        } catch (e) {
+          errors.push(f.name + ' : ' + e.message);
+        }
+      }
+      if (imported.length) {
         refreshDerived();
-        text = 'Fichier championnat reçu : les classements ont été reconstruits à partir des sessions de course et de qualification importées.';
-      } else if (d && (Array.isArray(d.Result) || Array.isArray(d.Laps))) { // course / qualification AC
-        const s = parseSession(d);
-        if (!s.results.length) throw new Error('Aucun résultat dans cette session.');
-        if (!db) normalizeData({ drivers: {}, standings: [], meta: {}, sessions: [] });
-        db.sessions = (db.sessions || []).filter(x => x.id !== s.id).concat(s);
-        refreshDerived();
-        text = typeLabel(s.type) + ' importée : ' + s.results.length + ' pilotes. Les classements et fiches sont calculés uniquement depuis les sessions importées.';
-      } else if (d && Array.isArray(d.Classes)) {
-        throw new Error('Export Server Manager détecté : convertissez-le d’abord avec build_championship.py, puis importez data/championship.json.');
-      } else {                                                       // simple log de collisions
-        incidentData = normIncidents(d);
+        renderAll();
+        await save();
+      }
+      for (const item of incidentFiles) {
+        incidentData = normIncidents(item.data);
         localStorage.setItem(incidentStoreKey, JSON.stringify(incidentData.map(x => x.raw)));
         renderIncidentTools();
-        return msg('Logs de collisions importés : ' + incidentData.length + ' (stockés dans ce navigateur).');
+        imported.push(item.name + ' (' + incidentData.length + ' incidents locaux)');
       }
-      renderAll();
-      await save();
-      msg(text + ' Sauvegardé sur le serveur et publié sur GitHub si GITHUB_TOKEN est configuré.');
-    } catch (e) { msg('Import impossible : ' + e.message); loadData(); }
+      const summary = [];
+      if (imported.length) summary.push(imported.length + ' fichier(s) traité(s) : ' + imported.join(' ; '));
+      if (errors.length) summary.push('Erreurs : ' + errors.join(' | '));
+      if (imported.length && imported.some(x => !x.includes('incidents locaux'))) summary.push('championnat sauvegardé sur le serveur');
+      msg(summary.join('\n') || 'Aucun fichier reconnu.');
+    } catch (e) {
+      msg('Import impossible : ' + e.message);
+      loadData();
+    }
   }
 
   // Deux sélecteurs cohérents : manche, puis séance (qualification/course).
