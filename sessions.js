@@ -21,9 +21,18 @@
       const v = person(driver), name = String(v.Name || v.DriverName || '').trim();
       const guid = String(v.Guid || v.DriverGuid || '').trim();
       const team = String(v.TeamName || v.Team || v.TeamShortName || '').trim();
-      if (guid) byGuid.set(guid, { name, team });
-      if (name) byName.set(normalizeName(name), { name, team, guid });
-      if (carId !== undefined && carId !== null) byCar.set(String(carId), { name, team, guid });
+      if (guid) {
+        const old = byGuid.get(guid) || {};
+        byGuid.set(guid, { name: name || old.name || '', team: team || old.team || '', guid });
+      }
+      if (name) {
+        const key = normalizeName(name), old = byName.get(key) || {};
+        byName.set(key, { name: name || old.name || '', team: team || old.team || '', guid: guid || old.guid || '' });
+      }
+      if (carId !== undefined && carId !== null) {
+        const old = byCar.get(String(carId)) || {};
+        byCar.set(String(carId), { name: name || old.name || '', team: team || old.team || '', guid: guid || old.guid || '' });
+      }
     };
     cars.forEach(c => remember(c.Driver || c, c.CarId));
     (Array.isArray(d.Entrants) ? d.Entrants : []).forEach(e => remember(e.Driver || e, e.CarId));
