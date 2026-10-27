@@ -302,6 +302,29 @@ def build(champ):
     for i, s in enumerate(standings, start=1):
         s["rank"] = i
 
+    # Classement alternatif : même calcul que le classement officiel, mais
+    # retrait de la manche la moins bien marquée par pilote. Le classement
+    # officiel ci-dessus reste inchangé et conserve toutes les manches joker.
+    by_event = defaultdict(lambda: defaultdict(int))
+    for rc in races:
+        for result in rc["results"]:
+            by_event[result["driver"]][str(rc["event"])] += result["points"]
+    standings_drop_worst = []
+    for summary in st.values():
+        event_points = by_event[summary["driver"]]
+        dropped_event = min(event_points, key=event_points.get) if len(event_points) >= 2 else None
+        dropped_points = event_points[dropped_event] if dropped_event is not None else 0
+        standings_drop_worst.append({
+            "driver": summary["driver"],
+            "points": summary["points"] - dropped_points,
+            "pointsAllRounds": summary["points"],
+            "droppedRound": dropped_event,
+            "droppedRoundPoints": dropped_points,
+            "wins": summary["wins"], "podiums": summary["podiums"],
+            "poles": summary["poles"], "races": summary["races"],
+        })
+    standings_drop_worst.sort(key=lambda s: (-s["points"], -s["wins"], -s["podiums"], drivers[s["driver"]]["name"].lower()))
+    for i, summary in enumerate(standings_drop_worst, start=1): summary["rank"] = i
     # ---------------------------------------------------------- profils
     profiles = build_profiles(per_driver_rows, drivers, races, st)
 
@@ -326,6 +349,7 @@ def build(champ):
         },
         "drivers": drivers,
         "standings": standings,
+        "standingsDropWorst": standings_drop_worst,
         "races": races,
         "profiles": profiles,
     }
