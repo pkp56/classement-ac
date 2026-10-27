@@ -40,11 +40,16 @@ function requireAdmin(req, res, next) {
     next();
 }
 app.post('/api/admin/login', (req, res) => {
+    const configuredUsername = process.env.ADMIN_USERNAME || 'gdspadmin';
     const configuredPassword = process.env.GDSPADMIN || process.env.ADMIN_PASSWORD;
-    if (!configuredPassword) return res.status(503).json({ status: 'error', message: 'La variable GDSPADMIN doit être configurée dans Render.' });
-    const supplied = Buffer.from(String(req.body && req.body.password || ''));
-    const expected = Buffer.from(configuredPassword);
-    if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) return res.status(401).json({ status: 'error', message: 'Mot de passe incorrect.' });
+    if (!configuredPassword) return res.status(503).json({ status: 'error', message: 'La variable ADMIN_PASSWORD (ou GDSPADMIN) doit être configurée dans Render.' });
+    const suppliedUsername = Buffer.from(String(req.body && req.body.username || ''));
+    const expectedUsername = Buffer.from(configuredUsername);
+    const suppliedPassword = Buffer.from(String(req.body && req.body.password || ''));
+    const expectedPassword = Buffer.from(configuredPassword);
+    const usernameValid = suppliedUsername.length === expectedUsername.length && crypto.timingSafeEqual(suppliedUsername, expectedUsername);
+    const passwordValid = suppliedPassword.length === expectedPassword.length && crypto.timingSafeEqual(suppliedPassword, expectedPassword);
+    if (!usernameValid || !passwordValid) return res.status(401).json({ status: 'error', message: 'Identifiant ou mot de passe incorrect.' });
     const token = crypto.randomBytes(32).toString('hex');
     adminTokens.add(token);
     res.json({ status: 'success', token });
