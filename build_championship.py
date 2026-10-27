@@ -246,7 +246,7 @@ def build(champ):
                 "racePoints": pts,
                 "polePoints": row_pole_pts,
                 "durationMinutes": duration_minutes,
-                "qualiBestLap": quali_best_lap.get(g) if first_race_of_event else None,
+                "qualiBestLap": quali_best_lap.get(g),
                 "postRacePenaltyFree": explicit_no_post_race_penalty(x),
                 "meritPoints": 0,
                 "meritBreakdown": {},
