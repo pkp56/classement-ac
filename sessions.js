@@ -205,8 +205,35 @@
             if (!db) normalizeData({ drivers: {}, standings: [], meta: {}, sessions: [] });
             db.sessions = (db.sessions || []).filter(x => x.id !== s.id).concat(s);
             imported.push(f.name + ' (' + typeLabel(s.type) + ', ' + s.results.length + ' pilotes)');
+          } else if (d && Array.isArray(d.Classes) && Array.isArray(d.Entrants)) {
+            // Import ciblé des équipes depuis un export Assetto Server Manager.
+            // Ne touche ni aux résultats, ni aux séances, ni aux points.
+            const entrants = d.Entrants.map(e => ({
+              name: String(e.Name || e.DriverName || '').trim(),
+              team: String(e.Team || e.TeamName || '').trim()
+            })).filter(e => e.name && e.team);
+            if (!entrants.length) throw new Error('aucun pilote avec une équipe renseignée dans Entrants');
+            const normalizeName = value => String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().replace(/\\s+/g, ' ').toLocaleLowerCase('fr');
+            const teamsByName = new Map(entrants.map(e => [normalizeName(e.name), e.team]));
+            let matched = 0;
+            const currentDrivers = (db && db.drivers) || {};
+            Object.values(currentDrivers).forEach(driver => {
+              const team = teamsByName.get(normalizeName(driver.name));
+              if (team) { driver.team = team; matched++; }
+            });
+            // Conserve aussi l'équipe sur les résultats de séance afin qu'une reconstruction ultérieure la garde.
+            ((db && db.sessions) || []).forEach(session => (session.results || []).forEach(result => {
+              const team = teamsByName.get(normalizeName(result.name));
+              if (team) result.team = team;
+            }));
+            if (!matched) throw new Error('aucun nom de pilote de l’export ne correspond aux pilotes du championnat actuel');
+            db.meta = Object.assign({}, db.meta, { updated: new Date().toISOString() });
+            await save();
+            normalizeData(db);
+            renderAll();
+            imported.push(f.name + ' (équipes : ' + matched + ' pilotes mis à jour, résultats conservés)');
           } else if (d && Array.isArray(d.Classes)) {
-            throw new Error('export Server Manager détecté : convertissez-le d’abord avec build_championship.py');
+            throw new Error('export Server Manager détecté : export Entrants manquant pour importer les équipes');
           } else {
             incidentFiles.push({ name: f.name, data: d });
           }
