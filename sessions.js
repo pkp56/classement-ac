@@ -53,17 +53,37 @@
     const list = (db && db.sessions) || [];
     const map = new Map();
     list.forEach(s => {
-      const key = String(s.eventName || s.track || 'Manche sans nom').trim();
-      if (!map.has(key)) map.set(key, { key, label: key, sessions: [] });
-      map.get(key).sessions.push(s);
+      const raw = String(s.eventName || s.track || 'Manche sans nom').trim();
+      // Les exports peuvent nommer la même manche différemment selon la séance.
+      // Regrouper d'abord par numéro de manche explicite, puis par nom si absent.
+      const match = raw.match(/manche\\s*#?\\s*(\\d+)/i);
+      const key = match ? 'round-' + Number(match[1]) : 'event-' + raw.toLocaleLowerCase('fr');
+      if (!map.has(key)) {
+        map.set(key, { key, label: match ? 'Manche ' + Number(match[1]) : raw, sessions: [], eventNames: new Set() });
+      }
+      const group = map.get(key);
+      group.sessions.push(s);
+      group.eventNames.add(raw);
     });
     return [...map.values()].map(g => {
       g.sessions.sort((a,b) => {
-        const order = s => /QUALIF/.test(s.type) ? 0 : /RACE/.test(s.type) ? 1 : 2;
+        const order = s => /QUALIF/.test(String(s.type)) ? 0 : /RACE/.test(String(s.type)) ? 1 : 2;
         return order(a)-order(b) || String(a.date).localeCompare(String(b.date));
       });
+      // Si le libellé contient une piste explicite, l'afficher en complément du numéro.
+      if (g.key.startsWith('round-')) {
+        const tracks = [...new Set(g.sessions.map(s => s.track).filter(Boolean))];
+        if (tracks.length === 1) g.label += ' — ' + tracks[0];
+      } else if (g.eventNames.size > 1) {
+        g.label = [...g.eventNames][0];
+      }
+      delete g.eventNames;
       return g;
     }).sort((a,b) => {
+      const round = g => Number((g.key.match(/^round-(\\d+)$/) || [])[1] || 0);
+      if (round(a) && round(b)) return round(a)-round(b);
+      if (round(a)) return -1;
+      if (round(b)) return 1;
       const first = g => g.sessions.map(s=>s.date).filter(Boolean).sort()[0] || '';
       return first(a).localeCompare(first(b)) || a.label.localeCompare(b.label,'fr');
     });
