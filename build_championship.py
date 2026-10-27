@@ -107,7 +107,8 @@ def build(champ):
     places = (cls.get("Points") or {}).get("Places") or []
     pole_pts = (cls.get("Points") or {}).get("PolePosition", 0)
     best_lap_pts = (cls.get("Points") or {}).get("BestLap", 0)
-    need_pct = (cls.get("Points") or {}).get("RequiredRaceTimePercentage", 0)
+    need_pct = max(75, (cls.get("Points") or {}).get("RequiredRaceTimePercentage", 0))
+    configured_teams = champ.get("DriverTeams", {}) or {}
 
     sessions = collect_sessions(champ)
     qualifs = {i: r for (i, e, k, r) in sessions if r.get("Type") == "QUALIFY"}
@@ -118,7 +119,7 @@ def build(champ):
     per_driver_rows = defaultdict(list)
 
     def note_driver(guid, name, team):
-        d = drivers.setdefault(guid, {"id": guid, "name": name, "team": ""})
+        d = drivers.setdefault(guid, {"id": guid, "name": name, "team": "Sans équipe"})
         d["name"] = name
         if team:
             teams.setdefault(norm_team(team), team)
