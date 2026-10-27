@@ -1,13 +1,439 @@
 {
-  "drivers": {},
-  "standings": [],
+  "drivers": {
+    "76561199247959520": {
+      "name": "Thomas PONGE",
+      "team": ""
+    },
+    "76561198091861503": {
+      "name": "51R Sherman",
+      "team": ""
+    },
+    "76561198910594990": {
+      "name": "Streetbike",
+      "team": ""
+    },
+    "76561198033054324": {
+      "name": "Karl74",
+      "team": ""
+    },
+    "76561199167900834": {
+      "name": "Tofusan",
+      "team": ""
+    },
+    "76561198023525085": {
+      "name": "kant-1",
+      "team": ""
+    },
+    "76561198015862674": {
+      "name": "aSSaSSins_strEEt",
+      "team": ""
+    },
+    "76561199485564734": {
+      "name": "Erwann la banane",
+      "team": ""
+    },
+    "76561199118757986": {
+      "name": "Arthur MAUS #67",
+      "team": ""
+    },
+    "76561198062399161": {
+      "name": "Harrythmetique ",
+      "team": ""
+    },
+    "76561197962251151": {
+      "name": "51R Gilles",
+      "team": ""
+    },
+    "76561198042197341": {
+      "name": "Neutraliz",
+      "team": ""
+    },
+    "76561197973673730": {
+      "name": "Orthopedux",
+      "team": ""
+    },
+    "76561199224754319": {
+      "name": "Richard Rossier",
+      "team": ""
+    },
+    "76561198870993027": {
+      "name": "Jenkweed",
+      "team": ""
+    },
+    "76561197972822145": {
+      "name": "Alan Mc Wrecker",
+      "team": ""
+    },
+    "76561198137168868": {
+      "name": "[APR] Alexou33",
+      "team": ""
+    },
+    "76561198023166815": {
+      "name": "fmherrou",
+      "team": ""
+    },
+    "76561198022149307": {
+      "name": "Elouan",
+      "team": ""
+    },
+    "76561199042511252": {
+      "name": "[APR] Pierre",
+      "team": ""
+    },
+    "76561198124771615": {
+      "name": "cheucheu91",
+      "team": ""
+    },
+    "76561198078021973": {
+      "name": "Jim ZPLOUCH",
+      "team": ""
+    },
+    "76561197983426917": {
+      "name": "[APR] Christophe",
+      "team": ""
+    },
+    "76561197968560375": {
+      "name": "pistol",
+      "team": ""
+    },
+    "76561198157550304": {
+      "name": "Pikoupok",
+      "team": ""
+    },
+    "76561198148830572": {
+      "name": "SuperSlipos",
+      "team": ""
+    },
+    "76561199162864808": {
+      "name": "Kimy Hoyer",
+      "team": ""
+    },
+    "76561199492825219": {
+      "name": "Yohana.L",
+      "team": ""
+    }
+  },
+  "standings": [
+    {
+      "driver": "76561199247959520",
+      "points": 30,
+      "wins": 1,
+      "podiums": 1,
+      "races": 1,
+      "byRace": {
+        "m1-race": 30
+      }
+    },
+    {
+      "driver": "76561198091861503",
+      "points": 26,
+      "wins": 0,
+      "podiums": 1,
+      "races": 1,
+      "byRace": {
+        "m1-race": 26
+      }
+    },
+    {
+      "driver": "76561198910594990",
+      "points": 23,
+      "wins": 0,
+      "podiums": 1,
+      "races": 1,
+      "byRace": {
+        "m1-race": 23
+      }
+    },
+    {
+      "driver": "76561198033054324",
+      "points": 21,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 21
+      }
+    },
+    {
+      "driver": "76561199167900834",
+      "points": 20,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 20
+      }
+    },
+    {
+      "driver": "76561198023525085",
+      "points": 19,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 19
+      }
+    },
+    {
+      "driver": "76561198015862674",
+      "points": 18,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 18
+      }
+    },
+    {
+      "driver": "76561199485564734",
+      "points": 17,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 17
+      }
+    },
+    {
+      "driver": "76561199118757986",
+      "points": 16,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 16
+      }
+    },
+    {
+      "driver": "76561198062399161",
+      "points": 15,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 15
+      }
+    },
+    {
+      "driver": "76561197962251151",
+      "points": 14,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 14
+      }
+    },
+    {
+      "driver": "76561198042197341",
+      "points": 13,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 13
+      }
+    },
+    {
+      "driver": "76561197973673730",
+      "points": 12,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 12
+      }
+    },
+    {
+      "driver": "76561199224754319",
+      "points": 11,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 11
+      }
+    },
+    {
+      "driver": "76561198870993027",
+      "points": 10,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 10
+      }
+    },
+    {
+      "driver": "76561197972822145",
+      "points": 9,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 9
+      }
+    },
+    {
+      "driver": "76561198137168868",
+      "points": 8,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 8
+      }
+    },
+    {
+      "driver": "76561198023166815",
+      "points": 7,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 7
+      }
+    },
+    {
+      "driver": "76561198022149307",
+      "points": 6,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 6
+      }
+    },
+    {
+      "driver": "76561199042511252",
+      "points": 5,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 5
+      }
+    },
+    {
+      "driver": "76561198124771615",
+      "points": 4,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 4
+      }
+    },
+    {
+      "driver": "76561198078021973",
+      "points": 3,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 3
+      }
+    },
+    {
+      "driver": "76561197983426917",
+      "points": 2,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 2
+      }
+    },
+    {
+      "driver": "76561197968560375",
+      "points": 1,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 1
+      }
+    },
+    {
+      "driver": "76561198157550304",
+      "points": 0,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 0
+      }
+    },
+    {
+      "driver": "76561198148830572",
+      "points": 0,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 0
+      }
+    },
+    {
+      "driver": "76561199162864808",
+      "points": 0,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 0
+      }
+    },
+    {
+      "driver": "76561199492825219",
+      "points": 0,
+      "wins": 0,
+      "podiums": 0,
+      "races": 1,
+      "byRace": {
+        "m1-race": 0
+      }
+    }
+  ],
   "meta": {
-    "eventsCompleted": 0,
-    "races": 0,
-    "drivers": 0,
-    "updated": "2026-10-27T19:25:09.800Z",
+    "eventsCompleted": 1,
+    "races": 1,
+    "drivers": 28,
+    "updated": "2026-10-27T19:25:28.082Z",
     "source": "sessions",
-    "message": "Aucun résultat : importez les JSON de qualification et de course."
+    "message": "Aucun résultat : importez les JSON de qualification et de course.",
+    "scoringRules": {
+      "race25": [
+        30,
+        26,
+        23,
+        21,
+        20,
+        19,
+        18,
+        17,
+        16,
+        15,
+        14,
+        13,
+        12,
+        11,
+        10,
+        9,
+        8,
+        7,
+        6,
+        5,
+        4,
+        3,
+        2,
+        1
+      ],
+      "race60Multiplier": 2,
+      "pole25": 1,
+      "pole60": 2,
+      "officialUsesAllRounds": true
+    }
   },
   "sessions": [
     {
@@ -412,12 +838,818 @@
         }
       ],
       "events": []
+    },
+    {
+      "id": "a0f0e152-704f-4957-85b5-802171547049|Manche 1 - Lola T290 Int.Series|2026-09-09T22:10:00+02:00|mt-tremblant_69|RACE",
+      "type": "RACE",
+      "track": "mt-tremblant_69 · gp_league_grid",
+      "eventName": "Manche 1 - Lola T290 Int.Series",
+      "date": "2026-09-09T22:10:00+02:00",
+      "durationMinutes": 25,
+      "results": [
+        {
+          "pos": 1,
+          "name": "Thomas PONGE",
+          "guid": "76561199247959520",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 101820,
+          "total": 1536780,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 1.1001241849001262,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 2,
+          "name": "51R Sherman",
+          "guid": "76561198091861503",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 101410,
+          "total": 1538105,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.299685819661866,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 3,
+          "name": "Streetbike",
+          "guid": "76561198910594990",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 101761,
+          "total": 1540390,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 1.400585050874998,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 4,
+          "name": "Karl74",
+          "guid": "76561198033054324",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 101795,
+          "total": 1542958,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.4077936127915878,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 5,
+          "name": "Tofusan",
+          "guid": "76561199167900834",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 101943,
+          "total": 1544422,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.4202821858349356,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 6,
+          "name": "kant-1",
+          "guid": "76561198023525085",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 102194,
+          "total": 1551441,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.2844235884533691,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 7,
+          "name": "aSSaSSins_strEEt",
+          "guid": "76561198015862674",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 101927,
+          "total": 1551698,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.4173115319064823,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 8,
+          "name": "Erwann la banane",
+          "guid": "76561199485564734",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 101948,
+          "total": 1552136,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 1.4295945714132354,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 9,
+          "name": "Arthur MAUS #67",
+          "guid": "76561199118757986",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 102507,
+          "total": 1554697,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.37871103721319693,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 10,
+          "name": "Harrythmetique ",
+          "guid": "76561198062399161",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 102618,
+          "total": 1561417,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.37514895464197534,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 11,
+          "name": "51R Gilles",
+          "guid": "76561197962251151",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 102763,
+          "total": 1564202,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.6324133650469913,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 12,
+          "name": "Neutraliz",
+          "guid": "76561198042197341",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 102753,
+          "total": 1568056,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.4087646117004011,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 13,
+          "name": "Orthopedux",
+          "guid": "76561197973673730",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 103095,
+          "total": 1571532,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.6677685335716811,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 14,
+          "name": "Richard Rossier",
+          "guid": "76561199224754319",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 102508,
+          "total": 1573296,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.6016791405921693,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 15,
+          "name": "Jenkweed",
+          "guid": "76561198870993027",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 102911,
+          "total": 1574600,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.6496406320232637,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 16,
+          "name": "Alan Mc Wrecker",
+          "guid": "76561197972822145",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 103309,
+          "total": 1583223,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.528307435353194,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 17,
+          "name": "[APR] Alexou33",
+          "guid": "76561198137168868",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 104164,
+          "total": 1586832,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.512422349239052,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 18,
+          "name": "fmherrou",
+          "guid": "76561198023166815",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 102477,
+          "total": 1588749,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.8299307469391153,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 19,
+          "name": "Elouan",
+          "guid": "76561198022149307",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 103344,
+          "total": 1596739,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 1.2876344004760807,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 20,
+          "name": "[APR] Pierre",
+          "guid": "76561199042511252",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 104192,
+          "total": 1598763,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.9815015482461096,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 21,
+          "name": "cheucheu91",
+          "guid": "76561198124771615",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 103985,
+          "total": 1600026,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.824560195712237,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 22,
+          "name": "Jim ZPLOUCH",
+          "guid": "76561198078021973",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 102413,
+          "total": 1610142,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 0.4960050201327235,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 23,
+          "name": "[APR] Christophe",
+          "guid": "76561197983426917",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 103982,
+          "total": 1619411,
+          "laps": 15,
+          "dsq": false,
+          "consistency": 1.519394678076762,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 24,
+          "name": "pistol",
+          "guid": "76561197968560375",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 105935,
+          "total": 1518949,
+          "laps": 14,
+          "dsq": false,
+          "consistency": 0.7290374408149048,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 25,
+          "name": "Pikoupok",
+          "guid": "76561198157550304",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 106071,
+          "total": 1560521,
+          "laps": 14,
+          "dsq": false,
+          "consistency": 1.521689689762946,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 26,
+          "name": "SuperSlipos",
+          "guid": "76561198148830572",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 103330,
+          "total": 1572130,
+          "laps": 14,
+          "dsq": false,
+          "consistency": 1.7014092472658429,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 27,
+          "name": "Kimy Hoyer",
+          "guid": "76561199162864808",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 102765,
+          "total": 1610633,
+          "laps": 14,
+          "dsq": false,
+          "consistency": 1.332109804304052,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 28,
+          "name": "Yohana.L",
+          "guid": "76561199492825219",
+          "team": "",
+          "car": "actk_lola_t290",
+          "best": 103487,
+          "total": 1631838,
+          "laps": 14,
+          "dsq": false,
+          "consistency": 0.9992554273624992,
+          "contacts": 0,
+          "envHits": 0
+        }
+      ],
+      "events": []
     }
   ],
   "standingsDropWorst": [],
   "teamStandings": [],
   "teamStandingsDropWorst": [],
   "meritStandings": [],
-  "races": [],
+  "races": [
+    {
+      "id": "m1-race",
+      "event": 1,
+      "eventName": "Manche 1 - Lola T290 Int.Series",
+      "session": "RACE",
+      "raceNo": 1,
+      "durationMinutes": 25,
+      "results": [
+        {
+          "driver": "76561199247959520",
+          "pos": 1,
+          "status": "FIN",
+          "grid": 1,
+          "laps": 15,
+          "bestLap": 101820,
+          "points": 30,
+          "racePoints": 30,
+          "meritPoints": 0,
+          "consistency": 1.1001241849001262,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198091861503",
+          "pos": 2,
+          "status": "FIN",
+          "grid": 2,
+          "laps": 15,
+          "bestLap": 101410,
+          "points": 26,
+          "racePoints": 26,
+          "meritPoints": 0,
+          "consistency": 0.299685819661866,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198910594990",
+          "pos": 3,
+          "status": "FIN",
+          "grid": 3,
+          "laps": 15,
+          "bestLap": 101761,
+          "points": 23,
+          "racePoints": 23,
+          "meritPoints": 0,
+          "consistency": 1.400585050874998,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198033054324",
+          "pos": 4,
+          "status": "FIN",
+          "grid": 4,
+          "laps": 15,
+          "bestLap": 101795,
+          "points": 21,
+          "racePoints": 21,
+          "meritPoints": 0,
+          "consistency": 0.4077936127915878,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561199167900834",
+          "pos": 5,
+          "status": "FIN",
+          "grid": 5,
+          "laps": 15,
+          "bestLap": 101943,
+          "points": 20,
+          "racePoints": 20,
+          "meritPoints": 0,
+          "consistency": 0.4202821858349356,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198023525085",
+          "pos": 6,
+          "status": "FIN",
+          "grid": 6,
+          "laps": 15,
+          "bestLap": 102194,
+          "points": 19,
+          "racePoints": 19,
+          "meritPoints": 0,
+          "consistency": 0.2844235884533691,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198015862674",
+          "pos": 7,
+          "status": "FIN",
+          "grid": 7,
+          "laps": 15,
+          "bestLap": 101927,
+          "points": 18,
+          "racePoints": 18,
+          "meritPoints": 0,
+          "consistency": 0.4173115319064823,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561199485564734",
+          "pos": 8,
+          "status": "FIN",
+          "grid": 8,
+          "laps": 15,
+          "bestLap": 101948,
+          "points": 17,
+          "racePoints": 17,
+          "meritPoints": 0,
+          "consistency": 1.4295945714132354,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561199118757986",
+          "pos": 9,
+          "status": "FIN",
+          "grid": 9,
+          "laps": 15,
+          "bestLap": 102507,
+          "points": 16,
+          "racePoints": 16,
+          "meritPoints": 0,
+          "consistency": 0.37871103721319693,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198062399161",
+          "pos": 10,
+          "status": "FIN",
+          "grid": 10,
+          "laps": 15,
+          "bestLap": 102618,
+          "points": 15,
+          "racePoints": 15,
+          "meritPoints": 0,
+          "consistency": 0.37514895464197534,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561197962251151",
+          "pos": 11,
+          "status": "FIN",
+          "grid": 11,
+          "laps": 15,
+          "bestLap": 102763,
+          "points": 14,
+          "racePoints": 14,
+          "meritPoints": 0,
+          "consistency": 0.6324133650469913,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198042197341",
+          "pos": 12,
+          "status": "FIN",
+          "grid": 12,
+          "laps": 15,
+          "bestLap": 102753,
+          "points": 13,
+          "racePoints": 13,
+          "meritPoints": 0,
+          "consistency": 0.4087646117004011,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561197973673730",
+          "pos": 13,
+          "status": "FIN",
+          "grid": 13,
+          "laps": 15,
+          "bestLap": 103095,
+          "points": 12,
+          "racePoints": 12,
+          "meritPoints": 0,
+          "consistency": 0.6677685335716811,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561199224754319",
+          "pos": 14,
+          "status": "FIN",
+          "grid": 14,
+          "laps": 15,
+          "bestLap": 102508,
+          "points": 11,
+          "racePoints": 11,
+          "meritPoints": 0,
+          "consistency": 0.6016791405921693,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198870993027",
+          "pos": 15,
+          "status": "FIN",
+          "grid": 15,
+          "laps": 15,
+          "bestLap": 102911,
+          "points": 10,
+          "racePoints": 10,
+          "meritPoints": 0,
+          "consistency": 0.6496406320232637,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561197972822145",
+          "pos": 16,
+          "status": "FIN",
+          "grid": 16,
+          "laps": 15,
+          "bestLap": 103309,
+          "points": 9,
+          "racePoints": 9,
+          "meritPoints": 0,
+          "consistency": 0.528307435353194,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198137168868",
+          "pos": 17,
+          "status": "FIN",
+          "grid": 17,
+          "laps": 15,
+          "bestLap": 104164,
+          "points": 8,
+          "racePoints": 8,
+          "meritPoints": 0,
+          "consistency": 0.512422349239052,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198023166815",
+          "pos": 18,
+          "status": "FIN",
+          "grid": 18,
+          "laps": 15,
+          "bestLap": 102477,
+          "points": 7,
+          "racePoints": 7,
+          "meritPoints": 0,
+          "consistency": 0.8299307469391153,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198022149307",
+          "pos": 19,
+          "status": "FIN",
+          "grid": 19,
+          "laps": 15,
+          "bestLap": 103344,
+          "points": 6,
+          "racePoints": 6,
+          "meritPoints": 0,
+          "consistency": 1.2876344004760807,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561199042511252",
+          "pos": 20,
+          "status": "FIN",
+          "grid": 20,
+          "laps": 15,
+          "bestLap": 104192,
+          "points": 5,
+          "racePoints": 5,
+          "meritPoints": 0,
+          "consistency": 0.9815015482461096,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198124771615",
+          "pos": 21,
+          "status": "FIN",
+          "grid": 21,
+          "laps": 15,
+          "bestLap": 103985,
+          "points": 4,
+          "racePoints": 4,
+          "meritPoints": 0,
+          "consistency": 0.824560195712237,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198078021973",
+          "pos": 22,
+          "status": "FIN",
+          "grid": 22,
+          "laps": 15,
+          "bestLap": 102413,
+          "points": 3,
+          "racePoints": 3,
+          "meritPoints": 0,
+          "consistency": 0.4960050201327235,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561197983426917",
+          "pos": 23,
+          "status": "FIN",
+          "grid": 23,
+          "laps": 15,
+          "bestLap": 103982,
+          "points": 2,
+          "racePoints": 2,
+          "meritPoints": 0,
+          "consistency": 1.519394678076762,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561197968560375",
+          "pos": 24,
+          "status": "FIN",
+          "grid": 24,
+          "laps": 14,
+          "bestLap": 105935,
+          "points": 1,
+          "racePoints": 1,
+          "meritPoints": 0,
+          "consistency": 0.7290374408149048,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198157550304",
+          "pos": 25,
+          "status": "FIN",
+          "grid": 25,
+          "laps": 14,
+          "bestLap": 106071,
+          "points": 0,
+          "racePoints": 0,
+          "meritPoints": 0,
+          "consistency": 1.521689689762946,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561198148830572",
+          "pos": 26,
+          "status": "FIN",
+          "grid": 26,
+          "laps": 14,
+          "bestLap": 103330,
+          "points": 0,
+          "racePoints": 0,
+          "meritPoints": 0,
+          "consistency": 1.7014092472658429,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561199162864808",
+          "pos": 27,
+          "status": "FIN",
+          "grid": 27,
+          "laps": 14,
+          "bestLap": 102765,
+          "points": 0,
+          "racePoints": 0,
+          "meritPoints": 0,
+          "consistency": 1.332109804304052,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "driver": "76561199492825219",
+          "pos": 28,
+          "status": "FIN",
+          "grid": 28,
+          "laps": 14,
+          "bestLap": 103487,
+          "points": 0,
+          "racePoints": 0,
+          "meritPoints": 0,
+          "consistency": 0.9992554273624992,
+          "contacts": 0,
+          "envHits": 0
+        }
+      ]
+    }
+  ],
   "auto": true
 }
