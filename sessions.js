@@ -21,9 +21,9 @@
       const clean = t.filter(x => x <= Math.min(...t) * 1.07);
       let cons = null;
       if (clean.length > 2) { const m = clean.reduce((a, b) => a + b, 0) / clean.length; cons = Math.sqrt(clean.reduce((a, b) => a + (b - m) ** 2, 0) / clean.length) / m * 100; }
-      const mineEv = evAll.filter(e => nm(e.Driver || e.driver) === name);
+      // Les événements de collision ne sont pas exploités ni conservés.
       const b = Number(r.BestLap) || 0;
-      return { pos: i + 1, name, guid: r.DriverGuid || '', car: r.CarModel || '—', best: b > 0 && b < 3600000 ? b : 0, total: Number(r.TotalTime) || 0, laps: mine.length, dsq: !!(r.Disqualified || r.IsDisqualified), consistency: cons, contacts: mineEv.filter(e => /CAR/.test(e.Type || e.type)).length, envHits: mineEv.filter(e => /ENV/.test(e.Type || e.type)).length };
+      return { pos: i + 1, name, guid: r.DriverGuid || '', car: r.CarModel || '—', best: b > 0 && b < 3600000 ? b : 0, total: Number(r.TotalTime) || 0, laps: mine.length, dsq: !!(r.Disqualified || r.IsDisqualified), consistency: cons, contacts: 0, envHits: 0 };
     });
     // Les événements (collisions, contacts, sorties) ne sont pas conservés dans les sessions importées.
     const eventName = d.EventName || (d.SessionConfig && d.SessionConfig.name) || '';
