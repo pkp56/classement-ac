@@ -34,19 +34,63 @@
   const table = (s, race) => '<div class="message">' + esc(typeLabel(s.type) + ' · ' + s.track) + ' · ' + s.results.length + ' pilotes' + '</div><div class="table-wrap"><table><thead><tr><th>Pos.</th><th>Pilote</th><th>Voiture</th>' + (race ? '<th>Tours</th><th>Temps total</th><th>Écart</th>' : '') + '<th>Meilleur tour</th>' + (race ? '' : '<th>Écart</th>') + '</tr></thead><tbody>' +
     s.results.map(r => '<tr><td class="rank">' + r.pos + '</td><td><b>' + esc(r.name) + '</b>' + (r.dsq ? ' <span class="tag">DSQ</span>' : '') + '</td><td>' + esc(r.car) + '</td>' + (race ? '<td>' + r.laps + '</td><td>' + fmt(r.total) + '</td><td>' + gap(r.total, s.results[0].total) + '</td>' : '') + '<td class="points">' + fmt(r.best) + '</td>' + (race ? '' : '<td>' + gap(r.best, s.results[0].best) + '</td>') + '</tr>').join('') + '</tbody></table></div>';
 
-  function showSession() {
+  const sessionLabel = (s, index, group) => {
+    if (/QUALIF/.test(s.type)) return 'Qualification';
+    if (/RACE/.test(s.type)) {
+      const races = group.filter(x => /RACE/.test(x.type)).sort((a,b) => String(a.date).localeCompare(String(b.date)));
+      const raceIndex = races.indexOf(s) + 1;
+      return (s.durationMinutes >= 50 ? 'Course unique · 60 min' : 'Course ' + raceIndex + ' · 25 min');
+    }
+    return typeLabel(s.type);
+  };
+
+  function currentGroup() {
+    const groups = groupSessions();
+    return groups[Number($('raceSelect').value)] || [];
+  }
+
+  function groupSessions() {
     const list = (db && db.sessions) || [];
-    const s = list[$('sessionSelect').value];
-    const isRace = s && /RACE/.test(s.type);
-    $('sessRace').innerHTML = s && isRace ? table(s, true) : '';
-    $('sessQualif').innerHTML = s && !isRace ? table(s, false) : '<div class="message">Importez le JSON de résultats d’une qualification (fichier du serveur AC) depuis l’administration, puis choisissez-la dans la liste des sessions.</div>';
-    if (s && isRace && s.events.length) { incidentData = normIncidents(s.events); renderIncidentTools(); }
+    const map = new Map();
+    list.forEach(s => {
+      const key = String(s.eventName || s.track || 'Manche sans nom').trim();
+      if (!map.has(key)) map.set(key, { key, label: key, sessions: [] });
+      map.get(key).sessions.push(s);
+    });
+    return [...map.values()].map(g => {
+      g.sessions.sort((a,b) => {
+        const order = s => /QUALIF/.test(s.type) ? 0 : /RACE/.test(s.type) ? 1 : 2;
+        return order(a)-order(b) || String(a.date).localeCompare(String(b.date));
+      });
+      return g;
+    }).sort((a,b) => {
+      const first = g => g.sessions.map(s=>s.date).filter(Boolean).sort()[0] || '';
+      return first(a).localeCompare(first(b)) || a.label.localeCompare(b.label,'fr');
+    });
+  }
+
+  function showSession() {
+    const group = currentGroup();
+    const sel = $('sessionSelect');
+    const s = group[Number(sel.value)] || group[0];
+    if (!s) {
+      $('sessionDetail').innerHTML = '<div class="empty">Aucune session importée pour cette manche. Importez les JSON de qualification et de course depuis l’administration.</div>';
+      return;
+    }
+    const isRace = /RACE/.test(s.type);
+    $('sessionDetail').innerHTML = '<div class="message"><b>' + esc(sessionLabel(s, Number(sel.value), group)) + '</b> · ' + esc(s.track) + when(s.date) + ' · ' + s.results.length + ' pilotes</div>' + table(s, isRace);
+    if (s.events && s.events.length) { incidentData = normIncidents(s.events); renderIncidentTools(); }
   }
 
   function renderSessions() {
-    const sel = $('sessionSelect'), list = (db && db.sessions) || [], prev = sel.value;
-    sel.innerHTML = list.length ? list.map((s, i) => '<option value="' + i + '">' + esc(typeLabel(s.type) + ' · ' + s.track + when(s.date)) + '</option>').join('') : '<option value="">Aucune session importée</option>';
-    if (prev && list[prev]) sel.value = prev;
+    const eventSel = $('raceSelect'), sessionSel = $('sessionSelect'), groups = groupSessions();
+    const previousGroup = eventSel.value;
+    const previousSession = sessionSel.value;
+    eventSel.innerHTML = groups.length ? groups.map((g,i) => '<option value="' + i + '">' + esc(g.label) + '</option>').join('') : '<option value="">Aucune manche importée</option>';
+    if (previousGroup && groups[Number(previousGroup)]) eventSel.value = previousGroup;
+    const group = currentGroup();
+    sessionSel.innerHTML = group.length ? group.map((s,i) => '<option value="' + i + '">' + esc(sessionLabel(s,i,group)) + '</option>').join('') : '<option value="">Aucune session</option>';
+    if (previousSession && group[Number(previousSession)]) sessionSel.value = previousSession;
     showSession();
   }
 
@@ -118,10 +162,9 @@
     } catch (e) { msg('Import impossible : ' + e.message); loadData(); }
   }
 
-  // Branchement sur la page
-  document.querySelector('.race-tabs').insertAdjacentHTML('beforebegin', '<div class="toolbar" style="margin-top:16px"><select id="sessionSelect" aria-label="Session importée"></select></div>');
-  $('raceCoursePanel').insertAdjacentHTML('beforeend', '<div id="sessRace"></div>');
-  $('raceQualifPanel').innerHTML = '<div id="sessQualif"></div>';
+  // Deux sélecteurs cohérents : manche, puis séance (qualification/course).
+  document.querySelector('.race-tabs').insertAdjacentHTML('beforebegin', '<div class="toolbar" style="margin-top:16px"><label for="sessionSelect" class="muted">Séance</label><select id="sessionSelect" aria-label="Choisir qualification ou course"></select></div><div id="sessionDetail" style="margin-top:16px"></div>');
+  $('raceSelect').addEventListener('change', renderSessions);
   $('sessionSelect').addEventListener('change', showSession);
   const old = $('importBtn'), btn = old.cloneNode(true);
   old.replaceWith(btn);
