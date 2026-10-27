@@ -121,9 +121,15 @@ def build(champ):
     def note_driver(guid, name, team):
         d = drivers.setdefault(guid, {"id": guid, "name": name, "team": "Sans équipe"})
         d["name"] = name
-        if team:
+        team = configured_teams.get(guid) or team
+        if team and str(team).strip():
+            team = str(team).strip()
             teams.setdefault(norm_team(team), team)
             d["team"] = teams[norm_team(team)]
+            d["teamSource"] = "configuration" if configured_teams.get(guid) else "source"
+        else:
+            d["team"] = "Sans équipe"
+            d["teamSource"] = "unassigned"
 
     for (ev_i, ev, key, r) in sessions:
         if r.get("Type") != "RACE":
