@@ -25,3 +25,13 @@ Servez le dossier avec n'importe quel serveur web. En local : `python3 -m http.s
 3. Rechargez la page, onglet « Championnat » : résumés des courses, profils pilotes (points forts et faibles), classement.
 
 Les points sont recalculés d'après le barème du championnat et peuvent différer légèrement du Server Manager. Les profils comparent chaque pilote au reste du plateau (minimum 2 courses). La course 2 à grille inversée est exclue du critère « Remontées ».
+
+## Collisions et incidents Assetto Corsa
+Dans l'onglet **Résultats par course → Collisions & incidents**, vous pouvez importer un export JSON de logs Assetto Corsa (tableau d'événements ou objet contenant `Events`, `incidents` ou `collisions`). La page propose :
+- tri chronologique, chronologique inversé ou par vitesse d'impact ;
+- filtres par type, pilote, recherche texte et vitesse minimale ;
+- statistiques sur les collisions voiture/décor, vitesse moyenne et pilotes les plus mentionnés ;
+- rapport chronologique de type directeur de course ;
+- export des logs au format JSON et conservation locale dans le navigateur.
+
+**Important :** les logs importés sont stockés uniquement dans le navigateur (localStorage) et ne modifient pas le classement officiel du serveur. L'implication dans une collision ne signifie pas qu'un pilote est responsable. Les incidents ne sont pas automatiquement associés à une manche précise : importez le fichier correspondant à la course que vous analysez.
