@@ -21,6 +21,9 @@ MIN_RACES_PROFILE = 2   # courses minimum pour établir un profil
 MIN_CLEAN_LAPS = 5      # tours propres minimum pour juger le rythme
 OUTLIER = 1.03          # tours > 103 % du tour médian du pilote : exclus du rythme
 
+POINTS_25_MIN = [30, 26, 23, 21, 20, 19]
+MIN_DISTANCE_PERCENT = 75
+
 
 # ------------------------------------------------------------------ utilitaires
 def fr(x, nd=1):
@@ -47,6 +50,30 @@ def plural(n, one, many):
 
 def norm_team(t):
     return re.sub(r"[\s_\-]+", " ", (t or "").strip()).casefold()
+
+def race_points(position, duration_minutes):
+    """Barème GDSP : 25 minutes, doublé pour une course d'une heure."""
+    if position <= 0:
+        return 0
+    if position <= len(POINTS_25_MIN):
+        points = POINTS_25_MIN[position - 1]
+    elif position <= 24:
+        points = 25 - position
+    else:
+        points = 0
+    return points * (2 if duration_minutes >= 50 else 1)
+
+
+def explicit_no_post_race_penalty(result):
+    """True/False si l'export donne l'information, sinon None."""
+    for key in ("HasPenalty", "hasPenalty", "PostRacePenalty", "postRacePenalty"):
+        if key in result:
+            return not bool(result[key])
+    for key in ("Penalties", "penalties", "PostRacePenalties", "postRacePenalties"):
+        if key in result:
+            return not bool(result[key])
+    return None
+
 
 
 # ------------------------------------------------------------------ sessions
@@ -104,10 +131,10 @@ def lap_tables(laps, winner_laps):
 # ------------------------------------------------------------------ construction
 def build(champ):
     cls = (champ.get("Classes") or [{}])[0]
-    places = (cls.get("Points") or {}).get("Places") or []
-    pole_pts = (cls.get("Points") or {}).get("PolePosition", 0)
-    best_lap_pts = (cls.get("Points") or {}).get("BestLap", 0)
-    need_pct = (cls.get("Points") or {}).get("RequiredRaceTimePercentage", 0)
+    # Le règlement GDSP remplace le barème configuré dans l'export ASM.
+    pole_pts = 1
+    best_lap_pts = 0
+    need_pct = MIN_DISTANCE_PERCENT
 
     sessions = collect_sessions(champ)
     qualifs = {i: r for (i, e, k, r) in sessions if r.get("Type") == "QUALIFY"}
@@ -141,11 +168,13 @@ def build(champ):
         # pole : meilleur chrono de la qualification de la manche (course 1 uniquement)
         pole_guid, pole_time = None, None
         quali_rank = {}
+        quali_best_lap = {}
         if has_quali:
             qr = [x for x in qualifs[ev_i]["Result"] if x["BestLap"] > 0]
             qr.sort(key=lambda x: x["BestLap"])
             for pos, x in enumerate(qr, start=1):
                 quali_rank[x["DriverGuid"]] = pos
+                quali_best_lap[x["DriverGuid"]] = x["BestLap"]
             if qr:
                 pole_guid, pole_time = qr[0]["DriverGuid"], qr[0]["BestLap"]
 
@@ -192,13 +221,12 @@ def build(champ):
             finished = (
                 x["TotalTime"] > 0
                 and not x.get("Disqualified")
-                and laps_done >= wl * (need_pct / 100.0 if need_pct else 0)
+                and laps_done >= wl * (MIN_DISTANCE_PERCENT / 100.0)
             )
-            pts = places[pos - 1] if finished and pos - 1 < len(places) else 0
-            if finished and pole_guid == g and first_race_of_event:
-                pts += pole_pts
-            if finished and best_lap_pts and fastest and fastest["DriverGuid"] == g:
-                pts += best_lap_pts
+            duration_minutes = float((r.get("SessionConfig") or {}).get("time") or 0)
+            pts = race_points(pos, duration_minutes) if finished else 0
+            row_pole_pts = (2 if duration_minutes >= 50 else 1) if finished and pole_guid == g and first_race_of_event else 0
+            pts += row_pole_pts
             if laps_done == wl:
                 gap = x["TotalTime"] - winner["TotalTime"]
                 gap_laps = 0
@@ -215,6 +243,13 @@ def build(champ):
                 "gap": gap, "gapLaps": gap_laps,
                 "bestLap": x["BestLap"],
                 "points": pts,
+                "racePoints": pts,
+                "polePoints": row_pole_pts,
+                "durationMinutes": duration_minutes,
+                "qualiBestLap": quali_best_lap.get(g),
+                "postRacePenaltyFree": explicit_no_post_race_penalty(x),
+                "meritPoints": 0,
+                "meritBreakdown": {},
                 "contacts": contacts.get(g, 0),
                 "envHits": env_hits.get(g, 0),
                 "pace": pace.get(g),
@@ -284,6 +319,51 @@ def build(champ):
     for rc in races:
         rc["summary"] = summarize(rc, drivers)
 
+    # ---------------------------------------------------------- Trophée du Mérite
+    points_before_event = defaultdict(int)
+    previous_event_points = {}
+    for rc in sorted(races, key=lambda race: (race["event"], race["raceNo"], race["date"] or "")):
+        event_no = rc["event"]
+        if event_no not in previous_event_points:
+            previous_event_points[event_no] = dict(points_before_event)
+        multiplier = 2 if rc["durationMinutes"] >= 50 else 1
+        for row in rc["results"]:
+            g = row["driver"]
+            breakdown = {"finish": 2 if row["status"] == "FIN" else 0}
+            if rc.get("fastestLap") and rc["fastestLap"]["driver"] == g and row["status"] == "FIN":
+                breakdown["fastestLap"] = 1
+            if row.get("qualiBestLap") and row.get("bestLap") and row["bestLap"] > 0 and row["bestLap"] < row["qualiBestLap"] and row["status"] == "FIN":
+                breakdown["fasterThanQuali"] = 1
+            gain = row.get("gain")
+            if row["status"] == "FIN" and gain is not None:
+                if 2 <= gain <= 3:
+                    breakdown["progression"] = 1
+                elif 4 <= gain <= 5:
+                    breakdown["progression"] = 2
+                elif gain >= 6:
+                    breakdown["progression"] = 3
+            if event_no >= 2:
+                before = previous_event_points.get(event_no, {})
+                prior_order = sorted(drivers, key=lambda driver: (-before.get(driver, 0), drivers[driver]["name"].lower()))
+                prior_rank = {driver: rank for rank, driver in enumerate(prior_order, 1)}
+                delta = prior_rank.get(g, row["pos"]) - row["pos"]
+                if row["status"] == "FIN" and delta >= 4:
+                    breakdown["generalStanding"] = 2
+                elif row["status"] == "FIN" and delta == 3:
+                    breakdown["generalStanding"] = 1
+            if row.get("postRacePenaltyFree") is True:
+                breakdown["cleanDriving"] = 1
+            row["meritBreakdown"] = breakdown
+            row["meritMultiplier"] = multiplier
+            row["meritPoints"] = sum(breakdown.values()) * multiplier
+        for row in rc["results"]:
+            points_before_event[row["driver"]] += row["racePoints"]
+
+    merit_standings_map = defaultdict(int)
+    for rc in races:
+        for row in rc["results"]:
+            merit_standings_map[row["driver"]] += row["meritPoints"]
+
     # ---------------------------------------------------------- classement
     st = {}
     for rc in races:
@@ -305,7 +385,11 @@ def build(champ):
     # Classement alternatif : même calcul que le classement officiel, mais
     # retrait de la manche la moins bien marquée par pilote. Le classement
     # officiel ci-dessus reste inchangé et conserve toutes les manches joker.
+    all_event_ids = [str(i) for i in range(1, len(champ.get("Events", [])) + 1)]
     by_event = defaultdict(lambda: defaultdict(int))
+    for guid in drivers:
+        for event_id in all_event_ids:
+            by_event[guid][event_id] = 0
     for rc in races:
         for result in rc["results"]:
             by_event[result["driver"]][str(rc["event"])] += result["points"]
@@ -325,6 +409,47 @@ def build(champ):
         })
     standings_drop_worst.sort(key=lambda s: (-s["points"], -s["wins"], -s["podiums"], drivers[s["driver"]]["name"].lower()))
     for i, summary in enumerate(standings_drop_worst, start=1): summary["rank"] = i
+    # Classements équipe : les points des pilotes sont additionnés par manche.
+    team_by_event = defaultdict(lambda: defaultdict(int))
+    team_totals = defaultdict(int)
+    all_teams = {d.get("team") or "Équipe non renseignée" for d in drivers.values()}
+    all_event_ids = [str(i) for i in range(1, len(champ.get("Events", [])) + 1)]
+    for team in all_teams:
+        for event_id in all_event_ids:
+            team_by_event[team][event_id] = 0
+    for rc in races:
+        for row in rc["results"]:
+            team = drivers[row["driver"]].get("team") or "Équipe non renseignée"
+            team_by_event[team][str(rc["event"])] += row["racePoints"]
+            team_totals[team] += row["racePoints"]
+    team_standings = []
+    for team, total in team_totals.items():
+        event_points = team_by_event[team]
+        dropped_event = min(event_points, key=event_points.get) if len(event_points) >= 2 else None
+        dropped_points = event_points[dropped_event] if dropped_event is not None else 0
+        team_standings.append({
+            "team": team, "points": total, "pointsAllRounds": total,
+            "pointsDropWorst": total - dropped_points,
+            "droppedRound": dropped_event, "droppedRoundPoints": dropped_points
+        })
+    team_standings.sort(key=lambda x: (-x["points"], x["team"].lower()))
+    for rank, team in enumerate(team_standings, 1):
+        team["rank"] = rank
+    team_standings_drop_worst = sorted(
+        [dict(x, points=x["pointsDropWorst"]) for x in team_standings],
+        key=lambda x: (-x["points"], x["team"].lower())
+    )
+    for rank, team in enumerate(team_standings_drop_worst, 1):
+        team["rank"] = rank
+
+    merit_standings = [
+        {"driver": guid, "points": points, "name": drivers[guid]["name"], "team": drivers[guid]["team"]}
+        for guid, points in merit_standings_map.items()
+    ]
+    merit_standings.sort(key=lambda x: (-x["points"], x["name"].lower()))
+    for rank, item in enumerate(merit_standings, 1):
+        item["rank"] = rank
+
     # ---------------------------------------------------------- profils
     profiles = build_profiles(per_driver_rows, drivers, races, st)
 
@@ -339,17 +464,26 @@ def build(champ):
             "drivers": len(drivers),
             "totalLaps": total_laps,
             "car": (cls.get("AvailableCars") or [None])[-1],
+            "scoringRules": {
+                "race25": POINTS_25_MIN + [max(0, 25 - pos) for pos in range(7, 25)],
+                "race60Multiplier": 2, "pole25": 1, "pole60": 2,
+                "minimumDistancePercent": MIN_DISTANCE_PERCENT,
+                "officialUsesAllRounds": True, "alternativeDropsWorstRound": True
+            },
             "notes": [
-                "Points recalculés d'après le barème du championnat : "
-                + ", ".join(str(p) for p in places[:5]) + "… ; "
-                + (f"+{pole_pts} pour la pole de la course 1 d'une manche avec qualification ; " if pole_pts else "")
-                + (f"abandon si moins de {need_pct} % des tours du vainqueur." if need_pct else ""),
+                "Barème GDSP : 30, 26, 23, 21, 20, 19 puis -1 point par place jusqu'à la 24e ; points doublés pour une course d'une heure.",
+                "La pole rapporte 1 point en 25 minutes et 2 points en 1 heure. Le meilleur tour compte dans le Trophée du Mérite.",
+                "Seuil de classement : 75 % des tours du vainqueur. Le classement officiel conserve toutes les manches ; l'alternatif retire la moins bonne manche.",
+                "Le bonus de conduite propre n'est attribué que si l'export confirme explicitement l'absence de pénalité post-course.",
                 f"Les contacts comptent les collisions à plus de {MIN_IMPACT:.0f} km/h, une fois par collision, pour chaque pilote impliqué (le fichier ne dit pas qui est en faute).",
             ],
         },
         "drivers": drivers,
         "standings": standings,
         "standingsDropWorst": standings_drop_worst,
+        "teamStandings": team_standings,
+        "teamStandingsDropWorst": team_standings_drop_worst,
+        "meritStandings": merit_standings,
         "races": races,
         "profiles": profiles,
     }
