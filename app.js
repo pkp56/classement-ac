@@ -17,6 +17,12 @@ app.use((req, res, next) => {
 });
 app.use(express.static(__dirname, { dotfiles: 'deny' }));
 
+// Health check public et sans données sensibles pour vérifier l'état du service Render.
+app.get('/healthz', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.status(200).json({ status: 'ok' });
+});
+
 // Route pour charger la page principale
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
@@ -139,7 +145,7 @@ app.post('/api/admin/reset-json', requireAdmin, (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-if (require.main === module) app.listen(PORT, () => {
+if (require.main === module) app.listen(PORT, '0.0.0.0', () => {
     console.log(`Serveur démarré sur le port ${PORT}`);
 });
 
