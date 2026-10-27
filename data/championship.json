@@ -31352,2166 +31352,6 @@
       ]
     },
     {
-      "id": "2026-10-21T21:55:00+02:00|mid_ohio|RACE|22",
-      "type": "RACE",
-      "track": "mid_ohio · chicane",
-      "date": "2026-10-21T21:55:00+02:00",
-      "results": [
-        {
-          "pos": 1,
-          "name": "Kimy Hoyer",
-          "guid": "76561199162864808",
-          "car": "actk_lola_t290",
-          "best": 91734,
-          "total": 1569274,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 1.4118842176772466,
-          "contacts": 1,
-          "envHits": 0
-        },
-        {
-          "pos": 2,
-          "name": "51R Sherman",
-          "guid": "76561198091861503",
-          "car": "actk_lola_t290",
-          "best": 91417,
-          "total": 1569689,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 0.26311226512354613,
-          "contacts": 0,
-          "envHits": 0
-        },
-        {
-          "pos": 3,
-          "name": "aSSaSSins_strEEt",
-          "guid": "76561198015862674",
-          "car": "actk_lola_t290",
-          "best": 92159,
-          "total": 1581159,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 0.29961565307632776,
-          "contacts": 1,
-          "envHits": 0
-        },
-        {
-          "pos": 4,
-          "name": "fmherrou",
-          "guid": "76561198023166815",
-          "car": "actk_lola_t290",
-          "best": 91885,
-          "total": 1585764,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 1.804949121486922,
-          "contacts": 0,
-          "envHits": 0
-        },
-        {
-          "pos": 5,
-          "name": "Tofusan",
-          "guid": "76561199167900834",
-          "car": "actk_lola_t290",
-          "best": 92212,
-          "total": 1589483,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 0.5647777736320305,
-          "contacts": 1,
-          "envHits": 1
-        },
-        {
-          "pos": 6,
-          "name": "Jim ZPLOUCH",
-          "guid": "76561198078021973",
-          "car": "actk_lola_t290",
-          "best": 92576,
-          "total": 1591381,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 0.4603453166987686,
-          "contacts": 3,
-          "envHits": 0
-        },
-        {
-          "pos": 7,
-          "name": "LeNainPosteur",
-          "guid": "76561198022928394",
-          "car": "actk_lola_t290",
-          "best": 92107,
-          "total": 1591994,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 0.918985267420906,
-          "contacts": 3,
-          "envHits": 0
-        },
-        {
-          "pos": 8,
-          "name": "Thomas PONGE",
-          "guid": "76561199247959520",
-          "car": "actk_lola_t290",
-          "best": 91893,
-          "total": 1593162,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 0.6399463977629521,
-          "contacts": 2,
-          "envHits": 0
-        },
-        {
-          "pos": 9,
-          "name": "Karl74",
-          "guid": "76561198033054324",
-          "car": "actk_lola_t290",
-          "best": 92582,
-          "total": 1594017,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 0.5260432326954027,
-          "contacts": 6,
-          "envHits": 0
-        },
-        {
-          "pos": 10,
-          "name": "Harrythmetique ",
-          "guid": "76561198062399161",
-          "car": "actk_lola_t290",
-          "best": 92234,
-          "total": 1604462,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 1.5930768601527705,
-          "contacts": 0,
-          "envHits": 0
-        },
-        {
-          "pos": 11,
-          "name": "[APR] Alexou33",
-          "guid": "76561198137168868",
-          "car": "actk_lola_t290",
-          "best": 93316,
-          "total": 1606891,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 0.7751528447060317,
-          "contacts": 2,
-          "envHits": 0
-        },
-        {
-          "pos": 12,
-          "name": "[APR] Christophe",
-          "guid": "76561197983426917",
-          "car": "actk_lola_t290",
-          "best": 93745,
-          "total": 1618598,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 0.641964390869343,
-          "contacts": 0,
-          "envHits": 0
-        },
-        {
-          "pos": 13,
-          "name": "Neutraliz",
-          "guid": "76561198042197341",
-          "car": "actk_lola_t290",
-          "best": 93716,
-          "total": 1620667,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 0.6254369797633992,
-          "contacts": 2,
-          "envHits": 0
-        },
-        {
-          "pos": 14,
-          "name": "Elouan",
-          "guid": "76561198022149307",
-          "car": "actk_lola_t290",
-          "best": 93032,
-          "total": 1623617,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 1.3262848309831194,
-          "contacts": 1,
-          "envHits": 0
-        },
-        {
-          "pos": 15,
-          "name": "kant-1",
-          "guid": "76561198023525085",
-          "car": "actk_lola_t290",
-          "best": 93122,
-          "total": 1627912,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 0.820561793164232,
-          "contacts": 1,
-          "envHits": 0
-        },
-        {
-          "pos": 16,
-          "name": "[APR] Pierre",
-          "guid": "76561199042511252",
-          "car": "actk_lola_t290",
-          "best": 93217,
-          "total": 1632071,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 0.7718608797631729,
-          "contacts": 1,
-          "envHits": 1
-        },
-        {
-          "pos": 17,
-          "name": "SuperSlipos",
-          "guid": "76561198148830572",
-          "car": "actk_lola_t290",
-          "best": 93647,
-          "total": 1636125,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 1.3563946901272854,
-          "contacts": 2,
-          "envHits": 0
-        },
-        {
-          "pos": 18,
-          "name": "pistol",
-          "guid": "76561197968560375",
-          "car": "actk_lola_t290",
-          "best": 95297,
-          "total": 1655771,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 1.1492298860137538,
-          "contacts": 2,
-          "envHits": 0
-        },
-        {
-          "pos": 19,
-          "name": "Pikoupok",
-          "guid": "76561198157550304",
-          "car": "actk_lola_t290",
-          "best": 94228,
-          "total": 1657034,
-          "laps": 17,
-          "dsq": false,
-          "consistency": 1.4255659469580881,
-          "contacts": 3,
-          "envHits": 0
-        },
-        {
-          "pos": 20,
-          "name": "Alan Mc Wrecker",
-          "guid": "76561197972822145",
-          "car": "actk_lola_t290",
-          "best": 93457,
-          "total": 1569433,
-          "laps": 16,
-          "dsq": false,
-          "consistency": 0.7998386813296189,
-          "contacts": 3,
-          "envHits": 1
-        },
-        {
-          "pos": 21,
-          "name": "cheucheu91",
-          "guid": "76561198124771615",
-          "car": "actk_lola_t290",
-          "best": 95134,
-          "total": 1602664,
-          "laps": 16,
-          "dsq": false,
-          "consistency": 1.3564494063812127,
-          "contacts": 2,
-          "envHits": 0
-        },
-        {
-          "pos": 22,
-          "name": "Streetbike",
-          "guid": "76561198910594990",
-          "car": "actk_lola_t290",
-          "best": 91842,
-          "total": 1607646,
-          "laps": 16,
-          "dsq": false,
-          "consistency": 1.9187390422688448,
-          "contacts": 5,
-          "envHits": 1
-        }
-      ],
-      "events": [
-        {
-          "CarId": 8,
-          "Driver": {
-            "Guid": "76561199167900834",
-            "GuidsList": [
-              "76561199167900834"
-            ],
-            "Name": "Tofusan",
-            "Nation": "FRA",
-            "Team": "ECURIE GDSP #2",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 3.7964153,
-          "OtherCarId": 6,
-          "OtherDriver": {
-            "Guid": "76561198033054324",
-            "GuidsList": [
-              "76561198033054324"
-            ],
-            "Name": "Karl74",
-            "Nation": "FRA",
-            "Team": "Fk Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.78452474,
-            "Y": 0.01676835,
-            "Z": 1.7590224
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 121.11202,
-            "Y": -0.54871196,
-            "Z": 2.6174235
-          },
-          "Timestamp": 1792610726,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 6,
-          "Driver": {
-            "Guid": "76561198033054324",
-            "GuidsList": [
-              "76561198033054324"
-            ],
-            "Name": "Karl74",
-            "Nation": "FRA",
-            "Team": "Fk Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 4.5674224,
-          "OtherCarId": 8,
-          "OtherDriver": {
-            "Guid": "76561199167900834",
-            "GuidsList": [
-              "76561199167900834"
-            ],
-            "Name": "Tofusan",
-            "Nation": "FRA",
-            "Team": "ECURIE GDSP #2",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.88178164,
-            "Y": 0.038591776,
-            "Z": -1.3640164
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 121.66997,
-            "Y": -0.4566328,
-            "Z": 2.698424
-          },
-          "Timestamp": 1792610728,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 5,
-          "Driver": {
-            "Guid": "76561198062399161",
-            "GuidsList": [
-              "76561198062399161"
-            ],
-            "Name": "Harrythmetique ",
-            "Nation": "FRA",
-            "Team": "Les Brasseurs de la Mine",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 1.881334,
-          "OtherCarId": 3,
-          "OtherDriver": {
-            "Guid": "76561198015862674",
-            "GuidsList": [
-              "76561198015862674"
-            ],
-            "Name": "aSSaSSins_strEEt",
-            "Nation": "FRA",
-            "Team": "ECURIE GDSP #2",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.82123595,
-            "Y": -0.021522699,
-            "Z": 1.5687935
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -197.51459,
-            "Y": 3.41379,
-            "Z": 26.022366
-          },
-          "Timestamp": 1792610736,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 3,
-          "Driver": {
-            "Guid": "76561198015862674",
-            "GuidsList": [
-              "76561198015862674"
-            ],
-            "Name": "aSSaSSins_strEEt",
-            "Nation": "FRA",
-            "Team": "ECURIE GDSP #2",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 9.709665,
-          "OtherCarId": 5,
-          "OtherDriver": {
-            "Guid": "76561198062399161",
-            "GuidsList": [
-              "76561198062399161"
-            ],
-            "Name": "Harrythmetique ",
-            "Nation": "FRA",
-            "Team": "Les Brasseurs de la Mine",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.83786166,
-            "Y": -0.07909307,
-            "Z": 1.3658375
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -196.91867,
-            "Y": 3.4157383,
-            "Z": 25.146223
-          },
-          "Timestamp": 1792610737,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 6,
-          "Driver": {
-            "Guid": "76561198033054324",
-            "GuidsList": [
-              "76561198033054324"
-            ],
-            "Name": "Karl74",
-            "Nation": "FRA",
-            "Team": "Fk Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 5.1275606,
-          "OtherCarId": 11,
-          "OtherDriver": {
-            "Guid": "76561198137168868",
-            "GuidsList": [
-              "76561198137168868"
-            ],
-            "Name": "[APR] Alexou33",
-            "Nation": "FRA",
-            "Team": "Alpha Performance Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.8737459,
-            "Y": 0.30156213,
-            "Z": -1.7095649
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -212.04028,
-            "Y": 4.1939955,
-            "Z": 48.255207
-          },
-          "Timestamp": 1792610738,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 11,
-          "Driver": {
-            "Guid": "76561198137168868",
-            "GuidsList": [
-              "76561198137168868"
-            ],
-            "Name": "[APR] Alexou33",
-            "Nation": "FRA",
-            "Team": "Alpha Performance Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 10.093069,
-          "OtherCarId": 6,
-          "OtherDriver": {
-            "Guid": "76561198033054324",
-            "GuidsList": [
-              "76561198033054324"
-            ],
-            "Name": "Karl74",
-            "Nation": "FRA",
-            "Team": "Fk Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.820522,
-            "Y": -0.25521505,
-            "Z": 1.609904
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -210.08936,
-            "Y": 3.551085,
-            "Z": 44.56258
-          },
-          "Timestamp": 1792610738,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 17,
-          "Driver": {
-            "Guid": "76561198157550304",
-            "GuidsList": [
-              "76561198157550304"
-            ],
-            "Name": "Pikoupok",
-            "Nation": "PLA",
-            "Team": "Réserviste",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 9.487264,
-          "OtherCarId": 26,
-          "OtherDriver": {
-            "Guid": "76561199247959520",
-            "GuidsList": [
-              "76561199247959520"
-            ],
-            "Name": "Thomas PONGE",
-            "Nation": "FRA",
-            "Team": "Online Passion Competition",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.87362975,
-            "Y": 0.30278644,
-            "Z": -1.7095562
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -297.21,
-            "Y": 20.609716,
-            "Z": 587.3996
-          },
-          "Timestamp": 1792610760,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 26,
-          "Driver": {
-            "Guid": "76561199247959520",
-            "GuidsList": [
-              "76561199247959520"
-            ],
-            "Name": "Thomas PONGE",
-            "Nation": "FRA",
-            "Team": "Online Passion Competition",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 1.903424,
-          "OtherCarId": 17,
-          "OtherDriver": {
-            "Guid": "76561198157550304",
-            "GuidsList": [
-              "76561198157550304"
-            ],
-            "Name": "Pikoupok",
-            "Nation": "PLA",
-            "Team": "Réserviste",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.8561009,
-            "Y": -0.25505197,
-            "Z": 0.99539685
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -294.4938,
-            "Y": 20.315119,
-            "Z": 590.95135
-          },
-          "Timestamp": 1792610762,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 4,
-          "Driver": {
-            "Guid": "76561198910594990",
-            "GuidsList": [
-              "76561198910594990"
-            ],
-            "Name": "Streetbike",
-            "Nation": "FRA",
-            "Team": "Scuderia Tolosa",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 5.2539864,
-          "OtherCarId": 7,
-          "OtherDriver": {
-            "Guid": "76561198078021973",
-            "GuidsList": [
-              "76561198078021973"
-            ],
-            "Name": "Jim ZPLOUCH",
-            "Nation": "FRA",
-            "Team": "Gitane Maïs",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.8784115,
-            "Y": -0.23094057,
-            "Z": -1.3234308
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 49.207695,
-            "Y": -17.665882,
-            "Z": -450.97583
-          },
-          "Timestamp": 1792610788,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 7,
-          "Driver": {
-            "Guid": "76561198078021973",
-            "GuidsList": [
-              "76561198078021973"
-            ],
-            "Name": "Jim ZPLOUCH",
-            "Nation": "FRA",
-            "Team": "Gitane Maïs",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 6.836404,
-          "OtherCarId": 4,
-          "OtherDriver": {
-            "Guid": "76561198910594990",
-            "GuidsList": [
-              "76561198910594990"
-            ],
-            "Name": "Streetbike",
-            "Nation": "FRA",
-            "Team": "Scuderia Tolosa",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.8732775,
-            "Y": -0.25863495,
-            "Z": 0.40911126
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 49.832085,
-            "Y": -17.663,
-            "Z": -451.63702
-          },
-          "Timestamp": 1792610788,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 9,
-          "Driver": {
-            "Guid": "76561198022928394",
-            "GuidsList": [
-              "76561198022928394"
-            ],
-            "Name": "LeNainPosteur",
-            "Nation": "FRA",
-            "Team": "Gitane Maïs",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 17.157217,
-          "OtherCarId": 10,
-          "OtherDriver": {
-            "Guid": "76561199042511252",
-            "GuidsList": [
-              "76561199042511252"
-            ],
-            "Name": "[APR] Pierre",
-            "Nation": "FRA",
-            "Team": "Alpha Performance Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.860913,
-            "Y": 0.035582993,
-            "Z": 0.9592873
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 29.126373,
-            "Y": -5.9107623,
-            "Z": -304.1954
-          },
-          "Timestamp": 1792610881,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 10,
-          "Driver": {
-            "Guid": "76561199042511252",
-            "GuidsList": [
-              "76561199042511252"
-            ],
-            "Name": "[APR] Pierre",
-            "Nation": "FRA",
-            "Team": "Alpha Performance Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 8.137524,
-          "OtherCarId": 9,
-          "OtherDriver": {
-            "Guid": "76561198022928394",
-            "GuidsList": [
-              "76561198022928394"
-            ],
-            "Name": "LeNainPosteur",
-            "Nation": "FRA",
-            "Team": "Gitane Maïs",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.8222119,
-            "Y": -0.1692517,
-            "Z": 1.5882427
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 29.453257,
-            "Y": -6.209794,
-            "Z": -304.5007
-          },
-          "Timestamp": 1792610881,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 10,
-          "Driver": {
-            "Guid": "76561199042511252",
-            "GuidsList": [
-              "76561199042511252"
-            ],
-            "Name": "[APR] Pierre",
-            "Nation": "FRA",
-            "Team": "Alpha Performance Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 16.061026,
-          "OtherCarId": 0,
-          "OtherDriver": {
-            "Guid": "",
-            "GuidsList": null,
-            "Name": "",
-            "Nation": "",
-            "Team": "",
-            "ClassID": "00000000-0000-0000-0000-000000000000"
-          },
-          "RelPosition": {
-            "X": -0.75645304,
-            "Y": -0.09221114,
-            "Z": 1.8579589
-          },
-          "Type": "COLLISION_WITH_ENV",
-          "WorldPosition": {
-            "X": 28.064142,
-            "Y": -9.44009,
-            "Z": -331.52914
-          },
-          "Timestamp": 1792610881,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 4,
-          "Driver": {
-            "Guid": "76561198910594990",
-            "GuidsList": [
-              "76561198910594990"
-            ],
-            "Name": "Streetbike",
-            "Nation": "FRA",
-            "Team": "Scuderia Tolosa",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 5.5047364,
-          "OtherCarId": 7,
-          "OtherDriver": {
-            "Guid": "76561198078021973",
-            "GuidsList": [
-              "76561198078021973"
-            ],
-            "Name": "Jim ZPLOUCH",
-            "Nation": "FRA",
-            "Team": "Gitane Maïs",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.78098273,
-            "Y": 0.015410171,
-            "Z": 1.7602514
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 49.69828,
-            "Y": -17.491858,
-            "Z": -450.04712
-          },
-          "Timestamp": 1792610883,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 7,
-          "Driver": {
-            "Guid": "76561198078021973",
-            "GuidsList": [
-              "76561198078021973"
-            ],
-            "Name": "Jim ZPLOUCH",
-            "Nation": "FRA",
-            "Team": "Gitane Maïs",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 7.831348,
-          "OtherCarId": 4,
-          "OtherDriver": {
-            "Guid": "76561198910594990",
-            "GuidsList": [
-              "76561198910594990"
-            ],
-            "Name": "Streetbike",
-            "Nation": "FRA",
-            "Team": "Scuderia Tolosa",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.3581527,
-            "Y": -0.06833997,
-            "Z": -1.6154605
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 49.177326,
-            "Y": -17.510193,
-            "Z": -449.51382
-          },
-          "Timestamp": 1792610883,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 9,
-          "Driver": {
-            "Guid": "76561198022928394",
-            "GuidsList": [
-              "76561198022928394"
-            ],
-            "Name": "LeNainPosteur",
-            "Nation": "FRA",
-            "Team": "Gitane Maïs",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 58.777725,
-          "OtherCarId": 4,
-          "OtherDriver": {
-            "Guid": "76561198910594990",
-            "GuidsList": [
-              "76561198910594990"
-            ],
-            "Name": "Streetbike",
-            "Nation": "FRA",
-            "Team": "Scuderia Tolosa",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.85919136,
-            "Y": -0.25503734,
-            "Z": 0.9976685
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 324.17404,
-            "Y": -0.22326551,
-            "Z": 86.11691
-          },
-          "Timestamp": 1792610916,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 4,
-          "Driver": {
-            "Guid": "76561198910594990",
-            "GuidsList": [
-              "76561198910594990"
-            ],
-            "Name": "Streetbike",
-            "Nation": "FRA",
-            "Team": "Scuderia Tolosa",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 62.05834,
-          "OtherCarId": 9,
-          "OtherDriver": {
-            "Guid": "76561198022928394",
-            "GuidsList": [
-              "76561198022928394"
-            ],
-            "Name": "LeNainPosteur",
-            "Nation": "FRA",
-            "Team": "Gitane Maïs",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.74205905,
-            "Y": -0.23796794,
-            "Z": 1.8835685
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 324.21515,
-            "Y": -0.22534451,
-            "Z": 86.1414
-          },
-          "Timestamp": 1792610918,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 18,
-          "Driver": {
-            "Guid": "76561198023525085",
-            "GuidsList": [
-              "76561198023525085"
-            ],
-            "Name": "kant-1",
-            "Nation": "PLA",
-            "Team": "Ecurie GDSP #1",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 11.760172,
-          "OtherCarId": 4,
-          "OtherDriver": {
-            "Guid": "76561198910594990",
-            "GuidsList": [
-              "76561198910594990"
-            ],
-            "Name": "Streetbike",
-            "Nation": "FRA",
-            "Team": "Scuderia Tolosa",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.8299689,
-            "Y": -0.122709274,
-            "Z": 1.5765969
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 141.05115,
-            "Y": -0.83755606,
-            "Z": -2.432783
-          },
-          "Timestamp": 1792610927,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 4,
-          "Driver": {
-            "Guid": "76561198910594990",
-            "GuidsList": [
-              "76561198910594990"
-            ],
-            "Name": "Streetbike",
-            "Nation": "FRA",
-            "Team": "Scuderia Tolosa",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 10.827225,
-          "OtherCarId": 18,
-          "OtherDriver": {
-            "Guid": "76561198023525085",
-            "GuidsList": [
-              "76561198023525085"
-            ],
-            "Name": "kant-1",
-            "Nation": "PLA",
-            "Team": "Ecurie GDSP #1",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.8456955,
-            "Y": 0.06418581,
-            "Z": 1.2861739
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 143.16301,
-            "Y": -0.66330475,
-            "Z": -2.2733965
-          },
-          "Timestamp": 1792610928,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 4,
-          "Driver": {
-            "Guid": "76561198910594990",
-            "GuidsList": [
-              "76561198910594990"
-            ],
-            "Name": "Streetbike",
-            "Nation": "FRA",
-            "Team": "Scuderia Tolosa",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 149.14806,
-          "OtherCarId": 0,
-          "OtherDriver": {
-            "Guid": "",
-            "GuidsList": null,
-            "Name": "",
-            "Nation": "",
-            "Team": "",
-            "ClassID": "00000000-0000-0000-0000-000000000000"
-          },
-          "RelPosition": {
-            "X": 0.6876989,
-            "Y": -0.11043006,
-            "Z": 1.7545136
-          },
-          "Type": "COLLISION_WITH_ENV",
-          "WorldPosition": {
-            "X": 96.18463,
-            "Y": -0.648293,
-            "Z": 5.1324344
-          },
-          "Timestamp": 1792610928,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 12,
-          "Driver": {
-            "Guid": "76561198042197341",
-            "GuidsList": [
-              "76561198042197341"
-            ],
-            "Name": "Neutraliz",
-            "Nation": "FRA",
-            "Team": "Erminig Gwenn",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 12.756521,
-          "OtherCarId": 14,
-          "OtherDriver": {
-            "Guid": "76561197972822145",
-            "GuidsList": [
-              "76561197972822145"
-            ],
-            "Name": "Alan Mc Wrecker",
-            "Nation": "FRA",
-            "Team": "Absolute Loosers",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.90334386,
-            "Y": -0.25317743,
-            "Z": -0.77037656
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 372.8014,
-            "Y": 1.2823551,
-            "Z": 26.00179
-          },
-          "Timestamp": 1792611013,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 14,
-          "Driver": {
-            "Guid": "76561197972822145",
-            "GuidsList": [
-              "76561197972822145"
-            ],
-            "Name": "Alan Mc Wrecker",
-            "Nation": "FRA",
-            "Team": "Absolute Loosers",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 7.8801403,
-          "OtherCarId": 12,
-          "OtherDriver": {
-            "Guid": "76561198042197341",
-            "GuidsList": [
-              "76561198042197341"
-            ],
-            "Name": "Neutraliz",
-            "Nation": "FRA",
-            "Team": "Erminig Gwenn",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.8375399,
-            "Y": -0.016364869,
-            "Z": 1.5498747
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 372.80878,
-            "Y": 1.3882462,
-            "Z": 26.220673
-          },
-          "Timestamp": 1792611015,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 19,
-          "Driver": {
-            "Guid": "76561198124771615",
-            "GuidsList": [
-              "76561198124771615"
-            ],
-            "Name": "cheucheu91",
-            "Nation": "FRA",
-            "Team": "Les Bananes Flambées",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 13.558806,
-          "OtherCarId": 20,
-          "OtherDriver": {
-            "Guid": "76561197968560375",
-            "GuidsList": [
-              "76561197968560375"
-            ],
-            "Name": "pistol",
-            "Nation": "FRA",
-            "Team": "",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.90253705,
-            "Y": 0.16432428,
-            "Z": -0.7217802
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 370.93488,
-            "Y": 1.2286425,
-            "Z": 42.72721
-          },
-          "Timestamp": 1792611018,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 20,
-          "Driver": {
-            "Guid": "76561197968560375",
-            "GuidsList": [
-              "76561197968560375"
-            ],
-            "Name": "pistol",
-            "Nation": "FRA",
-            "Team": "",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 15.496789,
-          "OtherCarId": 19,
-          "OtherDriver": {
-            "Guid": "76561198124771615",
-            "GuidsList": [
-              "76561198124771615"
-            ],
-            "Name": "cheucheu91",
-            "Nation": "FRA",
-            "Team": "Les Bananes Flambées",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.84494656,
-            "Y": -0.25475818,
-            "Z": 1.1695892
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 370.16168,
-            "Y": 0.71814823,
-            "Z": 44.933117
-          },
-          "Timestamp": 1792611020,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 14,
-          "Driver": {
-            "Guid": "76561197972822145",
-            "GuidsList": [
-              "76561197972822145"
-            ],
-            "Name": "Alan Mc Wrecker",
-            "Nation": "FRA",
-            "Team": "Absolute Loosers",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 82.41229,
-          "OtherCarId": 15,
-          "OtherDriver": {
-            "Guid": "76561198148830572",
-            "GuidsList": [
-              "76561198148830572"
-            ],
-            "Name": "SuperSlipos",
-            "Nation": "FRA",
-            "Team": "Les Bananes Flambées",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.708862,
-            "Y": -0.23727536,
-            "Z": 1.8346354
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -76.75785,
-            "Y": -10.166363,
-            "Z": -319.45026
-          },
-          "Timestamp": 1792611075,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 15,
-          "Driver": {
-            "Guid": "76561198148830572",
-            "GuidsList": [
-              "76561198148830572"
-            ],
-            "Name": "SuperSlipos",
-            "Nation": "FRA",
-            "Team": "Les Bananes Flambées",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 11.843705,
-          "OtherCarId": 17,
-          "OtherDriver": {
-            "Guid": "76561198157550304",
-            "GuidsList": [
-              "76561198157550304"
-            ],
-            "Name": "Pikoupok",
-            "Nation": "PLA",
-            "Team": "Réserviste",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.8316379,
-            "Y": 0.123021215,
-            "Z": 1.4074615
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -133.3288,
-            "Y": -7.695459,
-            "Z": -307.9018
-          },
-          "Timestamp": 1792611075,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 15,
-          "Driver": {
-            "Guid": "76561198148830572",
-            "GuidsList": [
-              "76561198148830572"
-            ],
-            "Name": "SuperSlipos",
-            "Nation": "FRA",
-            "Team": "Les Bananes Flambées",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 78.77511,
-          "OtherCarId": 14,
-          "OtherDriver": {
-            "Guid": "76561197972822145",
-            "GuidsList": [
-              "76561197972822145"
-            ],
-            "Name": "Alan Mc Wrecker",
-            "Nation": "FRA",
-            "Team": "Absolute Loosers",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.8259329,
-            "Y": -0.25510484,
-            "Z": 1.4793675
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -76.69699,
-            "Y": -10.173027,
-            "Z": -319.54202
-          },
-          "Timestamp": 1792611075,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 17,
-          "Driver": {
-            "Guid": "76561198157550304",
-            "GuidsList": [
-              "76561198157550304"
-            ],
-            "Name": "Pikoupok",
-            "Nation": "PLA",
-            "Team": "Réserviste",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 18.825552,
-          "OtherCarId": 15,
-          "OtherDriver": {
-            "Guid": "76561198148830572",
-            "GuidsList": [
-              "76561198148830572"
-            ],
-            "Name": "SuperSlipos",
-            "Nation": "FRA",
-            "Team": "Les Bananes Flambées",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.84640086,
-            "Y": 0.047102425,
-            "Z": 1.067713
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -133.49438,
-            "Y": -7.6985936,
-            "Z": -307.75607
-          },
-          "Timestamp": 1792611075,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 14,
-          "Driver": {
-            "Guid": "76561197972822145",
-            "GuidsList": [
-              "76561197972822145"
-            ],
-            "Name": "Alan Mc Wrecker",
-            "Nation": "FRA",
-            "Team": "Absolute Loosers",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 39.911438,
-          "OtherCarId": 0,
-          "OtherDriver": {
-            "Guid": "",
-            "GuidsList": null,
-            "Name": "",
-            "Nation": "",
-            "Team": "",
-            "ClassID": "00000000-0000-0000-0000-000000000000"
-          },
-          "RelPosition": {
-            "X": -0.74060005,
-            "Y": -0.25555134,
-            "Z": 1.8867303
-          },
-          "Type": "COLLISION_WITH_ENV",
-          "WorldPosition": {
-            "X": -63.454292,
-            "Y": -10.338088,
-            "Z": -296.40604
-          },
-          "Timestamp": 1792611080,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 16,
-          "Driver": {
-            "Guid": "76561198022149307",
-            "GuidsList": [
-              "76561198022149307"
-            ],
-            "Name": "Elouan",
-            "Nation": "FRA",
-            "Team": "Erminig Gwenn",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 6.9477587,
-          "OtherCarId": 12,
-          "OtherDriver": {
-            "Guid": "76561198042197341",
-            "GuidsList": [
-              "76561198042197341"
-            ],
-            "Name": "Neutraliz",
-            "Nation": "FRA",
-            "Team": "Erminig Gwenn",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.7849199,
-            "Y": 0.032700047,
-            "Z": 1.7445595
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 326.96854,
-            "Y": -1.3979273,
-            "Z": -76.19114
-          },
-          "Timestamp": 1792611108,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 12,
-          "Driver": {
-            "Guid": "76561198042197341",
-            "GuidsList": [
-              "76561198042197341"
-            ],
-            "Name": "Neutraliz",
-            "Nation": "FRA",
-            "Team": "Erminig Gwenn",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 7.1081767,
-          "OtherCarId": 16,
-          "OtherDriver": {
-            "Guid": "76561198022149307",
-            "GuidsList": [
-              "76561198022149307"
-            ],
-            "Name": "Elouan",
-            "Nation": "FRA",
-            "Team": "Erminig Gwenn",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.5125049,
-            "Y": -0.05839425,
-            "Z": -1.6073599
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 327.578,
-            "Y": -1.330982,
-            "Z": -74.9091
-          },
-          "Timestamp": 1792611108,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 8,
-          "Driver": {
-            "Guid": "76561199167900834",
-            "GuidsList": [
-              "76561199167900834"
-            ],
-            "Name": "Tofusan",
-            "Nation": "FRA",
-            "Team": "ECURIE GDSP #2",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 6.9905286,
-          "OtherCarId": 0,
-          "OtherDriver": {
-            "Guid": "",
-            "GuidsList": null,
-            "Name": "",
-            "Nation": "",
-            "Team": "",
-            "ClassID": "00000000-0000-0000-0000-000000000000"
-          },
-          "RelPosition": {
-            "X": -0.8908831,
-            "Y": 0.27807438,
-            "Z": -0.1987239
-          },
-          "Type": "COLLISION_WITH_ENV",
-          "WorldPosition": {
-            "X": 352.51157,
-            "Y": -9.209006,
-            "Z": -217.02248
-          },
-          "Timestamp": 1792611181,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 26,
-          "Driver": {
-            "Guid": "76561199247959520",
-            "GuidsList": [
-              "76561199247959520"
-            ],
-            "Name": "Thomas PONGE",
-            "Nation": "FRA",
-            "Team": "Online Passion Competition",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 14.498999,
-          "OtherCarId": 6,
-          "OtherDriver": {
-            "Guid": "76561198033054324",
-            "GuidsList": [
-              "76561198033054324"
-            ],
-            "Name": "Karl74",
-            "Nation": "FRA",
-            "Team": "Fk Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.78748333,
-            "Y": 0.044003077,
-            "Z": 1.7343118
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -152.84082,
-            "Y": -6.690087,
-            "Z": -282.38
-          },
-          "Timestamp": 1792611522,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 6,
-          "Driver": {
-            "Guid": "76561198033054324",
-            "GuidsList": [
-              "76561198033054324"
-            ],
-            "Name": "Karl74",
-            "Nation": "FRA",
-            "Team": "Fk Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 18.431181,
-          "OtherCarId": 26,
-          "OtherDriver": {
-            "Guid": "76561199247959520",
-            "GuidsList": [
-              "76561199247959520"
-            ],
-            "Name": "Thomas PONGE",
-            "Nation": "FRA",
-            "Team": "Online Passion Competition",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.108101204,
-            "Y": -0.066042446,
-            "Z": -1.6059828
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -153.02841,
-            "Y": -6.6635385,
-            "Z": -281.9423
-          },
-          "Timestamp": 1792611523,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 14,
-          "Driver": {
-            "Guid": "76561197972822145",
-            "GuidsList": [
-              "76561197972822145"
-            ],
-            "Name": "Alan Mc Wrecker",
-            "Nation": "FRA",
-            "Team": "Absolute Loosers",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 16.141243,
-          "OtherCarId": 19,
-          "OtherDriver": {
-            "Guid": "76561198124771615",
-            "GuidsList": [
-              "76561198124771615"
-            ],
-            "Name": "cheucheu91",
-            "Nation": "FRA",
-            "Team": "Les Bananes Flambées",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.21014278,
-            "Y": 0.09495773,
-            "Z": 1.6748621
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -0.24847475,
-            "Y": -7.4923525,
-            "Z": -291.27948
-          },
-          "Timestamp": 1792611670,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 19,
-          "Driver": {
-            "Guid": "76561198124771615",
-            "GuidsList": [
-              "76561198124771615"
-            ],
-            "Name": "cheucheu91",
-            "Nation": "FRA",
-            "Team": "Les Bananes Flambées",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 22.402605,
-          "OtherCarId": 14,
-          "OtherDriver": {
-            "Guid": "76561197972822145",
-            "GuidsList": [
-              "76561197972822145"
-            ],
-            "Name": "Alan Mc Wrecker",
-            "Nation": "FRA",
-            "Team": "Absolute Loosers",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.8830414,
-            "Y": -0.2526723,
-            "Z": -1.3603666
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -0.04925433,
-            "Y": -7.679262,
-            "Z": -291.357
-          },
-          "Timestamp": 1792611673,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 5,
-          "Driver": {
-            "Guid": "76561198062399161",
-            "GuidsList": [
-              "76561198062399161"
-            ],
-            "Name": "Harrythmetique ",
-            "Nation": "FRA",
-            "Team": "Les Brasseurs de la Mine",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 0.74101347,
-          "OtherCarId": 11,
-          "OtherDriver": {
-            "Guid": "76561198137168868",
-            "GuidsList": [
-              "76561198137168868"
-            ],
-            "Name": "[APR] Alexou33",
-            "Nation": "FRA",
-            "Team": "Alpha Performance Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.8107201,
-            "Y": 0.14654845,
-            "Z": 1.6079314
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 340.00122,
-            "Y": -0.6465238,
-            "Z": -57.521465
-          },
-          "Timestamp": 1792611846,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 11,
-          "Driver": {
-            "Guid": "76561198137168868",
-            "GuidsList": [
-              "76561198137168868"
-            ],
-            "Name": "[APR] Alexou33",
-            "Nation": "FRA",
-            "Team": "Alpha Performance Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 7.238865,
-          "OtherCarId": 5,
-          "OtherDriver": {
-            "Guid": "76561198062399161",
-            "GuidsList": [
-              "76561198062399161"
-            ],
-            "Name": "Harrythmetique ",
-            "Nation": "FRA",
-            "Team": "Les Brasseurs de la Mine",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.83351946,
-            "Y": 0.05973704,
-            "Z": -1.648477
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": 340.18912,
-            "Y": -0.67567813,
-            "Z": -57.32404
-          },
-          "Timestamp": 1792611848,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 6,
-          "Driver": {
-            "Guid": "76561198033054324",
-            "GuidsList": [
-              "76561198033054324"
-            ],
-            "Name": "Karl74",
-            "Nation": "FRA",
-            "Team": "Fk Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 3.3131363,
-          "OtherCarId": 7,
-          "OtherDriver": {
-            "Guid": "76561198078021973",
-            "GuidsList": [
-              "76561198078021973"
-            ],
-            "Name": "Jim ZPLOUCH",
-            "Nation": "FRA",
-            "Team": "Gitane Maïs",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.8507301,
-            "Y": -0.2547858,
-            "Z": 1.1050079
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -186.31012,
-            "Y": -3.9446578,
-            "Z": -206.179
-          },
-          "Timestamp": 1792612078,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 7,
-          "Driver": {
-            "Guid": "76561198078021973",
-            "GuidsList": [
-              "76561198078021973"
-            ],
-            "Name": "Jim ZPLOUCH",
-            "Nation": "FRA",
-            "Team": "Gitane Maïs",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 2.521996,
-          "OtherCarId": 6,
-          "OtherDriver": {
-            "Guid": "76561198033054324",
-            "GuidsList": [
-              "76561198033054324"
-            ],
-            "Name": "Karl74",
-            "Nation": "FRA",
-            "Team": "Fk Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.85787964,
-            "Y": -0.25473627,
-            "Z": 1.0469723
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -186.17816,
-            "Y": -3.9538527,
-            "Z": -206.53607
-          },
-          "Timestamp": 1792612078,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 9,
-          "Driver": {
-            "Guid": "76561198022928394",
-            "GuidsList": [
-              "76561198022928394"
-            ],
-            "Name": "LeNainPosteur",
-            "Nation": "FRA",
-            "Team": "Gitane Maïs",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 10.544748,
-          "OtherCarId": 6,
-          "OtherDriver": {
-            "Guid": "76561198033054324",
-            "GuidsList": [
-              "76561198033054324"
-            ],
-            "Name": "Karl74",
-            "Nation": "FRA",
-            "Team": "Fk Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.8583185,
-            "Y": -0.0779677,
-            "Z": 0.79717726
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -18.673061,
-            "Y": -8.874066,
-            "Z": -293.38147
-          },
-          "Timestamp": 1792612086,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 6,
-          "Driver": {
-            "Guid": "76561198033054324",
-            "GuidsList": [
-              "76561198033054324"
-            ],
-            "Name": "Karl74",
-            "Nation": "FRA",
-            "Team": "Fk Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 4.150169,
-          "OtherCarId": 9,
-          "OtherDriver": {
-            "Guid": "76561198022928394",
-            "GuidsList": [
-              "76561198022928394"
-            ],
-            "Name": "LeNainPosteur",
-            "Nation": "FRA",
-            "Team": "Gitane Maïs",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.8462676,
-            "Y": -0.17823812,
-            "Z": 1.2082732
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -18.210552,
-            "Y": -8.996372,
-            "Z": -293.26248
-          },
-          "Timestamp": 1792612088,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 20,
-          "Driver": {
-            "Guid": "76561197968560375",
-            "GuidsList": [
-              "76561197968560375"
-            ],
-            "Name": "pistol",
-            "Nation": "FRA",
-            "Team": "",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 14.012107,
-          "OtherCarId": 17,
-          "OtherDriver": {
-            "Guid": "76561198157550304",
-            "GuidsList": [
-              "76561198157550304"
-            ],
-            "Name": "Pikoupok",
-            "Nation": "PLA",
-            "Team": "Réserviste",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.8116857,
-            "Y": -0.24021493,
-            "Z": 1.6327059
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -212.75809,
-            "Y": 23.504965,
-            "Z": 563.6903
-          },
-          "Timestamp": 1792612115,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 17,
-          "Driver": {
-            "Guid": "76561198157550304",
-            "GuidsList": [
-              "76561198157550304"
-            ],
-            "Name": "Pikoupok",
-            "Nation": "PLA",
-            "Team": "Réserviste",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 10.750282,
-          "OtherCarId": 20,
-          "OtherDriver": {
-            "Guid": "76561197968560375",
-            "GuidsList": [
-              "76561197968560375"
-            ],
-            "Name": "pistol",
-            "Nation": "FRA",
-            "Team": "",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.9004252,
-            "Y": 0.17584294,
-            "Z": -0.79646087
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -212.52202,
-            "Y": 24.03887,
-            "Z": 565.3618
-          },
-          "Timestamp": 1792612115,
-          "AfterSessionEnd": false,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 5,
-          "Driver": {
-            "Guid": "76561198062399161",
-            "GuidsList": [
-              "76561198062399161"
-            ],
-            "Name": "Harrythmetique ",
-            "Nation": "FRA",
-            "Team": "Les Brasseurs de la Mine",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 20.007431,
-          "OtherCarId": 6,
-          "OtherDriver": {
-            "Guid": "76561198033054324",
-            "GuidsList": [
-              "76561198033054324"
-            ],
-            "Name": "Karl74",
-            "Nation": "FRA",
-            "Team": "Fk Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.78924215,
-            "Y": 0.05167213,
-            "Z": 1.7273468
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -212.47745,
-            "Y": 11.101853,
-            "Z": 296.14273
-          },
-          "Timestamp": 1792612351,
-          "AfterSessionEnd": true,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 6,
-          "Driver": {
-            "Guid": "76561198033054324",
-            "GuidsList": [
-              "76561198033054324"
-            ],
-            "Name": "Karl74",
-            "Nation": "FRA",
-            "Team": "Fk Racing",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 22.039303,
-          "OtherCarId": 5,
-          "OtherDriver": {
-            "Guid": "76561198062399161",
-            "GuidsList": [
-              "76561198062399161"
-            ],
-            "Name": "Harrythmetique ",
-            "Nation": "FRA",
-            "Team": "Les Brasseurs de la Mine",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.6251073,
-            "Y": -0.06657506,
-            "Z": -1.6088486
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -212.45064,
-            "Y": 11.094403,
-            "Z": 296.12994
-          },
-          "Timestamp": 1792612353,
-          "AfterSessionEnd": true,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 0,
-          "Driver": {
-            "Guid": "76561199162864808",
-            "GuidsList": [
-              "76561199162864808"
-            ],
-            "Name": "Kimy Hoyer",
-            "Nation": "FRA",
-            "Team": "Ecurie GDSP #1",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 52.754757,
-          "OtherCarId": 4,
-          "OtherDriver": {
-            "Guid": "76561198910594990",
-            "GuidsList": [
-              "76561198910594990"
-            ],
-            "Name": "Streetbike",
-            "Nation": "FRA",
-            "Team": "Scuderia Tolosa",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": 0.8713456,
-            "Y": -0.22515677,
-            "Z": -1.3133404
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -220.1261,
-            "Y": 12.455668,
-            "Z": 347.88998
-          },
-          "Timestamp": 1792612356,
-          "AfterSessionEnd": true,
-          "ReplayURL": ""
-        },
-        {
-          "CarId": 4,
-          "Driver": {
-            "Guid": "76561198910594990",
-            "GuidsList": [
-              "76561198910594990"
-            ],
-            "Name": "Streetbike",
-            "Nation": "FRA",
-            "Team": "Scuderia Tolosa",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "ImpactSpeed": 42.60075,
-          "OtherCarId": 0,
-          "OtherDriver": {
-            "Guid": "76561199162864808",
-            "GuidsList": [
-              "76561199162864808"
-            ],
-            "Name": "Kimy Hoyer",
-            "Nation": "FRA",
-            "Team": "Ecurie GDSP #1",
-            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
-          },
-          "RelPosition": {
-            "X": -0.61637884,
-            "Y": -0.10029073,
-            "Z": 1.811714
-          },
-          "Type": "COLLISION_WITH_CAR",
-          "WorldPosition": {
-            "X": -220.47682,
-            "Y": 12.434076,
-            "Z": 348.21588
-          },
-          "Timestamp": 1792612358,
-          "AfterSessionEnd": true,
-          "ReplayURL": ""
-        }
-      ]
-    },
-    {
       "id": "2026-10-21T22:30:00+02:00|mid_ohio|RACE|22",
       "type": "RACE",
       "track": "mid_ohio · chicane",
@@ -38686,6 +36526,2166 @@
         }
       ],
       "events": []
+    },
+    {
+      "id": "2026-10-21T21:55:00+02:00|mid_ohio|RACE|22",
+      "type": "RACE",
+      "track": "mid_ohio · chicane",
+      "date": "2026-10-21T21:55:00+02:00",
+      "results": [
+        {
+          "pos": 1,
+          "name": "Kimy Hoyer",
+          "guid": "76561199162864808",
+          "car": "actk_lola_t290",
+          "best": 91734,
+          "total": 1569274,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 1.4118842176772466,
+          "contacts": 1,
+          "envHits": 0
+        },
+        {
+          "pos": 2,
+          "name": "51R Sherman",
+          "guid": "76561198091861503",
+          "car": "actk_lola_t290",
+          "best": 91417,
+          "total": 1569689,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 0.26311226512354613,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 3,
+          "name": "aSSaSSins_strEEt",
+          "guid": "76561198015862674",
+          "car": "actk_lola_t290",
+          "best": 92159,
+          "total": 1581159,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 0.29961565307632776,
+          "contacts": 1,
+          "envHits": 0
+        },
+        {
+          "pos": 4,
+          "name": "fmherrou",
+          "guid": "76561198023166815",
+          "car": "actk_lola_t290",
+          "best": 91885,
+          "total": 1585764,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 1.804949121486922,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 5,
+          "name": "Tofusan",
+          "guid": "76561199167900834",
+          "car": "actk_lola_t290",
+          "best": 92212,
+          "total": 1589483,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 0.5647777736320305,
+          "contacts": 1,
+          "envHits": 1
+        },
+        {
+          "pos": 6,
+          "name": "Jim ZPLOUCH",
+          "guid": "76561198078021973",
+          "car": "actk_lola_t290",
+          "best": 92576,
+          "total": 1591381,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 0.4603453166987686,
+          "contacts": 3,
+          "envHits": 0
+        },
+        {
+          "pos": 7,
+          "name": "LeNainPosteur",
+          "guid": "76561198022928394",
+          "car": "actk_lola_t290",
+          "best": 92107,
+          "total": 1591994,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 0.918985267420906,
+          "contacts": 3,
+          "envHits": 0
+        },
+        {
+          "pos": 8,
+          "name": "Thomas PONGE",
+          "guid": "76561199247959520",
+          "car": "actk_lola_t290",
+          "best": 91893,
+          "total": 1593162,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 0.6399463977629521,
+          "contacts": 2,
+          "envHits": 0
+        },
+        {
+          "pos": 9,
+          "name": "Karl74",
+          "guid": "76561198033054324",
+          "car": "actk_lola_t290",
+          "best": 92582,
+          "total": 1594017,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 0.5260432326954027,
+          "contacts": 6,
+          "envHits": 0
+        },
+        {
+          "pos": 10,
+          "name": "Harrythmetique ",
+          "guid": "76561198062399161",
+          "car": "actk_lola_t290",
+          "best": 92234,
+          "total": 1604462,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 1.5930768601527705,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 11,
+          "name": "[APR] Alexou33",
+          "guid": "76561198137168868",
+          "car": "actk_lola_t290",
+          "best": 93316,
+          "total": 1606891,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 0.7751528447060317,
+          "contacts": 2,
+          "envHits": 0
+        },
+        {
+          "pos": 12,
+          "name": "[APR] Christophe",
+          "guid": "76561197983426917",
+          "car": "actk_lola_t290",
+          "best": 93745,
+          "total": 1618598,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 0.641964390869343,
+          "contacts": 0,
+          "envHits": 0
+        },
+        {
+          "pos": 13,
+          "name": "Neutraliz",
+          "guid": "76561198042197341",
+          "car": "actk_lola_t290",
+          "best": 93716,
+          "total": 1620667,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 0.6254369797633992,
+          "contacts": 2,
+          "envHits": 0
+        },
+        {
+          "pos": 14,
+          "name": "Elouan",
+          "guid": "76561198022149307",
+          "car": "actk_lola_t290",
+          "best": 93032,
+          "total": 1623617,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 1.3262848309831194,
+          "contacts": 1,
+          "envHits": 0
+        },
+        {
+          "pos": 15,
+          "name": "kant-1",
+          "guid": "76561198023525085",
+          "car": "actk_lola_t290",
+          "best": 93122,
+          "total": 1627912,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 0.820561793164232,
+          "contacts": 1,
+          "envHits": 0
+        },
+        {
+          "pos": 16,
+          "name": "[APR] Pierre",
+          "guid": "76561199042511252",
+          "car": "actk_lola_t290",
+          "best": 93217,
+          "total": 1632071,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 0.7718608797631729,
+          "contacts": 1,
+          "envHits": 1
+        },
+        {
+          "pos": 17,
+          "name": "SuperSlipos",
+          "guid": "76561198148830572",
+          "car": "actk_lola_t290",
+          "best": 93647,
+          "total": 1636125,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 1.3563946901272854,
+          "contacts": 2,
+          "envHits": 0
+        },
+        {
+          "pos": 18,
+          "name": "pistol",
+          "guid": "76561197968560375",
+          "car": "actk_lola_t290",
+          "best": 95297,
+          "total": 1655771,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 1.1492298860137538,
+          "contacts": 2,
+          "envHits": 0
+        },
+        {
+          "pos": 19,
+          "name": "Pikoupok",
+          "guid": "76561198157550304",
+          "car": "actk_lola_t290",
+          "best": 94228,
+          "total": 1657034,
+          "laps": 17,
+          "dsq": false,
+          "consistency": 1.4255659469580881,
+          "contacts": 3,
+          "envHits": 0
+        },
+        {
+          "pos": 20,
+          "name": "Alan Mc Wrecker",
+          "guid": "76561197972822145",
+          "car": "actk_lola_t290",
+          "best": 93457,
+          "total": 1569433,
+          "laps": 16,
+          "dsq": false,
+          "consistency": 0.7998386813296189,
+          "contacts": 3,
+          "envHits": 1
+        },
+        {
+          "pos": 21,
+          "name": "cheucheu91",
+          "guid": "76561198124771615",
+          "car": "actk_lola_t290",
+          "best": 95134,
+          "total": 1602664,
+          "laps": 16,
+          "dsq": false,
+          "consistency": 1.3564494063812127,
+          "contacts": 2,
+          "envHits": 0
+        },
+        {
+          "pos": 22,
+          "name": "Streetbike",
+          "guid": "76561198910594990",
+          "car": "actk_lola_t290",
+          "best": 91842,
+          "total": 1607646,
+          "laps": 16,
+          "dsq": false,
+          "consistency": 1.9187390422688448,
+          "contacts": 5,
+          "envHits": 1
+        }
+      ],
+      "events": [
+        {
+          "CarId": 8,
+          "Driver": {
+            "Guid": "76561199167900834",
+            "GuidsList": [
+              "76561199167900834"
+            ],
+            "Name": "Tofusan",
+            "Nation": "FRA",
+            "Team": "ECURIE GDSP #2",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 3.7964153,
+          "OtherCarId": 6,
+          "OtherDriver": {
+            "Guid": "76561198033054324",
+            "GuidsList": [
+              "76561198033054324"
+            ],
+            "Name": "Karl74",
+            "Nation": "FRA",
+            "Team": "Fk Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.78452474,
+            "Y": 0.01676835,
+            "Z": 1.7590224
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 121.11202,
+            "Y": -0.54871196,
+            "Z": 2.6174235
+          },
+          "Timestamp": 1792610726,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 6,
+          "Driver": {
+            "Guid": "76561198033054324",
+            "GuidsList": [
+              "76561198033054324"
+            ],
+            "Name": "Karl74",
+            "Nation": "FRA",
+            "Team": "Fk Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 4.5674224,
+          "OtherCarId": 8,
+          "OtherDriver": {
+            "Guid": "76561199167900834",
+            "GuidsList": [
+              "76561199167900834"
+            ],
+            "Name": "Tofusan",
+            "Nation": "FRA",
+            "Team": "ECURIE GDSP #2",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.88178164,
+            "Y": 0.038591776,
+            "Z": -1.3640164
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 121.66997,
+            "Y": -0.4566328,
+            "Z": 2.698424
+          },
+          "Timestamp": 1792610728,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 5,
+          "Driver": {
+            "Guid": "76561198062399161",
+            "GuidsList": [
+              "76561198062399161"
+            ],
+            "Name": "Harrythmetique ",
+            "Nation": "FRA",
+            "Team": "Les Brasseurs de la Mine",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 1.881334,
+          "OtherCarId": 3,
+          "OtherDriver": {
+            "Guid": "76561198015862674",
+            "GuidsList": [
+              "76561198015862674"
+            ],
+            "Name": "aSSaSSins_strEEt",
+            "Nation": "FRA",
+            "Team": "ECURIE GDSP #2",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.82123595,
+            "Y": -0.021522699,
+            "Z": 1.5687935
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -197.51459,
+            "Y": 3.41379,
+            "Z": 26.022366
+          },
+          "Timestamp": 1792610736,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 3,
+          "Driver": {
+            "Guid": "76561198015862674",
+            "GuidsList": [
+              "76561198015862674"
+            ],
+            "Name": "aSSaSSins_strEEt",
+            "Nation": "FRA",
+            "Team": "ECURIE GDSP #2",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 9.709665,
+          "OtherCarId": 5,
+          "OtherDriver": {
+            "Guid": "76561198062399161",
+            "GuidsList": [
+              "76561198062399161"
+            ],
+            "Name": "Harrythmetique ",
+            "Nation": "FRA",
+            "Team": "Les Brasseurs de la Mine",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.83786166,
+            "Y": -0.07909307,
+            "Z": 1.3658375
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -196.91867,
+            "Y": 3.4157383,
+            "Z": 25.146223
+          },
+          "Timestamp": 1792610737,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 6,
+          "Driver": {
+            "Guid": "76561198033054324",
+            "GuidsList": [
+              "76561198033054324"
+            ],
+            "Name": "Karl74",
+            "Nation": "FRA",
+            "Team": "Fk Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 5.1275606,
+          "OtherCarId": 11,
+          "OtherDriver": {
+            "Guid": "76561198137168868",
+            "GuidsList": [
+              "76561198137168868"
+            ],
+            "Name": "[APR] Alexou33",
+            "Nation": "FRA",
+            "Team": "Alpha Performance Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.8737459,
+            "Y": 0.30156213,
+            "Z": -1.7095649
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -212.04028,
+            "Y": 4.1939955,
+            "Z": 48.255207
+          },
+          "Timestamp": 1792610738,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 11,
+          "Driver": {
+            "Guid": "76561198137168868",
+            "GuidsList": [
+              "76561198137168868"
+            ],
+            "Name": "[APR] Alexou33",
+            "Nation": "FRA",
+            "Team": "Alpha Performance Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 10.093069,
+          "OtherCarId": 6,
+          "OtherDriver": {
+            "Guid": "76561198033054324",
+            "GuidsList": [
+              "76561198033054324"
+            ],
+            "Name": "Karl74",
+            "Nation": "FRA",
+            "Team": "Fk Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.820522,
+            "Y": -0.25521505,
+            "Z": 1.609904
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -210.08936,
+            "Y": 3.551085,
+            "Z": 44.56258
+          },
+          "Timestamp": 1792610738,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 17,
+          "Driver": {
+            "Guid": "76561198157550304",
+            "GuidsList": [
+              "76561198157550304"
+            ],
+            "Name": "Pikoupok",
+            "Nation": "PLA",
+            "Team": "Réserviste",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 9.487264,
+          "OtherCarId": 26,
+          "OtherDriver": {
+            "Guid": "76561199247959520",
+            "GuidsList": [
+              "76561199247959520"
+            ],
+            "Name": "Thomas PONGE",
+            "Nation": "FRA",
+            "Team": "Online Passion Competition",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.87362975,
+            "Y": 0.30278644,
+            "Z": -1.7095562
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -297.21,
+            "Y": 20.609716,
+            "Z": 587.3996
+          },
+          "Timestamp": 1792610760,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 26,
+          "Driver": {
+            "Guid": "76561199247959520",
+            "GuidsList": [
+              "76561199247959520"
+            ],
+            "Name": "Thomas PONGE",
+            "Nation": "FRA",
+            "Team": "Online Passion Competition",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 1.903424,
+          "OtherCarId": 17,
+          "OtherDriver": {
+            "Guid": "76561198157550304",
+            "GuidsList": [
+              "76561198157550304"
+            ],
+            "Name": "Pikoupok",
+            "Nation": "PLA",
+            "Team": "Réserviste",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.8561009,
+            "Y": -0.25505197,
+            "Z": 0.99539685
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -294.4938,
+            "Y": 20.315119,
+            "Z": 590.95135
+          },
+          "Timestamp": 1792610762,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 4,
+          "Driver": {
+            "Guid": "76561198910594990",
+            "GuidsList": [
+              "76561198910594990"
+            ],
+            "Name": "Streetbike",
+            "Nation": "FRA",
+            "Team": "Scuderia Tolosa",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 5.2539864,
+          "OtherCarId": 7,
+          "OtherDriver": {
+            "Guid": "76561198078021973",
+            "GuidsList": [
+              "76561198078021973"
+            ],
+            "Name": "Jim ZPLOUCH",
+            "Nation": "FRA",
+            "Team": "Gitane Maïs",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.8784115,
+            "Y": -0.23094057,
+            "Z": -1.3234308
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 49.207695,
+            "Y": -17.665882,
+            "Z": -450.97583
+          },
+          "Timestamp": 1792610788,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 7,
+          "Driver": {
+            "Guid": "76561198078021973",
+            "GuidsList": [
+              "76561198078021973"
+            ],
+            "Name": "Jim ZPLOUCH",
+            "Nation": "FRA",
+            "Team": "Gitane Maïs",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 6.836404,
+          "OtherCarId": 4,
+          "OtherDriver": {
+            "Guid": "76561198910594990",
+            "GuidsList": [
+              "76561198910594990"
+            ],
+            "Name": "Streetbike",
+            "Nation": "FRA",
+            "Team": "Scuderia Tolosa",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.8732775,
+            "Y": -0.25863495,
+            "Z": 0.40911126
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 49.832085,
+            "Y": -17.663,
+            "Z": -451.63702
+          },
+          "Timestamp": 1792610788,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 9,
+          "Driver": {
+            "Guid": "76561198022928394",
+            "GuidsList": [
+              "76561198022928394"
+            ],
+            "Name": "LeNainPosteur",
+            "Nation": "FRA",
+            "Team": "Gitane Maïs",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 17.157217,
+          "OtherCarId": 10,
+          "OtherDriver": {
+            "Guid": "76561199042511252",
+            "GuidsList": [
+              "76561199042511252"
+            ],
+            "Name": "[APR] Pierre",
+            "Nation": "FRA",
+            "Team": "Alpha Performance Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.860913,
+            "Y": 0.035582993,
+            "Z": 0.9592873
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 29.126373,
+            "Y": -5.9107623,
+            "Z": -304.1954
+          },
+          "Timestamp": 1792610881,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 10,
+          "Driver": {
+            "Guid": "76561199042511252",
+            "GuidsList": [
+              "76561199042511252"
+            ],
+            "Name": "[APR] Pierre",
+            "Nation": "FRA",
+            "Team": "Alpha Performance Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 8.137524,
+          "OtherCarId": 9,
+          "OtherDriver": {
+            "Guid": "76561198022928394",
+            "GuidsList": [
+              "76561198022928394"
+            ],
+            "Name": "LeNainPosteur",
+            "Nation": "FRA",
+            "Team": "Gitane Maïs",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.8222119,
+            "Y": -0.1692517,
+            "Z": 1.5882427
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 29.453257,
+            "Y": -6.209794,
+            "Z": -304.5007
+          },
+          "Timestamp": 1792610881,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 10,
+          "Driver": {
+            "Guid": "76561199042511252",
+            "GuidsList": [
+              "76561199042511252"
+            ],
+            "Name": "[APR] Pierre",
+            "Nation": "FRA",
+            "Team": "Alpha Performance Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 16.061026,
+          "OtherCarId": 0,
+          "OtherDriver": {
+            "Guid": "",
+            "GuidsList": null,
+            "Name": "",
+            "Nation": "",
+            "Team": "",
+            "ClassID": "00000000-0000-0000-0000-000000000000"
+          },
+          "RelPosition": {
+            "X": -0.75645304,
+            "Y": -0.09221114,
+            "Z": 1.8579589
+          },
+          "Type": "COLLISION_WITH_ENV",
+          "WorldPosition": {
+            "X": 28.064142,
+            "Y": -9.44009,
+            "Z": -331.52914
+          },
+          "Timestamp": 1792610881,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 4,
+          "Driver": {
+            "Guid": "76561198910594990",
+            "GuidsList": [
+              "76561198910594990"
+            ],
+            "Name": "Streetbike",
+            "Nation": "FRA",
+            "Team": "Scuderia Tolosa",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 5.5047364,
+          "OtherCarId": 7,
+          "OtherDriver": {
+            "Guid": "76561198078021973",
+            "GuidsList": [
+              "76561198078021973"
+            ],
+            "Name": "Jim ZPLOUCH",
+            "Nation": "FRA",
+            "Team": "Gitane Maïs",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.78098273,
+            "Y": 0.015410171,
+            "Z": 1.7602514
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 49.69828,
+            "Y": -17.491858,
+            "Z": -450.04712
+          },
+          "Timestamp": 1792610883,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 7,
+          "Driver": {
+            "Guid": "76561198078021973",
+            "GuidsList": [
+              "76561198078021973"
+            ],
+            "Name": "Jim ZPLOUCH",
+            "Nation": "FRA",
+            "Team": "Gitane Maïs",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 7.831348,
+          "OtherCarId": 4,
+          "OtherDriver": {
+            "Guid": "76561198910594990",
+            "GuidsList": [
+              "76561198910594990"
+            ],
+            "Name": "Streetbike",
+            "Nation": "FRA",
+            "Team": "Scuderia Tolosa",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.3581527,
+            "Y": -0.06833997,
+            "Z": -1.6154605
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 49.177326,
+            "Y": -17.510193,
+            "Z": -449.51382
+          },
+          "Timestamp": 1792610883,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 9,
+          "Driver": {
+            "Guid": "76561198022928394",
+            "GuidsList": [
+              "76561198022928394"
+            ],
+            "Name": "LeNainPosteur",
+            "Nation": "FRA",
+            "Team": "Gitane Maïs",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 58.777725,
+          "OtherCarId": 4,
+          "OtherDriver": {
+            "Guid": "76561198910594990",
+            "GuidsList": [
+              "76561198910594990"
+            ],
+            "Name": "Streetbike",
+            "Nation": "FRA",
+            "Team": "Scuderia Tolosa",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.85919136,
+            "Y": -0.25503734,
+            "Z": 0.9976685
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 324.17404,
+            "Y": -0.22326551,
+            "Z": 86.11691
+          },
+          "Timestamp": 1792610916,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 4,
+          "Driver": {
+            "Guid": "76561198910594990",
+            "GuidsList": [
+              "76561198910594990"
+            ],
+            "Name": "Streetbike",
+            "Nation": "FRA",
+            "Team": "Scuderia Tolosa",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 62.05834,
+          "OtherCarId": 9,
+          "OtherDriver": {
+            "Guid": "76561198022928394",
+            "GuidsList": [
+              "76561198022928394"
+            ],
+            "Name": "LeNainPosteur",
+            "Nation": "FRA",
+            "Team": "Gitane Maïs",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.74205905,
+            "Y": -0.23796794,
+            "Z": 1.8835685
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 324.21515,
+            "Y": -0.22534451,
+            "Z": 86.1414
+          },
+          "Timestamp": 1792610918,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 18,
+          "Driver": {
+            "Guid": "76561198023525085",
+            "GuidsList": [
+              "76561198023525085"
+            ],
+            "Name": "kant-1",
+            "Nation": "PLA",
+            "Team": "Ecurie GDSP #1",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 11.760172,
+          "OtherCarId": 4,
+          "OtherDriver": {
+            "Guid": "76561198910594990",
+            "GuidsList": [
+              "76561198910594990"
+            ],
+            "Name": "Streetbike",
+            "Nation": "FRA",
+            "Team": "Scuderia Tolosa",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.8299689,
+            "Y": -0.122709274,
+            "Z": 1.5765969
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 141.05115,
+            "Y": -0.83755606,
+            "Z": -2.432783
+          },
+          "Timestamp": 1792610927,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 4,
+          "Driver": {
+            "Guid": "76561198910594990",
+            "GuidsList": [
+              "76561198910594990"
+            ],
+            "Name": "Streetbike",
+            "Nation": "FRA",
+            "Team": "Scuderia Tolosa",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 10.827225,
+          "OtherCarId": 18,
+          "OtherDriver": {
+            "Guid": "76561198023525085",
+            "GuidsList": [
+              "76561198023525085"
+            ],
+            "Name": "kant-1",
+            "Nation": "PLA",
+            "Team": "Ecurie GDSP #1",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.8456955,
+            "Y": 0.06418581,
+            "Z": 1.2861739
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 143.16301,
+            "Y": -0.66330475,
+            "Z": -2.2733965
+          },
+          "Timestamp": 1792610928,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 4,
+          "Driver": {
+            "Guid": "76561198910594990",
+            "GuidsList": [
+              "76561198910594990"
+            ],
+            "Name": "Streetbike",
+            "Nation": "FRA",
+            "Team": "Scuderia Tolosa",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 149.14806,
+          "OtherCarId": 0,
+          "OtherDriver": {
+            "Guid": "",
+            "GuidsList": null,
+            "Name": "",
+            "Nation": "",
+            "Team": "",
+            "ClassID": "00000000-0000-0000-0000-000000000000"
+          },
+          "RelPosition": {
+            "X": 0.6876989,
+            "Y": -0.11043006,
+            "Z": 1.7545136
+          },
+          "Type": "COLLISION_WITH_ENV",
+          "WorldPosition": {
+            "X": 96.18463,
+            "Y": -0.648293,
+            "Z": 5.1324344
+          },
+          "Timestamp": 1792610928,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 12,
+          "Driver": {
+            "Guid": "76561198042197341",
+            "GuidsList": [
+              "76561198042197341"
+            ],
+            "Name": "Neutraliz",
+            "Nation": "FRA",
+            "Team": "Erminig Gwenn",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 12.756521,
+          "OtherCarId": 14,
+          "OtherDriver": {
+            "Guid": "76561197972822145",
+            "GuidsList": [
+              "76561197972822145"
+            ],
+            "Name": "Alan Mc Wrecker",
+            "Nation": "FRA",
+            "Team": "Absolute Loosers",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.90334386,
+            "Y": -0.25317743,
+            "Z": -0.77037656
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 372.8014,
+            "Y": 1.2823551,
+            "Z": 26.00179
+          },
+          "Timestamp": 1792611013,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 14,
+          "Driver": {
+            "Guid": "76561197972822145",
+            "GuidsList": [
+              "76561197972822145"
+            ],
+            "Name": "Alan Mc Wrecker",
+            "Nation": "FRA",
+            "Team": "Absolute Loosers",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 7.8801403,
+          "OtherCarId": 12,
+          "OtherDriver": {
+            "Guid": "76561198042197341",
+            "GuidsList": [
+              "76561198042197341"
+            ],
+            "Name": "Neutraliz",
+            "Nation": "FRA",
+            "Team": "Erminig Gwenn",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.8375399,
+            "Y": -0.016364869,
+            "Z": 1.5498747
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 372.80878,
+            "Y": 1.3882462,
+            "Z": 26.220673
+          },
+          "Timestamp": 1792611015,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 19,
+          "Driver": {
+            "Guid": "76561198124771615",
+            "GuidsList": [
+              "76561198124771615"
+            ],
+            "Name": "cheucheu91",
+            "Nation": "FRA",
+            "Team": "Les Bananes Flambées",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 13.558806,
+          "OtherCarId": 20,
+          "OtherDriver": {
+            "Guid": "76561197968560375",
+            "GuidsList": [
+              "76561197968560375"
+            ],
+            "Name": "pistol",
+            "Nation": "FRA",
+            "Team": "",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.90253705,
+            "Y": 0.16432428,
+            "Z": -0.7217802
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 370.93488,
+            "Y": 1.2286425,
+            "Z": 42.72721
+          },
+          "Timestamp": 1792611018,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 20,
+          "Driver": {
+            "Guid": "76561197968560375",
+            "GuidsList": [
+              "76561197968560375"
+            ],
+            "Name": "pistol",
+            "Nation": "FRA",
+            "Team": "",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 15.496789,
+          "OtherCarId": 19,
+          "OtherDriver": {
+            "Guid": "76561198124771615",
+            "GuidsList": [
+              "76561198124771615"
+            ],
+            "Name": "cheucheu91",
+            "Nation": "FRA",
+            "Team": "Les Bananes Flambées",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.84494656,
+            "Y": -0.25475818,
+            "Z": 1.1695892
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 370.16168,
+            "Y": 0.71814823,
+            "Z": 44.933117
+          },
+          "Timestamp": 1792611020,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 14,
+          "Driver": {
+            "Guid": "76561197972822145",
+            "GuidsList": [
+              "76561197972822145"
+            ],
+            "Name": "Alan Mc Wrecker",
+            "Nation": "FRA",
+            "Team": "Absolute Loosers",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 82.41229,
+          "OtherCarId": 15,
+          "OtherDriver": {
+            "Guid": "76561198148830572",
+            "GuidsList": [
+              "76561198148830572"
+            ],
+            "Name": "SuperSlipos",
+            "Nation": "FRA",
+            "Team": "Les Bananes Flambées",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.708862,
+            "Y": -0.23727536,
+            "Z": 1.8346354
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -76.75785,
+            "Y": -10.166363,
+            "Z": -319.45026
+          },
+          "Timestamp": 1792611075,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 15,
+          "Driver": {
+            "Guid": "76561198148830572",
+            "GuidsList": [
+              "76561198148830572"
+            ],
+            "Name": "SuperSlipos",
+            "Nation": "FRA",
+            "Team": "Les Bananes Flambées",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 11.843705,
+          "OtherCarId": 17,
+          "OtherDriver": {
+            "Guid": "76561198157550304",
+            "GuidsList": [
+              "76561198157550304"
+            ],
+            "Name": "Pikoupok",
+            "Nation": "PLA",
+            "Team": "Réserviste",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.8316379,
+            "Y": 0.123021215,
+            "Z": 1.4074615
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -133.3288,
+            "Y": -7.695459,
+            "Z": -307.9018
+          },
+          "Timestamp": 1792611075,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 15,
+          "Driver": {
+            "Guid": "76561198148830572",
+            "GuidsList": [
+              "76561198148830572"
+            ],
+            "Name": "SuperSlipos",
+            "Nation": "FRA",
+            "Team": "Les Bananes Flambées",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 78.77511,
+          "OtherCarId": 14,
+          "OtherDriver": {
+            "Guid": "76561197972822145",
+            "GuidsList": [
+              "76561197972822145"
+            ],
+            "Name": "Alan Mc Wrecker",
+            "Nation": "FRA",
+            "Team": "Absolute Loosers",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.8259329,
+            "Y": -0.25510484,
+            "Z": 1.4793675
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -76.69699,
+            "Y": -10.173027,
+            "Z": -319.54202
+          },
+          "Timestamp": 1792611075,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 17,
+          "Driver": {
+            "Guid": "76561198157550304",
+            "GuidsList": [
+              "76561198157550304"
+            ],
+            "Name": "Pikoupok",
+            "Nation": "PLA",
+            "Team": "Réserviste",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 18.825552,
+          "OtherCarId": 15,
+          "OtherDriver": {
+            "Guid": "76561198148830572",
+            "GuidsList": [
+              "76561198148830572"
+            ],
+            "Name": "SuperSlipos",
+            "Nation": "FRA",
+            "Team": "Les Bananes Flambées",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.84640086,
+            "Y": 0.047102425,
+            "Z": 1.067713
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -133.49438,
+            "Y": -7.6985936,
+            "Z": -307.75607
+          },
+          "Timestamp": 1792611075,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 14,
+          "Driver": {
+            "Guid": "76561197972822145",
+            "GuidsList": [
+              "76561197972822145"
+            ],
+            "Name": "Alan Mc Wrecker",
+            "Nation": "FRA",
+            "Team": "Absolute Loosers",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 39.911438,
+          "OtherCarId": 0,
+          "OtherDriver": {
+            "Guid": "",
+            "GuidsList": null,
+            "Name": "",
+            "Nation": "",
+            "Team": "",
+            "ClassID": "00000000-0000-0000-0000-000000000000"
+          },
+          "RelPosition": {
+            "X": -0.74060005,
+            "Y": -0.25555134,
+            "Z": 1.8867303
+          },
+          "Type": "COLLISION_WITH_ENV",
+          "WorldPosition": {
+            "X": -63.454292,
+            "Y": -10.338088,
+            "Z": -296.40604
+          },
+          "Timestamp": 1792611080,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 16,
+          "Driver": {
+            "Guid": "76561198022149307",
+            "GuidsList": [
+              "76561198022149307"
+            ],
+            "Name": "Elouan",
+            "Nation": "FRA",
+            "Team": "Erminig Gwenn",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 6.9477587,
+          "OtherCarId": 12,
+          "OtherDriver": {
+            "Guid": "76561198042197341",
+            "GuidsList": [
+              "76561198042197341"
+            ],
+            "Name": "Neutraliz",
+            "Nation": "FRA",
+            "Team": "Erminig Gwenn",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.7849199,
+            "Y": 0.032700047,
+            "Z": 1.7445595
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 326.96854,
+            "Y": -1.3979273,
+            "Z": -76.19114
+          },
+          "Timestamp": 1792611108,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 12,
+          "Driver": {
+            "Guid": "76561198042197341",
+            "GuidsList": [
+              "76561198042197341"
+            ],
+            "Name": "Neutraliz",
+            "Nation": "FRA",
+            "Team": "Erminig Gwenn",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 7.1081767,
+          "OtherCarId": 16,
+          "OtherDriver": {
+            "Guid": "76561198022149307",
+            "GuidsList": [
+              "76561198022149307"
+            ],
+            "Name": "Elouan",
+            "Nation": "FRA",
+            "Team": "Erminig Gwenn",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.5125049,
+            "Y": -0.05839425,
+            "Z": -1.6073599
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 327.578,
+            "Y": -1.330982,
+            "Z": -74.9091
+          },
+          "Timestamp": 1792611108,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 8,
+          "Driver": {
+            "Guid": "76561199167900834",
+            "GuidsList": [
+              "76561199167900834"
+            ],
+            "Name": "Tofusan",
+            "Nation": "FRA",
+            "Team": "ECURIE GDSP #2",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 6.9905286,
+          "OtherCarId": 0,
+          "OtherDriver": {
+            "Guid": "",
+            "GuidsList": null,
+            "Name": "",
+            "Nation": "",
+            "Team": "",
+            "ClassID": "00000000-0000-0000-0000-000000000000"
+          },
+          "RelPosition": {
+            "X": -0.8908831,
+            "Y": 0.27807438,
+            "Z": -0.1987239
+          },
+          "Type": "COLLISION_WITH_ENV",
+          "WorldPosition": {
+            "X": 352.51157,
+            "Y": -9.209006,
+            "Z": -217.02248
+          },
+          "Timestamp": 1792611181,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 26,
+          "Driver": {
+            "Guid": "76561199247959520",
+            "GuidsList": [
+              "76561199247959520"
+            ],
+            "Name": "Thomas PONGE",
+            "Nation": "FRA",
+            "Team": "Online Passion Competition",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 14.498999,
+          "OtherCarId": 6,
+          "OtherDriver": {
+            "Guid": "76561198033054324",
+            "GuidsList": [
+              "76561198033054324"
+            ],
+            "Name": "Karl74",
+            "Nation": "FRA",
+            "Team": "Fk Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.78748333,
+            "Y": 0.044003077,
+            "Z": 1.7343118
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -152.84082,
+            "Y": -6.690087,
+            "Z": -282.38
+          },
+          "Timestamp": 1792611522,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 6,
+          "Driver": {
+            "Guid": "76561198033054324",
+            "GuidsList": [
+              "76561198033054324"
+            ],
+            "Name": "Karl74",
+            "Nation": "FRA",
+            "Team": "Fk Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 18.431181,
+          "OtherCarId": 26,
+          "OtherDriver": {
+            "Guid": "76561199247959520",
+            "GuidsList": [
+              "76561199247959520"
+            ],
+            "Name": "Thomas PONGE",
+            "Nation": "FRA",
+            "Team": "Online Passion Competition",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.108101204,
+            "Y": -0.066042446,
+            "Z": -1.6059828
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -153.02841,
+            "Y": -6.6635385,
+            "Z": -281.9423
+          },
+          "Timestamp": 1792611523,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 14,
+          "Driver": {
+            "Guid": "76561197972822145",
+            "GuidsList": [
+              "76561197972822145"
+            ],
+            "Name": "Alan Mc Wrecker",
+            "Nation": "FRA",
+            "Team": "Absolute Loosers",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 16.141243,
+          "OtherCarId": 19,
+          "OtherDriver": {
+            "Guid": "76561198124771615",
+            "GuidsList": [
+              "76561198124771615"
+            ],
+            "Name": "cheucheu91",
+            "Nation": "FRA",
+            "Team": "Les Bananes Flambées",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.21014278,
+            "Y": 0.09495773,
+            "Z": 1.6748621
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -0.24847475,
+            "Y": -7.4923525,
+            "Z": -291.27948
+          },
+          "Timestamp": 1792611670,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 19,
+          "Driver": {
+            "Guid": "76561198124771615",
+            "GuidsList": [
+              "76561198124771615"
+            ],
+            "Name": "cheucheu91",
+            "Nation": "FRA",
+            "Team": "Les Bananes Flambées",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 22.402605,
+          "OtherCarId": 14,
+          "OtherDriver": {
+            "Guid": "76561197972822145",
+            "GuidsList": [
+              "76561197972822145"
+            ],
+            "Name": "Alan Mc Wrecker",
+            "Nation": "FRA",
+            "Team": "Absolute Loosers",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.8830414,
+            "Y": -0.2526723,
+            "Z": -1.3603666
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -0.04925433,
+            "Y": -7.679262,
+            "Z": -291.357
+          },
+          "Timestamp": 1792611673,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 5,
+          "Driver": {
+            "Guid": "76561198062399161",
+            "GuidsList": [
+              "76561198062399161"
+            ],
+            "Name": "Harrythmetique ",
+            "Nation": "FRA",
+            "Team": "Les Brasseurs de la Mine",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 0.74101347,
+          "OtherCarId": 11,
+          "OtherDriver": {
+            "Guid": "76561198137168868",
+            "GuidsList": [
+              "76561198137168868"
+            ],
+            "Name": "[APR] Alexou33",
+            "Nation": "FRA",
+            "Team": "Alpha Performance Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.8107201,
+            "Y": 0.14654845,
+            "Z": 1.6079314
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 340.00122,
+            "Y": -0.6465238,
+            "Z": -57.521465
+          },
+          "Timestamp": 1792611846,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 11,
+          "Driver": {
+            "Guid": "76561198137168868",
+            "GuidsList": [
+              "76561198137168868"
+            ],
+            "Name": "[APR] Alexou33",
+            "Nation": "FRA",
+            "Team": "Alpha Performance Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 7.238865,
+          "OtherCarId": 5,
+          "OtherDriver": {
+            "Guid": "76561198062399161",
+            "GuidsList": [
+              "76561198062399161"
+            ],
+            "Name": "Harrythmetique ",
+            "Nation": "FRA",
+            "Team": "Les Brasseurs de la Mine",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.83351946,
+            "Y": 0.05973704,
+            "Z": -1.648477
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": 340.18912,
+            "Y": -0.67567813,
+            "Z": -57.32404
+          },
+          "Timestamp": 1792611848,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 6,
+          "Driver": {
+            "Guid": "76561198033054324",
+            "GuidsList": [
+              "76561198033054324"
+            ],
+            "Name": "Karl74",
+            "Nation": "FRA",
+            "Team": "Fk Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 3.3131363,
+          "OtherCarId": 7,
+          "OtherDriver": {
+            "Guid": "76561198078021973",
+            "GuidsList": [
+              "76561198078021973"
+            ],
+            "Name": "Jim ZPLOUCH",
+            "Nation": "FRA",
+            "Team": "Gitane Maïs",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.8507301,
+            "Y": -0.2547858,
+            "Z": 1.1050079
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -186.31012,
+            "Y": -3.9446578,
+            "Z": -206.179
+          },
+          "Timestamp": 1792612078,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 7,
+          "Driver": {
+            "Guid": "76561198078021973",
+            "GuidsList": [
+              "76561198078021973"
+            ],
+            "Name": "Jim ZPLOUCH",
+            "Nation": "FRA",
+            "Team": "Gitane Maïs",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 2.521996,
+          "OtherCarId": 6,
+          "OtherDriver": {
+            "Guid": "76561198033054324",
+            "GuidsList": [
+              "76561198033054324"
+            ],
+            "Name": "Karl74",
+            "Nation": "FRA",
+            "Team": "Fk Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.85787964,
+            "Y": -0.25473627,
+            "Z": 1.0469723
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -186.17816,
+            "Y": -3.9538527,
+            "Z": -206.53607
+          },
+          "Timestamp": 1792612078,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 9,
+          "Driver": {
+            "Guid": "76561198022928394",
+            "GuidsList": [
+              "76561198022928394"
+            ],
+            "Name": "LeNainPosteur",
+            "Nation": "FRA",
+            "Team": "Gitane Maïs",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 10.544748,
+          "OtherCarId": 6,
+          "OtherDriver": {
+            "Guid": "76561198033054324",
+            "GuidsList": [
+              "76561198033054324"
+            ],
+            "Name": "Karl74",
+            "Nation": "FRA",
+            "Team": "Fk Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.8583185,
+            "Y": -0.0779677,
+            "Z": 0.79717726
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -18.673061,
+            "Y": -8.874066,
+            "Z": -293.38147
+          },
+          "Timestamp": 1792612086,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 6,
+          "Driver": {
+            "Guid": "76561198033054324",
+            "GuidsList": [
+              "76561198033054324"
+            ],
+            "Name": "Karl74",
+            "Nation": "FRA",
+            "Team": "Fk Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 4.150169,
+          "OtherCarId": 9,
+          "OtherDriver": {
+            "Guid": "76561198022928394",
+            "GuidsList": [
+              "76561198022928394"
+            ],
+            "Name": "LeNainPosteur",
+            "Nation": "FRA",
+            "Team": "Gitane Maïs",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.8462676,
+            "Y": -0.17823812,
+            "Z": 1.2082732
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -18.210552,
+            "Y": -8.996372,
+            "Z": -293.26248
+          },
+          "Timestamp": 1792612088,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 20,
+          "Driver": {
+            "Guid": "76561197968560375",
+            "GuidsList": [
+              "76561197968560375"
+            ],
+            "Name": "pistol",
+            "Nation": "FRA",
+            "Team": "",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 14.012107,
+          "OtherCarId": 17,
+          "OtherDriver": {
+            "Guid": "76561198157550304",
+            "GuidsList": [
+              "76561198157550304"
+            ],
+            "Name": "Pikoupok",
+            "Nation": "PLA",
+            "Team": "Réserviste",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.8116857,
+            "Y": -0.24021493,
+            "Z": 1.6327059
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -212.75809,
+            "Y": 23.504965,
+            "Z": 563.6903
+          },
+          "Timestamp": 1792612115,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 17,
+          "Driver": {
+            "Guid": "76561198157550304",
+            "GuidsList": [
+              "76561198157550304"
+            ],
+            "Name": "Pikoupok",
+            "Nation": "PLA",
+            "Team": "Réserviste",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 10.750282,
+          "OtherCarId": 20,
+          "OtherDriver": {
+            "Guid": "76561197968560375",
+            "GuidsList": [
+              "76561197968560375"
+            ],
+            "Name": "pistol",
+            "Nation": "FRA",
+            "Team": "",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.9004252,
+            "Y": 0.17584294,
+            "Z": -0.79646087
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -212.52202,
+            "Y": 24.03887,
+            "Z": 565.3618
+          },
+          "Timestamp": 1792612115,
+          "AfterSessionEnd": false,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 5,
+          "Driver": {
+            "Guid": "76561198062399161",
+            "GuidsList": [
+              "76561198062399161"
+            ],
+            "Name": "Harrythmetique ",
+            "Nation": "FRA",
+            "Team": "Les Brasseurs de la Mine",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 20.007431,
+          "OtherCarId": 6,
+          "OtherDriver": {
+            "Guid": "76561198033054324",
+            "GuidsList": [
+              "76561198033054324"
+            ],
+            "Name": "Karl74",
+            "Nation": "FRA",
+            "Team": "Fk Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.78924215,
+            "Y": 0.05167213,
+            "Z": 1.7273468
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -212.47745,
+            "Y": 11.101853,
+            "Z": 296.14273
+          },
+          "Timestamp": 1792612351,
+          "AfterSessionEnd": true,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 6,
+          "Driver": {
+            "Guid": "76561198033054324",
+            "GuidsList": [
+              "76561198033054324"
+            ],
+            "Name": "Karl74",
+            "Nation": "FRA",
+            "Team": "Fk Racing",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 22.039303,
+          "OtherCarId": 5,
+          "OtherDriver": {
+            "Guid": "76561198062399161",
+            "GuidsList": [
+              "76561198062399161"
+            ],
+            "Name": "Harrythmetique ",
+            "Nation": "FRA",
+            "Team": "Les Brasseurs de la Mine",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.6251073,
+            "Y": -0.06657506,
+            "Z": -1.6088486
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -212.45064,
+            "Y": 11.094403,
+            "Z": 296.12994
+          },
+          "Timestamp": 1792612353,
+          "AfterSessionEnd": true,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 0,
+          "Driver": {
+            "Guid": "76561199162864808",
+            "GuidsList": [
+              "76561199162864808"
+            ],
+            "Name": "Kimy Hoyer",
+            "Nation": "FRA",
+            "Team": "Ecurie GDSP #1",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 52.754757,
+          "OtherCarId": 4,
+          "OtherDriver": {
+            "Guid": "76561198910594990",
+            "GuidsList": [
+              "76561198910594990"
+            ],
+            "Name": "Streetbike",
+            "Nation": "FRA",
+            "Team": "Scuderia Tolosa",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": 0.8713456,
+            "Y": -0.22515677,
+            "Z": -1.3133404
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -220.1261,
+            "Y": 12.455668,
+            "Z": 347.88998
+          },
+          "Timestamp": 1792612356,
+          "AfterSessionEnd": true,
+          "ReplayURL": ""
+        },
+        {
+          "CarId": 4,
+          "Driver": {
+            "Guid": "76561198910594990",
+            "GuidsList": [
+              "76561198910594990"
+            ],
+            "Name": "Streetbike",
+            "Nation": "FRA",
+            "Team": "Scuderia Tolosa",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "ImpactSpeed": 42.60075,
+          "OtherCarId": 0,
+          "OtherDriver": {
+            "Guid": "76561199162864808",
+            "GuidsList": [
+              "76561199162864808"
+            ],
+            "Name": "Kimy Hoyer",
+            "Nation": "FRA",
+            "Team": "Ecurie GDSP #1",
+            "ClassID": "ec85bc54-dba7-4dbf-adfe-7cd090ca7854"
+          },
+          "RelPosition": {
+            "X": -0.61637884,
+            "Y": -0.10029073,
+            "Z": 1.811714
+          },
+          "Type": "COLLISION_WITH_CAR",
+          "WorldPosition": {
+            "X": -220.47682,
+            "Y": 12.434076,
+            "Z": 348.21588
+          },
+          "Timestamp": 1792612358,
+          "AfterSessionEnd": true,
+          "ReplayURL": ""
+        }
+      ]
     }
   ]
 }
