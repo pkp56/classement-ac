@@ -23,7 +23,7 @@ app.get('/', (req, res) => {
 });
 
 // ROUTE DE SAUVEGARDE : Enregistre les classements sur le serveur
-app.post('/api/save-championship', requireAdmin, (req, res) => {
+app.post('/api/save-championship', requireAdmin, async (req, res) => {
     try {
         const dataDir = path.join(__dirname, 'data');
         if (!fs.existsSync(dataDir)) {
@@ -47,7 +47,25 @@ app.post('/api/save-championship', requireAdmin, (req, res) => {
             if (fs.existsSync(temp)) fs.unlinkSync(temp);
         }
         
-        res.json({ status: "success", message: "Championnat sauvegardé sur le serveur !" });
+        // Publication GitHub côté serveur : le jeton n'est jamais envoyé au navigateur.
+        if (process.env.GITHUB_TOKEN) {
+            const owner = process.env.GITHUB_OWNER || 'pkp56';
+            const repo = process.env.GITHUB_REPO || 'classement-ac';
+            const branch = process.env.GITHUB_BRANCH || 'main';
+            const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/data/championship.json`;
+            const headers = { 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'classement-ac-admin' };
+            const current = await fetch(apiUrl + '?ref=' + encodeURIComponent(branch), { headers });
+            let sha;
+            if (current.ok) sha = (await current.json()).sha;
+            else if (current.status !== 404) throw new Error('Lecture GitHub impossible (HTTP ' + current.status + ').');
+            const publish = await fetch(apiUrl, { method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Mise à jour du classement depuis l’administration', content: Buffer.from(JSON.stringify(req.body, null, 2), 'utf8').toString('base64'), branch, ...(sha ? { sha } : {}) }) });
+            if (!publish.ok) {
+                const detail = await publish.json().catch(() => ({}));
+                throw new Error('Publication GitHub impossible (HTTP ' + publish.status + ') : ' + (detail.message || 'erreur API'));
+            }
+            return res.json({ status: 'success', message: 'Championnat sauvegardé sur le serveur et publié sur GitHub.' });
+        }
+        res.json({ status: 'success', message: 'Championnat sauvegardé sur le serveur. Publication GitHub non configurée (GITHUB_TOKEN absent).' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ status: "error", message: "Erreur lors de la sauvegarde sur le serveur." });
