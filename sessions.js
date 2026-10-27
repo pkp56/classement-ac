@@ -96,7 +96,8 @@
 
   function clearDerived() {
     if (!db) db = { drivers: {}, standings: [], sessions: [], meta: {} };
-    db.drivers = {};
+    // Garder les fiches pilotes et leurs équipes : seule la partie calculée est remise à zéro.
+    db.drivers = (db.drivers && typeof db.drivers === 'object') ? db.drivers : {};
     db.standings = [];
     db.standingsDropWorst = [];
     db.teamStandings = [];
@@ -166,9 +167,17 @@
       const d = JSON.parse(await f.text());
       let text;
       if (d && d.drivers && Array.isArray(d.standings)) {            // championnat (format du site)
-        // Un ancien JSON de classement ne doit jamais être la source des résultats.
-        // On ne garde que les sessions déjà importées, puis on reconstruit les données dérivées.
-        d.sessions = (db && db.sessions) || d.sessions || [];
+        // Le fichier importé est la source de vérité s'il contient des sessions.
+        // Si ce fichier n'en contient pas, conserver les sessions déjà importées.
+        const importedSessions = Array.isArray(d.sessions) ? d.sessions : [];
+        const currentSessions = (db && Array.isArray(db.sessions)) ? db.sessions : [];
+        d.sessions = importedSessions.length ? importedSessions : currentSessions;
+        // Préserver les équipes déjà connues quand le JSON importé n'en contient pas.
+        const oldDrivers = (db && db.drivers) || {};
+        d.drivers = d.drivers || {};
+        Object.entries(oldDrivers).forEach(([id, driver]) => {
+          if (d.drivers[id] && !d.drivers[id].team && driver && driver.team) d.drivers[id].team = driver.team;
+        });
         db = d;
         refreshDerived();
         text = 'Fichier championnat reçu : les classements ont été reconstruits à partir des sessions de course et de qualification importées.';
