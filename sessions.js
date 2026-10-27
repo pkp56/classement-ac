@@ -83,7 +83,7 @@
 
   function currentGroup() {
     const groups = groupSessions();
-    return groups[Number($('raceSelect').value)] || [];
+    return groups[Number($('raceSelect').value)]?.sessions || [];
   }
 
   function groupSessions() {
