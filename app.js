@@ -5,9 +5,14 @@ const app = express();
 app.disable('x-powered-by');
 
 // Permet au serveur de lire les données JSON envoyées par le site
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '5mb', strict: true }));
+app.use((err, req, res, next) => {
+    if (err.type === 'entity.too.large') return res.status(413).json({ status: 'error', message: 'JSON trop volumineux.' });
+    if (err instanceof SyntaxError && 'body' in err) return res.status(400).json({ status: 'error', message: 'JSON invalide.' });
+    next(err);
+});
 app.use((req, res, next) => {
-    if (/^\/(?:data\/backups|node_modules)(?:\/|$)/i.test(req.path)) return res.sendStatus(404);
+    if (/^\/(?:data\/backups|node_modules)(?:\/|$)/i.test(req.path) || /\.(?:js|py|json|md|lock|bak|tmp)$/i.test(req.path) && !/^\/(?:sessions|championnat)\.js$/i.test(req.path) && !/^\/data\/(?:ranking|championship)\.json$/i.test(req.path)) return res.sendStatus(404);
     next();
 });
 app.use(express.static(__dirname, { dotfiles: 'deny' }));
@@ -32,7 +37,7 @@ app.post('/api/save-championship', requireAdmin, (req, res) => {
         if (fs.existsSync(filePath)) {
             const backups = path.join(dataDir, 'backups');
             fs.mkdirSync(backups, { recursive: true });
-            fs.copyFileSync(filePath, path.join(backups, 'championship.json.' + Date.now() + '.bak'));
+            fs.copyFileSync(filePath, path.join(backups, 'championship.json.' + Date.now() + '.' + crypto.randomBytes(4).toString('hex') + '.bak'));
         }
         const temp = filePath + '.' + crypto.randomBytes(8).toString('hex') + '.tmp';
         try {
@@ -63,7 +68,10 @@ function safeEqual(a, b) {
 function requireAdmin(req, res, next) {
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-    if (!token || !adminTokens.has(token) || adminTokens.get(token) < Date.now()) return res.status(401).json({ status: 'error', message: 'Connexion administrateur requise.' });
+    if (!token || !adminTokens.has(token) || adminTokens.get(token) < Date.now()) {
+        if (token) adminTokens.delete(token);
+        return res.status(401).json({ status: 'error', message: 'Connexion administrateur requise.' });
+    }
     next();
 }
 app.post('/api/admin/login', (req, res) => {
@@ -78,8 +86,8 @@ app.post('/api/admin/login', (req, res) => {
     const expectedUsername = Buffer.from(configuredUsername);
     const suppliedPassword = Buffer.from(String(req.body && req.body.password || ''));
     const expectedPassword = Buffer.from(configuredPassword);
-    const usernameValid = suppliedUsername.length === expectedUsername.length && crypto.timingSafeEqual(suppliedUsername, expectedUsername);
-    const passwordValid = suppliedPassword.length === expectedPassword.length && crypto.timingSafeEqual(suppliedPassword, expectedPassword);
+    const usernameValid = safeEqual(suppliedUsername.toString(), expectedUsername.toString());
+    const passwordValid = safeEqual(suppliedPassword.toString(), expectedPassword.toString());
     if (!usernameValid || !passwordValid) {
         failedLogins.set(ip, [...failures, now]);
         return res.status(401).json({ status: 'error', message: 'Identifiant ou mot de passe incorrect.' });
@@ -113,6 +121,8 @@ app.post('/api/admin/reset-json', requireAdmin, (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+if (require.main === module) app.listen(PORT, () => {
     console.log(`Serveur démarré sur le port ${PORT}`);
 });
+
+module.exports = app;
