@@ -66,7 +66,7 @@ function proxyJson(opts, cb) {
   headers['content-type']='application/json';
   headers['content-length']=Buffer.byteLength(opts.body||'{}');
   const proto = target.protocol==='https:'?https:http;
-  const up = proto.request(target,{method:opts.method,headers,timeout:25000},(upRes)=>{
+  const up = proto.request(target,{method:opts.method,headers,timeout:60000},(upRes)=>{
     const buf=[];upRes.on('data',c=>buf.push(c));upRes.on('end',()=>{cb(upRes.statusCode, Buffer.concat(buf).toString('utf8'), upRes.headers)});
   });
   up.on('error',e=>cb(0,'',{}));
