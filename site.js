@@ -163,7 +163,7 @@ async function loadRemoteLegacy(){
 }
 
 // ---------- Navigation / rounds / drivers ----------
-function rounds(){let m={};sessions.forEach(s=>(m[s.date.slice(0,10)]??=[]).push(s));return Object.entries(m).sort().map(([d,s],i)=>({date:d,sessions:s,track:track(s[0].track),number:i+1}))}
+function rounds(){let m={};sessions.filter(s=>s&&s.date).forEach(s=>(m[s.date.slice(0,10)]??=[]).push(s));return Object.entries(m).sort().map(([d,s],i)=>({date:d,sessions:s,track:track(s[0].track),number:i+1}))}
 function allDrivers(){let map=new Map;for(const s of sessions)for(const r of s.results){if(!map.has(r.id))map.set(r.id,{...r});}return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name))}
 function info(){return ''}
 function head(k,t,desc=''){
@@ -430,7 +430,7 @@ function globalPerformanceRatings(){
 function computeEventStandings(sArr,penMapArg,cfg){
   const sess=sArr.map(s=>({...s,results:s.results.map(r=>({...r}))}));
   // Group rounds by date
-  const rMap={};sess.forEach(s=>(rMap[s.date.slice(0,10)]??=[]).push(s));
+  const rMap={};sess.filter(s=>s&&s.date).forEach(s=>(rMap[s.date.slice(0,10)]??=[]).push(s));
   const rs=Object.entries(rMap).sort().map(([d,s],i)=>({date:d,sessions:s,track:s[0].track,number:i+1}));
   const scale=cfg.pointsScale||DEFAULT_POINTS.pointsScale;
   const minPct=cfg.minPercentDistance??0.75;
@@ -716,8 +716,36 @@ function importSessionJson(text,fileName){
     saveState();alert(`Import réussi : ${j.Type} du ${j.Date}.`);render();return true;
   }catch(err){alert('Erreur d\'import : '+err.message);return false}
 }
-function handleImport(ev){const f=ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=e=>importSessionJson(e.target.result,f.name);r.readAsText(f)}
-function bulkImport(ev){const fs=ev.target.files;let ok=0;for(const f of fs){const r=new FileReader();r.onload=e=>{if(importSessionJson(e.target.result,f.name)){ok++;if(ok===fs.length)render()}};r.readAsText(f)}}
+function handleImport(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const out=document.getElementById('ah-result');
+  if(out)out.innerHTML='<p class="note">Lecture du fichier…</p>';
+  const r=new FileReader();
+  r.onload=e=>{
+    const ok=importSessionJson(e.target.result,f.name);
+    if(out&&ok)out.innerHTML=`<p class="note">✅ Fichier <b>${esc(f.name)}</b> importé avec succès. N'oublie pas d'enregistrer.</p>`;
+    if(ok){saveState();render()}
+    ev.target.value='';
+  };
+  r.readAsText(f);
+}
+async function bulkImport(ev){
+  const fs=Array.from(ev.target.files||[]);
+  if(!fs.length)return;
+  const out=document.getElementById('ah-result');
+  if(out)out.innerHTML=`<p class="note">Import de ${fs.length} fichier(s) en cours…</p>`;
+  let ok=0,errs=[];
+  for(const f of fs){
+    const txt=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsText(f)});
+    try{
+      if(importSessionJson(txt,f.name,{silent:true}))ok++;
+      else errs.push(f.name+' : format invalide ou ignoré');
+    }catch(e){errs.push(f.name+' : '+e.message)}
+  }
+  saveState();render();
+  if(out)out.innerHTML=`<p class="note"><b>Import terminé :</b> ${ok} fichier(s) importé(s), ${errs.length} erreur(s).</p>${errs.length?`<ul class="note" style="font-family:monospace;font-size:11px">${errs.map(x=>'<li>✗ '+esc(x)+'</li>').join('')}</ul>`:''}`;
+  ev.target.value='';
+}
 function addAdjustment(roundKey,sessionIdx,drvId,timeAdd,dq,warning,note){penMap[`${roundKey}:${sessionIdx}:${drvId}`]={timeAdd:+timeAdd||0,dq:!!dq,warning:!!warning,note:note||''};saveState();render()}
 function removeAdjustment(key){delete penMap[key];saveState();render()}
 function addRound(){const d=prompt('Date (AAAA-MM-JJ) ?','2026-11-18');if(!d)return;const t=prompt('Circuit (ex: spa_1970) ?','spa_1970');if(!t)return;customCalendar=customCalendar||{};customCalendar[d]={track:t};saveState();render()}
@@ -935,26 +963,49 @@ async function ahImport(){
 const _origImport=importSessionJson;
 importSessionJson=function(text,fileName,opts){
   opts=opts||{};
-  try{let j=JSON.parse(text);
-    function driverFrom(obj){const drv=obj.Driver||obj.driver||{};const guid=drv.Guid||obj.DriverGuid||obj.Guid||'';const name=clean(drv.Name||obj.DriverName||'').trim();return {id:pseudonymizeGuid(guid||name+'|'+obj.CarId),name,team:clean(drv.Team||obj.Team||'')||'',skin:clean(obj.Skin||name||''),model:obj.Model||obj.CarModel}}
+  let j;
+  try{j=JSON.parse(text)}catch(e){if(!opts.silent)alert('Fichier JSON invalide : '+e.message);return false}
+  try{
+    function driverFrom(obj){const drv=obj.Driver||obj.driver||{};const guid=drv.Guid||obj.DriverGuid||obj.Guid||'';const name=clean(drv.Name||obj.DriverName||'').trim();return {id:pseudonymizeGuid(guid||name+'|'+(obj.CarId||obj.Model||Math.random())),name,team:clean(drv.Team||obj.Team||'')||'',skin:clean(obj.Skin||name||''),model:obj.Model||obj.CarModel}}
     function clean(v){return String(v||'').replace(/7656119\d{10}/g,m=>pseudonymizeGuid(m))}
-    // Filtrer les sessions "test" par le nom du championnat/track si jamais ça passe (sécurité)
-    const serverName=(j.ServerName||j.Name||''), track=(j.TrackName||'');
-    if(/test/i.test(serverName+' '+track)){if(!opts.silent)alert('Session ignorée (nom contient "test").');return false}
+    function toArr(x){
+      if(Array.isArray(x))return x;
+      if(x&&typeof x==='object'){const out=[];for(const k in x){if(x[k]&&typeof x[k]==='object')out.push(x[k])}return out}
+      return [];
+    }
+    // Si le JSON est un export AH "Results" object imbriqué (Sessions.Events.Sessions.Results), extraire automatiquement
+    if(!j.Type&&j.Results){j=j.Results}
+    if(!j.Type){if(!opts.silent)alert('Ce fichier JSON ne semble pas être un résultat de session Assetto Corsa (champ Type/Date manquant). Utilise un fichier /results/download/*.json ou l\'export session AH.');return false}
     if(j.Type==='PRACTICE'){if(!opts.silent)alert('Les sessions PRACTICE ne sont pas importées.');return false}
-    const cars={};(j.Cars||[]).forEach(c=>cars[c.CarId]=driverFrom(c));
-    const results=(j.Result||[]).map(r=>{const meta=cars[r.CarId]||driverFrom(r);return {id:meta.id,name:meta.name,team:meta.team||'',skin:meta.skin||'',grid:r.GridPosition,laps:r.NumLaps||0,best:r.BestLap,time:r.TotalTime,disqualified:!!r.Disqualified,hasPenalty:!!r.HasPenalty,penaltyTime:r.PenaltyTime||0,lapPenalty:r.LapPenalty||0}}).filter(r=>!(r.model==='dodge_monaco_police'||/broadcast/i.test(r.name)));
-    const laps=(j.Laps||[]).map(l=>{const meta=cars[l.CarId];if(!meta)return null;return {id:meta.id,time:l.LapTime,cuts:l.Cuts||0,timestamp:l.Timestamp}}).filter(Boolean);
-    const events=(j.Events||[]).filter(e=>e.Type==='COLLISION_WITH_CAR'&&j.Type==='RACE').map(e=>{const a=cars[e.CarId],b=cars[e.OtherCarId];if(!a||!b)return null;return {a:a.name,b:b.name,aid:a.id,bid:b.id,speed:e.ImpactSpeed,timestamp:e.Timestamp}}).filter(Boolean);
+    // Filtre "test"
+    const serverName=String(j.ServerName||j.Name||''), track=String(j.TrackName||'');
+    if(/test/i.test(serverName+' '+track)){if(!opts.silent)alert('Session ignorée (nom contient "test").');return false}
+    const cars={};toArr(j.Cars).forEach(c=>{if(c&&c.CarId!=null)cars[c.CarId]=driverFrom(c)});
+    const results=toArr(j.Result).map(r=>{
+      if(!r)return null;
+      const meta=cars[r.CarId]||driverFrom(r);
+      return {id:meta.id,name:meta.name,team:meta.team||'',skin:meta.skin||'',grid:(typeof r.GridPosition==='number')?r.GridPosition:null,laps:r.NumLaps||0,best:r.BestLap,time:r.TotalTime,disqualified:!!r.Disqualified,hasPenalty:!!r.HasPenalty,penaltyTime:r.PenaltyTime||0,lapPenalty:r.LapPenalty||0}
+    }).filter(r=>r&&!(r.model==='dodge_monaco_police'||/broadcast/i.test(r.name)));
+    if(!results.length){if(!opts.silent)alert('Aucun pilote dans ce fichier, session ignorée.');return false}
+    const laps=toArr(j.Laps).map(l=>{
+      if(!l)return null;
+      const meta=cars[l.CarId];if(!meta)return null;
+      return {id:meta.id,time:l.LapTime,cuts:l.Cuts||0,timestamp:l.Timestamp}
+    }).filter(Boolean);
+    const events=toArr(j.Events).filter(e=>e&&e.Type==='COLLISION_WITH_CAR'&&j.Type==='RACE').map(e=>{
+      const a=cars[e.CarId],b=cars[e.OtherCarId];if(!a||!b)return null;
+      return {a:a.name,b:b.name,aid:a.id,bid:b.id,speed:e.ImpactSpeed,timestamp:e.Timestamp}
+    }).filter(Boolean);
     let raceStart=null;
-    if(j.Type==='RACE'){const c=[];laps.forEach(l=>{if(typeof l.timestamp==='number'&&typeof l.time==='number'&&40000<l.time<600000)c.push(l.timestamp-l.time/1000)});if(c.length)raceStart=Math.min(...c)}
-    const sess={date:j.Date,track:j.TrackName,type:j.Type,results,laps,events,raceStart};
+    if(j.Type==='RACE'){const c=[];laps.forEach(l=>{if(typeof l.timestamp==='number'&&typeof l.time==='number'&&l.time>40000&&l.time<600000)c.push(l.timestamp-l.time/1000)});if(c.length)raceStart=Math.min(...c)}
+    if(!j.Date){if(!opts.silent)alert('Date manquante dans le JSON, session ignorée.');return false}
+    const sess={date:j.Date,track:j.TrackName||'',type:j.Type,results,laps,events,raceStart};
     const idx=sessions.findIndex(x=>x.date===j.Date&&x.type===j.Type);
     if(idx>=0)sessions[idx]=sess;else sessions.push(sess);
-    sessions.sort((a,b)=>a.date.localeCompare(b.date));
-    if(!opts.silent){saveState();alert(`Import réussi : ${j.Type} du ${j.Date}.`);render()}
+    sessions.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    if(!opts.silent){saveState();alert(`Import réussi : ${j.Type} du ${j.Date} (${results.length} pilotes).`);render()}
     return true;
-  }catch(err){if(!opts.silent)alert('Erreur d\'import : '+err.message);return false}
+  }catch(err){console.error('import error',err);if(!opts.silent)alert('Erreur d\'import : '+err.message);return false}
 };
 
 function importSessionJson(text,fileName,opts){return importSessionJson(text,fileName,opts)}
