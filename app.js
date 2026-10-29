@@ -6,6 +6,8 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
 
 const app = express();
 app.disable('x-powered-by');
@@ -22,8 +24,52 @@ app.use((req, res, next) => {
 });
 
 // --- PROXY API vers le backend gdsp-render-backend ---
-// On relaie à la main pour éviter d'ajouter une dépendance (http-proxy-middleware).
-// Cela évite les problèmes de CORS et évite d'exposer l'URL du backend dans le HTML.
+// Implémenté à la main (sans http-proxy-middleware) pour n'ajouter aucune dépendance.
+// Body-parser est volontairement DÉSACTIVÉ sur /api/* : on relaie le corps brut pour
+// conserver Content-Length et éviter les doubles lectures.
+function proxyRequest(req, res) {
+  let target;
+  try { target = new URL(req.url, BACKEND_URL); } catch(e) { return res.status(400).end('URL invalide'); }
+
+  const headers = Object.assign({}, req.headers);
+  delete headers.host;
+  delete headers.connection;
+  delete headers.origin;
+  delete headers.referer;
+  // On laisse Accept-Encoding : les réponses compressées (gzip/br) sont relayées telles quelles.
+
+  const chunks = [];
+  req.on('data', c => chunks.push(c));
+  req.on('end', () => {
+    const body = chunks.length ? Buffer.concat(chunks) : null;
+    if (body && body.length) headers['content-length'] = body.length;
+    const proto = target.protocol === 'https:' ? https : http;
+    const upstream = proto.request(target, {
+      method: req.method,
+      headers,
+      timeout: 25000,
+    }, (upRes) => {
+      res.writeHead(upRes.statusCode || 502, upRes.headers);
+      upRes.pipe(res);
+    });
+    upstream.on('timeout', () => { upstream.destroy(new Error('upstream timeout')); });
+    upstream.on('error', (e) => {
+      console.error('proxy error:', req.method, req.url, '->', e.message);
+      if (!res.headersSent) res.status(502).json({ error: 'Backend indisponible', detail: e.message });
+      else res.end();
+    });
+    if (body) upstream.write(body);
+    upstream.end();
+  });
+  req.on('error', () => { if (!res.headersSent) res.sendStatus(500); });
+}
+
+// Intercepter TOUTES les méthodes sur /api/* et /health avant le body parser statique.
+app.all('/api/*', proxyRequest);
+app.all('/health', proxyRequest);
+
+// Parser JSON limité, au cas où on en aurait besoin (aucune route POST hors API,
+// mais laisse la place pour de futurs webhooks côté statique ; ici inutilisé).
 app.use(express.json({ limit: '5mb' }));
 app.use((err, req, res, next) => {
   if (err.type === 'entity.too.large') return res.status(413).json({ error: 'JSON trop volumineux.' });
@@ -31,38 +77,7 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-function proxyReq(req, res) {
-  const target = new URL(req.originalUrl, BACKEND_URL);
-  const headers = { ...req.headers };
-  delete headers.host;
-  delete headers.referer;
-  delete headers.origin;
-  delete headers['accept-encoding']; // évite le compressé que node devrait décompresser
-  const method = req.method;
-  const opts = { method, headers };
-  let body;
-  if (method !== 'GET' && method !== 'HEAD' && req.body) {
-    body = JSON.stringify(req.body);
-    headers['content-type'] = 'application/json';
-    headers['content-length'] = Buffer.byteLength(body);
-  }
-  const proto = target.protocol === 'https:' ? require('https') : require('http');
-  const up = proto.request(target, opts, (upRes) => {
-    res.writeHead(upRes.statusCode, upRes.headers);
-    upRes.pipe(res);
-  });
-  up.on('error', (e) => {
-    console.error('proxy error:', e.message);
-    if (!res.headersSent) res.status(502).json({ error: 'Backend indisponible.', detail: e.message });
-  });
-  if (body) up.write(body);
-  up.end();
-}
-app.all('/api/*', proxyReq);
-app.all('/health', proxyReq);
-
-// Point d'entrée HTML : aucun besoin d'injecter l'URL backend, le navigateur
-// appelle /api/* en relatif et le serveur relaie.
+// Point d'entrée HTML
 const INDEX_PATH = path.join(ROOT, 'index.html');
 let _indexCache = null;
 function getIndex() {
