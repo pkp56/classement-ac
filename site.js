@@ -51,7 +51,16 @@ function nav(){
     Object.entries(navLabels).map(([k,v])=>`<button class="${page===k?'active':''}" onclick="go('${k}')">${v.toUpperCase()}</button>`).join('');
   renderEventSwitcher();
 }
-function go(x){page=x;render();window.scrollTo(0,0)}
+async function go(x){
+  page=x;window.scrollTo(0,0);
+  if(x==='global'&&backendMulti){
+    app.innerHTML=`<div class="panel"><p class="note">Chargement des données de tous les événements…</p></div>`;
+    const html=await globalRanking();
+    app.innerHTML=html;
+    return;
+  }
+  render();
+}
 function goHome(){currentSlug=null;eventContext=null;sessions.length=0;penMap={};manualDrivers=null;customCalendar=null;go('hub')}
 
 function renderEventSwitcher(){
@@ -239,17 +248,19 @@ function hub(){
 async function globalRanking(){
   // Charger les data de tous les événements qui n'ont pas encore leurs sessions en mémoire
   const needFetch=events.filter(ev=>!ev.__loaded);
-  await Promise.all(needFetch.map(async ev=>{
-    try{
-      const r=await apiGet('/api/events/'+encodeURIComponent(ev.slug));
-      if(!r.ok)return;
-      const j=await r.json();
-      ev.data=j.data||{};
-      ev.points_config=j.points_config||ev.points_config;
-      ev.updated_at=j.updated_at||ev.updated_at;
-    }catch(e){ev.data={}}
-    ev.__loaded=true;
-  }));
+  if(needFetch.length){
+    const results=await Promise.all(needFetch.map(ev=>
+      apiGet('/api/events/'+encodeURIComponent(ev.slug))
+        .then(r=>r.ok?r.json():null)
+        .catch(()=>null)
+    ));
+    needFetch.forEach((ev,i)=>{
+      const j=results[i];
+      if(j){ev.data=j.data||{};ev.points_config=j.points_config||ev.points_config;ev.updated_at=j.updated_at||ev.updated_at}
+      else{ev.data={}}
+      ev.__loaded=true;
+    });
+  }
   return globalRankingSync();
 }
 function globalRankingSync(){
@@ -934,8 +945,7 @@ function importSessionJson(text,fileName,opts){return importSessionJson(text,fil
 function render(){
   nav();
   if(page==='hub'&&backendMulti){app.innerHTML=hub();return}
-  if(page==='global'&&backendMulti){app.innerHTML=globalRankingSync();return}
-  const renderers={accueil:home,classement:ranking,manches:manche,pilotes:drivers,admin};
+  const renderers={accueil:home,classement:ranking,manches:manche,pilotes:drivers,global:globalRankingSync,admin};
   app.innerHTML=(renderers[page]||home)();
 }
 
