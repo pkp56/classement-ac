@@ -154,7 +154,18 @@ function head(k,t,desc=''){
   const eye = prefix ? prefix : 'GDSP / '+k;
   return `<div class="eyebrow">${esc(eye)}</div><h1>${t}</h1>${desc?`<p class="note">${desc}</p>`:''}`;
 }
-function table(headers,rows){rows=Array.isArray(rows)?rows:[];return `<div class="table-wrap"><table><thead><tr>${headers.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.join('')||'<tr><td colspan="8">Aucune donnée disponible.</td></tr>'}</tbody></table></div>`}
+function table(headers,rows){
+  try{
+    const hs=Array.isArray(headers)?headers:[];
+    let rs=[];
+    if(Array.isArray(rows))rs=rows;
+    else if(typeof rows==='string')rs=[rows];
+    else if(rows)rs=[String(rows)];
+    const head=hs.map(x=>`<th>${x==null?'':x}</th>`).join('');
+    const body=rs.length?rs.join(''):'<tr><td colspan="8">Aucune donnée disponible.</td></tr>';
+    return `<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  }catch(e){return `<p class="note" style="color:#9c3021">Erreur tableau : ${esc(e.message)}</p>`}
+}
 function fmt(t){if(!t||t<0||t>99999999)return '—';let m=Math.floor(t/60000),s=((t%60000)/1000).toFixed(3);return `${m}:${s.padStart(6,'0')}`}
 
 // ---------- Pénalités / tri ----------
@@ -633,16 +644,21 @@ function renderAhChamps(){
   if(!ahChampsCache.length){out.innerHTML='<p class="note">Aucun championnat trouvé.</p>';return}
   const existing=new Set(events.map(e=>e.slug));
   const rows=ahChampsCache.map(c=>{
-    const exists=events.some(e=>e.slug===c.slug);
-    const tag=c.kind==='open'?'<span class="tag open">OPEN</span>':'<span class="tag live">CHAMPIONNAT</span>';
-    return `<tr>
-      <td>${tag}</td>
-      <td><b>${esc(c.name)}</b><br><span class="muted">${c.server.replace('https://','')}</span></td>
-      <td>${c.progress.toFixed(0)}%</td>
-      <td>${c.numEvents}</td>
-      <td>${c.pointsScale.slice(0,5).join('/')}${c.pointsScale.length>5?'…':''}</td>
-      <td>${exists?'<span class="tag archive">déjà présent</span>':`<button class="btn secondary small" onclick="ahCreateEvent('${c.server}','${c.uuid}','${c.slug}')">+ Créer</button>`}</td>
-    </tr>`;
+    try{
+      const exists=events.some(e=>e.slug===c.slug);
+      const tag=(c.kind==='open')?'<span class="tag open">OPEN</span>':'<span class="tag live">CHAMPIONNAT</span>';
+      const scale=Array.isArray(c.pointsScale)?c.pointsScale:[];
+      const prog=Number.isFinite(c.progress)?c.progress.toFixed(0):'—';
+      const nev=Number.isFinite(c.numEvents)?c.numEvents:0;
+      return `<tr>
+        <td>${tag}</td>
+        <td><b>${esc(c.name||'?')}</b><br><span class="muted">${esc(String(c.server||'').replace('https://',''))}</span></td>
+        <td>${prog}</td>
+        <td>${nev}</td>
+        <td>${scale.slice(0,5).join('/')}${scale.length>5?'…':''}</td>
+        <td>${exists?'<span class="tag archive">déjà présent</span>':`<button class="btn secondary small" onclick="ahCreateEvent(\`${esc(c.server)}\`,\`${esc(c.uuid)}\`,\`${esc(c.slug)}\`)">+ Créer</button>`}</td>
+      </tr>`;
+    }catch(e){return `<tr><td colspan="6" class="muted">Erreur ligne : ${esc(e.message)}</td></tr>`}
   });
   out.innerHTML=`<p class="note">${ahChampsCache.length} championnats/opens détectés. Les championnats de type « test » et doublons ont été filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème.</p>${table(['','Nom','Progression','Manches','Barème (places)',''],rows)}`;
 }
