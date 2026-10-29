@@ -96,7 +96,7 @@ function ahFetch(url, timeoutMs=15000){
   });
 }
 
-async function ahList(serverUrl){
+async function ahListResults(serverUrl){
   const r=await ahFetch(serverUrl.replace(/\/+$/,'')+'/results');
   if(r.status!==200)throw new Error('HTTP '+r.status);
   const html=r.body.toString('utf8');
@@ -105,12 +105,11 @@ async function ahList(serverUrl){
   const out=[];let m;
   while((m=re.exec(html))!==null){
     const filename=m[1];
-    // Parse filename: YYYY_MM_DD_H_M_TYPE.json
     const parts=filename.replace(/\.json$/,'').split('_');
     if(parts.length<5)continue;
     const [y,mo,d,h,mi,...rest]=parts;
-    const type=rest.pop().toUpperCase(); // QUALIFY / RACE / PRACTICE
-    const serverName=rest.join('_'); // possible session name if any
+    const type=rest.pop().toUpperCase();
+    const serverName=rest.join('_');
     const dObj=new Date(+y,+mo-1,+d,+h,+mi);
     out.push({filename,url:serverUrl.replace(/\/+$/,'')+'/results/download/'+filename,type,date:dObj.toISOString(),sessionName:serverName});
   }
@@ -122,7 +121,7 @@ app.get('/api/ah-scan', async(req,res)=>{
     let all=[];
     for(const srv of AH_SERVERS){
       try{
-        const items=(await ahList(srv)).map(x=>({server:srv,...x}));
+        const items=(await ahListResults(srv)).map(x=>({server:srv,...x}));
         all=all.concat(items);
       }catch(e){all.push({server:srv,error:e.message})}
     }
@@ -142,6 +141,99 @@ app.get('/api/ah-fetch', async(req,res)=>{
     res.status(r.status).send(r.body);
   }catch(e){res.status(502).json({error:e.message})}
 });
+
+async function ahListChampionships(serverUrl){
+  const r=await ahFetch(serverUrl.replace(/\/+$/,'')+'/championships');
+  if(r.status!==200)throw new Error('HTTP '+r.status+' /championships');
+  const html=r.body.toString('utf8');
+  const re=/href="(\/championship\/[0-9a-f-]+)(?:\/export)?"/g;
+  const uuids=new Set();let m;
+  while((m=re.exec(html))!==null){
+    const path=m[1];
+    if(/export/.test(m[0]))continue;
+    const uuid=path.split('/').pop();
+    if(/^[0-9a-f-]{36}$/.test(uuid))uuids.add(uuid);
+  }
+  return [...uuids];
+}
+
+async function ahFetchChampionship(serverUrl,uuid){
+  const r=await ahFetch(serverUrl.replace(/\/+$/,'')+'/championship/'+uuid+'/export');
+  if(r.status!==200)throw new Error('HTTP '+r.status);
+  return JSON.parse(r.body.toString('utf8'));
+}
+
+// Liste tous les championnats sur les serveurs, avec méta + barème + sessions connues
+app.get('/api/ah-championships', async(req,res)=>{
+  try{
+    const out=[];
+    for(const srv of AH_SERVERS){
+      try{
+        const uuids=await ahListChampionships(srv);
+        for(const uuid of uuids){
+          try{
+            const j=await ahFetchChampionship(srv,uuid);
+            const name=(j.Name||'').trim();
+            const lname=name.toLowerCase();
+            // Filtres: test/duplicate/practice servers
+            if(/\btest\b|ser.?test|duplicate/i.test(name))continue;
+            if(j.IsInactive)continue;
+            const pts=((j.Classes||[])[0]||{}).Points||{};
+            const scale=(pts.Places||[]).map(x=>+x||0).filter(x=>x>0);
+            const events=(j.Events||{});
+            // AH stores sessions in an object keyed by type? Actually dict of event ID -> event, events contain .Sessions object
+            let eventList=[];
+            if(typeof events==='object'){
+              for(const k in events){const ev=events[k];if(ev&&ev.ID)eventList.push(ev)}
+            }
+            // Lister résultats /results/download correspondant aux dates des events (on ne télécharge pas ici, on calcule juste le nombre)
+            let qual=0, race=0;
+            eventList.forEach(ev=>{
+              const sess=ev.Sessions||{};
+              if(typeof sess==='object'){
+                if(sess.QUALIFY)qual++;
+                ['RACE','RACEx2','RACE2','RACE_2'].forEach(k=>{if(sess[k])race++});
+                // Ignore PRACTICE
+              }
+            });
+            out.push({
+              server:srv,uuid,name,
+              progress:j.Stats?.Progress||0,
+              numEvents:j.Stats?.NumEvents||0,
+              numEntrants:j.Stats?.NumEntrants||0,
+              kind:/open/i.test(name)?'open':'championship',
+              pointsScale:scale,
+              polePoints: +pts.PolePosition||0,
+              bestLapPoints: +pts.BestLap||0,
+              mostLapsLedPoints: +pts.MostLapsLed||0,
+              secondRaceMultiplier: +pts.SecondRaceMultiplier||1,
+              minDistancePct: +pts.RequiredRaceTimePercentage||0,
+              ignoreWorst: +j.IgnoreXWorstEvents||0,
+              qualSessions:qual, raceSessions:race,
+              created:j.Created, updated:j.Updated,
+              // Suggested slug
+              slug:suggestSlug(name,j.Created)
+            });
+          }catch(e){}
+        }
+      }catch(e){out.push({server:srv,error:e.message})}
+    }
+    res.json({servers:AH_SERVERS,items:out.filter(x=>!x.error),errors:out.filter(x=>x.error)});
+  }catch(e){res.status(502).json({error:e.message})}
+});
+
+function suggestSlug(name,created){
+  const y=(created||'').slice(0,4);
+  const base=name.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')
+    .replace(/-gdup?-?/g,'-')
+    .replace(/^open-?/,'')
+    .replace(/^international-series-/,'')
+    .replace(/^championnat-/,'')
+    .slice(0,50);
+  return (base+'-'+y).replace(/-+/g,'-').replace(/^-+|-+$/g,'');
+}
 
 // Endpoint de réinitialisation TOTALE (doit être déclaré AVANT le générique /api/*) :
 // 1) sauvegarde un championnat VIDE mais valide (avec une clé _reset pour satisfaire isNonEmptyObject) ;
