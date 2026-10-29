@@ -189,7 +189,12 @@ async function adminLogin(){
 }
 async function adminLogout(){adminToken=null;adminAuth=false;adminUser='';localStorage.removeItem('gdsp_admin_token');render()}
 async function saveRemote(){if(!adminToken||!window.GDSP_API_URL)return;const payload={sessions,penMap,manualDrivers,customCalendar};try{const r=await apiPost('/api/save-championship',payload);const j=await r.json();if(!r.ok)throw new Error(j.error||j.message||'erreur');return j}catch(e){console.warn('sauvegarde distante impossible',e);return null}}
-async function loadRemote(){if(!window.GDSP_API_URL)return null;try{const base=(window.GDSP_API_URL||'').replace(/\/+$/,'');const r=await apiGet('/api/championship');if(!r.ok)return null;const j=await r.json();const c=j.championship||{};if(Array.isArray(c.sessions)&&c.sessions.length)sessions=c.sessions;if(c.penMap)penMap=c.penMap;if(c.manualDrivers)manualDrivers=c.manualDrivers;if(c.customCalendar)customCalendar=c.customCalendar;return j}catch(e){console.warn('chargement distant impossible',e);return null}}
+async function loadRemote(){try{const r=await apiGet('/api/championship');if(!r.ok)return null;const j=await r.json();const c=j.championship||{};
+    if(Array.isArray(c.sessions)){sessions.length=0;if(c.sessions.length)sessions.push(...c.sessions);else{penMap={};manualDrivers=null;customCalendar=null}}
+    if(c.penMap)penMap=c.penMap;else penMap={};
+    if('manualDrivers' in c)manualDrivers=c.manualDrivers;
+    if('customCalendar' in c)customCalendar=c.customCalendar;
+    return j}catch(e){console.warn('chargement distant impossible',e);return null}}
 function adminHash(obj){return btoa(JSON.stringify(obj)).slice(0,10)}
 function importSessionJson(text,fileName){
   try{
@@ -236,7 +241,7 @@ function removeAdjustment(key){delete penMap[key];saveState();render()}
 function addRound(){const d=prompt('Date de la manche (AAAA-MM-JJ) ?','2026-11-18');if(!d)return;const t=prompt('Nom du circuit (ex: spa_1970) ?','spa_1970');if(!t)return;customCalendar=customCalendar||{};customCalendar[d]={track:t};saveState();render()}
 async function resetChampionship(){
   if(!confirm('Réinitialiser TOUT le championnat ? Tous les résultats, classements, ajustements de commission, fiches pilotes et calendrier ajouté seront effacés. Cette action est irréversible.'))return;
-  const remote=confirm('Effacer aussi la sauvegarde sur le serveur (PostgreSQL) ? OK = effacement complet du serveur ET du navigateur. Annuler = effacement du navigateur seulement (la prochaine connexion recharge le serveur).');
+  const remote=confirm('Effacer aussi la sauvegarde sur le serveur (PostgreSQL) ? OK = effacement complet du serveur ET du navigateur. Annuler = effacement du navigateur seulement (le serveur conservera les données).');
   try{
     if(remote&&adminToken){
       const r=await apiPost('/api/admin/reset',{confirmation:'REINIT_CHAMPIONNAT'});
@@ -244,11 +249,17 @@ async function resetChampionship(){
       if(!r.ok){alert('Échec de la réinitialisation serveur : '+(j.error||j.message||'erreur inconnue'));return}
     }
   }catch(e){alert('Erreur serveur : '+e.message);return}
+  // Vider la mémoire
   sessions.length=0;
   penMap={}; manualDrivers=null; customCalendar=null; selectedRaceAdj=null; driverId=''; compareA=''; compareB=''; round=0; sessionIndex=0; page='accueil';
+  // Vider le stockage local
   localStorage.removeItem('gdsp_sessions');localStorage.removeItem('gdsp_penalties');localStorage.removeItem('gdsp_drivers');localStorage.removeItem('gdsp_calendar');
   localStorage.setItem('gdsp_reset','1');
-  render();alert('Championnat réinitialisé : toutes les manches, résultats, ajustements et fiches pilotes ont été effacés. Utilise l\'onglet Imports pour charger de nouveaux résultats.')
+  // Déconnecter l'admin pour éviter qu'un loadRemote() automatique ne recharge les anciennes données
+  adminAuth=false;adminUser='';if(adminToken){localStorage.removeItem('gdsp_admin_token');adminToken=null}
+  render();
+  if(remote)alert('Championnat réinitialisé (navigateur ET serveur PostgreSQL). Tu peux maintenant repartir de zéro et importer de nouveaux résultats.');
+  else alert('Championnat réinitialisé dans le navigateur. Les données restent présentes sur le serveur : reconnecte-toi admin puis clique « Recharger depuis le serveur » pour les récupérer, ou « Vider tout » avec le serveur pour les effacer définitivement.');
 }
 function resetRound(n){if(!confirm(`Effacer la manche ${n+1} ?`))return;sessions=sessions.filter(s=>{const r=rounds().find(x=>x.sessions.includes(s));return !r||r.number!==n+1});saveState();render()}
 function exportData(){const blob=new Blob([JSON.stringify(sessions,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='gdsp_export.json';a.click()}
@@ -275,11 +286,21 @@ function render(){nav();app.innerHTML=({accueil:home,classement:ranking,manches:
 (async()=>{
   const isReset=localStorage.getItem('gdsp_reset')==='1';
   try{
-    if(!isReset&&!sessions.length){
-      try{const r=await fetch('data/data.json',{cache:'no-store'});if(r.ok){const base=await r.json();if(Array.isArray(base)&&base.length)sessions.push(...base)}}catch(e){}
+    if(isReset){
+      sessions.length=0;
+      // Ne pas charger data.json ni le backend : championnat vide.
+    }else{
+      if(!sessions.length){
+        try{const r=await fetch('data/data.json',{cache:'no-store'});if(r.ok){const base=await r.json();if(Array.isArray(base)&&base.length)sessions.push(...base)}}catch(e){}
+      }
+      if(adminToken){try{const remote=await loadRemote();if(remote){
+        // Si le serveur a été vidé (sessions vide), vider tout
+        const cs=(remote.championship&&remote.championship.sessions)||null;
+        if(Array.isArray(cs)&&cs.length===0){sessions.length=0;penMap={};manualDrivers=null;customCalendar=null;localStorage.setItem('gdsp_reset','1')}
+        if(manualDrivers)sessions.forEach(s=>s.results.forEach(r=>{if(manualDrivers[r.id]){r.name=manualDrivers[r.id].name;r.team=manualDrivers[r.id].team||''}}))
+      }}catch(e){}}else{if(manualDrivers)sessions.forEach(s=>s.results.forEach(r=>{if(manualDrivers[r.id]){r.name=manualDrivers[r.id].name;r.team=manualDrivers[r.id].team||''}}))}
+      if(adminToken){try{const r=await apiGet('/health');if(!r.ok)throw new Error('bad health');adminAuth=true;adminUser='Direction de course'}catch(e){adminToken=null;localStorage.removeItem('gdsp_admin_token')}}
     }
-    if(adminToken){try{const remote=await loadRemote();if(remote&&Array.isArray(remote.championship&&remote.championship.sessions)&&remote.championship.sessions.length===0){sessions.length=0;localStorage.setItem('gdsp_reset','1')}if(remote){if(manualDrivers)sessions.forEach(s=>s.results.forEach(r=>{if(manualDrivers[r.id]){r.name=manualDrivers[r.id].name;r.team=manualDrivers[r.id].team||''}}))}}catch(e){}}else{if(manualDrivers)sessions.forEach(s=>s.results.forEach(r=>{if(manualDrivers[r.id]){r.name=manualDrivers[r.id].name;r.team=manualDrivers[r.id].team||''}}))}
-    if(adminToken){try{const r=await apiGet('/health');if(!r.ok)throw new Error('bad health');adminAuth=true;adminUser='Direction de course'}catch(e){adminToken=null;localStorage.removeItem('gdsp_admin_token')}}
     render();
   }catch(e){app.innerHTML='Erreur de rendu : '+e.message}
 })();

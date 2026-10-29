@@ -80,7 +80,7 @@ app.all('/api/admin/reset', (req, res) => {
     proxyRequest(req, res, {
       method: 'POST',
       path: '/api/save-championship',
-      body: JSON.stringify({ _reset: true, sessions: [], penMap: {}, manualDrivers: null, customCalendar: null, meta: { resetAt: new Date().toISOString() } }),
+      body: JSON.stringify({ _reset: true, sessions: [], penMap: {}, manualDrivers: null, customCalendar: null, warnings: {}, meta: { resetAt: new Date().toISOString(), resetBy: 'admin' } }),
     });
   });
 });
