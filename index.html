@@ -203,7 +203,7 @@ async function saveRemote(){
   if(!r.ok)throw new Error(j.error||j.message||('HTTP '+r.status));
   return j;
 }
-async function loadRemote(){if(!adminToken)return null;try{const r=await apiGet('/api/championship');if(!r.ok)return null;const j=await r.json();const c=j.championship||{};
+async function loadRemote(){try{const r=await apiGet('/api/championship');if(!r.ok)return null;const j=await r.json();const c=j.championship||{};
     if(Array.isArray(c.sessions)){sessions.length=0;if(c.sessions.length)sessions.push(...c.sessions);else{penMap={};manualDrivers=null;customCalendar=null;localStorage.setItem('gdsp_reset','1')}}
     if(c.penMap&&typeof c.penMap==='object')penMap=c.penMap;else penMap={};
     if('manualDrivers' in c)manualDrivers=c.manualDrivers;
@@ -318,17 +318,42 @@ function render(){nav();app.innerHTML=({accueil:home,classement:ranking,manches:
   try{
     if(isReset){
       sessions.length=0;
-      // Ne pas charger data.json ni le backend : championnat vide.
+      // Ne pas charger data.json : championnat volontairement vide (jusqu'à restauration ou import).
+      // MAIS on vérifie quand même le serveur si des données ont été remises depuis.
+      try{
+        const remote=await loadRemote();
+        const cs=remote&&remote.championship&&remote.championship.sessions;
+        if(Array.isArray(cs)&&cs.length){
+          // Le serveur a des données -> lever le flag reset local
+          localStorage.removeItem('gdsp_reset');
+        }
+      }catch(e){}
     }else{
+      // 1) Charger les données embarquées (data.json) comme base de secours.
       if(!sessions.length){
         try{const r=await fetch('data/data.json',{cache:'no-store'});if(r.ok){const base=await r.json();if(Array.isArray(base)&&base.length)sessions.push(...base)}}catch(e){}
       }
-      if(adminToken){try{const remote=await loadRemote();if(remote){
-        // Si le serveur a été vidé (sessions vide), vider tout
-        const cs=(remote.championship&&remote.championship.sessions)||null;
-        if(Array.isArray(cs)&&cs.length===0){sessions.length=0;penMap={};manualDrivers=null;customCalendar=null;localStorage.setItem('gdsp_reset','1')}
-        if(manualDrivers)sessions.forEach(s=>s.results.forEach(r=>{if(manualDrivers[r.id]){r.name=manualDrivers[r.id].name;r.team=manualDrivers[r.id].team||''}}))
-      }}catch(e){}}else{if(manualDrivers)sessions.forEach(s=>s.results.forEach(r=>{if(manualDrivers[r.id]){r.name=manualDrivers[r.id].name;r.team=manualDrivers[r.id].team||''}}))}
+      // 2) Toujours essayer de charger la dernière sauvegarde serveur (publique, ne nécessite pas d'admin).
+      try{
+        const remote=await loadRemote();
+        if(remote){
+          const cs=(remote.championship&&remote.championship.sessions)||null;
+          if(Array.isArray(cs)){
+            if(cs.length===0){
+              // Serveur vidé explicitement -> championnat vide
+              sessions.length=0;penMap={};manualDrivers=null;customCalendar=null;
+              localStorage.setItem('gdsp_reset','1');
+            }else{
+              // Écraser par la version serveur (c'est la vérité courante)
+              sessions.length=0;sessions.push(...cs);
+              localStorage.setItem('gdsp_reset','');
+            }
+          }
+        }
+      }catch(e){console.warn('chargement serveur indisponible, utilisation des données locales/initiales',e)}
+      // 3) Appliquer les renommages manuels éventuels
+      if(manualDrivers)sessions.forEach(s=>s.results.forEach(r=>{if(manualDrivers[r.id]){r.name=manualDrivers[r.id].name;r.team=manualDrivers[r.id].team||''}}));
+      // 4) Si un token admin est présent, vérifier sa validité (et afficher comme connecté si OK)
       if(adminToken){try{const r=await apiGet('/health');if(!r.ok)throw new Error('bad health');adminAuth=true;adminUser='Direction de course'}catch(e){adminToken=null;localStorage.removeItem('gdsp_admin_token')}}
     }
     render();
