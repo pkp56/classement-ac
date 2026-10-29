@@ -365,7 +365,7 @@ function globalPerformanceRatings(){
     const pspd=pct(rc.entries,'best',true); // meilleur tour
     const pres=pct(rc.entries,'pos',true); // position
     rc.entries.forEach((e,i)=>{
-      if(!pilot.has(e.id))pilot.set(e.id,{sumW:0,ax:{regularite:0,proprete:0,vitesse:0,resultats:0},positions:[],ts:[]});
+      if(!pilot.has(e.id))pilot.set(e.id,{id:e.id,sumW:0,ax:{regularite:0,proprete:0,vitesse:0,resultats:0},positions:[],ts:[]});
       const p=pilot.get(e.id);
       const vals={regularite:psd[i],proprete:pcln[i],vitesse:pspd[i],resultats:pres[i]};
       for(const k in vals){const v=vals[k]; if(Number.isFinite(v)){p.ax[k]+=v*weight;}}
@@ -416,7 +416,7 @@ function globalPerformanceRatings(){
   const final=out.filter(p=>p.races>=2).map(p=>{
     const ax=p.det;
     const score=(ax.regularite+ax.proprete+ax.vitesse+ax.resultats+ax.progression)/5;
-    return {id,name:idName.get(id)||'?',team:idTeam.get(id)||'',score,details:ax,count:p.races,trend:p.prog||0};
+    return {id:p.id,name:idName.get(p.id)||'?',team:idTeam.get(p.id)||'',score,details:ax,count:p.races,trend:p.prog||0};
   }).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name));
   // Assigner niveau par quartile (1=top 25% … 4=bottom 25%). Utiliser la distribution naturelle.
   const n=final.length;
