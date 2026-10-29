@@ -246,16 +246,31 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
     // 1) Construire les fenêtres temporelles par event
     const windows=[];
     const events=champ.Events||{};
+    let hasValidEvent=false;
     for(const k in events){
-      const ev=events[k];if(!ev||!ev.StartedTime)continue;
-      const start=new Date(ev.StartedTime).getTime();
-      const end=ev.CompletedTime?new Date(ev.CompletedTime).getTime():start+6*3600*1000;
-      const sess=ev.Sessions||{};
-      const types=[];
-      if(sess.QUALIFY)types.push('QUALIFY');
-      if(sess.RACE)types.push('RACE');
-      if(sess.RACEx2)types.push('RACEx2');
-      windows.push({evId:ev.ID,name:ev.Name||'',start,end,types});
+      const ev=events[k];if(!ev)continue;
+      const startRaw=ev.StartedTime?new Date(ev.StartedTime).getTime():NaN;
+      const endRaw=ev.CompletedTime?new Date(ev.CompletedTime).getTime():NaN;
+      if(isFinite(startRaw)&&startRaw>1000000000000){
+        hasValidEvent=true;
+        const start=startRaw;
+        const end=isFinite(endRaw)&&endRaw>start?endRaw:start+6*3600*1000;
+        const sess=ev.Sessions||{};
+        const types=[];
+        if(sess.QUALIFY)types.push('QUALIFY');
+        if(sess.RACE)types.push('RACE');
+        if(sess.RACEx2)types.push('RACEx2');
+        windows.push({evId:ev.ID,name:ev.Name||'',start,end,types,track:(ev.RaceSetup&&ev.RaceSetup.Track)||null});
+      }
+    }
+    // Si aucun event n'a de date valide (championnat archivé / open), utiliser Created→Updated du championnat
+    // avec types par défaut QUALIFY+RACE+RACEx2.
+    if(!hasValidEvent){
+      const cStart=champ.Created?new Date(champ.Created).getTime():NaN;
+      const cEnd=champ.Updated?new Date(champ.Updated).getTime():NaN;
+      if(isFinite(cStart)&&isFinite(cEnd)){
+        windows.push({evId:'champ',name:champ.Name||'',start:cStart-24*3600*1000,end:cEnd+24*3600*1000,types:['QUALIFY','RACE','RACEx2'],track:null});
+      }
     }
     // 2) Récupérer la liste de tous les /results du serveur
     const allResults=await ahListResults(server);

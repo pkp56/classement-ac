@@ -115,7 +115,9 @@ async function loadEvent(slug){
     eventContext={slug:ev.slug,name:ev.name,kind:ev.kind,pointsConfig:ev.points_config||{},data:ev.data||{}};
     currentSlug=ev.slug;
     const d=ev.data||{};
-    ahConfig=(d.ahServer&&d.ahUuid)?{server:d.ahServer,uuid:d.ahUuid}:null;
+    let _ah=(d.ahServer&&d.ahUuid)?{server:d.ahServer,uuid:d.ahUuid}:null;
+    if(!_ah){try{const m=JSON.parse(localStorage.getItem('gdsp_ah_map')||'{}');_ah=m[ev.slug]||null}catch(e){}}
+    ahConfig=_ah;
     localStorage.setItem('gdsp_last_event',ev.slug);
     sessions.length=0;
     if(Array.isArray(d.sessions))sessions.push(...d.sessions);
@@ -687,6 +689,8 @@ async function ahCreateEvent(server,uuid,slug){
     const r=await apiPost('/api/events',{slug:c.slug,name:c.name,kind:c.kind,pointsConfig:cfg,data:{ahServer:c.server,ahUuid:c.uuid}});
     const j=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(j.error||'HTTP '+r.status);
+    // Sauvegarder le lien AH aussi en local (clé par slug) au cas où le backend ne l'a pas encore stocké (déploiement en attente)
+    try{localStorage.setItem('gdsp_ah_map',JSON.stringify(Object.assign({},JSON.parse(localStorage.getItem('gdsp_ah_map')||'{}'),{[c.slug]:{server:c.server,uuid:c.uuid}})))}catch(e){}
     // Recharger events
     const lr=await apiGet('/api/events');const lj=await lr.json();events=Array.isArray(lj.events)?lj.events:events;
     alert('Événement créé : '+c.name+'. Tu peux maintenant le sélectionner dans le menu et y importer ses résultats (📥 Auto-import ou Import AH sessions à venir).');
@@ -700,7 +704,15 @@ async function ahImport(){
   if(out){out.innerHTML='<p class="note">Scan des serveurs AssettoHosting en cours…</p>'}
   try{
     let endpoint='/api/ah-scan';
-    if(ahConfig)endpoint=`/api/ah-championship-sessions?server=${encodeURIComponent(ahConfig.server)}&uuid=${encodeURIComponent(ahConfig.uuid)}`;
+    let scopeNote='';
+    if(ahConfig){
+      endpoint=`/api/ah-championship-sessions?server=${encodeURIComponent(ahConfig.server)}&uuid=${encodeURIComponent(ahConfig.uuid)}`;
+    }else if(currentSlug){
+      if(!confirm("Cet événement n'est pas lié à un championnat AssettoHosting.\n\nL'importation va parcourir TOUS les résultats des serveurs GDSP et ne pourra pas distinguer les sessions de cet événement de celles des autres. Il est recommandé de lier l'événement depuis l'onglet « Serveurs AH » (supprime-le puis recrée-le avec + Créer).\n\nContinuer quand même ?")){
+        if(out)out.innerHTML='<p class="note">Import annulé. Passe par l\'onglet « Serveurs AH » pour lier cet événement à un championnat AH, ou importe des fichiers JSON manuellement.</p>';
+        return;
+      }
+    }
     const r=await apiGet(endpoint);
     const j=await r.json();
     if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
