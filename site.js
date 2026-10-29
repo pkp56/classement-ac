@@ -630,17 +630,20 @@ function openAdjForm(rj,sj,did){const ta=prompt('Ajustement temps en secondes (+
 let ahChampsCache=null;
 async function ahScanChamps(){
   const out=document.getElementById('ah-champs-result');
-  if(out)out.innerHTML='<p class="note">Scan des serveurs AssettoHosting en cours…</p>';
+  if(out)out.innerHTML='<p class="note">Scan des serveurs AssettoHosting en cours… (peut prendre 10-20s, les serveurs doivent être réveillés)</p>';
   try{
     const r=await apiGet('/api/ah-championships');
-    const j=await r.json();
-    if(!r.ok)throw new Error(j.error||'HTTP '+r.status);
-    ahChampsCache=j.items||[];
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error((j.error||'HTTP '+r.status)+'');
+    if(!Array.isArray(j.items))throw new Error('Réponse inattendue (items non tableau): '+JSON.stringify(j).slice(0,200));
+    ahChampsCache=j.items;
     renderAhChamps();
-  }catch(e){if(out)out.innerHTML=`<p class="note" style="color:#9c3021">✗ ${esc(e.message)}</p>`}
+  }catch(e){if(out)out.innerHTML=`<p class="note" style="color:#9c3021">✗ ${esc(e.message)}</p>`;console.error('ah-scan',e)}
 }
 function renderAhChamps(){
   const out=document.getElementById('ah-champs-result');if(!out||!ahChampsCache)return;
+  try{
+  if(!Array.isArray(ahChampsCache)){out.innerHTML='<p class="note">Réponse invalide du serveur.</p>';return}
   if(!ahChampsCache.length){out.innerHTML='<p class="note">Aucun championnat trouvé.</p>';return}
   const existing=new Set(events.map(e=>e.slug));
   const rows=ahChampsCache.map(c=>{
@@ -661,6 +664,7 @@ function renderAhChamps(){
     }catch(e){return `<tr><td colspan="6" class="muted">Erreur ligne : ${esc(e.message)}</td></tr>`}
   });
   out.innerHTML=`<p class="note">${ahChampsCache.length} championnats/opens détectés. Les championnats de type « test » et doublons ont été filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème.</p>${table(['','Nom','Progression','Manches','Barème (places)',''],rows)}`;
+  }catch(e){out.innerHTML='<p class="note" style="color:#9c3021">✗ '+esc(e.message)+'<br><pre style="font-size:11px;overflow:auto">'+esc(e.stack||'')+'</pre></p>'}
 }
 async function ahCreateEvent(server,uuid,slug){
   try{
