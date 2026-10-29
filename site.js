@@ -55,8 +55,14 @@ async function go(x){
   page=x;window.scrollTo(0,0);
   if(x==='global'&&backendMulti){
     app.innerHTML=`<div class="panel"><p class="note">Chargement des données de tous les événements…</p></div>`;
-    const html=await globalRanking();
-    app.innerHTML=html;
+    nav();
+    try{
+      const html=await globalRanking();
+      app.innerHTML=html;
+    }catch(e){
+      console.error('go global error:',e);
+      app.innerHTML=`<div class="panel"><p class="note" style="color:#9c3021">✗ Erreur de chargement : ${esc(e.message||e)}</p></div>`;
+    }
     return;
   }
   render();
@@ -92,7 +98,7 @@ async function switchEvent(slug){
 }
 
 // ---------- API helpers ----------
-async function apiGet(path){const r=await fetch(path,{cache:'no-store',headers:adminToken?{Authorization:'Bearer '+adminToken}:{}});return r}
+async function apiGet(path,opts){const r=await fetch(path,Object.assign({cache:'no-store',headers:adminToken?{Authorization:'Bearer '+adminToken}:{}},opts||{}));return r}
 async function apiPost(path,body){
   const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json',...(adminToken?{Authorization:'Bearer '+adminToken}:{})},body:body?JSON.stringify(body):undefined});
   if(r.status===401){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');render()}
@@ -249,19 +255,22 @@ async function globalRanking(){
   // Charger les data de tous les événements qui n'ont pas encore leurs sessions en mémoire
   const needFetch=events.filter(ev=>!ev.__loaded);
   if(needFetch.length){
-    const results=await Promise.all(needFetch.map(ev=>
-      apiGet('/api/events/'+encodeURIComponent(ev.slug))
-        .then(r=>r.ok?r.json():null)
-        .catch(()=>null)
-    ));
+    const results=await Promise.all(needFetch.map(ev=>{
+      const ctl=new AbortController();
+      const to=setTimeout(()=>ctl.abort(),20000);
+      return apiGet('/api/events/'+encodeURIComponent(ev.slug),{signal:ctl.signal})
+        .then(r=>{clearTimeout(to);if(!r.ok)return null;return r.json().catch(()=>null)})
+        .catch(e=>{clearTimeout(to);console.warn('load event failed:',ev.slug,e.message);return null});
+    }));
     needFetch.forEach((ev,i)=>{
       const j=results[i];
-      if(j){ev.data=j.data||{};ev.points_config=j.points_config||ev.points_config;ev.updated_at=j.updated_at||ev.updated_at}
+      if(j&&j.slug){ev.data=j.data||{};ev.points_config=j.points_config||ev.points_config;ev.updated_at=j.updated_at||ev.updated_at}
       else{ev.data={}}
       ev.__loaded=true;
     });
   }
-  return globalRankingSync();
+  try{return globalRankingSync()}
+  catch(e){console.error('globalRankingSync error:',e);return `<div class="panel"><p class="note" style="color:#9c3021">✗ Erreur lors du calcul : ${esc(e.message)}</p><pre style="font-size:11px;overflow:auto">${esc(e.stack||'')}</pre></div>`}
 }
 function globalRankingSync(){
   if(!backendMulti)return ranking();
