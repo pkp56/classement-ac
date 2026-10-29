@@ -89,14 +89,21 @@ app.all('/api/admin/reset', (req, res) => {
     const auth=req.headers.authorization||'';
     if(!auth.startsWith('Bearer '))return res.status(401).json({error:'Connexion administrateur requise.'});
     const hdrs={'Authorization':auth,'Content-Type':'application/json'};
+    // If the new backend supports /api/events/:slug/data, the frontend will reset that way.
+    // For legacy backend (no /api/events), we keep the old behavior.
+    const eventSlug=typeof body.slug==='string'?body.slug:null;
+    if(eventSlug){
+      const champ={sessions:[],penMap:{},manualDrivers:null,customCalendar:null};
+      proxyJson({method:'POST',path:'/api/events/'+encodeURIComponent(eventSlug)+'/data',headers:hdrs,body:JSON.stringify(champ)},(s,data)=>{
+        res.json({status:'ok', eventReset:{status:s,body:tryParse(data)}});
+      });
+      return;
+    }
     let champ={ _reset:true, sessions:[], penMap:{}, manualDrivers:null, customCalendar:null, warnings:{}, meta:{ resetAt:new Date().toISOString(), resetBy:'admin', note:'Championnat entièrement réinitialisé.' } };
-    // Step 1: save championship
     proxyJson({method:'POST',path:'/api/save-championship',headers:hdrs,body:JSON.stringify(champ)},(s1,data1)=>{
       if(s1<200||s1>=300){return res.status(502).json({error:'Échec reset championnat',step1:{status:s1,body:data1}})}
-      // Step 2: clear drivers/penalties via PUT /api/results (table historique)
       proxyJson({method:'PUT',path:'/api/results',headers:hdrs,body:JSON.stringify({drivers:[],penalties:[]})},(s2,data2)=>{
-        // Even if this fails, champ is cleared. Return status.
-        res.json({status:'ok', championship:{status:s1,body:tryParse(data1)}, results:{status:s2,body:tryParse(data2)}, championship_cleared:champ});
+        res.json({status:'ok', championship:{status:s1,body:tryParse(data1)}, results:{status:s2,body:tryParse(data2)}});
       });
     });
   });

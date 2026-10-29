@@ -181,3 +181,4 @@ cython_debug/
 .cursorindexingignore
 # Node.js dependencies (install by npm install on Render)
 node_modules/
+node_modules

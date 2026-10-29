@@ -1,364 +1,116 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GDSP — Lola T290 International Series</title><style>
-:root{--ink:#102a32;--cream:#f4ecd8;--red:#9c3021;--gold:#cd9a42;--line:#bdb09a}*{box-sizing:border-box}body{margin:0;background:#e9e0cb;color:var(--ink);font-family:Arial,sans-serif}header{background:#102a32;color:#f4ecd8;border-bottom:5px solid #a33426}.top{max-width:1400px;margin:auto;display:flex;align-items:center;padding:15px 35px;gap:38px}.brand-logo{width:52px;height:60px;object-fit:contain;display:block}.brand-title{font-size:10px;font-weight:bold;letter-spacing:1px;line-height:1.4;max-width:110px;color:#e7dec9}.brand-group{display:flex;align-items:center;gap:10px}.car-thumb{width:140px;height:38px;object-fit:contain;mix-blend-mode:multiply}.race-number{font-family:Impact,sans-serif;font-size:19px;color:#9c3021}.driver-car{display:block;width:100%;max-width:600px;height:auto;object-fit:contain;mix-blend-mode:multiply}.profile-car{padding:20px;background:#f8f2e4;border:1px solid var(--line)}.brand{font-family:Georgia,serif;font-weight:bold;font-size:26px;letter-spacing:2px;border:2px solid #e4d9c1;padding:8px 11px}.brand span{color:#d59c43}nav{display:flex;gap:25px;align-items:center;flex-wrap:wrap}nav button{background:none;border:0;color:#d6d0c0;font-size:12px;font-weight:bold;letter-spacing:1.2px;cursor:pointer;padding:12px 0}nav button.active{color:white;border-bottom:2px solid #d7a34b}.right{margin-left:auto;color:#d2a55f;font-size:11px;letter-spacing:2px;font-weight:bold;white-space:nowrap}.page{max-width:1330px;margin:auto;padding:34px 35px 70px}.eyebrow{font-size:11px;letter-spacing:2.5px;font-weight:bold;text-transform:uppercase;color:var(--red)}h1,h2,h3{font-family:Impact,'Arial Narrow',sans-serif;text-transform:uppercase;letter-spacing:.7px;font-weight:normal}h1{font-size:clamp(44px,6vw,80px);line-height:.98;margin:12px 0}h2{font-size:32px;margin:8px 0 20px}h3{font-size:21px;margin:8px 0}.hero{background:#132d35;color:#f7ecd5;min-height:390px;display:grid;grid-template-columns:40% 1fr;overflow:hidden}.hero-text{padding:52px 48px 52px 35px}.hero h1{font-size:clamp(32px,4.4vw,58px);line-height:1;margin:10px 0}.hero h1 em{color:#d8a347;font-style:normal}.hero p{line-height:1.6;color:#d1cbbd;max-width:500px}.hero-image{background:linear-gradient(90deg,#132d35 0%,#132d35cc 15%,#132d3555 30%,transparent 42%),url('/intro.png') center/cover}.btn{display:inline-block;background:#ac3928;color:white;border:0;padding:14px 20px;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;font-weight:bold;cursor:pointer}.btn.secondary{background:transparent;border:1px solid #b7a688;color:var(--ink)}.stats{display:grid;grid-template-columns:repeat(4,1fr);background:#f8f2e4;border:1px solid var(--line);margin-top:20px}.stat{padding:22px 28px;border-right:1px solid var(--line)}.stat:last-child{border:0}.stat strong{font-family:Impact,sans-serif;font-size:31px;display:block}.label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#6d726c;font-weight:bold}.section-head{display:flex;justify-content:space-between;align-items:end;margin:45px 0 15px;border-bottom:2px solid var(--ink);padding-bottom:10px}.section-head h2{margin:4px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.panel{background:#f8f2e4;border:1px solid var(--line);padding:25px}.note{font-size:13px;line-height:1.6;color:#586260}.tag{font-size:10px;letter-spacing:1px;background:#d6c6a4;padding:6px 9px;font-weight:bold}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}th{background:var(--ink);color:#eee5d1;font-size:10px;letter-spacing:1.3px;text-transform:uppercase;padding:14px}td{padding:13px 14px;border-bottom:1px solid #dbd0ba}tbody tr:hover{background:#eee4cf}.pos{font-family:Impact,sans-serif;font-size:19px;color:#9f3828}.muted{color:#777e76;font-size:12px}select,input{padding:11px;background:#fbf7ec;border:1px solid #b3a78e;color:var(--ink);font:inherit}select{min-width:180px}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.tabs button{padding:10px 14px;border:1px solid #b7a688;background:transparent;color:var(--ink);font-weight:bold;cursor:pointer}.tabs button.active{background:var(--ink);color:white}.cardlist{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.driver{background:#f8f2e4;border:1px solid var(--line);padding:19px;cursor:pointer}.driver:hover{border-color:var(--red)}.driver strong{font-family:Impact,sans-serif;font-size:22px;letter-spacing:.5px}.banner{background:#dfd1b5;border-left:4px solid #9f3828;padding:13px 16px;font-size:13px;line-height:1.5;margin:20px 0}.footer{background:#102a32;color:#ddceb1;padding:28px 35px;font-size:11px;letter-spacing:1.5px;text-align:center}.bar{height:8px;background:#d9cdb6}.bar i{display:block;background:#a93828;height:100%}.admin-input{padding:11px;background:#fbf7ec;border:1px solid #b3a78e;color:var(--ink);font:inherit;min-width:240px}.btn.small{padding:8px 12px;font-size:10px}.admin-round{background:#f8f2e4;border:1px solid var(--line);padding:18px}.admin-round.dashed{border-style:dashed;display:flex;align-items:center;justify-content:center;min-height:120px}.admin-grid{grid-template-columns:repeat(3,1fr)}.driver-admin-list{display:grid;gap:10px}.driver-admin-row{display:flex;justify-content:space-between;align-items:center;background:#f8f2e4;border:1px solid var(--line);padding:12px 16px}code{background:#e6dcc3;padding:2px 5px}@media(max-width:800px){.top{gap:15px;padding:14px;flex-wrap:wrap}.right{display:none}nav{gap:12px}.page{padding:24px 16px 50px}.hero{grid-template-columns:1fr}.hero-text{padding:30px}.hero-image{min-height:170px;background-image:linear-gradient(180deg,#132d35,transparent),url('/intro.png')}.stats{grid-template-columns:repeat(2,1fr)}.grid,.cardlist{grid-template-columns:1fr}.stat{border-bottom:1px solid var(--line)}}
-</style><script>window.GDSP_API_URL=window.GDSP_API_URL||"__GDSP_API_URL__";if(window.GDSP_API_URL==="__GDSP_API_URL__")window.GDSP_API_URL=""</script>
-</head><body><header><div class="top"><div class="brand-group"><img class="brand-logo" src="/assets/logo.png" alt="Logo GDSP"><div class="brand-title">GENTLEMEN<br>DRIVERS<br>PROJECT</div></div><nav id="nav"></nav><div class="right">● &nbsp; SAISON 1972</div></div></header><main id="app" class="page"></main><footer class="footer">GENTLEMEN DRIVERS PROJECT &nbsp; / &nbsp; INTERNATIONAL SERIES LOLA T290 &nbsp; / &nbsp; GENTLEMAN DRIVING</footer><script>
-
-let sessions=[], page='accueil', ranktab='pilotes', eventtab='resultats', round=0, sessionIndex=1, driverId='', compareA='', compareB=''; const app=document.getElementById('app');
-const labels={accueil:'Accueil',classement:'Classements',manches:'Résultats',pilotes:'Pilotes',admin:'Administration'};function nav(){document.getElementById('nav').innerHTML=Object.entries(labels).map(([k,v])=>`<button class="${page===k?'active':''}" onclick="go('${k}')">${v.toUpperCase()}</button>`).join('')};function go(x){page=x;render();window.scrollTo(0,0)}
-const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const date=x=>new Date(x).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});function track(x){return ({'mt-tremblant_69':'Mont-Tremblant','riverside':'Riverside','sebring_90s':'Sebring','mid_ohio':'Mid-Ohio'})[x]||x}
-function rounds(){let m={};sessions.forEach(s=>(m[s.date.slice(0,10)]??=[]).push(s));return Object.entries(m).sort().map(([d,s],i)=>({date:d,sessions:s,track:track(s[0].track),number:i+1}))}function allDrivers(){let map=new Map;for(const s of sessions)for(const r of s.results){if(!map.has(r.id))map.set(r.id,{...r});}return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name))}
-function info(){return ''}function head(k,t,desc=''){return `<div class="eyebrow">GDSP / ${k}</div><h1>${t}</h1><p class="note">${desc}</p>`}function table(headers,rows){return `<div class="table-wrap"><table><thead><tr>${headers.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.join('')||'<tr><td colspan="8">Aucune donnée disponible.</td></tr>'}</tbody></table></div>`}function fmt(t){if(!t||t<0||t>99999999)return '—';let m=Math.floor(t/60000),s=((t%60000)/1000).toFixed(3);return `${m}:${s.padStart(6,'0')}`}
-function findSessionIdx(sess){const rs=rounds();for(let i=0;i<rs.length;i++){const j=rs[i].sessions.indexOf(sess);if(j>=0)return [i,j]}return [-1,-1]}
-function applyCommissionToArr(arr,sess,rIdx,sIdx){
-  arr.forEach(y=>{y.comTimeAdd=0;y.comDQ=false;y.comWarning=false});
-  const rk=rIdx>=0?rIdx+':'+sIdx+':':null;
-  for(const k in penMap){
-    if(rk&&!k.startsWith(rk))continue;
-    const [rj,sj,did]=k.split(':');
-    if(rk&&(rj!=rIdx||sj!=sIdx))continue;
-    const rs2=rounds();
-    if(!rk){const r=rs2[+rj];if(!r||r.sessions[+sj]!==sess)continue}
-    const y=arr.find(x=>x.id===did);if(!y)continue;
-    const adj=penMap[k];
-    if(adj.dq)y.comDQ=true;
-    else if(typeof adj.timeAdd==='number'&&adj.timeAdd!==0)y.comTimeAdd=(y.comTimeAdd||0)+adj.timeAdd*1000;
-    if(adj.warning)y.comWarning=true;
-  }
-  return arr;
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GDSP — Gentlemen Drivers Simracing Project</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23102a32%22 width=%22100%22 height=%22100%22/><text y=%2276%22 x=%2210%22 font-size=%2272%22 fill=%22%23d8a347%22>G</text></svg>">
+<style>
+:root{--ink:#102a32;--cream:#f4ecd8;--red:#9c3021;--gold:#cd9a42;--line:#bdb09a}
+*{box-sizing:border-box}
+body{margin:0;background:#e9e0cb;color:var(--ink);font-family:Arial,sans-serif}
+header{background:#102a32;color:#f4ecd8;border-bottom:5px solid #a33426}
+.top{max-width:1400px;margin:auto;display:flex;align-items:center;padding:15px 35px;gap:38px}
+.brand-logo{width:52px;height:60px;object-fit:contain;display:block}
+.brand-title{font-size:10px;font-weight:bold;letter-spacing:1px;line-height:1.4;max-width:110px;color:#e7dec9}
+.brand-group{display:flex;align-items:center;gap:10px}
+.car-thumb{width:140px;height:38px;object-fit:contain;mix-blend-mode:multiply}
+.race-number{font-family:Impact,sans-serif;font-size:19px;color:#9c3021}
+.driver-car{display:block;width:100%;max-width:600px;height:auto;object-fit:contain;mix-blend-mode:multiply}
+.profile-car{padding:20px;background:#f8f2e4;border:1px solid var(--line)}
+.brand{font-family:Georgia,serif;font-weight:bold;font-size:26px;letter-spacing:2px;border:2px solid #e4d9c1;padding:8px 11px;cursor:pointer}
+.brand span{color:#d59c43}
+nav{display:flex;gap:25px;align-items:center;flex-wrap:wrap}
+nav button{background:none;border:0;color:#d6d0c0;font-size:12px;font-weight:bold;letter-spacing:1.2px;cursor:pointer;padding:12px 0}
+nav button.active{color:white;border-bottom:2px solid #d7a34b}
+.right{margin-left:auto;color:#d2a55f;font-size:11px;letter-spacing:2px;font-weight:bold;white-space:nowrap}
+.event-switcher{margin-left:14px;display:flex;align-items:center;gap:6px}
+.event-switcher select{background:#1c3a43;color:#f4ecd8;border:1px solid #3b5a64;padding:6px 8px;font:inherit;font-size:11px;letter-spacing:.5px}
+.page{max-width:1330px;margin:auto;padding:34px 35px 70px}
+.eyebrow{font-size:11px;letter-spacing:2.5px;font-weight:bold;text-transform:uppercase;color:var(--red)}
+h1,h2,h3{font-family:Impact,'Arial Narrow',sans-serif;text-transform:uppercase;letter-spacing:.7px;font-weight:normal}
+h1{font-size:clamp(44px,6vw,80px);line-height:.98;margin:12px 0}
+h2{font-size:32px;margin:8px 0 20px}
+h3{font-size:21px;margin:8px 0}
+.hero{background:#132d35;color:#f7ecd5;min-height:390px;display:grid;grid-template-columns:40% 1fr;overflow:hidden}
+.hero-text{padding:52px 48px 52px 35px}
+.hero h1{font-size:clamp(32px,4.4vw,58px);line-height:1;margin:10px 0}
+.hero h1 em{color:#d8a347;font-style:normal}
+.hero p{line-height:1.6;color:#d1cbbd;max-width:500px}
+.hero-image{background:linear-gradient(90deg,#132d35 0%,#132d35cc 15%,#132d3555 30%,transparent 42%),url('/intro.png') center/cover}
+.btn{display:inline-block;background:#ac3928;color:white;border:0;padding:14px 20px;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;font-weight:bold;cursor:pointer;text-decoration:none}
+.btn.secondary{background:transparent;border:1px solid #b7a688;color:var(--ink)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);background:#f8f2e4;border:1px solid var(--line);margin-top:20px}
+.stat{padding:22px 28px;border-right:1px solid var(--line)}
+.stat:last-child{border:0}
+.stat strong{font-family:Impact,sans-serif;font-size:31px;display:block}
+.label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#6d726c;font-weight:bold}
+.section-head{display:flex;justify-content:space-between;align-items:end;margin:45px 0 15px;border-bottom:2px solid var(--ink);padding-bottom:10px}
+.section-head h2{margin:4px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.panel{background:#f8f2e4;border:1px solid var(--line);padding:25px}
+.note{font-size:13px;line-height:1.6;color:#586260}
+.tag{font-size:10px;letter-spacing:1px;background:#d6c6a4;padding:6px 9px;font-weight:bold;display:inline-block}
+.tag.live{background:#9c3021;color:#f4ecd8}
+.tag.open{background:#3b6341;color:#f4ecd8}
+.tag.archive{background:#6d726c;color:#f4ecd8}
+.table-wrap{overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}
+th{background:var(--ink);color:#eee5d1;font-size:10px;letter-spacing:1.3px;text-transform:uppercase;padding:14px}
+td{padding:13px 14px;border-bottom:1px solid #dbd0ba}
+tbody tr:hover{background:#eee4cf}
+.pos{font-family:Impact,sans-serif;font-size:19px;color:#9f3828}
+.muted{color:#777e76;font-size:12px}
+select,input{padding:11px;background:#fbf7ec;border:1px solid #b3a78e;color:var(--ink);font:inherit}
+select{min-width:180px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}
+.tabs button{padding:10px 14px;border:1px solid #b7a688;background:transparent;color:var(--ink);font-weight:bold;cursor:pointer}
+.tabs button.active{background:var(--ink);color:white}
+.cardlist{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.driver{background:#f8f2e4;border:1px solid var(--line);padding:19px;cursor:pointer}
+.driver:hover{border-color:var(--red)}
+.driver strong{font-family:Impact,sans-serif;font-size:22px;letter-spacing:.5px}
+.event-card{background:#f8f2e4;border:1px solid var(--line);padding:22px;cursor:pointer;transition:transform .1s}
+.event-card:hover{border-color:var(--red);transform:translateY(-2px)}
+.event-card h3{margin:8px 0 6px;font-size:24px}
+.event-card .coef{float:right;font-size:11px;color:#6d726c;letter-spacing:1px;text-transform:uppercase}
+.footer{background:#102a32;color:#ddceb1;padding:28px 35px;font-size:11px;letter-spacing:1.5px;text-align:center}
+.bar{height:8px;background:#d9cdb6}
+.bar i{display:block;background:#a93828;height:100%}
+.admin-input{padding:11px;background:#fbf7ec;border:1px solid #b3a78e;color:var(--ink);font:inherit;min-width:240px}
+.btn.small{padding:8px 12px;font-size:10px}
+.admin-round{background:#f8f2e4;border:1px solid var(--line);padding:18px}
+.admin-round.dashed{border-style:dashed;display:flex;align-items:center;justify-content:center;min-height:120px}
+.admin-grid{grid-template-columns:repeat(3,1fr)}
+.driver-admin-list{display:grid;gap:10px}
+.driver-admin-row{display:flex;justify-content:space-between;align-items:center;background:#f8f2e4;border:1px solid var(--line);padding:12px 16px}
+code{background:#e6dcc3;padding:2px 5px}
+.subcrumb{font-size:11px;letter-spacing:2px;color:#6d726c;text-transform:uppercase;margin-bottom:10px}
+.subcrumb a{color:var(--red);cursor:pointer;text-decoration:none}
+@media(max-width:800px){
+  .top{gap:15px;padding:14px;flex-wrap:wrap}.right{display:none}nav{gap:12px}
+  .page{padding:24px 16px 50px}.hero{grid-template-columns:1fr}.hero-text{padding:30px}
+  .hero-image{min-height:170px;background-image:linear-gradient(180deg,#132d35,transparent),url('/intro.png')}
+  .stats{grid-template-columns:repeat(2,1fr)}.grid,.cardlist{grid-template-columns:1fr}
+  .stat{border-bottom:1px solid var(--line)}
 }
-function sortSession(sess){
-  if(!sess)return [];
-  const [rIdx,sIdx]=findSessionIdx(sess);
-  let arr=sess.results.map(x=>{
-    let y=({...x});
-    // Pénalité serveur (ACSM) : PenaltyTime est en nanosecondes.
-    let base=y.time; if(!Number.isFinite(base))base=10**18;
-    let serverNs=Number(y.penaltyTime)||0;
-    let et=base+serverNs/1e6;
-    if(y.lapPenalty)et=10**18;
-    if(Number.isFinite(y.efftime))et=y.efftime; // valeur mémorisée par calculate()
-    y._eff=et;
-    return y;
-  });
-  // Toujours appliquer la commission (penMap) avant de trier.
-  applyCommissionToArr(arr,sess,rIdx,sIdx);
-  function effDQ(x){return x.disqualified||x.comDQ}
-  if(sess.type==='QUALIFY'){
-    arr.sort((a,b)=>{
-      const ab=Number.isFinite(a.best)&&a.best>0?a.best:10**18;
-      const bb=Number.isFinite(b.best)&&b.best>0?b.best:10**18;
-      return ab-bb;
-    });
-    return arr;
-  }
-  arr.forEach(x=>{x._t=x._eff+(x.comTimeAdd||0);x._dq=effDQ(x)});
-  arr.sort((a,b)=>(a._dq?1:0)-(b._dq?1:0)||b.laps-a.laps||a._t-b._t);
-  return arr;
-}
-function tabs(items,active,fn){return `<div class="tabs">${items.map(([id,label])=>`<button class="${id===active?'active':''}" onclick="${fn}('${id}')">${label}</button>`).join('')}</div>`}function showrank(x){ranktab=x;render()}function showevent(x){eventtab=x;render()}
-function home(){let rs=rounds(),last=rs.at(-1);return `<div class="hero"><div class="hero-text"><div class="eyebrow" style="color:#d7a347">● &nbsp; LE CHAMPIONNAT HISTORIQUE GDSP</div><h1>International<br>Series <em>Lola T290</em></h1><p>Six manches, une voiture de légende et l’esprit gentleman driver. Revivez le championnat comme si vous y étiez.</p><button class="btn" onclick="go('manches')">Explorer les résultats &nbsp; ↗</button></div><div class="hero-image"></div></div><div class="stats"><div class="stat"><span class="label">Manches prévues</span><strong>06</strong></div><div class="stat"><span class="label">Manches importées</span><strong>${String(rs.length).padStart(2,'0')}</strong></div><div class="stat"><span class="label">Pilotes dans les fichiers</span><strong>${allDrivers().length}</strong></div><div class="stat"><span class="label">Voitures sur le serveur</span><strong>30 max.</strong></div></div>${info()}<div class="section-head"><div><div class="eyebrow">Le carnet de course</div><h2>Au cœur de la saison</h2></div></div><div class="grid"><div class="panel"><div class="eyebrow">Dernière manche importée</div><h2>${esc(last.track)}</h2><p class="note">${date(last.date)} · ${last.sessions.length-1} course(s) · Manche ${last.number}</p><button class="btn secondary" onclick="round=${rs.length-1};sessionIndex=1;go('manches')">Voir les résultats →</button></div><div class="panel"><div class="eyebrow">La formule</div><h2>Un retour aux années 70</h2><p class="note">Quatre manches en 2 × 25 minutes, deux manches d’une heure, un calendrier évolutif et une seule ambition : faire vivre la compétition historique.</p><span class="tag">ASSETTO CORSA</span> &nbsp; <span class="tag">LOLA T290</span></div></div>`}
-const liveries=[['pistol','pistol','01'],['kimy','kimy','07'],['zplouch','jim','08'],['streetbike','streetbike','09'],['fmherrou','fmherrou','10'],['lenain','lenain','11'],['ponge','thomas','13'],['yohana','yohana','14'],['tofusan','tofusan','21'],['holden','holden','23'],['assassin','assassins','25'],['elouan','elouan','27'],['harryth','harry','28'],['jenkweed','jenkweed','29'],['erwann','erwann','30'],['arthur maus','arthur','31'],['alexou','alexou','33'],['orthopedux','victor','35'],['superslipos','superslipos','42'],['51r gilles','gilles','55'],['51r sherman','sherman','56'],['richard','richard','66'],['cheucheu','cheucheu','69'],['karl74','karl','74'],['neutraliz','neutraliz','77'],['alan mc','alan','84'],['pierre','pierre','86'],['kant-1','kant','88']];function livery(name){return liveries.find(x=>(name||'').toLocaleLowerCase('fr').includes(x[0]))}function car(name){let l=livery(name);return l?`<img class="car-thumb" src="/assets/${l[1]}.jpg?v=6" alt="Voiture n° ${l[2]} de ${esc(name)}">`:'<span class="muted">Visuel à ajouter</span>'}function number(name){let l=livery(name);return l?`<span class="race-number">${l[2]}</span>`:'—'}
-function raceBase(place,multiplier){let p=place===1?40:place===2?38:place===3?35:place===4?32:place===5?30:place===6?28:place===7?26:place===8?24:place===9?22:place===10?20:place===11?18:place===12?17:place===13?16:place===14?15:place===15?14:place===16?13:place===17?12:place===18?11:place===19?10:place===20?9:place===21?8:place===22?7:place===23?6:place===24?5:place===25?6:place===26?5:place===27?4:place===28?3:0;return p*multiplier}
-function baseFull(place,multiplier){const pts={1:41,2:38,3:35,4:32,5:30,6:28,7:26,8:24,9:22,10:20,11:18,12:17,13:16,14:15,15:14,16:13,17:12,18:11,19:10,20:9,21:8,22:7,23:6,24:5,25:4,26:3,27:2,28:1};return (pts[place]||0)*multiplier;}
-function calculate(){
-  // Appliquer les pénalités de commission (ajout de temps en secondes, DQ, avertissements)
-  sessions.forEach(s=>s.results.forEach(r=>{
-    delete r.comPenalty; delete r.comDQ; delete r.comWarning; delete r.adjustment;
-    r.comTimeAdd=0;
-  }));
-  const warnCount=new Map();
-  for(const k in penMap){
-    const adj=penMap[k]; const did=k.split(':')[2];
-    if(adj.warning)warnCount.set(did,(warnCount.get(did)||0)+1);
-  }
-  // Marquer finalTime/finalDQ après application des pénalités commission pour usage interne (finishes, mérites).
-  sessions.forEach(race=>{
-    if(race.type!=='RACE')return;
-    race.results.forEach(p=>{
-      let base;
-      if(Number.isFinite(p._eff))base=p._eff;
-      else{let serverNs=Number(p.penaltyTime)||0;let bt=Number.isFinite(p.time)?p.time:10**18;base=bt+serverNs/1e6;if(p.lapPenalty)base=10**18}
-      p.finalTime=base+(p.comTimeAdd||0);
-      p.finalDQ=p.disqualified||p.comDQ;
-    });
-  });
-  let rs=rounds(), ds=allDrivers(), map=new Map(ds.map(d=>[d.id,{...d,rounds:Array(rs.length).fill(0),merit:Array(rs.length).fill(0),details:[],warnings:warnCount.get(d.id)||0}]));
-  function effDQ(p){return p.finalDQ||p.disqualified||p.comDQ}
-  function raceTime(p){return p.finalTime!=null?p.finalTime:p.time}
-  function raceWin(race){return race.results.find(r=>!effDQ(r)&&Number.isFinite(raceTime(r)))}
-  function finishStatus(race,p){
-    if(effDQ(p))return {full:false};
-    let win=raceWin(race); if(!win)return {full:false};
-    let wl=win.laps, winEff=raceTime(win), eff=raceTime(p);
-    let finished=Number.isFinite(eff)&&Number.isFinite(winEff)&&eff>=winEff;
-    return {full:finished&&p.laps>=wl*0.75};
-  }
-  function fastestOfRace(race){
-    let b=Infinity,bid=null;
-    race.results.forEach(p=>{let s=finishStatus(race,p);if(s.full&&Number.isFinite(p.best)&&p.best>0&&p.best<b){b=p.best;bid=p.id}});
-    return bid;
-  }
-  // Recalculer l'ordre d'arrivée de chaque course / qualif (meilleur tour en qualif, pénalités temps en course) avant de distribuer les points
-  for(let r of rs)for(let sess of r.sessions){if(sess.type==='RACE'||sess.type==='QUALIFY')sess.results=sortSession(sess)}
-    // Calcul des points championnat (après reclassement par les pénalités temps)
-  for(let j=0;j<rs.length;j++){
-    let r=rs[j], races=r.sessions.filter(s=>s.type==='RACE'), qual=r.sessions.find(s=>s.type==='QUALIFY'), multiplier=races.length===1?2:1, poleGiven=false;
-    for(let race of races){
-      let clsIdx=0;
-      race.results.forEach((p,i)=>{
-        let d=map.get(p.id); if(!d)return;
-        let s=finishStatus(race,p), pts=0, place=i+1;
-        if(s.full){
-          clsIdx++;
-          pts=baseFull(clsIdx,multiplier);
-        }
-        if(effDQ(p))pts=0;
-        if(!poleGiven&&p.grid===1&&pts>0){pts+=multiplier;poleGiven=true}
-        d.rounds[j]+=pts;
-        if(pts>0){
-          let mm=2*multiplier;
-          if(typeof p.grid==='number'&&p.grid>0){let gain=p.grid-place;if(gain>=6)mm+=3*multiplier;else if(gain>=4)mm+=2*multiplier;else if(gain>=2)mm+=1*multiplier}
-          d.merit[j]+=mm;
-        }
-      });
-    }
-  }
-  // Bonus mérite dépendant du classement / qualifs
-  let before=new Map; map.forEach(d=>before.set(d.id,0));
-  for(let j=0;j<rs.length;j++){
-    let r=rs[j], races=r.sessions.filter(s=>s.type==='RACE'), qual=r.sessions.find(s=>s.type==='QUALIFY'), multiplier=races.length===1?2:1;
-    let sorted=[...before.entries()].sort((a,b)=>b[1]-a[1]);
-    sorted.forEach(([id])=>{let cur=before.get(id);before.set(id,sorted.findIndex(([,p])=>p===cur)+1)});
-    let qBest={}; if(qual) qual.results.forEach(p=>{if(Number.isFinite(p.best)&&p.best>0)qBest[p.id]=p.best});
-    for(let race of races){
-      let fid=fastestOfRace(race);
-      race.results.forEach((p,i)=>{
-        let d=map.get(p.id); if(!d)return;
-        let s=finishStatus(race,p); if(!s.full)return;
-        if(p.id===fid)d.merit[j]+=1*multiplier;
-        if(qBest[p.id]&&Number.isFinite(p.best)&&p.best<qBest[p.id])d.merit[j]+=1*multiplier;
-        if(j>0){let prev=before.get(p.id); if(typeof prev==='number'){let better=prev-(i+1);if(better>3)d.merit[j]+=2*multiplier;else if(better>=3)d.merit[j]+=1*multiplier}}
-        if(!p.hasPenalty&&!p.penaltyTime&&!p.lapPenalty&&!p.disqualified&&!p.comDQ&&!(p.comTimeAdd>0))d.merit[j]+=1*multiplier;
-      });
-    }
-    map.forEach(d=>before.set(d.id,(before.get(d.id)||0)+d.rounds[j]));
-  }
-  return [...map.values()].map(d=>({...d,total:d.rounds.reduce((a,b)=>a+b,0),joker:[...d.rounds].sort((a,b)=>b-a).slice(0,5).reduce((a,b)=>a+b,0),meritTotal:d.merit.reduce((a,b)=>a+b,0)}));
-}
-function meritRows(){let rs=rounds(),ds=calculate();ds.sort((a,b)=>b.meritTotal-a.meritTotal||a.name.localeCompare(b.name));return table(['Pos.','N°','Pilote','Voiture',...rs.map(x=>'M'+x.number),'Total mérite'],ds.map((d,i)=>`<tr><td class="pos">${i+1}</td><td>${number(d.name)}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${car(d.name)}</td>${d.merit.map(p=>`<td>${p}</td>`).join('')}<td><b>${d.meritTotal}</b></td></tr>`))}
-function ranking(){let ds=calculate(), r=rounds(), value=ranktab==='joker'?'joker':'total';let tabshtml=tabs([['pilotes','Pilotes'],['joker','Pilotes · 5 meilleures manches'],['equipes','Équipes'],['merite','Trophée du mérite']],ranktab,'showrank');if(ranktab==='merite')return `${head('classements','La course aux points','Pilotes, équipes et Trophée du mérite.')}${tabshtml}<div class="panel"><h2>Trophée du mérite</h2><p class="note">Course terminée, meilleur tour en course, meilleur temps course que qualification, progression depuis la grille, résultat meilleur que son classement général à partir de la manche 2, et absence de pénalité post-course. Les manches d’une heure rapportent le double.</p>${meritRows()}</div>`;let rows;if(ranktab==='equipes'){let teams=new Map;ds.forEach(d=>{let t=(d.team||'').trim();if(!t||/indépendant/i.test(t))return;let key=t.toLocaleLowerCase('fr');if(!teams.has(key))teams.set(key,{name:t,rounds:Array(r.length).fill(0),count:0});let team=teams.get(key);team.count++;for(let j=0;j<r.length;j++)team.rounds[j]+=d.rounds[j]});let arr=[...teams.values()].map(t=>({...t,total:t.rounds.reduce((a,b)=>a+b,0),joker:[...t.rounds].sort((a,b)=>b-a).slice(0,5).reduce((a,b)=>a+b,0)})).sort((a,b)=>b.joker-a.joker);rows=table(['Pos.','Équipe issue des fichiers','Pilotes',...r.map(x=>'M'+x.number),'Total (5 meilleures)'],arr.map((t,i)=>`<tr><td class="pos">${i+1}</td><td><b>${esc(t.name)}</b></td><td>${t.count}</td>${t.rounds.map(p=>`<td>${p}</td>`).join('')}<td><b>${t.joker}</b></td></tr>`))}else{ds.sort((a,b)=>b[value]-a[value]||a.name.localeCompare(b.name));rows=table(['Pos.','N°','Pilote','Voiture',...r.map(x=>'M'+x.number),'Total'],ds.map((d,i)=>`<tr><td class="pos">${i+1}</td><td>${number(d.name)}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${car(d.name)}</td>${d.rounds.map(p=>`<td>${p}</td>`).join('')}<td><b>${d[value]}</b></td></tr>`))}return `${head('classements','La course aux points','Pilotes et équipes · calculs provisoires.')}${tabshtml}<div class="panel"><h2>${({pilotes:'Classement général',joker:'Cinq meilleures manches',equipes:'Classement équipes'})[ranktab]}</h2><p class="note">${ranktab==='equipes'?'Cumul des points des pilotes par manche, puis les cinq meilleurs totaux de manche sont retenus. Les pilotes sans équipe ne sont pas regroupés.':ranktab==='joker'?'Les cinq meilleurs totaux de manche sont conservés ; avant la sixième manche, aucune manche n’est retirée.':'Tous les résultats sont cumulés. Les positions de course sont celles des fichiers après exclusion de la voiture de diffusion.'}</p>${rows}</div>`}
-function manche(){let rs=rounds();if(round>=rs.length)round=0;let r=rs[round];if(sessionIndex>=r.sessions.length)sessionIndex=0;let s=r.sessions[sessionIndex];let rows=sortSession(s);let winner=s.type==='RACE'?rows[0]:null;
-function eff(x){let t=x._t;if(Number.isFinite(t))return t;let base=x.finalTime!=null?x.finalTime:(x.efftime!=null?x.efftime:x.time);return Number.isFinite(base)?base+(x.comTimeAdd||0):null}
-function gapTo(a,b){let ta=eff(a),tb=eff(b);if(!ta||!tb||a.laps!==b.laps||a._dq||b._dq)return a.laps!==b.laps?(a.laps<b.laps?'+'+(b.laps-a.laps)+' t':'—'):'—';let d=(ta-tb)/1000;return d>0?'+'+d.toFixed(3)+' s':'—'}
-let resultrows;
-if(s.type==='QUALIFY'){
-  resultrows=rows.map((x,i)=>`<tr><td class="pos">${String(i+1).padStart(2,'0')}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.team)||'—'}</td><td>${x.laps??'—'}</td><td>${fmt(x.best)}</td></tr>`);
-}else{
-  resultrows=rows.map((x,i)=>{const prev=i>0?rows[i-1]:null;return `<tr><td class="pos">${String(i+1).padStart(2,'0')}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.team)||'—'}</td><td>${x.grid??'—'}</td><td>${x.laps??'—'}</td><td>${fmt(x.best)}</td><td>${i===0?'Tête':gapTo(x,winner)}</td><td>${i===0?'—':gapTo(x,prev)}</td></tr>`});
-}function raceClock(ts,start){if(typeof ts!=='number'||typeof start!=='number')return '—';let sec=Math.max(0,ts-start),h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=Math.floor(sec%60),ms=Math.floor((sec%1)*10);return (h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')}let eventrows=s.events.map((e,i)=>`<tr><td>${i+1}</td><td><b>${esc(e.a)}</b></td><td>${esc(e.b)}</td><td>${typeof e.speed==='number'?e.speed.toFixed(1)+' km/h':'—'}</td><td>${raceClock(e.timestamp,s.raceStart)}</td></tr>`);return `${head('résultats','Les manches','Toutes les sessions importées, regroupées par date.')}${info()}<div class="controls"><select onchange="round=+this.value;sessionIndex=0;eventtab='resultats';render()">${rs.map((x,i)=>`<option value="${i}" ${i===round?'selected':''}>Manche ${i+1} · ${esc(x.track)}</option>`).join('')}</select><select onchange="sessionIndex=+this.value;eventtab='resultats';render()">${r.sessions.map((x,i)=>`<option value="${i}" ${i===sessionIndex?'selected':''}>${x.type==='QUALIFY'?'Qualification':'Course '+r.sessions.slice(0,i+1).filter(y=>y.type==='RACE').length}</option>`).join('')}</select><span class="tag">${date(r.date)}</span></div>${tabs([['resultats','Résultats'],...(s.type==='RACE'?[['collisions','Collisions entre pilotes']]:[])],eventtab,'showevent')}<div class="panel">${eventtab==='collisions'?`<h2>Incidents enregistrés</h2><p class="note">Événements bruts entre voitures en course, sans attribution de responsabilité. Plusieurs enregistrements peuvent correspondre à un même contact. Le temps de course est estimé à partir du premier tour complet enregistré ; quelques secondes de tour de formation peuvent donc manquer. Les vitesses sont affichées en km/h.</p>${table(['#','Pilote','Autre pilote','Vitesse','Temps de course'],eventrows)}`:`<h2>${esc(r.track)} · ${s.type==='QUALIFY'?'Qualification':'Course'}</h2><p class="note">Classement officiel : meilleur tour pour les qualifications, ordre d'arrivée (avec pénalités commission) pour les courses.</p>${s.type==='QUALIFY'?table(['Pos.','Pilote','Équipe','Tours','Meilleur tour'],resultrows):table(['Pos.','Pilote','Équipe','Grille','Tours','Meilleur tour','Écart / tête','Écart / préc.'],resultrows)}`}</div>`}
-function performanceRatings(){let pilots=new Map;const pct=(arr,id,key,lower=true)=>{let eligible=arr.filter(x=>Number.isFinite(x[key])),item=eligible.find(x=>x.id===id);if(!item||eligible.length<2)return null;let better=eligible.filter(x=>lower?x[key]<item[key]:x[key]>item[key]).length, equal=eligible.filter(x=>x[key]===item[key]).length;return 100*(1-(better+(equal-1)/2)/(eligible.length-1))};for(let race of sessions.filter(s=>s.type==='RACE')){let entries=race.results.map((r,i)=>{let laps=race.laps.filter(l=>l.id===r.id&&Number.isFinite(l.time)&&l.time>0&&l.time<600000),clean=laps.filter(l=>!(l.cuts>0)),avg=clean.reduce((a,l)=>a+l.time,0)/(clean.length||1),sd=clean.length>=3?Math.sqrt(clean.reduce((a,l)=>a+(l.time-avg)**2,0)/clean.length)/avg:null,name=(r.name||'').trim().toLowerCase(),collisions=race.events.filter(e=>[e.a,e.b].some(v=>String(v||'').trim().toLowerCase()===name)).length,cuts=laps.reduce((n,l)=>n+(Number.isFinite(l.cuts)?Math.max(0,l.cuts):0),0);return {id:r.id,regularity:sd,cleanliness:collisions+cuts,speed:Number.isFinite(r.best)&&r.best>0&&r.best<600000?r.best:null,result:i+1}});for(let e of entries){let v={regularite:pct(entries,e.id,'regularity'),proprete:pct(entries,e.id,'cleanliness'),vitesse:pct(entries,e.id,'speed'),resultats:pct(entries,e.id,'result')};if(Object.values(v).some(x=>x===null))continue;if(!pilots.has(e.id))pilots.set(e.id,[]);pilots.get(e.id).push(v)}}let out=[];for(let [id,items] of pilots){if(items.length<2)continue;let average=key=>items.reduce((a,x)=>a+x[key],0)/items.length,details={regularite:average('regularite'),proprete:average('proprete'),vitesse:average('vitesse'),resultats:average('resultats')},score=Object.values(details).reduce((a,b)=>a+b,0)/4;out.push({id,score,details,count:items.length})}out.sort((a,b)=>b.score-a.score);for(let i=0;i<out.length;i++){let rank=out.findIndex(x=>Math.abs(x.score-out[i].score)<1e-9);out[i].level=4-Math.min(3,Math.floor(rank*4/out.length))}return out}
-function ratingCard(id){let ratings=performanceRatings(),r=ratings.find(x=>x.id===id);if(!r)return `<div class="panel"><div class="eyebrow">Évaluation de performance</div><h2>Niveau à déterminer</h2><p class="note">Au moins deux courses exploitables sont nécessaires : chacune doit comporter au moins trois tours sans coupe et suffisamment de pilotes comparables pour chacun des critères.</p></div>`;let labels={regularite:'Régularité',proprete:'Propreté',vitesse:'Vitesse au tour',resultats:'Résultats'},bars=Object.entries(r.details).map(([k,v])=>`<div style="margin:14px 0"><div style="display:flex;justify-content:space-between;font-size:13px"><b>${labels[k]}</b><span>${v.toFixed(0)} / 100</span></div><div class="bar" style="margin-top:7px"><i style="width:${v.toFixed(1)}%"></i></div></div>`).join('');return `<div class="panel"><div class="eyebrow">Évaluation de performance · provisoire</div><h2>Niveau ${r.level} <span style="font-family:Arial;font-size:13px;color:#6d726c">/ 4</span></h2><p class="note">Score relatif : <b>${r.score.toFixed(1)} / 100</b> · ${r.count} course(s) exploitables · ${ratings.length} pilotes évalués</p>${bars}<details><summary style="cursor:pointer;font-weight:bold;font-size:13px">Comprendre le calcul</summary><p class="note">Chaque critère pèse 25 %. Les pilotes sont comparés aux autres participants de chaque course, puis les scores sont moyennés sur les courses exploitables. Régularité : écart-type relatif des temps des tours sans coupe (trois tours minimum). Vitesse : meilleur tour en course. Résultats : position brute à l’arrivée. Propreté : événements de collision entre pilotes plus nombre de coupes (« Cuts »), comptés à poids égal. Une coupe n’est pas nécessairement une sortie de piste. Les événements peuvent compter plusieurs fois pour un même contact et n’indiquent pas la responsabilité.</p><p class="note">Les niveaux répartissent les pilotes éligibles par quartiles de score : 4 est le plus élevé, 1 le plus bas ; les égalités reçoivent le même niveau. Avec peu de pilotes, certains niveaux peuvent être vides. Les pénalités de commission, les arrêts et les tours de sortie ne sont pas corrigés ; les niveaux évolueront avec les imports.</p></details></div>`}
-function plotHistory(metrics,mode){if(!metrics.length)return '<p class="note">Aucune course disponible.</p>';let w=700,h=190,left=42,right=20,top=16,bottom=42,vals=metrics.map(m=>mode==='position'?m.position:m.collisions),max=Math.max(mode==='position'?5:1,...vals),x=i=>left+(metrics.length===1?(w-left-right)/2:i*(w-left-right)/(metrics.length-1)),y=v=>mode==='position'?top+(v-1)*(h-top-bottom)/Math.max(max-1,1):top+(max-v)*(h-top-bottom)/max;let line=vals.map((v,i)=>`${x(i)},${y(v)}`).join(' '),ticks=[1,Math.ceil(max/2),max].filter((v,i,a)=>a.indexOf(v)===i);let grid=ticks.map(t=>`<line x1="${left}" y1="${y(t)}" x2="${w-right}" y2="${y(t)}" stroke="#d8cdbb"/><text x="${left-8}" y="${y(t)+4}" text-anchor="end" font-size="11" fill="#69756e">${t}</text>`).join('');let points=vals.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="5" fill="#9c3021"><title>${esc(track(metrics[i].race.track))} — ${date(metrics[i].race.date)} : ${v}</title></circle><text x="${x(i)}" y="${h-17}" text-anchor="middle" font-size="10" fill="#69756e">C${i+1}</text>`).join('');return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${mode==='position'?'Positions à l’arrivée par course':'Événements de collision par course'}" style="width:100%;height:auto;display:block">${grid}<polyline fill="none" stroke="#a83729" stroke-width="2.5" points="${line}"/>${points}</svg><p class="note">${metrics.map((m,i)=>`C${i+1} : ${esc(track(m.race.track))} · ${date(m.race.date)}`).join(' &nbsp; / &nbsp; ')}</p>`}
-function drivers(){let ds=allDrivers();if(driverId){let d=ds.find(x=>x.id===driverId);if(!d){driverId='';return drivers()}let races=sessions.filter(s=>s.type==='RACE'&&s.results.some(x=>x.id===driverId));let metrics=races.map(s=>{let index=s.results.findIndex(x=>x.id===driverId),r=s.results[index], name=(r.name||'').trim().toLowerCase();let collisions=s.events.filter(e=>[e.a,e.b].some(x=>String(x||'').trim().toLowerCase()===name)).length;return {race:s,result:r,position:index+1,delta:typeof r.grid==='number'&&r.grid>0?r.grid-(index+1):null,collisions}});let known=metrics.filter(x=>x.delta!==null),avgDelta=known.length?known.reduce((n,x)=>n+x.delta,0)/known.length:null,avgColl=metrics.length?metrics.reduce((n,x)=>n+x.collisions,0)/metrics.length:null,avgPos=metrics.length?metrics.reduce((n,x)=>n+x.position,0)/metrics.length:null;let signed=x=>x===null?'—':`${x>0?'+':''}${x.toFixed(1)}`;let positives=[], weaknesses=[];if(known.length>=2){if(avgDelta>0.5)positives.push(`Progression moyenne de ${signed(avgDelta)} place(s) entre le départ et l’arrivée.`);else if(avgDelta<-.5)weaknesses.push(`Recul moyen de ${Math.abs(avgDelta).toFixed(1)} place(s) entre le départ et l’arrivée.`);else positives.push('Positions de départ globalement conservées en course.')}if(metrics.length>=2){if(avgColl<1)positives.push('Moins d’un événement de collision enregistré par course en moyenne.');else if(avgColl>=3)weaknesses.push('Plusieurs événements de collision enregistrés par course en moyenne : un point à surveiller, sans présumer de responsabilité.');if(avgPos<=5)positives.push('Position moyenne à l’arrivée dans les cinq premiers.')}let desc=arr=>arr.length?arr.map(x=>`<li>${esc(x)}</li>`).join(''):'<li>Pas assez de données ou aucun indicateur marquant selon les seuils provisoires.</li>';let l=livery(d.name),largeCar=l?`<img class="driver-car" src="/assets/${l[1]}.jpg?v=6" alt="Voiture numéro ${l[2]} de ${esc(d.name)}">`:'<p class="note">Visuel de voiture à ajouter.</p>';let rows=races.map(s=>{let i=s.results.findIndex(x=>x.id===driverId),r=s.results[i];let times=s.laps.filter(x=>x.id===driverId&&x.time>0&&x.time<99999999);let mean=times.reduce((a,b)=>a+b.time,0)/(times.length||1),sd=Math.sqrt(times.reduce((a,b)=>a+(b.time-mean)**2,0)/(times.length||1));let m=metrics.find(x=>x.race===s);return `<tr><td>${date(s.date)}</td><td>${esc(track(s.track))}</td><td>${r.grid??'—'}</td><td class="pos">${i+1}</td><td>${m.delta===null?'—':(m.delta>0?'+':'')+m.delta}</td><td>${m.collisions}</td><td>${fmt(r.best)}</td><td>${times.length>1?(sd/1000).toFixed(2)+' s':'—'}</td></tr>`});return `${head('pilote',esc(d.name),esc(d.team)||'Pilote')}${info()}<button class="btn secondary" onclick="driverId='';render()">← Tous les pilotes</button><div class="profile-car" style="margin-top:15px"><span class="label">Voiture engagée</span> &nbsp; ${number(d.name)} ${largeCar}</div><div class="stats"><div class="stat"><span class="label">Courses enregistrées</span><strong>${races.length}</strong></div><div class="stat"><span class="label">Meilleur résultat brut</span><strong>${races.length?Math.min(...metrics.map(m=>m.position)):'—'}</strong></div><div class="stat"><span class="label">Places gagnées / course</span><strong>${signed(avgDelta)}</strong></div><div class="stat"><span class="label">Collisions / course</span><strong>${avgColl===null?'—':avgColl.toFixed(1)}</strong></div></div><p class="note">Delta : position de départ brute moins position d’arrivée après exclusion de la voiture de diffusion ; positif = progression. Moyenne calculée sur ${known.length} course(s) avec grille disponible. Les pénalités de commission ne sont pas intégrées.</p><div class="section-head"><div><div class="eyebrow">Quatre critères · un niveau</div><h2>Profil de performance</h2></div></div>${ratingCard(driverId)}<div class="section-head"><div><div class="eyebrow">Analyse provisoire</div><h2>Portrait du pilote</h2></div></div><div class="grid"><div class="panel"><div class="eyebrow">Points forts</div><ul class="note">${desc(positives)}</ul></div><div class="panel"><div class="eyebrow">Axes de progression</div><ul class="note">${desc(weaknesses)}</ul></div></div><p class="note">Analyse descriptive automatique, non une évaluation de responsabilité. Une collision est un événement brut entre deux voitures ; des contacts peuvent produire plusieurs événements, et la présence de diffusion, le trafic ou les circonstances influencent ce chiffre.</p><div class="section-head"><div><div class="eyebrow">L’évolution en piste</div><h2>Course après course</h2></div></div><div class="grid"><div class="panel"><h3>Position à l’arrivée</h3><p class="note">Classement brut : une valeur plus haute dans le graphique représente une meilleure position.</p>${plotHistory(metrics,'position')}</div><div class="panel"><h3>Collisions enregistrées</h3><p class="note">Événements bruts, sans attribution de responsabilité et sans dédoublonnage.</p>${plotHistory(metrics,'collisions')}</div></div><div class="section-head"><h2>Historique en course</h2></div><div class="panel"><p class="note">Régularité : écart-type des tours enregistrés, sans exclusion des tours de sortie, incidents ou arrêts ; indicateur provisoire. Les collisions sont attribuées par correspondance de nom dans chaque session.</p>${table(['Date','Circuit','Départ','Arrivée','Delta','Collisions brutes','Meilleur tour','Écart-type'],rows)}</div>`
-}return `${head('pilotes','Les engagés','Découvrez les pilotes présents dans les fichiers de résultats.')}${info()}<div class="panel"><div class="eyebrow">Face à face</div><h2>Comparer deux pilotes</h2><div class="controls"><select onchange="compareA=this.value;render()"><option value="">Choisir un pilote</option>${ds.map(d=>`<option value="${d.id}" ${compareA===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select><select onchange="compareB=this.value;render()"><option value="">Choisir un autre pilote</option>${ds.map(d=>`<option value="${d.id}" ${compareB===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div>${comparison()}</div><div class="controls"><input id="search" placeholder="Rechercher un pilote..." oninput="filterDrivers(this.value)"></div><div class="cardlist" id="drivers">${ds.map(d=>`<div class="driver" data-name="${esc(d.name.toLowerCase())}" onclick="driverId='${d.id}';render()"><div class="eyebrow">Pilote engagé</div><strong>${esc(d.name)}</strong> &nbsp; ${number(d.name)}<div>${car(d.name)}</div><p class="muted">${esc(d.team)||'Équipe non renseignée'}</p><span class="label">Voir la fiche &nbsp; →</span></div>`).join('')}</div>`}
-function comparison(){if(!compareA||!compareB)return '<p class="note">Sélectionnez deux pilotes pour comparer leurs résultats bruts.</p>';let list=calculate(),a=list.find(x=>x.id===compareA),b=list.find(x=>x.id===compareB);if(!a||!b)return '';function stats(x){let rr=sessions.filter(s=>s.type==='RACE').flatMap(s=>s.results.map((r,i)=>({r,i})).filter(y=>y.r.id===x.id));let valid=rr.filter(y=>typeof y.r.grid==='number'&&y.r.grid>0);let delta=valid.length?(valid.reduce((n,y)=>n+y.r.grid-(y.i+1),0)/valid.length).toFixed(1):'—';let collisions=sessions.filter(s=>s.type==='RACE').reduce((n,s)=>{let r=s.results.find(z=>z.id===x.id);if(!r)return n;let name=(r.name||'').trim().toLowerCase();return n+s.events.filter(e=>[e.a,e.b].some(v=>String(v||'').trim().toLowerCase()===name)).length},0);return {courses:rr.length,best:rr.length?Math.min(...rr.map(y=>y.i+1)):'—',avg:rr.length?(rr.reduce((n,y)=>n+y.i+1,0)/rr.length).toFixed(1):'—',delta,collisions:rr.length?(collisions/rr.length).toFixed(1):'—'}}let aa=stats(a),bb=stats(b);return table(['Indicateur',esc(a.name),esc(b.name)],[['Courses',aa.courses,bb.courses],['Meilleure position brute',aa.best,bb.best],['Position moyenne brute',aa.avg,bb.avg],['Delta moyen départ-arrivée',aa.delta,bb.delta],['Collisions brutes par course',aa.collisions,bb.collisions],['Points provisoires',a.total,b.total]].map(r=>`<tr>${r.map(x=>`<td>${x}</td>`).join('')}</tr>`))}
-var adminAuth=false, adminUser='', adminTab='import', selectedRaceAdj=null, adminToken=localStorage.getItem('gdsp_admin_token')||null, penMapRaw=JSON.parse(localStorage.getItem('gdsp_penalties')||'{}');
-// Migration: les anciens ajustements en points ne sont plus supportés ; on les supprime.
-for(const k in penMapRaw){if('pts' in penMapRaw[k]&&!('timeAdd' in penMapRaw[k])&&!('warning' in penMapRaw[k]))delete penMapRaw[k]}
-var penMap=penMapRaw, manualDrivers=JSON.parse(localStorage.getItem('gdsp_drivers')||'null'), customCalendar=JSON.parse(localStorage.getItem('gdsp_calendar')||'null'), storedSessions=JSON.parse(localStorage.getItem('gdsp_sessions')||'null');
-// Par défaut sessions reste [] ; le bootstrap remplit depuis data/data.json (données initiales) ou le backend.
-// Les clés locales ne servent que de cache/override (elles sont restaurées depuis localStorage s'il y en a).
-if(storedSessions&&Array.isArray(storedSessions)&&storedSessions.length)sessions=storedSessions;
-if(adminToken){fetch('/healthz').then(r=>{if(r.ok){adminAuth=true;adminUser='Direction de course';render()}}).catch(()=>{})}
-localStorage.setItem('gdsp_penalties',JSON.stringify(penMap));
-const ADMIN_PASS='gdsp290';
-function shaShort(input){let h=2166136261;for(let i=0;i<input.length;i++){h^=input.charCodeAt(i);h=Math.imul(h,16777619)}return ('00000000'+(h>>>0).toString(16)).slice(-8)+input.slice(0,4)}
-function pseudonymizeGuid(guid){return shaShort(String(guid||''))}
-function saveState(){localStorage.setItem('gdsp_sessions',JSON.stringify(sessions));localStorage.setItem('gdsp_penalties',JSON.stringify(penMap));if(manualDrivers)localStorage.setItem('gdsp_drivers',JSON.stringify(manualDrivers));if(customCalendar)localStorage.setItem('gdsp_calendar',JSON.stringify(customCalendar));if(adminToken)saveRemote().catch(e=>console.warn('auto-save failed',e))}
-async function apiPost(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json',...(adminToken?{Authorization:'Bearer '+adminToken}:{})},body:body?JSON.stringify(body):undefined});if(r.status===401){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');render()}return r}
-async function apiGet(path){const r=await fetch(path,{cache:'no-store',headers:adminToken?{Authorization:'Bearer '+adminToken}:{}});return r}
-async function adminLogin(){
-  const u=(document.getElementById('adminuser')||{}).value||'gdspadmin';
-  const p=document.getElementById('adminpass').value;
-  try{
-    const r=await apiPost('/api/admin/login',{username:u,password:p});
-    const j=await r.json();
-    if(!r.ok||!j.token){alert(j.error||j.message||'Identifiant ou mot de passe incorrect.');return}
-    adminToken=j.token;localStorage.setItem('gdsp_admin_token',adminToken);adminAuth=true;adminUser='Direction de course';try{await loadRemote()}catch(e){}render();
-  }catch(e){alert('Erreur de connexion au serveur. '+e.message)}
-}
-async function adminLogout(){adminToken=null;adminAuth=false;adminUser='';localStorage.removeItem('gdsp_admin_token');render()}
-async function doSaveRemote(){
-  const el=document.getElementById('save-status');
-  function say(txt){if(el){el.textContent=txt;el.style.color='#586260';if(txt.startsWith('✗'))el.style.color='#9c3021';if(txt.startsWith('✓'))el.style.color='#3b6341'}console.log('[save]',txt)}
-  say('Envoi en cours…');
-  try{const j=await saveRemote();say('✓ Sauvegarde envoyée au serveur ('+new Date(j.updatedAt||Date.now()).toLocaleString('fr-FR')+').')}
-  catch(e){say('✗ Échec : '+e.message);console.error('sauvegarde',e)}
-}
-async function saveRemote(){
-  if(!adminToken)throw new Error('Non connecté administrateur. Déconnecte-toi puis reconnecte-toi.');
-  const payload={sessions,penMap,manualDrivers,customCalendar};
-  const r=await apiPost('/api/save-championship',payload);
-  let j={};try{j=await r.json()}catch(e){}
-  if(!r.ok)throw new Error(j.error||j.message||('HTTP '+r.status));
-  return j;
-}
-async function loadRemote(){try{const r=await apiGet('/api/championship');if(!r.ok)return null;const j=await r.json();const c=j.championship||{};
-    if(Array.isArray(c.sessions)){sessions.length=0;if(c.sessions.length)sessions.push(...c.sessions);else{penMap={};manualDrivers=null;customCalendar=null;localStorage.setItem('gdsp_reset','1')}}
-    if(c.penMap&&typeof c.penMap==='object')penMap=c.penMap;else penMap={};
-    if('manualDrivers' in c)manualDrivers=c.manualDrivers;
-    if('customCalendar' in c)customCalendar=c.customCalendar;
-    return j}catch(e){console.warn('chargement distant impossible',e);return null}}
-function adminHash(obj){return btoa(JSON.stringify(obj)).slice(0,10)}
-function importSessionJson(text,fileName){
-  try{
-    let j=JSON.parse(text);
-    const date=j.Date;
-    function driverFrom(obj){
-      const drv=obj.Driver||obj.driver||{};
-      const guid=drv.Guid||obj.DriverGuid||obj.Guid||'';
-      const name=clean(drv.Name||obj.DriverName||'').trim();
-      return {id:pseudonymizeGuid(guid||name+'|'+obj.CarId),name,team:clean(drv.Team||obj.Team||'')||'',skin:clean(obj.Skin||name||''),model:obj.Model||obj.CarModel}
-    }
-    function clean(v){return String(v||'').replace(/7656119\d{10}/g,m=>pseudonymizeGuid(m))}
-    const cars={};(j.Cars||[]).forEach(c=>cars[c.CarId]=driverFrom(c));
-    const qual = j.Type!=='RACE';
-    const wl=(j.Result&&j.Result[0]&&j.Result[0].NumLaps)||0;
-    const results=(j.Result||[]).map(r=>{
-      const meta=cars[r.CarId]||driverFrom(r);
-      return {id:meta.id,name:meta.name,team:meta.team||'','skin':meta.skin||'',grid:r.GridPosition,laps:r.NumLaps||0,best:r.BestLap,time:r.TotalTime,disqualified:!!r.Disqualified,hasPenalty:!!r.HasPenalty,penaltyTime:r.PenaltyTime||0,lapPenalty:r.LapPenalty||0}
-    }).filter(r=>!(r.model==='dodge_monaco_police'||/broadcast/i.test(r.name)));
-    const laps=(j.Laps||[]).map(l=>{const meta=cars[l.CarId];if(!meta)return null;return {id:meta.id,time:l.LapTime,cuts:l.Cuts||0,timestamp:l.Timestamp}}).filter(Boolean);
-    const events=(j.Events||[]).filter(e=>e.Type==='COLLISION_WITH_CAR'&&j.Type==='RACE').map(e=>{
-      const a=cars[e.CarId],b=cars[e.OtherCarId];if(!a||!b)return null;
-      return {a:a.name,b:b.name,aid:a.id,bid:b.id,speed:e.ImpactSpeed,timestamp:e.Timestamp}
-    }).filter(Boolean);
-    let raceStart=null;
-    if(j.Type==='RACE'){
-      const c=[];
-      laps.forEach(l=>{if(typeof l.timestamp==='number'&&typeof l.time==='number'&&40000<l.time<600000)c.push(l.timestamp-l.time/1000)});
-      if(c.length)raceStart=Math.min(...c)
-    }
-    const sess={date,track:j.TrackName,type:j.Type,results,laps,events,raceStart};
-    // merge: replace existing same date+type, else append
-    const idx=sessions.findIndex(x=>x.date===date&&x.type===j.Type);
-    if(idx>=0)sessions[idx]=sess;else sessions.push(sess);
-    sessions.sort((a,b)=>a.date.localeCompare(b.date));
-    saveState();alert(`Import réussi : ${j.Type} du ${date}.`);render();
-    return true;
-  }catch(err){alert('Erreur d’import JSON : '+err.message);return false}
-}
-function handleImport(ev){const f=ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=e=>importSessionJson(e.target.result,f.name);r.readAsText(f)}
-function bulkImport(ev){const fs=ev.target.files;let ok=0;for(const f of fs){const r=new FileReader();r.onload=e=>{if(importSessionJson(e.target.result,f.name)){ok++;if(ok===fs.length)render()}};r.readAsText(f)}}
-function addAdjustment(roundKey,sessionIdx,drvId,timeAdd,dq,warning,note){penMap[`${roundKey}:${sessionIdx}:${drvId}`]={timeAdd:+timeAdd||0,dq:!!dq,warning:!!warning,note:note||''};saveState();render()}
-function removeAdjustment(key){delete penMap[key];saveState();render()}
-function addRound(){const d=prompt('Date de la manche (AAAA-MM-JJ) ?','2026-11-18');if(!d)return;const t=prompt('Nom du circuit (ex: spa_1970) ?','spa_1970');if(!t)return;customCalendar=customCalendar||{};customCalendar[d]={track:t};saveState();render()}
-async function resetChampionship(){
-  if(!confirm('Réinitialiser TOUT le championnat ? Tous les résultats, classements, ajustements de commission, fiches pilotes et calendrier ajouté seront effacés. Cette action est irréversible.'))return;
-  const remote=confirm('Effacer aussi la sauvegarde sur le serveur (PostgreSQL) ? OK = effacement complet du serveur ET du navigateur. Annuler = effacement du navigateur seulement (le serveur conservera les données).');
-  let serverCleared=true, serverDetail='';
-  try{
-    if(remote){
-      if(!adminToken){alert("Tu n'es pas connecté administrateur : impossible d'effacer le serveur. Connecte-toi puis réessaie.");return}
-      const r=await apiPost('/api/admin/reset',{confirmation:'REINIT_CHAMPIONNAT'});
-      let txt='',j={};
-      try{txt=await r.clone().text()}catch(e){txt=''}
-      try{j=JSON.parse(txt)}catch(e){j={raw:txt}}
-      if(!r.ok||j.status!=='ok'){
-        serverCleared=false;serverDetail='HTTP '+r.status+' — '+(j.error||j.message||txt||JSON.stringify(j)).slice(0,600);
-        alert('Échec de la réinitialisation serveur : '+serverDetail);return;
-      }
-      // Vérification : relire le championnat et s'assurer que penMap/sessions sont vides
-      const chk=await apiGet('/api/championship'); const chkJ=await chk.json().catch(()=>({}));
-      const c=chkJ.championship||{};
-      const sessCount=Array.isArray(c.sessions)?c.sessions.length:-1;
-      const penCount=c.penMap&&typeof c.penMap==='object'?Object.keys(c.penMap).length:-1;
-      if(sessCount!==0||penCount!==0){
-        serverCleared=false;serverDetail='Le serveur a répondu mais contient encore '+sessCount+' session(s) et '+penCount+' pénalité(s). Réessaie ou contacte le support.';
-        alert('Échec de vérification : '+serverDetail);return;
-      }
-    }
-  }catch(e){alert('Erreur serveur : '+e.message);return}
-  // Vider la mémoire
-  sessions.length=0;
-  penMap={}; manualDrivers=null; customCalendar=null; selectedRaceAdj=null; driverId=''; compareA=''; compareB=''; round=0; sessionIndex=0; page='accueil';
-  // Vider le stockage local
-  localStorage.removeItem('gdsp_sessions');localStorage.removeItem('gdsp_penalties');localStorage.removeItem('gdsp_drivers');localStorage.removeItem('gdsp_calendar');
-  localStorage.setItem('gdsp_reset','1');
-  // Déconnecter l'admin pour éviter qu'un loadRemote() automatique ne recharge les anciennes données
-  adminAuth=false;adminUser='';if(adminToken){localStorage.removeItem('gdsp_admin_token');adminToken=null}
-  render();
-  if(remote)alert('Championnat réinitialisé (navigateur ET serveur PostgreSQL, vérification OK). Tu peux maintenant repartir de zéro et importer de nouveaux résultats.');
-  else alert('Championnat réinitialisé dans le navigateur. Les données restent présentes sur le serveur : reconnecte-toi admin puis clique « Recharger depuis le serveur » pour les récupérer, ou « Vider tout » avec le serveur pour les effacer définitivement.');
-}
-function resetRound(n){if(!confirm(`Effacer la manche ${n+1} ?`))return;sessions=sessions.filter(s=>{const r=rounds().find(x=>x.sessions.includes(s));return !r||r.number!==n+1});saveState();render()}
-function exportData(){const blob=new Blob([JSON.stringify(sessions,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='gdsp_export.json';a.click()}
-function editDriver(id){const d=allDrivers().find(x=>x.id===id);if(!d)return;const name=prompt('Nom du pilote :',d.name);if(name===null)return;const team=prompt('Équipe :',d.team||'');if(team===null)return;manualDrivers=manualDrivers||{};manualDrivers[id]={name,team:team||''};sessions.forEach(s=>s.results.forEach(r=>{if(r.id===id){r.name=name;r.team=team||''}}));saveState();render()}
-function adminTabs(x){adminTab=x;render()}
-function admin(){
-  if(!adminAuth){return `${head('administration','Direction de course','Accès direction de course.')}<div class="panel"><h2>Connexion direction de course</h2><p class="note">Identifiant et mot de passe configurés sur le backend (variables d'environnement <code>ADMIN_USERNAME</code> et <code>ADMIN_PASSWORD</code>). Sans connexion, les classements restent consultables librement.</p><div style="display:flex;gap:10px;align-items:center;max-width:520px;flex-wrap:wrap"><input id="adminuser" type="text" placeholder="Identifiant" value="gdspadmin" class="admin-input"><input id="adminpass" type="password" placeholder="Mot de passe" style="flex:1;min-width:200px" class="admin-input"><button class="btn" onclick="adminLogin()">Entrer</button></div></div>`;}
-  const rs=rounds();
-  const adjList=Object.entries(penMap).map(([k,v])=>{const [rj,sj,did]=k.split(':');const ri=+rj,si=+sj,r=rs[ri],s=r&&r.sessions[si];const drv=s&&s.results.find(x=>x.id===did);const raceCount=r?r.sessions.slice(0,si+1).filter(x=>x.type==='RACE').length:0;let label='';if(v.dq)label='DQ';else if(typeof v.timeAdd==='number'&&v.timeAdd!==0)label=(v.timeAdd>0?'+':'')+v.timeAdd+' s';else if(v.warning)label='Avertissement';return `<tr><td>${r?'M'+r.number:'—'}</td><td>${s?(s.type==='QUALIFY'?'Qualif':'Course '+raceCount):'—'}</td><td>${esc(drv?drv.name:'(pilote)')}</td><td>${label}</td><td>${esc(v.note||'')}</td><td><button class="btn secondary small" onclick="removeAdjustment('${k}')">Retirer</button></td></tr>`});
-  const roundCards=rs.map((r,i)=>{let pts=0;r.sessions.filter(s=>s.type==='RACE').forEach(s=>{const sorted=sortSession(s);sorted.forEach((p,j)=>{if(p.laps>=((sorted[0]&&sorted[0].laps)||0)*.75&&!(p.disqualified||p.comDQ)){pts+=baseFull(j+1,r.sessions.filter(x=>x.type==='RACE').length===1?2:1)}})});return `<div class="admin-round"><b>Manche ${r.number} · ${esc(track(r.track))}</b><div class="muted">${date(r.date)} · ${r.sessions.length-1} course(s)</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn secondary small" onclick="openAdj(${i})">Pénalités</button><button class="btn secondary small" onclick="resetRound(${i})">Effacer</button></div></div>`}).join('');
-  return `${head('administration','Direction de course','Gestion des imports, des pénalités et du calendrier.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Chargez un ou plusieurs fichiers JSON Assetto Server Manager. Les GUID Steam sont immédiatement pseudonymisés et la voiture de diffusion est exclue. Cette démo stocke les données dans le navigateur.</p><div class="grid"><div class="panel"><h3>Importer une session</h3><input type="file" accept=".json" onchange="handleImport(event)"></div><div class="panel"><h3>Importer plusieurs JSON</h3><input type="file" accept=".json" multiple onchange="bulkImport(event)"></div></div>`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées. Les sessions sont regroupées par date.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission : pénalités temps et avertissements</h2><p class="note">Ajoutez une pénalité temps en secondes (ex: +5, +10, +30, +60) qui s'ajoute au temps et reclasse automatiquement les pilotes. Vous pouvez aussi saisir une <b>valeur négative</b> (ex: −10) pour <b>annuler une pénalité serveur jugée abusive</b> (ACSM enregistre parfois des pénalités automatiques erronées). Les pénalités temps ne sont jamais des disqualifications : utilisez la case « Disqualifier » pour un drapeau noir. Les avertissements sont comptabilisés sans influencer le classement. Les pénalités serveur déjà enregistrées dans le JSON apparaissent dans le temps final et peuvent être annulées via un ajustement négatif.</p>${selectedRaceAdj!==null?renderAdjPanel(rs[selectedRaceAdj]):`<p class="note">Choisissez une manche depuis l'onglet « Manches » pour saisir ses décisions.</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><p class="note">Modifiez les noms affichés et les équipes après import. Les livrées associées restent liées aux numéros de voiture.</p><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées sur le backend PostgreSQL (Render/Neon) quand l'administrateur est connecté. Une copie locale reste dans le navigateur pour consultation hors ligne.</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter les données</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ? Vos modifications locales seront perdues.')){loadRemote().then(j=>{render();alert(j?'Données rechargées depuis le serveur.':'Pas de sauvegarde serveur disponible.')})}">Recharger depuis le serveur</button><button class="btn secondary" onclick="if(confirm('Restaurer les données initiales du championnat (manches officielles fournies avec le site) ? Toutes les modifications locales non sauvegardées seront perdues.')){localStorage.removeItem('gdsp_reset');localStorage.removeItem('gdsp_sessions');localStorage.removeItem('gdsp_penalties');localStorage.removeItem('gdsp_drivers');localStorage.removeItem('gdsp_calendar');location.reload()}">Restaurer les données d'origine</button><button class="btn secondary" onclick="resetChampionship()">Vider tout le championnat</button></div><p class="note" style="margin-top:12px">Nombre de sessions chargées : ${sessions.length}. Les GUID d’origine ne sont jamais conservés dans la donnée affichée.</p>`}</div>`}
-function renderAdjPanel(r){let html=`<div class="controls"><select onchange="selectedRaceAdj=null;render()">${rounds().map((x,i)=>`<option value="${i}" ${i===rounds().indexOf(r)?'selected':''}>Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div><p class="note">Sélectionnez un pilote puis saisissez la pénalité (en secondes), cochez DQ, ou ajoutez un simple avertissement.</p><div class="grid">`;r.sessions.forEach((s,sj)=>{if(s.type!=='RACE')return;html+=`<div class="panel"><h3>Course ${r.sessions.slice(0,sj+1).filter(x=>x.type==='RACE').length}</h3>${table(['Pos.','Pilote','Ajuster'],s.results.map((p,i)=>`<tr><td class="pos">${i+1}</td><td>${esc(p.name)}</td><td><button class="btn secondary small" onclick="openAdjForm(${r.number-1},${sj},'${p.id}')">Modifier</button></td></tr>`))}</div>`});return html+'</div>'}
-function openAdj(roundIdx){selectedRaceAdj=roundIdx;adminTab='adjust';render()}
-function openAdjForm(rj,sj,did){
-  const ta=prompt('Ajustement temps en secondes (ex: +10 pour ajouter 10 s, -10 pour annuler une pénalité serveur de 10 s) ?','0');
-  if(ta===null)return;
-  const timeAdd=+ta||0;
-  const dq=confirm('Disqualifier (drapeau noir) ce pilote pour cette course ? OK = DQ, Annuler = non.');
-  const warning=!dq&&confirm('Ajouter un simple avertissement (sanction sans temps ni DQ) ? OK = avertissement.');
-  const note=prompt('Note / motif pour la commission (facultatif) ?','')||'';
-  addAdjustment(rj,sj,did,timeAdd,dq,warning,note);
-}
-function render(){nav();app.innerHTML=({accueil:home,classement:ranking,manches:manche,pilotes:drivers,admin})[page]()}
-(async()=>{
-  const isReset=localStorage.getItem('gdsp_reset')==='1';
-  try{
-    if(isReset){
-      sessions.length=0;
-      // Ne pas charger data.json : championnat volontairement vide (jusqu'à restauration ou import).
-      // MAIS on vérifie quand même le serveur si des données ont été remises depuis.
-      try{
-        const remote=await loadRemote();
-        const cs=remote&&remote.championship&&remote.championship.sessions;
-        if(Array.isArray(cs)&&cs.length){
-          // Le serveur a des données -> lever le flag reset local
-          localStorage.removeItem('gdsp_reset');
-        }
-      }catch(e){}
-    }else{
-      // 1) Charger les données embarquées (data.json) comme base de secours.
-      if(!sessions.length){
-        try{const r=await fetch('data/data.json',{cache:'no-store'});if(r.ok){const base=await r.json();if(Array.isArray(base)&&base.length)sessions.push(...base)}}catch(e){}
-      }
-      // 2) Toujours essayer de charger la dernière sauvegarde serveur (publique, ne nécessite pas d'admin).
-      try{
-        const remote=await loadRemote();
-        if(remote){
-          const cs=(remote.championship&&remote.championship.sessions)||null;
-          if(Array.isArray(cs)){
-            if(cs.length===0){
-              // Serveur vidé explicitement -> championnat vide
-              sessions.length=0;penMap={};manualDrivers=null;customCalendar=null;
-              localStorage.setItem('gdsp_reset','1');
-            }else{
-              // Écraser par la version serveur (c'est la vérité courante)
-              sessions.length=0;sessions.push(...cs);
-              localStorage.setItem('gdsp_reset','');
-            }
-          }
-        }
-      }catch(e){console.warn('chargement serveur indisponible, utilisation des données locales/initiales',e)}
-      // 3) Appliquer les renommages manuels éventuels
-      if(manualDrivers)sessions.forEach(s=>s.results.forEach(r=>{if(manualDrivers[r.id]){r.name=manualDrivers[r.id].name;r.team=manualDrivers[r.id].team||''}}));
-      // 4) Si un token admin est présent, vérifier sa validité (et afficher comme connecté si OK)
-      if(adminToken){try{const r=await apiGet('/health');if(!r.ok)throw new Error('bad health');adminAuth=true;adminUser='Direction de course'}catch(e){adminToken=null;localStorage.removeItem('gdsp_admin_token')}}
-    }
-    render();
-  }catch(e){app.innerHTML='Erreur de rendu : '+e.message}
-})();
-
-
-</script></body></html>
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="brand-group" onclick="goHome()">
+      <div class="brand">GD<span>S</span>P</div>
+      <div class="brand-title">GENTLEMEN<br>DRIVERS<br>SIMRACING PROJECT</div>
+    </div>
+    <nav id="nav"></nav>
+    <div id="event-switcher" class="event-switcher"></div>
+    <div class="right" id="topRight">INTERNATIONAL SERIES · LOLA T290</div>
+  </div>
+</header>
+<div class="page" id="app"></div>
+<footer class="footer">GDSP — Gentlemen Drivers Simracing Project · Classements et résultats communautaires.</footer>
+<script src="/site.js?v=2"></script>
+</body>
+</html>
