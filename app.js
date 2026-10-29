@@ -73,10 +73,9 @@ function proxyJson(opts, cb) {
   up.write(opts.body||'{}');up.end();
 }
 
-app.all('/api/*', (req,res)=>proxyRequest(req,res));
 app.all('/health',(req,res)=>proxyRequest(req,res));
 
-// Endpoint de réinitialisation TOTALE :
+// Endpoint de réinitialisation TOTALE (doit être déclaré AVANT le générique /api/*) :
 // 1) sauvegarde un championnat VIDE mais valide (avec une clé _reset pour satisfaire isNonEmptyObject) ;
 // 2) efface aussi l'ancienne table drivers/penalties via PUT /api/results ;
 // 3) renvoie le résultat agrégé au frontend.
@@ -102,6 +101,8 @@ app.all('/api/admin/reset', (req, res) => {
     });
   });
 });
+app.all('/api/*', (req,res)=>proxyRequest(req,res));
+
 function tryParse(s){try{return JSON.parse(s)}catch(e){return s}}
 
 // Point d'entrée HTML
