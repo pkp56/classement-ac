@@ -10,9 +10,18 @@ function rounds(){let m={};sessions.forEach(s=>(m[s.date.slice(0,10)]??=[]).push
 function info(){return `<div class="banner"><b>SAISON EN COURS</b> — Résultats réels importés à partir des fichiers fournis. L’administration permet d’importer des JSON, d’ajuster les points et de modifier pilotes/manches en local dans le navigateur ; aucune donnée n’est encore envoyée vers un serveur de production.</div>`}function head(k,t,desc=''){return `<div class="eyebrow">GDSP / ${k}</div><h1>${t}</h1><p class="note">${desc}</p>`}function table(headers,rows){return `<div class="table-wrap"><table><thead><tr>${headers.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.join('')||'<tr><td colspan="8">Aucune donnée disponible.</td></tr>'}</tbody></table></div>`}function fmt(t){if(!t||t<0||t>99999999)return '—';let m=Math.floor(t/60000),s=((t%60000)/1000).toFixed(3);return `${m}:${s.padStart(6,'0')}`}
 function sortSession(sess){
   if(!sess)return [];
-  let arr=sess.results.map(x=>({...x}));
+  let arr=sess.results.map(x=>{
+    let y=({...x});
+    // Pénalité serveur (ACSM) : PenaltyTime est en nanosecondes.
+    let base=y.time; if(!Number.isFinite(base))base=10**18;
+    let serverNs=Number(y.penaltyTime)||0;
+    let et=base+serverNs/1e6;
+    if(y.lapPenalty)et=10**18;
+    if(Number.isFinite(y.efftime))et=y.efftime; // calculé par calculate() quand disponible
+    y._eff=et;
+    return y;
+  });
   function effDQ(x){return x.disqualified||x.comDQ}
-  function rt(x){return x.finalTime!=null?x.finalTime:(x.efftime!=null?x.efftime:x.time)}
   if(sess.type==='QUALIFY'){
     arr.sort((a,b)=>{
       const ab=Number.isFinite(a.best)&&a.best>0?a.best:10**18;
@@ -21,7 +30,7 @@ function sortSession(sess){
     });
     return arr;
   }
-  arr.forEach(x=>{let base=x.efftime!=null?x.efftime:x.time;if(!Number.isFinite(base))base=10**18;x._t=base+(x.comTimeAdd||0);x._dq=effDQ(x)});
+  arr.forEach(x=>{x._t=x._eff+(x.comTimeAdd||0);x._dq=effDQ(x)});
   arr.sort((a,b)=>(a._dq?1:0)-(b._dq?1:0)||b.laps-a.laps||a._t-b._t);
   return arr;
 }
@@ -47,16 +56,14 @@ function calculate(){
     if(adj.timeAdd>0)res.comTimeAdd=(res.comTimeAdd||0)+adj.timeAdd*1000;
     if(adj.warning)warnCount.set(did,(warnCount.get(did)||0)+1);
   }
-  // Recalculer l'ordre d'arrivée effectif (temps brut + pénalités serveur + pénalités commission) pour chaque course
+  // Marquer finalTime/finalDQ après application des pénalités commission pour usage interne (finishes, mérites).
   sessions.forEach(race=>{
     if(race.type!=='RACE')return;
     race.results.forEach(p=>{
-      let base=p.efftime!=null?p.efftime:p.time;
-      if(!Number.isFinite(base))base=10**18;
+      let base=Number.isFinite(p.efftime)?p.efftime:10**18;
       p.finalTime=base+(p.comTimeAdd||0);
       p.finalDQ=p.disqualified||p.comDQ;
     });
-    race.results.sort((a,b)=>(a.finalDQ?1:0)-(b.finalDQ?1:0)||b.laps-a.laps||a.finalTime-b.finalTime);
   });
   let rs=rounds(), ds=allDrivers(), map=new Map(ds.map(d=>[d.id,{...d,rounds:Array(rs.length).fill(0),merit:Array(rs.length).fill(0),details:[],warnings:warnCount.get(d.id)||0}]));
   function effDQ(p){return p.finalDQ||p.disqualified||p.comDQ}
@@ -124,7 +131,7 @@ function calculate(){
 function meritRows(){let rs=rounds(),ds=calculate();ds.sort((a,b)=>b.meritTotal-a.meritTotal||a.name.localeCompare(b.name));return table(['Pos.','N°','Pilote','Voiture',...rs.map(x=>'M'+x.number),'Total mérite'],ds.map((d,i)=>`<tr><td class="pos">${i+1}</td><td>${number(d.name)}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${car(d.name)}</td>${d.merit.map(p=>`<td>${p}</td>`).join('')}<td><b>${d.meritTotal}</b></td></tr>`))}
 function ranking(){let ds=calculate(), r=rounds(), value=ranktab==='joker'?'joker':'total';let tabshtml=tabs([['pilotes','Pilotes'],['joker','Pilotes · 5 meilleures manches'],['equipes','Équipes'],['merite','Trophée du mérite']],ranktab,'showrank');if(ranktab==='merite')return `${head('classements','La course aux points','Pilotes, équipes et Trophée du mérite.')}${tabshtml}<div class="banner"><b>CALCUL PROVISOIRE</b> — Trophée du mérite appliqué selon le règlement fourni. Les points sont doublés pour les manches d’une heure ; le classement général de référence avant chaque manche est recalculé avec les points championnat importés. Les pénalités “post-course des commissaires” sont ici approchées par les pénalités signalées dans les fichiers de résultats ; des corrections de commission peuvent changer les totaux.</div><div class="panel"><h2>Trophée du mérite</h2><p class="note">Course terminée, meilleur tour en course, meilleur temps course que qualification, progression depuis la grille, résultat meilleur que son classement général à partir de la manche 2, et absence de pénalité post-course. Les manches d’une heure rapportent le double.</p>${meritRows()}</div>`;let rows;if(ranktab==='equipes'){let teams=new Map;ds.forEach(d=>{let t=(d.team||'').trim();if(!t||/indépendant/i.test(t))return;let key=t.toLocaleLowerCase('fr');if(!teams.has(key))teams.set(key,{name:t,rounds:Array(r.length).fill(0),count:0});let team=teams.get(key);team.count++;for(let j=0;j<r.length;j++)team.rounds[j]+=d.rounds[j]});let arr=[...teams.values()].map(t=>({...t,total:t.rounds.reduce((a,b)=>a+b,0),joker:[...t.rounds].sort((a,b)=>b-a).slice(0,5).reduce((a,b)=>a+b,0)})).sort((a,b)=>b.joker-a.joker);rows=table(['Pos.','Équipe issue des fichiers','Pilotes',...r.map(x=>'M'+x.number),'Total (5 meilleures)'],arr.map((t,i)=>`<tr><td class="pos">${i+1}</td><td><b>${esc(t.name)}</b></td><td>${t.count}</td>${t.rounds.map(p=>`<td>${p}</td>`).join('')}<td><b>${t.joker}</b></td></tr>`))}else{ds.sort((a,b)=>b[value]-a[value]||a.name.localeCompare(b.name));rows=table(['Pos.','N°','Pilote','Voiture',...r.map(x=>'M'+x.number),'Total'],ds.map((d,i)=>`<tr><td class="pos">${i+1}</td><td>${number(d.name)}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${car(d.name)}</td>${d.rounds.map(p=>`<td>${p}</td>`).join('')}<td><b>${d[value]}</b></td></tr>`))}return `${head('classements','La course aux points','Pilotes et équipes · calculs provisoires.')}${tabshtml}<div class="banner"><b>CALCUL SELON RÈGLEMENT</b> — Barème 41/38/35/32/30/28/26/24/22/20/18/17/16/15/14/13/12/11/10/9/8/7/6/5/4/3/2/1 pt jusqu'à la 28e place (0 au-delà). Manches d'1h : tous les points doublés. +1 pt pour le meilleur tour en qualification (x2 en 1h). Pour marquer, un pilote doit avoir franchi l'arrivée et couvert au moins 75% de la distance du vainqueur. Les pénalités temps ajoutées par la direction de course (+5 s, +10 s, +30 s = drapeau noir) sont ajoutées au temps final et reclashent automatiquement pilotes et points. Les avertissements sont comptabilisés sans impact sur le classement.</div><div class="panel"><h2>${({pilotes:'Classement général',joker:'Cinq meilleures manches',equipes:'Classement équipes'})[ranktab]}</h2><p class="note">${ranktab==='equipes'?'Cumul des points des pilotes par manche, puis les cinq meilleurs totaux de manche sont retenus. Les pilotes sans équipe ne sont pas regroupés.':ranktab==='joker'?'Les cinq meilleurs totaux de manche sont conservés ; avant la sixième manche, aucune manche n’est retirée.':'Tous les résultats sont cumulés. Les positions de course sont celles des fichiers après exclusion de la voiture de diffusion.'}</p>${rows}</div>`}
 function manche(){let rs=rounds();if(round>=rs.length)round=0;let r=rs[round];if(sessionIndex>=r.sessions.length)sessionIndex=0;let s=r.sessions[sessionIndex];let rows=sortSession(s);let winner=s.type==='RACE'?rows[0]:null;
-function eff(x){let base=x.finalTime!=null?x.finalTime:(x.efftime!=null?x.efftime:x.time);return Number.isFinite(base)?base+(x.comTimeAdd||0):null}
+function eff(x){let t=x._t;if(Number.isFinite(t))return t;let base=x.finalTime!=null?x.finalTime:(x.efftime!=null?x.efftime:x.time);return Number.isFinite(base)?base+(x.comTimeAdd||0):null}
 function gapTo(a,b){let ta=eff(a),tb=eff(b);if(!ta||!tb||a.laps!==b.laps||a._dq||b._dq)return a.laps!==b.laps?(a.laps<b.laps?'+'+(b.laps-a.laps)+' t':'—'):'—';let d=(ta-tb)/1000;return d>0?'+'+d.toFixed(3)+' s':'—'}
 let resultrows;
 if(s.type==='QUALIFY'){
