@@ -155,7 +155,7 @@ async function adminLogin(){
     adminToken=j.token;localStorage.setItem('gdsp_admin_token',adminToken);adminAuth=true;adminUser='Direction de course';try{await loadRemote()}catch(e){}render();
   }catch(e){alert('Erreur de connexion au serveur. '+e.message)}
 }
-async function adminLogout(){try{await apiPost('/api/admin/logout')}catch(e){}adminToken=null;adminAuth=false;adminUser='';localStorage.removeItem('gdsp_admin_token');render()}
+async function adminLogout(){adminToken=null;adminAuth=false;adminUser='';localStorage.removeItem('gdsp_admin_token');render()}
 async function saveRemote(){if(!adminToken||!window.GDSP_API_URL)return;const payload={sessions,penMap,manualDrivers,customCalendar};try{const r=await apiPost('/api/save-championship',payload);const j=await r.json();if(!r.ok)throw new Error(j.error||j.message||'erreur');return j}catch(e){console.warn('sauvegarde distante impossible',e);return null}}
 async function loadRemote(){if(!window.GDSP_API_URL)return null;try{const base=(window.GDSP_API_URL||'').replace(/\/+$/,'');const r=await fetch(base+'/api/championship',{cache:'no-store'});if(!r.ok)return null;const j=await r.json();const c=j.championship||{};if(Array.isArray(c.sessions)&&c.sessions.length)sessions=c.sessions;if(c.penMap)penMap=c.penMap;if(c.manualDrivers)manualDrivers=c.manualDrivers;if(c.customCalendar)customCalendar=c.customCalendar;return j}catch(e){console.warn('chargement distant impossible',e);return null}}
 function adminHash(obj){return btoa(JSON.stringify(obj)).slice(0,10)}
