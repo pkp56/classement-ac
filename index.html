@@ -246,8 +246,9 @@ async function resetChampionship(){
   try{
     if(remote&&adminToken){
       const r=await apiPost('/api/admin/reset',{confirmation:'REINIT_CHAMPIONNAT'});
-      const j=await r.json().catch(()=>({}));
-      if(!r.ok||j.status!=='ok'){serverCleared=false;serverDetail=(j.error||j.message||JSON.stringify(j)).slice(0,300);alert('Échec de la réinitialisation serveur : '+serverDetail);return}
+      let txt='',j={};
+      try{txt=await r.text();j=JSON.parse(txt)}catch(e){j={raw:txt}}
+      if(!r.ok||j.status!=='ok'){serverCleared=false;serverDetail='HTTP '+r.status+' : '+(j.error||j.message||(txt&&txt.slice(0,500))||JSON.stringify(j)).slice(0,500);alert('Échec de la réinitialisation serveur : '+serverDetail);return}
       // Vérification : relire le championnat et s'assurer que penMap/sessions sont vides
       const chk=await apiGet('/api/championship'); const chkJ=await chk.json().catch(()=>({}));
       const c=chkJ.championship||{};
