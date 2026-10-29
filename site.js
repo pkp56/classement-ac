@@ -643,7 +643,7 @@ function renderAhChamps(){
       <td>${c.pointsScale.slice(0,5).join('/')}${c.pointsScale.length>5?'…':''}</td>
       <td>${exists?'<span class="tag archive">déjà présent</span>':`<button class="btn secondary small" onclick="ahCreateEvent('${c.server}','${c.uuid}','${c.slug}')">+ Créer</button>`}</td>
     </tr>`;
-  }).join('');
+  });
   out.innerHTML=`<p class="note">${ahChampsCache.length} championnats/opens détectés. Les championnats de type « test » et doublons ont été filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème.</p>${table(['','Nom','Progression','Manches','Barème (places)',''],rows)}`;
 }
 async function ahCreateEvent(server,uuid,slug){
