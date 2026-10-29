@@ -242,11 +242,21 @@ function addRound(){const d=prompt('Date de la manche (AAAA-MM-JJ) ?','2026-11-1
 async function resetChampionship(){
   if(!confirm('Réinitialiser TOUT le championnat ? Tous les résultats, classements, ajustements de commission, fiches pilotes et calendrier ajouté seront effacés. Cette action est irréversible.'))return;
   const remote=confirm('Effacer aussi la sauvegarde sur le serveur (PostgreSQL) ? OK = effacement complet du serveur ET du navigateur. Annuler = effacement du navigateur seulement (le serveur conservera les données).');
+  let serverCleared=true, serverDetail='';
   try{
     if(remote&&adminToken){
       const r=await apiPost('/api/admin/reset',{confirmation:'REINIT_CHAMPIONNAT'});
       const j=await r.json().catch(()=>({}));
-      if(!r.ok){alert('Échec de la réinitialisation serveur : '+(j.error||j.message||'erreur inconnue'));return}
+      if(!r.ok||j.status!=='ok'){serverCleared=false;serverDetail=(j.error||j.message||JSON.stringify(j)).slice(0,300);alert('Échec de la réinitialisation serveur : '+serverDetail);return}
+      // Vérification : relire le championnat et s'assurer que penMap/sessions sont vides
+      const chk=await apiGet('/api/championship'); const chkJ=await chk.json().catch(()=>({}));
+      const c=chkJ.championship||{};
+      const sessCount=Array.isArray(c.sessions)?c.sessions.length:-1;
+      const penCount=c.penMap&&typeof c.penMap==='object'?Object.keys(c.penMap).length:-1;
+      if(sessCount!==0||penCount!==0){
+        serverCleared=false;serverDetail='Le serveur a répondu mais contient encore '+sessCount+' session(s) et '+penCount+' pénalité(s). Réessaie ou contacte le support.';
+        alert('Échec de vérification : '+serverDetail);return;
+      }
     }
   }catch(e){alert('Erreur serveur : '+e.message);return}
   // Vider la mémoire
@@ -258,7 +268,7 @@ async function resetChampionship(){
   // Déconnecter l'admin pour éviter qu'un loadRemote() automatique ne recharge les anciennes données
   adminAuth=false;adminUser='';if(adminToken){localStorage.removeItem('gdsp_admin_token');adminToken=null}
   render();
-  if(remote)alert('Championnat réinitialisé (navigateur ET serveur PostgreSQL). Tu peux maintenant repartir de zéro et importer de nouveaux résultats.');
+  if(remote)alert('Championnat réinitialisé (navigateur ET serveur PostgreSQL, vérification OK). Tu peux maintenant repartir de zéro et importer de nouveaux résultats.');
   else alert('Championnat réinitialisé dans le navigateur. Les données restent présentes sur le serveur : reconnecte-toi admin puis clique « Recharger depuis le serveur » pour les récupérer, ou « Vider tout » avec le serveur pour les effacer définitivement.');
 }
 function resetRound(n){if(!confirm(`Effacer la manche ${n+1} ?`))return;sessions=sessions.filter(s=>{const r=rounds().find(x=>x.sessions.includes(s));return !r||r.number!==n+1});saveState();render()}
