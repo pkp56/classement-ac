@@ -24,28 +24,24 @@ app.use((req, res, next) => {
 });
 
 // --- PROXY API vers le backend gdsp-render-backend ---
-// Implémenté à la main (sans http-proxy-middleware) pour n'ajouter aucune dépendance.
-// Body-parser est volontairement DÉSACTIVÉ sur /api/* : on relaie le corps brut pour
-// conserver Content-Length et éviter les doubles lectures.
-function proxyRequest(req, res) {
+function proxyRequest(req, res, opts = {}) {
   let target;
-  try { target = new URL(req.url, BACKEND_URL); } catch(e) { return res.status(400).end('URL invalide'); }
+  try { target = new URL(opts.path || req.url, BACKEND_URL); } catch(e) { return res.status(400).end('URL invalide'); }
 
   const headers = Object.assign({}, req.headers);
   delete headers.host;
   delete headers.connection;
   delete headers.origin;
   delete headers.referer;
-  // On laisse Accept-Encoding : les réponses compressées (gzip/br) sont relayées telles quelles.
+
+  if (opts.method) headers['content-length'] = Buffer.byteLength(opts.body||'');
 
   const chunks = [];
-  req.on('data', c => chunks.push(c));
-  req.on('end', () => {
-    const body = chunks.length ? Buffer.concat(chunks) : null;
+  const send = (body) => {
     if (body && body.length) headers['content-length'] = body.length;
     const proto = target.protocol === 'https:' ? https : http;
     const upstream = proto.request(target, {
-      method: req.method,
+      method: opts.method || req.method,
       headers,
       timeout: 25000,
     }, (upRes) => {
@@ -60,16 +56,39 @@ function proxyRequest(req, res) {
     });
     if (body) upstream.write(body);
     upstream.end();
-  });
-  req.on('error', () => { if (!res.headersSent) res.sendStatus(500); });
+  };
+
+  if (opts.method) {
+    // Body provided directly (e.g. reset endpoint)
+    send(opts.body);
+  } else {
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => send(chunks.length ? Buffer.concat(chunks) : null));
+    req.on('error', () => { if (!res.headersSent) res.sendStatus(500); });
+  }
 }
 
-// Intercepter TOUTES les méthodes sur /api/* et /health avant le body parser statique.
-app.all('/api/*', proxyRequest);
-app.all('/health', proxyRequest);
+app.all('/api/admin/reset', (req, res) => {
+  // Endpoint local de réinitialisation totale. Transmet une sauvegarde vide au backend
+  // (upsert) PUIS répond au frontend.
+  const chunks = [];
+  req.on('data', c => chunks.push(c));
+  req.on('end', () => {
+    let body = {};
+    try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}; } catch {}
+    if (body.confirmation !== 'REINIT_CHAMPIONNAT') return res.status(400).json({ error: 'Confirmation manquante.' });
+    proxyRequest(req, res, {
+      method: 'POST',
+      path: '/api/save-championship',
+      body: JSON.stringify({ _reset: true, sessions: [], penMap: {}, manualDrivers: null, customCalendar: null, meta: { resetAt: new Date().toISOString() } }),
+    });
+  });
+});
+app.all('/api/*', (req, res) => proxyRequest(req, res));
+app.all('/health', (req, res) => proxyRequest(req, res));
 
-// Parser JSON limité, au cas où on en aurait besoin (aucune route POST hors API,
-// mais laisse la place pour de futurs webhooks côté statique ; ici inutilisé).
+
+// Parser JSON (inutile pour /api/* qui est relayé brut, mais au cas où on ajoute des routes locales)
 app.use(express.json({ limit: '5mb' }));
 app.use((err, req, res, next) => {
   if (err.type === 'entity.too.large') return res.status(413).json({ error: 'JSON trop volumineux.' });
