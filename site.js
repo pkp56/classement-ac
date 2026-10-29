@@ -8,6 +8,7 @@ let backendMulti = null;          // null=pending, true=multi, false=legacy
 let events = [];                  // liste des événements (multi seulement)
 let currentSlug = LEGACY_DEFAULT_SLUG;
 let eventContext = null;          // {slug,name,kind,pointsConfig,data}
+let ahConfig = null;              // {server, uuid} when event is bound to an AH championship
 let page='accueil', ranktab='pilotes', eventtab='resultats', round=0, sessionIndex=1, driverId='', compareA='', compareB='';
 let sessions=[], penMap={}, manualDrivers=null, customCalendar=null;
 let adminAuth=false, adminUser='', adminTab='import', selectedRaceAdj=null;
@@ -113,8 +114,9 @@ async function loadEvent(slug){
     const ev=await r.json();
     eventContext={slug:ev.slug,name:ev.name,kind:ev.kind,pointsConfig:ev.points_config||{},data:ev.data||{}};
     currentSlug=ev.slug;
-    localStorage.setItem('gdsp_last_event',ev.slug);
     const d=ev.data||{};
+    ahConfig=(d.ahServer&&d.ahUuid)?{server:d.ahServer,uuid:d.ahUuid}:null;
+    localStorage.setItem('gdsp_last_event',ev.slug);
     sessions.length=0;
     if(Array.isArray(d.sessions))sessions.push(...d.sessions);
     penMap=(d.penMap&&typeof d.penMap==='object')?d.penMap:{};
@@ -682,7 +684,7 @@ async function ahCreateEvent(server,uuid,slug){
       globalCoef:c.kind==='open'?0.5:1.0,
       secondRaceMultiplier:c.secondRaceMultiplier||1
     };
-    const r=await apiPost('/api/events',{slug:c.slug,name:c.name,kind:c.kind,pointsConfig:cfg});
+    const r=await apiPost('/api/events',{slug:c.slug,name:c.name,kind:c.kind,pointsConfig:cfg,data:{ahServer:c.server,ahUuid:c.uuid}});
     const j=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(j.error||'HTTP '+r.status);
     // Recharger events
@@ -697,7 +699,9 @@ async function ahImport(){
   const out=document.getElementById('ah-result');
   if(out){out.innerHTML='<p class="note">Scan des serveurs AssettoHosting en cours…</p>'}
   try{
-    const r=await apiGet('/api/ah-scan');
+    let endpoint='/api/ah-scan';
+    if(ahConfig)endpoint=`/api/ah-championship-sessions?server=${encodeURIComponent(ahConfig.server)}&uuid=${encodeURIComponent(ahConfig.uuid)}`;
+    const r=await apiGet(endpoint);
     const j=await r.json();
     if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
     let items=j.items||[];
@@ -713,25 +717,26 @@ async function ahImport(){
       const key=new Date(x.date).toISOString().slice(0,16)+'|'+x.type;
       return !existing.has(key);
     });
+    if(ahConfig && out)out.innerHTML=`<p class="note">Événement lié à <b>${esc(j.championship||'')}</b> (${j.events||0} manches côté AH). ${pending.length} session(s) nouvelle(s) détectée(s) pour cet événement.</p>`;
     if(!pending.length){
-      if(out)out.innerHTML=`<p class="note">✅ Aucune nouvelle session QUALIFY/RACE à importer (${items.length} déjà connues, practice ignorées).</p>`;
+      const msg=ahConfig?`✅ Aucune nouvelle session QUALIFY/RACE pour cet événement (${items.length} déjà connues).`:`✅ Aucune nouvelle session QUALIFY/RACE à importer (${items.length} déjà connues, practice ignorées).`;
+      if(out)out.innerHTML=(ahConfig?out.innerHTML:'')+`<p class="note">${msg}</p>`;
       return;
     }
-    if(out)out.innerHTML=`<p class="note">Récupération de ${pending.length} session(s) en cours…</p>`;
+    if(out)out.innerHTML+=(ahConfig?'':`<p class="note">Récupération de ${pending.length} session(s) en cours…</p>`);
     let ok=0,err=0,details=[];
     for(const it of pending){
       try{
         const fr=await apiGet('/api/ah-fetch?url='+encodeURIComponent(it.url));
         if(!fr.ok)throw new Error('HTTP '+fr.status);
         const txt=await fr.text();
-        // Reimport dans notre parser
-        if(importSessionJson(txt,it.filename,{silent:true})){ok++;details.push(`+ ${it.type} ${it.filename}`)}
+        if(importSessionJson(txt,it.filename,{silent:true})){ok++;details.push(`+ ${it.type} ${it.track||''} ${it.filename}${it.eventName?' ('+it.eventName+')':''}`)}
         else{err++;details.push(`✗ erreur parsing ${it.filename}`)}
       }catch(e){err++;details.push(`✗ ${it.filename}: ${e.message}`)}
     }
     if(ok>0)saveState();
     render();
-    if(out)out.innerHTML=`<p class="note"><b>Import terminé :</b> ${ok} session(s) importée(s), ${err} erreur(s).</p><ul class="note" style="font-family:monospace;font-size:11px">${details.map(d=>'<li>'+esc(d)+'</li>').join('')}</ul>`;
+    if(out)out.innerHTML+=`<p class="note"><b>Import terminé :</b> ${ok} session(s) importée(s), ${err} erreur(s).</p><ul class="note" style="font-family:monospace;font-size:11px">${details.map(d=>'<li>'+esc(d)+'</li>').join('')}</ul>`;
   }catch(e){if(out)out.innerHTML=`<p class="note" style="color:#9c3021">✗ Erreur : ${esc(e.message)}</p>`}
 }
 

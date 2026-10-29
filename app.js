@@ -235,6 +235,68 @@ function suggestSlug(name,created){
   return (base+'-'+y).replace(/-+/g,'-').replace(/^-+|-+$/g,'');
 }
 
+// Liste des JSON de résultats appartenant spécifiquement à un championnat (filtre par fenêtre de dates des Events + type)
+app.get('/api/ah-championship-sessions', async(req,res)=>{
+  const server=String(req.query.server||'').replace(/\/+$/,'');
+  const uuid=String(req.query.uuid||'');
+  if(!/^https?:\/\/(fr2|fr5)\.assettohosting\.com/i.test(server))return res.status(400).json({error:'Serveur non autorisé.'});
+  if(!/^[0-9a-f-]{36}$/i.test(uuid))return res.status(400).json({error:'UUID invalide.'});
+  try{
+    const champ=await ahFetchChampionship(server,uuid);
+    // 1) Construire les fenêtres temporelles par event
+    const windows=[];
+    const events=champ.Events||{};
+    for(const k in events){
+      const ev=events[k];if(!ev||!ev.StartedTime)continue;
+      const start=new Date(ev.StartedTime).getTime();
+      const end=ev.CompletedTime?new Date(ev.CompletedTime).getTime():start+6*3600*1000;
+      const sess=ev.Sessions||{};
+      const types=[];
+      if(sess.QUALIFY)types.push('QUALIFY');
+      if(sess.RACE)types.push('RACE');
+      if(sess.RACEx2)types.push('RACEx2');
+      windows.push({evId:ev.ID,name:ev.Name||'',start,end,types});
+    }
+    // 2) Récupérer la liste de tous les /results du serveur
+    const allResults=await ahListResults(server);
+    // 3) Associer chaque résultat à une fenêtre dont il tombe dans [start-15min, end+15min]
+    // Pour les RACEx2: le type de fichier est 'RACE' mais on les distingue par le fait qu'il y a 2 RACE dans la fenêtre.
+    // On trie les résultats par date et on numérote les RACE d'une même fenêtre.
+    const MARGIN=30*60*1000;
+    // D'abord, grouper les candidats QUALIFY et RACE par fenêtre
+    const candidatesByWin=new Map();
+    windows.forEach(w=>candidatesByWin.set(w,[]));
+    for(const it of allResults){
+      const t=new Date(it.date).getTime();
+      if(it.type==='PRACTICE')continue;
+      if(/test/i.test(it.sessionName+' '+it.filename))continue;
+      const win=windows.find(w=>t>=w.start-MARGIN && t<=w.end+MARGIN);
+      if(!win)continue;
+      candidatesByWin.get(win).push({...it,_t:t});
+    }
+    const matched=[];
+    for(const w of windows){
+      const cands=candidatesByWin.get(w).sort((a,b)=>a._t-b._t);
+      let raceIdx=0;
+      for(const it of cands){
+        let assignedType=null;
+        if(it.type==='QUALIFY' && w.types.includes('QUALIFY'))assignedType='QUALIFY';
+        else if(it.type==='RACE'){
+          // 1re RACE → RACE; 2e RACE → RACEx2 (si l'event a des RACEx2)
+          raceIdx++;
+          if(raceIdx===1 && w.types.includes('RACE'))assignedType='RACE';
+          else if(raceIdx===2 && w.types.includes('RACEx2'))assignedType='RACEx2';
+          else if(w.types.includes('RACE'))assignedType='RACE';
+        }
+        if(assignedType){
+          matched.push({...it,type:assignedType,eventId:w.evId,eventName:w.name});
+        }
+      }
+    }
+    res.json({server,uuid,championship:champ.Name,events:windows.length,items:matched});
+  }catch(e){res.status(502).json({error:e.message})}
+});
+
 // Endpoint de réinitialisation TOTALE (doit être déclaré AVANT le générique /api/*) :
 // 1) sauvegarde un championnat VIDE mais valide (avec une clé _reset pour satisfaire isNonEmptyObject) ;
 // 2) efface aussi l'ancienne table drivers/penalties via PUT /api/results ;
