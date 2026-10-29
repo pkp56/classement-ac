@@ -8,8 +8,27 @@ const labels={accueil:'Accueil',classement:'Classements',manches:'Résultats',pi
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const date=x=>new Date(x).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});function track(x){return ({'mt-tremblant_69':'Mont-Tremblant','riverside':'Riverside','sebring_90s':'Sebring','mid_ohio':'Mid-Ohio'})[x]||x}
 function rounds(){let m={};sessions.forEach(s=>(m[s.date.slice(0,10)]??=[]).push(s));return Object.entries(m).sort().map(([d,s],i)=>({date:d,sessions:s,track:track(s[0].track),number:i+1}))}function allDrivers(){let map=new Map;for(const s of sessions)for(const r of s.results){if(!map.has(r.id))map.set(r.id,{...r});}return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name))}
 function info(){return `<div class="banner"><b>SAISON EN COURS</b> — Résultats réels importés à partir des fichiers fournis. L’administration permet d’importer des JSON, d’ajuster les points et de modifier pilotes/manches en local dans le navigateur ; aucune donnée n’est encore envoyée vers un serveur de production.</div>`}function head(k,t,desc=''){return `<div class="eyebrow">GDSP / ${k}</div><h1>${t}</h1><p class="note">${desc}</p>`}function table(headers,rows){return `<div class="table-wrap"><table><thead><tr>${headers.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.join('')||'<tr><td colspan="8">Aucune donnée disponible.</td></tr>'}</tbody></table></div>`}function fmt(t){if(!t||t<0||t>99999999)return '—';let m=Math.floor(t/60000),s=((t%60000)/1000).toFixed(3);return `${m}:${s.padStart(6,'0')}`}
+function findSessionIdx(sess){const rs=rounds();for(let i=0;i<rs.length;i++){const j=rs[i].sessions.indexOf(sess);if(j>=0)return [i,j]}return [-1,-1]}
+function applyCommissionToArr(arr,sess,rIdx,sIdx){
+  arr.forEach(y=>{y.comTimeAdd=0;y.comDQ=false;y.comWarning=false});
+  const rk=rIdx>=0?rIdx+':'+sIdx+':':null;
+  for(const k in penMap){
+    if(rk&&!k.startsWith(rk))continue;
+    const [rj,sj,did]=k.split(':');
+    if(rk&&(rj!=rIdx||sj!=sIdx))continue;
+    const rs2=rounds();
+    if(!rk){const r=rs2[+rj];if(!r||r.sessions[+sj]!==sess)continue}
+    const y=arr.find(x=>x.id===did);if(!y)continue;
+    const adj=penMap[k];
+    if(adj.dq)y.comDQ=true;
+    else if(adj.timeAdd>0)y.comTimeAdd=(y.comTimeAdd||0)+adj.timeAdd*1000;
+    if(adj.warning)y.comWarning=true;
+  }
+  return arr;
+}
 function sortSession(sess){
   if(!sess)return [];
+  const [rIdx,sIdx]=findSessionIdx(sess);
   let arr=sess.results.map(x=>{
     let y=({...x});
     // Pénalité serveur (ACSM) : PenaltyTime est en nanosecondes.
@@ -17,10 +36,12 @@ function sortSession(sess){
     let serverNs=Number(y.penaltyTime)||0;
     let et=base+serverNs/1e6;
     if(y.lapPenalty)et=10**18;
-    if(Number.isFinite(y.efftime))et=y.efftime; // calculé par calculate() quand disponible
+    if(Number.isFinite(y.efftime))et=y.efftime; // valeur mémorisée par calculate()
     y._eff=et;
     return y;
   });
+  // Toujours appliquer la commission (penMap) avant de trier.
+  applyCommissionToArr(arr,sess,rIdx,sIdx);
   function effDQ(x){return x.disqualified||x.comDQ}
   if(sess.type==='QUALIFY'){
     arr.sort((a,b)=>{
@@ -47,20 +68,16 @@ function calculate(){
   }));
   const warnCount=new Map();
   for(const k in penMap){
-    const [rj,sj,did]=k.split(':');
-    const rs2=rounds(); const r=rs2[+rj]; if(!r)continue;
-    const s=r.sessions[+sj]; if(!s)continue;
-    const res=s.results.find(x=>x.id===did); if(!res)continue;
-    const adj=penMap[k];
-    if(adj.dq){res.comDQ=true; continue}
-    if(adj.timeAdd>0)res.comTimeAdd=(res.comTimeAdd||0)+adj.timeAdd*1000;
+    const adj=penMap[k]; const did=k.split(':')[2];
     if(adj.warning)warnCount.set(did,(warnCount.get(did)||0)+1);
   }
   // Marquer finalTime/finalDQ après application des pénalités commission pour usage interne (finishes, mérites).
   sessions.forEach(race=>{
     if(race.type!=='RACE')return;
     race.results.forEach(p=>{
-      let base=Number.isFinite(p.efftime)?p.efftime:10**18;
+      let base;
+      if(Number.isFinite(p._eff))base=p._eff;
+      else{let serverNs=Number(p.penaltyTime)||0;let bt=Number.isFinite(p.time)?p.time:10**18;base=bt+serverNs/1e6;if(p.lapPenalty)base=10**18}
       p.finalTime=base+(p.comTimeAdd||0);
       p.finalDQ=p.disqualified||p.comDQ;
     });
