@@ -236,33 +236,177 @@ function hub(){
 }
 
 // Global ranking across all events — shown only in multi mode, built on demand
-async function globalRanking(){return globalRankingSync()}
+async function globalRanking(){
+  // Charger les data de tous les événements qui n'ont pas encore leurs sessions en mémoire
+  const needFetch=events.filter(ev=>!ev.__loaded);
+  await Promise.all(needFetch.map(async ev=>{
+    try{
+      const r=await apiGet('/api/events/'+encodeURIComponent(ev.slug));
+      if(!r.ok)return;
+      const j=await r.json();
+      ev.data=j.data||{};
+      ev.points_config=j.points_config||ev.points_config;
+      ev.updated_at=j.updated_at||ev.updated_at;
+    }catch(e){ev.data={}}
+    ev.__loaded=true;
+  }));
+  return globalRankingSync();
+}
 function globalRankingSync(){
-  // Legacy: redirect to classement
   if(!backendMulti)return ranking();
-  const agg=new Map(); // id -> {id,name,team,points:0,events:0,victories:0,podiums:0,best:[]}
-  // We need to load each event and compute its points in memory
+  const ratings=globalPerformanceRatings();
+  if(!ratings.length)return `${head('global','Classement GLOBAL Discord','Niveau pilote inter-événements GDSP.')}<div class="panel"><p class="note">Pas encore assez de données pour évaluer les pilotes. Importe des résultats dans plusieurs championnats/opens.</p></div>`;
+  // Regrouper par niveau (1=élite … 4=débutant)
+  const tiers={1:[],2:[],3:[],4:[]};
+  ratings.forEach(r=>tiers[r.level].push(r));
+  const tierLabel={1:'Niveau 1 · Élite',2:'Niveau 2 · Confirmé',3:'Niveau 3 · Intermédiaire',4:'Niveau 4 · Débutant'};
+  const tierDesc={
+    1:'Pilotes les plus complets et constants sur la durée : résultats, propreté, vitesse et régularité au rendez-vous dans tous les championnats.',
+    2:'Pilotes solides, capables de belles performances et d\'une bonne finition en course. Quelques axes à travailler pour rejoindre l\'élite.',
+    3:'Pilotes en progression, avec des éclairs de vitesse mais encore de l\'irrégularité ou des incidents de course coûteux.',
+    4:'Pilotes récents ou en phase d\'apprentissage : la régularité et la propreté sont à construire, la marge de progression est importante.'
+  };
+  const now=Date.now();
+  function trendArrow(t){const v=t.trend||0; if(v>4)return `<span style="color:#3b6341">▲ ${v.toFixed(0)} places</span>`; if(v>1)return `<span style="color:#3b6341">↑ ${v.toFixed(1)}</span>`; if(v<-4)return `<span style="color:#9c3021">▼ ${Math.abs(v).toFixed(0)} places</span>`; if(v<-1)return `<span style="color:#9c3021">↓ ${Math.abs(v).toFixed(1)}</span>`; return `<span style="color:#6d726c">→ stable</span>`}
+  // Blocs tiers (3 colonnes pour 1/2/3-4 ? Mieux 4 colonnes)
+  const tierCards=[1,2,3,4].map(l=>{
+    const list=tiers[l].slice(0,18).map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #dbd0ba"><span><b>${esc(d.name)}</b>${d.team?`<br><span class="muted" style="font-size:11px">${esc(d.team)}</span>`:''}</span><span class="muted" style="font-size:12px">${d.count}c · ${d.score.toFixed(0)}</span></div>`).join('');
+    return `<div class="lvl-block"><span class="tag lvl lvl-${l}">${l}</span><h2 style="margin-top:10px">${tierLabel[l]}</h2><p class="note">${tierDesc[l]}</p><p class="note" style="margin:10px 0"><b>${tiers[l].length}</b> pilote${tiers[l].length>1?'s':''} · top ${tiers[l][0]?tiers[l][0].score.toFixed(0):'—'} → ${tiers[l].length?tiers[l][tiers[l].length-1].score.toFixed(0):'—'}/100</p><div style="margin-top:8px">${list||'<p class="note" style="font-size:12px">—</p>'}</div></div>`;
+  }).join('');
+  const labels={regularite:'Régularité',proprete:'Propreté',vitesse:'Vitesse',resultats:'Résultats',progression:'Progression'};
+  const detailRows=ratings.map((d,i)=>{
+    const bars=Object.keys(labels).map(k=>{
+      const v=d.details[k]||0;
+      return `<span title="${labels[k]}: ${v.toFixed(0)}" style="display:inline-block;width:34px;margin-right:3px"><span class="mini-bar"><i style="width:${Math.max(2,Math.min(100,v))}%"></i></span><span style="font-size:9px;color:#6d726c;display:block;text-align:center;margin-top:2px">${Math.round(v)}</span></span>`;
+    }).join('');
+    return `<tr><td class="pos">${i+1}</td><td><span class="tag lvl lvl-${d.level}">${d.level}</span></td><td><b>${esc(d.name)}</b>${d.team?`<br><span class="muted">${esc(d.team)}</span>`:''}</td><td>${d.count}</td><td><b>${d.score.toFixed(0)}</b> ${trendArrow(d)}</td><td>${bars}</td></tr>`;
+  }).join('');
+  return `${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
+    <p class="note" style="margin-bottom:16px">Le niveau est établi sur <b>cinq critères</b> : position moyenne en course, régularité des tours, propreté (collisions & cuts), vitesse au tour et progression dans le temps. Les courses récentes comptent davantage (poids doublé par rapport à celles de trois mois). Il faut au moins <b>2 courses</b> pour être classé.</p>
+    <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">${tierCards}</div>
+    <div class="panel"><h2>Détail des pilotes classés</h2><p class="note">Trié par score global. Les 5 mini-barres représentent Régularité / Propreté / Vitesse / Résultats / Progression (0-100).</p>${table(['','Niv.','Pilote','Courses','Score / 100','5 critères (0-100)'],detailRows)}</div>`;
+}
+
+// Calcule un score 0-100 par pilote, tous événements confondus, pondération récente (demi-vie 90 jours).
+// Retourne un tableau trié par score décroissant, avec level (1=élite..4=débutant) par quartiles.
+function globalPerformanceRatings(){
+  // Collecte de toutes les courses RACE de tous les events.
+  // raceEntries = [{date (ts), entries:[{id,name,driverResultPosition,sdLap,collisions,cuts,bestLap,gridPos}]}]
+  const allRaces=[];
+  const idName=new Map(),idTeam=new Map();
   for(const ev of events){
-    const data=ev.data||{};
-    const s_=Array.isArray(data.sessions)?data.sessions.slice():[];
-    const p_=(data.penMap&&typeof data.penMap==='object')?data.penMap:{};
-    // Compute points in this event using its points config
-    const cfg=Object.assign({},DEFAULT_POINTS,ev.points_config||{});
-    const evResult=computeEventStandings(s_,p_,cfg);
-    for(const drv of evResult){
-      const key=drv.id;
-      if(!agg.has(key))agg.set(key,{id:key,name:drv.name,team:drv.team||'',points:0,events:0,victories:0,podiums:0});
-      const a=agg.get(key);
-      a.points+=drv.eventTotal*(cfg.globalCoef||1);
-      a.events++;
-      if(drv.wins)a.victories+=drv.wins;
-      if(drv.podiums)a.podiums+=drv.podiums;
+    const d=ev.data||{};
+    const sessions=Array.isArray(d.sessions)?d.sessions:[];
+    const races=sessions.filter(s=>s&&s.type==='RACE');
+    for(const s of races){
+      const ts=new Date(s.date).getTime();
+      if(!isFinite(ts))continue;
+      // Regrouper les laps/results
+      const lapsById={};
+      (s.laps||[]).forEach(l=>{if(!l||!l.id)return;if(!lapsById[l.id])lapsById[l.id]=[];lapsById[l.id].push(l)});
+      const collById={};
+      (s.events||[]).forEach(e=>{if(!e||e.type!=='COLLISION_WITH_CAR')return;if(e.aid){collById[e.aid]=(collById[e.aid]||0)+1}if(e.bid){collById[e.bid]=(collById[e.bid]||0)+1}});
+      const entries=[];
+      (s.results||[]).forEach((r,i)=>{
+        if(!r||!r.id)return;
+        idName.set(r.id,r.name);
+        idTeam.set(r.id,r.team||'');
+        const myLaps=(lapsById[r.id]||[]).filter(l=>Number.isFinite(l.time)&&l.time>0&&l.time<600000);
+        const clean=myLaps.filter(l=>!(l.cuts>0));
+        const avg=clean.length?clean.reduce((a,l)=>a+l.time,0)/clean.length:null;
+        const sd=avg&&clean.length>=3?Math.sqrt(clean.reduce((a,l)=>a+(l.time-avg)**2,0)/clean.length)/avg:null;
+        const cuts=myLaps.reduce((n,l)=>n+(Number.isFinite(l.cuts)?Math.max(0,l.cuts):0),0);
+        entries.push({id:r.id,name:r.name,pos:i+1,grid:(typeof r.grid==='number'&&r.grid>0)?r.grid:null,sd,collisions:collById[r.id]||0,cuts,best:Number.isFinite(r.best)&&r.best>0?r.best:null});
+      });
+      if(entries.length>=3)allRaces.push({ts,entries});
     }
   }
-  const arr=[...agg.values()].sort((a,b)=>b.points-a.points||a.name.localeCompare(b.name));
-  const rows=arr.map((d,i)=>`<tr><td class="pos">${i+1}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${d.events}</td><td>${d.victories}</td><td>${d.podiums}</td><td><b>${d.points.toFixed(1)}</b></td></tr>`);
-  return `${head('global','Classement GLOBAL Discord','Cumul de tous les championnats et opens, pondérés par leur coefficient (×1 championnats, ×0,5 opens par défaut).')}<div class="panel"><h2>Classement inter-événements</h2><p class="note">Le classement est calculé en direct à partir des données de chaque événement. Les pénalités de commission sont appliquées. Les pilotes sans équipe sont regroupés sous leur nom.</p>${table(['Pos.','Pilote','Épreuves','Victoires','Podiums','Points (coeff.)'],rows)}</div>`;
+  if(allRaces.length===0)return [];
+  const now=Date.now();
+  const HALF_LIFE=90*24*3600*1000; // 90 jours
+  // Pour chaque course, convertir chaque métrique en percentile (0-100), pondérer.
+  // On pondère aussi chaque course par 1 (pas de coef open/champ ? L'utilisateur a choisi "recent" uniquement).
+  const pilot=new Map(); // id -> {weights:{}, cum:{regularite,proprete,vitesse,resultats}, races:[{ts,pos}]}
+  function pct(arr,key,lower){
+    // Percentile de la valeur de clé pour chaque entrée. lower=true = petite valeur = meilleur.
+    const valid=arr.filter(x=>Number.isFinite(x[key]));
+    if(valid.length<2)return arr.map(()=>null);
+    return arr.map(it=>{
+      if(!Number.isFinite(it[key]))return null;
+      const better=valid.filter(x=>lower?x[key]<it[key]:x[key]>it[key]).length;
+      const equal=valid.filter(x=>x[key]===it[key]).length;
+      return 100*(1-(better+(equal-1)/2)/(valid.length-1));
+    });
+  }
+  for(const rc of allRaces){
+    const weight=Math.exp(-(now-rc.ts)/HALF_LIFE); // 1 aujourd'hui, 0.5 il y a 90j, 0.25 il y a 180j…
+    const psd=pct(rc.entries,'sd',true); // +petit = mieux
+    const pcln=pct(rc.entries.map(e=>({...e,clean:(e.collisions*3)+e.cuts})),'clean',true);
+    const pspd=pct(rc.entries,'best',true); // meilleur tour
+    const pres=pct(rc.entries,'pos',true); // position
+    rc.entries.forEach((e,i)=>{
+      if(!pilot.has(e.id))pilot.set(e.id,{sumW:0,ax:{regularite:0,proprete:0,vitesse:0,resultats:0},positions:[],ts:[]});
+      const p=pilot.get(e.id);
+      const vals={regularite:psd[i],proprete:pcln[i],vitesse:pspd[i],resultats:pres[i]};
+      for(const k in vals){const v=vals[k]; if(Number.isFinite(v)){p.ax[k]+=v*weight;}}
+      p.sumW+=weight;
+      p.positions.push(e.pos); p.ts.push(rc.ts);
+    });
+  }
+  // Calculer la progression: différence de position moyenne entre le premier et le dernier tiers des courses (par pilote),
+  // pondérée aussi. Une valeur positive = s'améliore (régression de position vers le haut → chiffres plus petits → -Δ).
+  const out=[];
+  for(const [id,p]of pilot){
+    if(p.sumW<=0)continue;
+    const det={};
+    for(const k in p.ax)det[k]=p.ax[k]/p.sumW;
+    // Progression: régression linéaire simple de la position en fonction du temps (normalisé en mois).
+    // On convertit en percentile par rapport à tous les pilotes plus bas.
+    let prog=null;
+    if(p.ts.length>=3){
+      // Tri par ts
+      const idx=p.ts.map((t,i)=>({t,pos:p.positions[i]})).sort((a,b)=>a.t-b.t);
+      const n=idx.length;
+      const meanT=idx.reduce((a,x)=>a+x.t,0)/n;
+      const meanP=idx.reduce((a,x)=>a+x.pos,0)/n;
+      let num=0,den=0;
+      idx.forEach(x=>{num+=(x.t-meanT)*(x.pos-meanP);den+=(x.t-meanT)**2});
+      if(den>0){
+        const slope=num/den; // delta pos / ms; si négatif = la position diminue (s'améliore) avec le temps
+        // Convertir en "points de progression par mois" (positif = s'améliore)
+        prog=-slope*30*24*3600*1000; // places gagnées par mois
+      }
+    }
+    p.prog=prog;
+    p.races=p.ts.length;
+    p.det=det;
+    out.push(p);
+  }
+  // Percentiliser la progression (plus prog élevé = mieux, prog négatif = régression)
+  const progVals=out.filter(x=>Number.isFinite(x.prog)).map(x=>x.prog);
+  if(progVals.length>=2){
+    out.forEach(p=>{
+      if(!Number.isFinite(p.prog)){p.det.progression=50;return}
+      const better=progVals.filter(v=>v>p.prog).length;
+      const equal=progVals.filter(v=>v===p.prog).length;
+      p.det.progression=100*(1-(better+(equal-1)/2)/(progVals.length-1));
+    });
+  }else{out.forEach(p=>p.det.progression=50)}
+  // Score final = moyenne 5 axes. Minimum 2 courses.
+  const final=out.filter(p=>p.races>=2).map(p=>{
+    const ax=p.det;
+    const score=(ax.regularite+ax.proprete+ax.vitesse+ax.resultats+ax.progression)/5;
+    return {id,name:idName.get(id)||'?',team:idTeam.get(id)||'',score,details:ax,count:p.races,trend:p.prog||0};
+  }).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name));
+  // Assigner niveau par quartile (1=top 25% … 4=bottom 25%). Utiliser la distribution naturelle.
+  const n=final.length;
+  final.forEach((p,i)=>{
+    const q=i/n;
+    p.level=q<0.25?1:q<0.5?2:q<0.75?3:4;
+  });
+  return final;
 }
+
 
 // Compute standings for an event without touching global sessions/penMap
 function computeEventStandings(sArr,penMapArg,cfg){
