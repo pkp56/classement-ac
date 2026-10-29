@@ -593,11 +593,82 @@ function admin(){
   const roundCards=rs.map((r,i)=>`<div class="admin-round"><b>Manche ${r.number} · ${esc(track(r.track))}</b><div class="muted">${date(r.date)} · ${r.sessions.length-1} course(s)</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn secondary small" onclick="openAdj(${i})">Pénalités</button><button class="btn secondary small" onclick="resetRound(${i})">Effacer</button></div></div>`).join('');
   const multiAdmin = backendMulti?`
     <div class="panel" style="margin-top:16px"><h2>Gestion des championnats & opens</h2><p class="note">Crée un nouveau championnat ou open (week-end). Chaque événement possède son propre barème, son propre calendrier et ses propres résultats.</p><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="createEventPrompt()">+ Créer un événement (championnat/open/archive)</button>${currentSlug?`<button class="btn secondary" onclick="deleteCurrentEvent()">Supprimer l'événement courant</button>`:''}</div></div>`:'';
-  return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Chargez un ou plusieurs JSON Assetto Server Manager. Les GUID Steam sont pseudonymisés.</p><div class="grid"><div class="panel"><h3>Importer une session</h3><input type="file" accept=".json" onchange="handleImport(event)"></div><div class="panel"><h3>Importer plusieurs JSON</h3><input type="file" accept=".json" multiple onchange="bulkImport(event)"></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>. Change d'événement via le sélecteur en haut pour importer ailleurs.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Pénalités temps (positives ou négatives pour annuler une pénalité serveur abusive), DQ ou avertissements. Les pénalités temps reclashent automatiquement.</p>${selectedRaceAdj!==null?renderAdjPanel(rs[selectedRaceAdj]):`<p class="note">Choisis une manche depuis « Manches ».</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>${multiAdmin}`;
+  return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Pénalités temps (positives ou négatives pour annuler une pénalité serveur abusive), DQ ou avertissements. Les pénalités temps reclashent automatiquement.</p>${selectedRaceAdj!==null?renderAdjPanel(rs[selectedRaceAdj]):`<p class="note">Choisis une manche depuis « Manches ».</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>${multiAdmin}`;
 }
 function renderAdjPanel(r){let html=`<div class="controls"><select onchange="selectedRaceAdj=null;render()">${rounds().map((x,i)=>`<option value="${i}" ${i===rounds().indexOf(r)?'selected':''}>Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div><p class="note">Sélectionne un pilote.</p><div class="grid">`;r.sessions.forEach((s,sj)=>{if(s.type!=='RACE')return;html+=`<div class="panel"><h3>Course ${r.sessions.slice(0,sj+1).filter(x=>x.type==='RACE').length}</h3>${table(['Pos.','Pilote','Ajuster'],s.results.map((p,i)=>`<tr><td class="pos">${i+1}</td><td>${esc(p.name)}</td><td><button class="btn secondary small" onclick="openAdjForm(${r.number-1},${sj},'${p.id}')">Modifier</button></td></tr>`))}</div>`});return html+'</div>'}
 function openAdj(roundIdx){selectedRaceAdj=roundIdx;adminTab='adjust';render()}
 function openAdjForm(rj,sj,did){const ta=prompt('Ajustement temps en secondes (+10 / -10 pour annuler une pénalité serveur) ?','0');if(ta===null)return;const timeAdd=+ta||0;const dq=confirm('DQ (drapeau noir) ?');const warning=!dq&&confirm('Avertissement sans sanction ?');const note=prompt('Note / motif ?','')||'';addAdjustment(rj,sj,did,timeAdd,dq,warning,note)}
+
+// ---------- AssettoHosting auto-import ----------
+async function ahImport(){
+  const out=document.getElementById('ah-result');
+  if(out){out.innerHTML='<p class="note">Scan des serveurs AssettoHosting en cours…</p>'}
+  try{
+    const r=await apiGet('/api/ah-scan');
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
+    let items=j.items||[];
+    // Filtres:
+    // 1) Enlever PRACTICE
+    items=items.filter(x=>x.type!=='PRACTICE');
+    // 2) Enlever celles qui contiennent "test" dans le nom/serveur/url (insensible à la casse)
+    const isTest=x=>/test/i.test((x.sessionName||'')+' '+(x.filename||'')+' '+(x.server||''));
+    items=items.filter(x=>!isTest(x));
+    // 3) Enlever celles déjà importées (même date+type)
+    const existing=new Set(sessions.map(s=>`${new Date(s.date).toISOString().slice(0,16)}|${s.type}`));
+    const pending=items.filter(x=>{
+      const key=new Date(x.date).toISOString().slice(0,16)+'|'+x.type;
+      return !existing.has(key);
+    });
+    if(!pending.length){
+      if(out)out.innerHTML=`<p class="note">✅ Aucune nouvelle session QUALIFY/RACE à importer (${items.length} déjà connues, practice ignorées).</p>`;
+      return;
+    }
+    if(out)out.innerHTML=`<p class="note">Récupération de ${pending.length} session(s) en cours…</p>`;
+    let ok=0,err=0,details=[];
+    for(const it of pending){
+      try{
+        const fr=await apiGet('/api/ah-fetch?url='+encodeURIComponent(it.url));
+        if(!fr.ok)throw new Error('HTTP '+fr.status);
+        const txt=await fr.text();
+        // Reimport dans notre parser
+        if(importSessionJson(txt,it.filename,{silent:true})){ok++;details.push(`+ ${it.type} ${it.filename}`)}
+        else{err++;details.push(`✗ erreur parsing ${it.filename}`)}
+      }catch(e){err++;details.push(`✗ ${it.filename}: ${e.message}`)}
+    }
+    if(ok>0)saveState();
+    render();
+    if(out)out.innerHTML=`<p class="note"><b>Import terminé :</b> ${ok} session(s) importée(s), ${err} erreur(s).</p><ul class="note" style="font-family:monospace;font-size:11px">${details.map(d=>'<li>'+esc(d)+'</li>').join('')}</ul>`;
+  }catch(e){if(out)out.innerHTML=`<p class="note" style="color:#9c3021">✗ Erreur : ${esc(e.message)}</p>`}
+}
+
+// Patch importSessionJson to support silent mode
+const _origImport=importSessionJson;
+importSessionJson=function(text,fileName,opts){
+  opts=opts||{};
+  try{let j=JSON.parse(text);
+    function driverFrom(obj){const drv=obj.Driver||obj.driver||{};const guid=drv.Guid||obj.DriverGuid||obj.Guid||'';const name=clean(drv.Name||obj.DriverName||'').trim();return {id:pseudonymizeGuid(guid||name+'|'+obj.CarId),name,team:clean(drv.Team||obj.Team||'')||'',skin:clean(obj.Skin||name||''),model:obj.Model||obj.CarModel}}
+    function clean(v){return String(v||'').replace(/7656119\d{10}/g,m=>pseudonymizeGuid(m))}
+    // Filtrer les sessions "test" par le nom du championnat/track si jamais ça passe (sécurité)
+    const serverName=(j.ServerName||j.Name||''), track=(j.TrackName||'');
+    if(/test/i.test(serverName+' '+track)){if(!opts.silent)alert('Session ignorée (nom contient "test").');return false}
+    if(j.Type==='PRACTICE'){if(!opts.silent)alert('Les sessions PRACTICE ne sont pas importées.');return false}
+    const cars={};(j.Cars||[]).forEach(c=>cars[c.CarId]=driverFrom(c));
+    const results=(j.Result||[]).map(r=>{const meta=cars[r.CarId]||driverFrom(r);return {id:meta.id,name:meta.name,team:meta.team||'',skin:meta.skin||'',grid:r.GridPosition,laps:r.NumLaps||0,best:r.BestLap,time:r.TotalTime,disqualified:!!r.Disqualified,hasPenalty:!!r.HasPenalty,penaltyTime:r.PenaltyTime||0,lapPenalty:r.LapPenalty||0}}).filter(r=>!(r.model==='dodge_monaco_police'||/broadcast/i.test(r.name)));
+    const laps=(j.Laps||[]).map(l=>{const meta=cars[l.CarId];if(!meta)return null;return {id:meta.id,time:l.LapTime,cuts:l.Cuts||0,timestamp:l.Timestamp}}).filter(Boolean);
+    const events=(j.Events||[]).filter(e=>e.Type==='COLLISION_WITH_CAR'&&j.Type==='RACE').map(e=>{const a=cars[e.CarId],b=cars[e.OtherCarId];if(!a||!b)return null;return {a:a.name,b:b.name,aid:a.id,bid:b.id,speed:e.ImpactSpeed,timestamp:e.Timestamp}}).filter(Boolean);
+    let raceStart=null;
+    if(j.Type==='RACE'){const c=[];laps.forEach(l=>{if(typeof l.timestamp==='number'&&typeof l.time==='number'&&40000<l.time<600000)c.push(l.timestamp-l.time/1000)});if(c.length)raceStart=Math.min(...c)}
+    const sess={date:j.Date,track:j.TrackName,type:j.Type,results,laps,events,raceStart};
+    const idx=sessions.findIndex(x=>x.date===j.Date&&x.type===j.Type);
+    if(idx>=0)sessions[idx]=sess;else sessions.push(sess);
+    sessions.sort((a,b)=>a.date.localeCompare(b.date));
+    if(!opts.silent){saveState();alert(`Import réussi : ${j.Type} du ${j.Date}.`);render()}
+    return true;
+  }catch(err){if(!opts.silent)alert('Erreur d\'import : '+err.message);return false}
+};
+
+function importSessionJson(text,fileName,opts){return importSessionJson(text,fileName,opts)}
 
 // ---------- RENDER ----------
 function render(){

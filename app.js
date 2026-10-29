@@ -75,6 +75,74 @@ function proxyJson(opts, cb) {
 
 app.all('/health',(req,res)=>proxyRequest(req,res));
 
+// --- PROXY AssettoHosting pour import automatique ---
+const AH_SERVERS = (process.env.AH_SERVERS||'https://fr2.assettohosting.com:50648,https://fr5.assettohosting.com:50145')
+  .split(',').map(s=>s.trim()).filter(Boolean);
+
+function ahFetch(url, timeoutMs=15000){
+  return new Promise((resolve,reject)=>{
+    let u;try{u=new URL(url)}catch(e){return reject(new Error('URL invalide'))}
+    const proto=u.protocol==='https:'?https:http;
+    const req=proto.get({hostname:u.hostname,port:u.port||(u.protocol==='https:'?443:80),path:u.pathname+u.search,headers:{'User-Agent':'GDSP-Importer/1.0','Accept':'application/json,*/*'}},res=>{
+      if(res.statusCode>=300&&res.statusCode<400&&res.headers.location){
+        return ahFetch(new URL(res.headers.location,url).toString(),timeoutMs).then(resolve,reject);
+      }
+      const chunks=[];
+      res.on('data',c=>chunks.push(c));
+      res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body:Buffer.concat(chunks)}));
+    });
+    req.setTimeout(timeoutMs,()=>req.destroy(new Error('timeout')));
+    req.on('error',reject);
+  });
+}
+
+async function ahList(serverUrl){
+  const r=await ahFetch(serverUrl.replace(/\/+$/,'')+'/results');
+  if(r.status!==200)throw new Error('HTTP '+r.status);
+  const html=r.body.toString('utf8');
+  // Extract href="/results/download/XXXX.json"
+  const re=/href="\/results\/download\/([^"]+\.json)"/g;
+  const out=[];let m;
+  while((m=re.exec(html))!==null){
+    const filename=m[1];
+    // Parse filename: YYYY_MM_DD_H_M_TYPE.json
+    const parts=filename.replace(/\.json$/,'').split('_');
+    if(parts.length<5)continue;
+    const [y,mo,d,h,mi,...rest]=parts;
+    const type=rest.pop().toUpperCase(); // QUALIFY / RACE / PRACTICE
+    const serverName=rest.join('_'); // possible session name if any
+    const dObj=new Date(+y,+mo-1,+d,+h,+mi);
+    out.push({filename,url:serverUrl.replace(/\/+$/,'')+'/results/download/'+filename,type,date:dObj.toISOString(),sessionName:serverName});
+  }
+  return out;
+}
+
+app.get('/api/ah-scan', async(req,res)=>{
+  try{
+    let all=[];
+    for(const srv of AH_SERVERS){
+      try{
+        const items=(await ahList(srv)).map(x=>({server:srv,...x}));
+        all=all.concat(items);
+      }catch(e){all.push({server:srv,error:e.message})}
+    }
+    res.json({servers:AH_SERVERS,items:all.filter(x=>!x.error),errors:all.filter(x=>x.error)});
+  }catch(e){res.status(502).json({error:e.message})}
+});
+
+app.get('/api/ah-fetch', async(req,res)=>{
+  const url=String(req.query.url||'');
+  if(!/^https?:\/\/(fr2|fr5)\.assettohosting\.com/i.test(url)){
+    return res.status(400).json({error:'URL non autorisée.'});
+  }
+  try{
+    const r=await ahFetch(url,20000);
+    res.set('Cache-Control','public, max-age=300');
+    res.set('Content-Type','application/json');
+    res.status(r.status).send(r.body);
+  }catch(e){res.status(502).json({error:e.message})}
+});
+
 // Endpoint de réinitialisation TOTALE (doit être déclaré AVANT le générique /api/*) :
 // 1) sauvegarde un championnat VIDE mais valide (avec une clé _reset pour satisfaire isNonEmptyObject) ;
 // 2) efface aussi l'ancienne table drivers/penalties via PUT /api/results ;
