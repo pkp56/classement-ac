@@ -1,152 +1,66 @@
+// Serveur statique minimal pour le site GDSP (Lola T290 International Series).
+// Déployable sur Render en service Web statique via Node.
+// La persistance métier est assurée par le backend séparé (gdsp-render-backend) ;
+// ce serveur ne fait que servir les fichiers et injecter l'URL du backend dans le HTML.
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+
 const app = express();
 app.disable('x-powered-by');
 
-// Permet au serveur de lire les données JSON envoyées par le site
-app.use(express.json({ limit: '5mb', strict: true }));
-app.use((err, req, res, next) => {
-    if (err.type === 'entity.too.large') return res.status(413).json({ status: 'error', message: 'JSON trop volumineux.' });
-    if (err instanceof SyntaxError && 'body' in err) return res.status(400).json({ status: 'error', message: 'JSON invalide.' });
-    next(err);
-});
+const PORT = Number(process.env.PORT || 10000);
+const BACKEND_URL = (process.env.GDSP_API_URL || process.env.BACKEND_URL || '').replace(/\/+$/,'');
+const ROOT = __dirname;
+
+// Sécurité : ne jamais servir de .env, node_modules, sources de build, backups, etc.
+const FORBIDDEN = /(^|\/)(?:\.env|node_modules|\.git|\.github|package\.json|package-lock\.json|README\.md|render\.yaml|\.gitignore|\.gitattributes|app\.js|tests?\/|backups?\/)/i;
 app.use((req, res, next) => {
-    if (/^\/(?:data\/backups|node_modules)(?:\/|$)/i.test(req.path) || /\.(?:js|py|json|md|lock|bak|tmp)$/i.test(req.path) && !/^\/(?:sessions|championnat)\.js$/i.test(req.path) && !/^\/data\/(?:ranking|championship)\.json$/i.test(req.path)) return res.sendStatus(404);
-    next();
-});
-app.use(express.static(__dirname, { dotfiles: 'deny' }));
-
-// Health check public et sans données sensibles pour vérifier l'état du service Render.
-app.get('/healthz', (req, res) => {
-    res.set('Cache-Control', 'no-store');
-    res.status(200).json({ status: 'ok' });
+  if (FORBIDDEN.test(req.path)) return res.sendStatus(404);
+  next();
 });
 
-// Route pour charger la page principale
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// ROUTE DE SAUVEGARDE : Enregistre les classements sur le serveur
-app.post('/api/save-championship', requireAdmin, async (req, res) => {
-    try {
-        const dataDir = path.join(__dirname, 'data');
-        if (!fs.existsSync(dataDir)) {
-            fs.mkdirSync(dataDir);
-        }
-        
-        const filePath = path.join(dataDir, 'championship.json');
-        if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) || !Object.keys(req.body).length) {
-            return res.status(400).json({ status: 'error', message: 'Championnat JSON invalide.' });
-        }
-        if (fs.existsSync(filePath)) {
-            const backups = path.join(dataDir, 'backups');
-            fs.mkdirSync(backups, { recursive: true });
-            fs.copyFileSync(filePath, path.join(backups, 'championship.json.' + Date.now() + '.' + crypto.randomBytes(4).toString('hex') + '.bak'));
-        }
-        const temp = filePath + '.' + crypto.randomBytes(8).toString('hex') + '.tmp';
-        try {
-            fs.writeFileSync(temp, JSON.stringify(req.body, null, 2), { flag: 'wx' });
-            fs.renameSync(temp, filePath);
-        } finally {
-            if (fs.existsSync(temp)) fs.unlinkSync(temp);
-        }
-        
-        // Publication GitHub côté serveur : le jeton n'est jamais envoyé au navigateur.
-        if (process.env.GITHUB_TOKEN) {
-            const owner = process.env.GITHUB_OWNER || 'pkp56';
-            const repo = process.env.GITHUB_REPO || 'classement-ac';
-            const branch = process.env.GITHUB_BRANCH || 'main';
-            const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/data/championship.json`;
-            const headers = { 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'classement-ac-admin' };
-            const current = await fetch(apiUrl + '?ref=' + encodeURIComponent(branch), { headers });
-            let sha;
-            if (current.ok) sha = (await current.json()).sha;
-            else if (current.status !== 404) throw new Error('Lecture GitHub impossible (HTTP ' + current.status + ').');
-            const publish = await fetch(apiUrl, { method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Mise à jour du classement depuis l’administration', content: Buffer.from(JSON.stringify(req.body, null, 2), 'utf8').toString('base64'), branch, ...(sha ? { sha } : {}) }) });
-            if (!publish.ok) {
-                const detail = await publish.json().catch(() => ({}));
-                throw new Error('Publication GitHub impossible (HTTP ' + publish.status + ') : ' + (detail.message || 'erreur API'));
-            }
-            return res.json({ status: 'success', message: 'Championnat sauvegardé sur le serveur et publié sur GitHub.' });
-        }
-        res.json({ status: 'success', message: 'Championnat sauvegardé sur le serveur. Publication GitHub non configurée (GITHUB_TOKEN absent).' });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ status: "error", message: "Erreur lors de la sauvegarde sur le serveur." });
-    }
-});
-
-// Accès administrateur : variable d'environnement Render GDSPADMIN.
-const crypto = require('crypto');
-const adminTokens = new Map();
-const SESSION_MS = 8 * 60 * 60 * 1000;
-const failedLogins = new Map();
-function safeEqual(a, b) {
-    return crypto.timingSafeEqual(
-        crypto.createHash('sha256').update(String(a)).digest(),
-        crypto.createHash('sha256').update(String(b)).digest()
-    );
+// Injection de la configuration backend dans le HTML servi.
+// Remplace le marqueur __GDSP_API_URL__ par la valeur de la variable d'env,
+// ce qui évite de rebuild l'HTML quand l'URL change (ex: nouveau backend Render).
+const INDEX_PATH = path.join(ROOT, 'index.html');
+let _indexCache = null;
+function getIndex() {
+  const html = fs.readFileSync(INDEX_PATH, 'utf8');
+  return html.replace(/__GDSP_API_URL__/g, BACKEND_URL || '');
 }
-function requireAdmin(req, res, next) {
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-    if (!token || !adminTokens.has(token) || adminTokens.get(token) < Date.now()) {
-        if (token) adminTokens.delete(token);
-        return res.status(401).json({ status: 'error', message: 'Connexion administrateur requise.' });
-    }
-    next();
-}
-app.post('/api/admin/login', (req, res) => {
-    const configuredUsername = process.env.ADMIN_USERNAME || 'gdspadmin';
-    const configuredPassword = process.env.GDSPADMIN || process.env.ADMIN_PASSWORD;
-    if (!configuredPassword) return res.status(503).json({ status: 'error', message: 'La variable ADMIN_PASSWORD (ou GDSPADMIN) doit être configurée dans Render.' });
-    const now = Date.now();
-    const ip = req.ip;
-    const failures = (failedLogins.get(ip) || []).filter(t => now - t < 15 * 60 * 1000);
-    if (failures.length >= 10) return res.status(429).json({ status: 'error', message: 'Trop de tentatives. Réessayez plus tard.' });
-    const suppliedUsername = Buffer.from(String(req.body && req.body.username || ''));
-    const expectedUsername = Buffer.from(configuredUsername);
-    const suppliedPassword = Buffer.from(String(req.body && req.body.password || ''));
-    const expectedPassword = Buffer.from(configuredPassword);
-    const usernameValid = safeEqual(suppliedUsername.toString(), expectedUsername.toString());
-    const passwordValid = safeEqual(suppliedPassword.toString(), expectedPassword.toString());
-    if (!usernameValid || !passwordValid) {
-        failedLogins.set(ip, [...failures, now]);
-        return res.status(401).json({ status: 'error', message: 'Identifiant ou mot de passe incorrect.' });
-    }
-    failedLogins.delete(ip);
-    const token = crypto.randomBytes(32).toString('hex');
-    adminTokens.set(token, Date.now() + SESSION_MS);
-    res.json({ status: 'success', token });
-});
-app.post('/api/admin/logout', requireAdmin, (req, res) => {
-    adminTokens.delete(req.headers.authorization.slice(7));
-    res.json({ status: 'success' });
-});
-app.post('/api/admin/reset-json', requireAdmin, (req, res) => {
-    if (!req.body || req.body.confirmation !== 'SUPPRIMER') return res.status(400).json({ status: 'error', message: 'Confirmation manquante.' });
-    try {
-        const dataDir = path.join(__dirname, 'data');
-        let deleted = [];
-        if (fs.existsSync(dataDir)) {
-            deleted = ['ranking.json', 'championship.json'].filter(name => fs.existsSync(path.join(dataDir, name)) && fs.statSync(path.join(dataDir, name)).isFile());
-            const backups = path.join(dataDir, 'backups');
-            fs.mkdirSync(backups, { recursive: true });
-            for (const name of deleted) fs.copyFileSync(path.join(dataDir, name), path.join(backups, name + '.' + Date.now() + '.' + crypto.randomBytes(4).toString('hex') + '.bak'));
-            for (const name of deleted) fs.unlinkSync(path.join(dataDir, name));
-        }
-        res.json({ status: 'success', deletedCount: deleted.length, message: deleted.length + ' fichier(s) JSON supprimé(s) dans le dossier data.' });
-    } catch (error) {
-        console.error('Échec de réinitialisation JSON :', error);
-        res.status(500).json({ status: 'error', message: 'Erreur pendant la suppression des fichiers JSON.' });
-    }
+app.get('/', (_req, res) => {
+  if (!_indexCache || process.env.NODE_ENV !== 'production') _indexCache = getIndex();
+  res.set('Content-Type', 'text/html; charset=utf-8');
+  res.set('Cache-Control', 'no-cache');
+  res.send(_indexCache);
 });
 
-const PORT = process.env.PORT || 3000;
-if (require.main === module) app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Serveur démarré sur le port ${PORT}`);
+// Health check pour Render.
+app.get('/healthz', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.status(200).json({ ok: true, service: 'gdsp-frontend', backendConfigured: !!BACKEND_URL });
 });
 
-module.exports = app;
+// Fichiers statiques (HTML/CSS/JS/images/JSON).
+app.use(express.static(ROOT, {
+  dotfiles: 'deny',
+  etag: true,
+  maxAge: '1h',
+  setHeaders(res, filePath) {
+    if (/data\.json$/i.test(filePath)) res.set('Cache-Control', 'no-cache');
+    if (/\.html$/i.test(filePath)) res.set('Cache-Control', 'no-cache');
+  }
+}));
+
+// Redirections de courtoisie pour les routes hash du SPA.
+app.get('*', (req, res, next) => {
+  // Ne pas intercepter les fichiers évidents (avec extension)
+  if (path.extname(req.path)) return next();
+  res.sendFile(INDEX_PATH);
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`GDSP frontend démarré sur le port ${PORT}. Backend configuré : ${BACKEND_URL || '(aucun — lecture seule data/data.json)'}`);
+});
