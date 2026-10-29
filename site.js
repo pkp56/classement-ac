@@ -38,11 +38,16 @@ const date=x=>new Date(x).toLocaleDateString('fr-FR',{day:'numeric',month:'long'
 function track(x){return ({'mt-tremblant_69':'Mont-Tremblant','riverside':'Riverside','sebring_90s':'Sebring','mid_ohio':'Mid-Ohio'})[x]||x}
 
 function nav(){
+  // Hide event-specific tabs (classement/manches/pilotes) if no event is selected
+  let navLabels={...labels()};
+  if(backendMulti&&!eventContext){
+    delete navLabels.classement;delete navLabels.manches;delete navLabels.pilotes;
+  }
   const crumb = backendMulti && page!=='hub' && currentSlug
     ? `<div class="subcrumb" style="padding:6px 0 0 0"><a onclick="goHome()">← Tous les championnats</a></div>`
     : '';
   document.getElementById('nav').innerHTML =
-    Object.entries(labels()).map(([k,v])=>`<button class="${page===k?'active':''}" onclick="go('${k}')">${v.toUpperCase()}</button>`).join('');
+    Object.entries(navLabels).map(([k,v])=>`<button class="${page===k?'active':''}" onclick="go('${k}')">${v.toUpperCase()}</button>`).join('');
   renderEventSwitcher();
 }
 function go(x){page=x;render();window.scrollTo(0,0)}
@@ -53,6 +58,11 @@ function renderEventSwitcher(){
   const tr=document.getElementById('topRight');
   if(!backendMulti){sw.innerHTML='';tr.textContent='INTERNATIONAL SERIES · LOLA T290';return}
   if(!events.length){sw.innerHTML='';tr.textContent='GDSP';return}
+  if(events.length===1&&!eventContext){
+    // Un seul événement: on charge directement l'événement sans passer par le hub
+    // (fait en async au boot, via bootstrap)
+    sw.innerHTML='';tr.textContent=events[0].name.toUpperCase();return
+  }
   if(page==='hub'||page==='global'){sw.innerHTML='';tr.textContent='GENTLEMAN DRIVERS PROJECT';return}
   const champOpts=events.filter(e=>e.kind==='championship');
   const openOpts=events.filter(e=>e.kind==='open');
@@ -103,6 +113,7 @@ async function loadEvent(slug){
     const ev=await r.json();
     eventContext={slug:ev.slug,name:ev.name,kind:ev.kind,pointsConfig:ev.points_config||{},data:ev.data||{}};
     currentSlug=ev.slug;
+    localStorage.setItem('gdsp_last_event',ev.slug);
     const d=ev.data||{};
     sessions.length=0;
     if(Array.isArray(d.sessions))sessions.push(...d.sessions);
@@ -593,6 +604,10 @@ function admin(){
   const roundCards=rs.map((r,i)=>`<div class="admin-round"><b>Manche ${r.number} · ${esc(track(r.track))}</b><div class="muted">${date(r.date)} · ${r.sessions.length-1} course(s)</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn secondary small" onclick="openAdj(${i})">Pénalités</button><button class="btn secondary small" onclick="resetRound(${i})">Effacer</button></div></div>`).join('');
   const multiAdmin = backendMulti?`
     <div class="panel" style="margin-top:16px"><h2>Gestion des championnats & opens</h2><p class="note">Crée un nouveau championnat ou open (week-end). Chaque événement possède son propre barème, son propre calendrier et ses propres résultats.</p><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="createEventPrompt()">+ Créer un événement (championnat/open/archive)</button>${currentSlug?`<button class="btn secondary" onclick="deleteCurrentEvent()">Supprimer l'événement courant</button>`:''}</div></div>`:'';
+  if(backendMulti&&!eventContext&&adminTab==='import'){
+    // Empêcher l'import si aucun événement sélectionné
+    return `${head('administration','Direction de course','')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="panel"><h2>Sélectionne d'abord un événement</h2><p class="note">Choisis un championnat/open dans le menu en haut à droite, ou retourne à l'accueil et clique sur une vignette, avant d'importer des résultats.</p><button class="btn secondary" onclick="goHome()">← Retour à l'accueil</button></div>${multiAdmin}`;
+  }
   return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Pénalités temps (positives ou négatives pour annuler une pénalité serveur abusive), DQ ou avertissements. Les pénalités temps reclashent automatiquement.</p>${selectedRaceAdj!==null?renderAdjPanel(rs[selectedRaceAdj]):`<p class="note">Choisis une manche depuis « Manches ».</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>${multiAdmin}`;
 }
 function renderAdjPanel(r){let html=`<div class="controls"><select onchange="selectedRaceAdj=null;render()">${rounds().map((x,i)=>`<option value="${i}" ${i===rounds().indexOf(r)?'selected':''}>Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div><p class="note">Sélectionne un pilote.</p><div class="grid">`;r.sessions.forEach((s,sj)=>{if(s.type!=='RACE')return;html+=`<div class="panel"><h3>Course ${r.sessions.slice(0,sj+1).filter(x=>x.type==='RACE').length}</h3>${table(['Pos.','Pilote','Ajuster'],s.results.map((p,i)=>`<tr><td class="pos">${i+1}</td><td>${esc(p.name)}</td><td><button class="btn secondary small" onclick="openAdjForm(${r.number-1},${sj},'${p.id}')">Modifier</button></td></tr>`))}</div>`});return html+'</div>'}
@@ -693,16 +708,24 @@ function render(){
   await detectBackend();
 
   if(backendMulti){
-    // Multi mode: start on hub
+    // Multi mode
     try{
-      // Refresh events list after detection
       const lr=await apiGet('/api/events');
       if(lr.ok){const j=await lr.json();events=Array.isArray(j.events)?j.events:[]}
     }catch(e){}
-    // Auto-load default Lola if it exists
-    const def=events.find(e=>e.slug===LEGACY_DEFAULT_SLUG);
-    if(def){/* Ne rien charger d'office: affichage du hub */}
-    page='hub';
+    if(events.length===1){
+      // Un seul événement: on y entre directement (pas de hub vide)
+      await loadEvent(events[0].slug);
+      page='accueil';
+    }else if(events.length>1){
+      // Plusieurs événements: afficher le hub
+      // Auto-load default Lola if present and no last-event stored
+      const last=localStorage.getItem('gdsp_last_event');
+      if(last&&events.find(e=>e.slug===last)){await loadEvent(last);page='accueil'}
+      else page='hub';
+    }else{
+      page='hub';
+    }
   }else{
     // Legacy mode: same behaviour as before
     page='accueil';
