@@ -878,22 +878,33 @@ async function ahImport(){
     const r=await apiGet(endpoint);
     const j=await r.json();
     if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
-    let items=j.items||[];
+    let items=(j.items||[]).map(x=>({...x,_type:x.sessionType||x.rawType||x.type}));
     // Filtres:
     // 1) Enlever PRACTICE
-    items=items.filter(x=>x.type!=='PRACTICE');
+    items=items.filter(x=>x._type!=='PRACTICE');
     // 2) Enlever celles qui contiennent "test" dans le nom/serveur/url (insensible à la casse)
-    const isTest=x=>/test/i.test((x.sessionName||'')+' '+(x.filename||'')+' '+(x.server||''));
+    const isTest=x=>/test/i.test((x.eventName||'')+' '+(x.sessionName||'')+' '+(x.filename||'')+' '+(x.server||''));
     items=items.filter(x=>!isTest(x));
     // 3) Enlever celles déjà importées (même date+type)
     const existing=new Set(sessions.map(s=>`${new Date(s.date).toISOString().slice(0,16)}|${s.type}`));
     const pending=items.filter(x=>{
-      const key=new Date(x.date).toISOString().slice(0,16)+'|'+x.type;
+      if(!x.date)return false;
+      const key=new Date(x.date).toISOString().slice(0,16)+'|'+x._type;
       return !existing.has(key);
     });
-    if(ahConfig && out)out.innerHTML=`<p class="note">Événement lié à <b>${esc(j.championship||'')}</b> (${j.events||0} manches côté AH). ${pending.length} session(s) nouvelle(s) détectée(s) pour cet événement.</p>`;
+    const alreadyKnown=items.length-pending.length;
+    const evLabel=esc(j.championship||'');
+    if(ahConfig && out){
+      if(items.length===0){
+        out.innerHTML=`<p class="note">Événement lié à <b>${evLabel}</b> (${j.events||0} manches côté AH), mais <b>AssettoHosting n'a conservé aucun résultat historique pour cet événement</b> (les données ont été purgées avec le temps). Importe les fichiers JSON manuellement si tu les possèdes encore.</p>`;
+        return;
+      }
+      out.innerHTML=`<p class="note">Événement lié à <b>${evLabel}</b> (${j.events||0} manches côté AH, ${items.length} sessions récupérables depuis l'archive AH). ${pending.length} nouvelle(s), ${alreadyKnown} déjà importée(s).</p>`;
+    }
     if(!pending.length){
-      const msg=ahConfig?`✅ Aucune nouvelle session QUALIFY/RACE pour cet événement (${items.length} déjà connues).`:`✅ Aucune nouvelle session QUALIFY/RACE à importer (${items.length} déjà connues, practice ignorées).`;
+      let msg;
+      if(ahConfig)msg=`✅ Aucune nouvelle session à importer (${alreadyKnown} déjà présente${alreadyKnown>1?'s':''} dans cet événement).`;
+      else msg=`✅ Aucune nouvelle session QUALIFY/RACE à importer (${alreadyKnown} déjà connues, PRACTICE ignorées).`;
       if(out)out.innerHTML=(ahConfig?out.innerHTML:'')+`<p class="note">${msg}</p>`;
       return;
     }
@@ -910,9 +921,9 @@ async function ahImport(){
         }
         if(!fr.ok)throw new Error('HTTP '+fr.status);
         txt=await fr.text();
-        if(importSessionJson(txt,fname,{silent:true})){ok++;details.push(`+ ${it.rawType||it.type} ${it.track||''} ${it.eventName?'('+it.eventName+')':''}`)}
+        if(importSessionJson(txt,fname,{silent:true})){ok++;details.push(`+ ${it._type} ${it.track||''} ${it.eventName?'('+it.eventName+')':''}`)}
         else{err++;details.push(`✗ erreur parsing ${fname}`)}
-      }catch(e){err++;details.push(`✗ ${it.rawType||it.type} ${it.eventName||''}: ${e.message}`)}
+      }catch(e){err++;details.push(`✗ ${it._type} ${it.eventName||''}: ${e.message}`)}
     }
     if(ok>0)saveState();
     render();
