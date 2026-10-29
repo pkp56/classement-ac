@@ -24,8 +24,8 @@ nav{display:flex;gap:25px;align-items:center;flex-wrap:wrap}
 nav button{background:none;border:0;color:#d6d0c0;font-size:12px;font-weight:bold;letter-spacing:1.2px;cursor:pointer;padding:12px 0}
 nav button.active{color:white;border-bottom:2px solid #d7a34b}
 .right{margin-left:auto;color:#d2a55f;font-size:11px;letter-spacing:2px;font-weight:bold;white-space:nowrap}
-.event-switcher{margin-left:14px;display:flex;align-items:center;gap:6px}
-.event-switcher select{background:#1c3a43;color:#f4ecd8;border:1px solid #3b5a64;padding:6px 8px;font:inherit;font-size:11px;letter-spacing:.5px}
+.event-switcher{display:flex;align-items:center;gap:6px}
+.event-switcher select{background:#1c3a43;color:#f4ecd8;border:1px solid #3b5a64;padding:6px 8px;font:inherit;font-size:11px;letter-spacing:.5px;max-width:360px}
 .page{max-width:1330px;margin:auto;padding:34px 35px 70px}
 .eyebrow{font-size:11px;letter-spacing:2.5px;font-weight:bold;text-transform:uppercase;color:var(--red)}
 h1,h2,h3{font-family:Impact,'Arial Narrow',sans-serif;text-transform:uppercase;letter-spacing:.7px;font-weight:normal}
@@ -115,12 +115,14 @@ code{background:#e6dcc3;padding:2px 5px}
       <div class="brand-title">GENTLEMAN<br>DRIVERS<br>PROJECT</div>
     </div>
     <nav id="nav"></nav>
-    <div id="event-switcher" class="event-switcher"></div>
-    <div class="right" id="topRight">INTERNATIONAL SERIES · LOLA T290</div>
+    <div style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+      <div class="right" id="topRight" style="margin-left:0">INTERNATIONAL SERIES · LOLA T290</div>
+      <div id="event-switcher" class="event-switcher" style="margin-left:0"></div>
+    </div>
   </div>
 </header>
 <div class="page" id="app"></div>
 <footer class="footer">GDSP — Gentleman Drivers Project · Classements et résultats communautaires.</footer>
-<script src="/site.js?v=10"></script>
+<script src="/site.js?v=11"></script>
 </body>
 </html>

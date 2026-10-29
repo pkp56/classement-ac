@@ -75,18 +75,16 @@ function renderEventSwitcher(){
   if(!backendMulti){sw.innerHTML='';tr.textContent='INTERNATIONAL SERIES · LOLA T290';return}
   if(!events.length){sw.innerHTML='';tr.textContent='GDSP';return}
   if(events.length===1&&!eventContext){
-    // Un seul événement: on charge directement l'événement sans passer par le hub
-    // (fait en async au boot, via bootstrap)
     sw.innerHTML='';tr.textContent=events[0].name.toUpperCase();return
   }
   if(page==='hub'||page==='global'){sw.innerHTML='';tr.textContent='GENTLEMAN DRIVERS PROJECT';return}
+  const ev=events.find(e=>e.slug===currentSlug);
+  tr.textContent=ev?ev.name.toUpperCase():'GDSP';
   const champOpts=events.filter(e=>e.kind==='championship');
   const openOpts=events.filter(e=>e.kind==='open');
   const archOpts=events.filter(e=>e.kind==='archive');
   const grp=(label,arr)=>arr.length?`<optgroup label="${label}">${arr.map(e=>`<option value="${esc(e.slug)}" ${e.slug===currentSlug?'selected':''}>${esc(e.name)}</option>`).join('')}</optgroup>`:'';
-  sw.innerHTML=`<select onchange="switchEvent(this.value)"><option value="">— Tous les championnats —</option>${grp('Championnats',champOpts)}${grp('Opens',openOpts)}${grp('Archives',archOpts)}</select>`;
-  const ev=events.find(e=>e.slug===currentSlug);
-  tr.textContent=ev?ev.name.toUpperCase():'GDSP';
+  sw.innerHTML=`<select onchange="switchEvent(this.value)"><option value="">— Changer de championnat/open —</option>${grp('Championnats',champOpts)}${grp('Opens',openOpts)}${grp('Archives',archOpts)}</select>`;
 }
 
 async function switchEvent(slug){
