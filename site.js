@@ -154,7 +154,7 @@ function head(k,t,desc=''){
   const eye = prefix ? prefix : 'GDSP / '+k;
   return `<div class="eyebrow">${esc(eye)}</div><h1>${t}</h1>${desc?`<p class="note">${desc}</p>`:''}`;
 }
-function table(headers,rows){return `<div class="table-wrap"><table><thead><tr>${headers.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.join('')||'<tr><td colspan="8">Aucune donnée disponible.</td></tr>'}</tbody></table></div>`}
+function table(headers,rows){rows=Array.isArray(rows)?rows:[];return `<div class="table-wrap"><table><thead><tr>${headers.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.join('')||'<tr><td colspan="8">Aucune donnée disponible.</td></tr>'}</tbody></table></div>`}
 function fmt(t){if(!t||t<0||t>99999999)return '—';let m=Math.floor(t/60000),s=((t%60000)/1000).toFixed(3);return `${m}:${s.padStart(6,'0')}`}
 
 // ---------- Pénalités / tri ----------
