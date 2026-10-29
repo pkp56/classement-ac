@@ -739,12 +739,18 @@ async function ahImport(){
     let ok=0,err=0,details=[];
     for(const it of pending){
       try{
-        const fr=await apiGet('/api/ah-fetch?url='+encodeURIComponent(it.url));
+        let fr,txt,fname=it.filename||(it.rawType+'_'+(it.date||'').slice(0,10));
+        if(it.source==='export'){
+          const qs=new URLSearchParams({server:it.server,uuid:ahConfig.uuid,eventId:it.eventId,rawType:it.rawType}).toString();
+          fr=await apiGet('/api/ah-championship-session-json?'+qs);
+        }else{
+          fr=await apiGet('/api/ah-fetch?url='+encodeURIComponent(it.url));
+        }
         if(!fr.ok)throw new Error('HTTP '+fr.status);
-        const txt=await fr.text();
-        if(importSessionJson(txt,it.filename,{silent:true})){ok++;details.push(`+ ${it.type} ${it.track||''} ${it.filename}${it.eventName?' ('+it.eventName+')':''}`)}
-        else{err++;details.push(`✗ erreur parsing ${it.filename}`)}
-      }catch(e){err++;details.push(`✗ ${it.filename}: ${e.message}`)}
+        txt=await fr.text();
+        if(importSessionJson(txt,fname,{silent:true})){ok++;details.push(`+ ${it.rawType||it.type} ${it.track||''} ${it.eventName?'('+it.eventName+')':''}`)}
+        else{err++;details.push(`✗ erreur parsing ${fname}`)}
+      }catch(e){err++;details.push(`✗ ${it.rawType||it.type} ${it.eventName||''}: ${e.message}`)}
     }
     if(ok>0)saveState();
     render();

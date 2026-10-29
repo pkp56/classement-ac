@@ -236,6 +236,9 @@ function suggestSlug(name,created){
 }
 
 // Liste des JSON de résultats appartenant spécifiquement à un championnat (filtre par fenêtre de dates des Events + type)
+// Liste les sessions d'un championnat en lisant directement l'export /championship/<uuid>/export.
+// L'export AH contient les résultats complets (Cars/Result/Laps/Events) pour TOUTES les sessions
+// passées, y compris les championnats archivés dont les JSON /results/download ont été purgés.
 app.get('/api/ah-championship-sessions', async(req,res)=>{
   const server=String(req.query.server||'').replace(/\/+$/,'');
   const uuid=String(req.query.uuid||'');
@@ -243,72 +246,74 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
   if(!/^[0-9a-f-]{36}$/i.test(uuid))return res.status(400).json({error:'UUID invalide.'});
   try{
     const champ=await ahFetchChampionship(server,uuid);
-    // 1) Construire les fenêtres temporelles par event
-    const windows=[];
+    const items=[];
     const events=champ.Events||{};
-    let hasValidEvent=false;
-    for(const k in events){
-      const ev=events[k];if(!ev)continue;
-      const startRaw=ev.StartedTime?new Date(ev.StartedTime).getTime():NaN;
-      const endRaw=ev.CompletedTime?new Date(ev.CompletedTime).getTime():NaN;
-      if(isFinite(startRaw)&&startRaw>1000000000000){
-        hasValidEvent=true;
-        const start=startRaw;
-        const end=isFinite(endRaw)&&endRaw>start?endRaw:start+6*3600*1000;
-        const sess=ev.Sessions||{};
-        const types=[];
-        if(sess.QUALIFY)types.push('QUALIFY');
-        if(sess.RACE)types.push('RACE');
-        if(sess.RACEx2)types.push('RACEx2');
-        windows.push({evId:ev.ID,name:ev.Name||'',start,end,types,track:(ev.RaceSetup&&ev.RaceSetup.Track)||null});
+    for(const evId in events){
+      const ev=events[evId];if(!ev)continue;
+      const sess=ev.Sessions||{};
+      const ordered=['QUALIFY','RACE','RACEx2'];
+      for(const rawType of ordered){
+        const s=sess[rawType];if(!s)continue;
+        const rObj=s.Results||{};
+        const hasFull=Array.isArray(rObj.Result) && rObj.Result.length>0;
+        const date=(rObj.Date)||s.StartedTime||s.CompletedTime||ev.StartedTime||null;
+        const track=rObj.TrackName||(ev.RaceSetup&&ev.RaceSetup.Track)||null;
+        items.push({
+          source: hasFull?'export':'url',
+          eventId:evId,eventName:ev.Name||champ.Name||'',
+          rawType,
+          sessionType:(rawType==='QUALIFY')?'QUALIFY':'RACE',
+          date:date?new Date(date).toISOString():null,
+          track,
+          server,url:null,filename:null
+        });
       }
     }
-    // Si aucun event n'a de date valide (championnat archivé / open), utiliser Created→Updated du championnat
-    // avec types par défaut QUALIFY+RACE+RACEx2.
-    if(!hasValidEvent){
-      const cStart=champ.Created?new Date(champ.Created).getTime():NaN;
-      const cEnd=champ.Updated?new Date(champ.Updated).getTime():NaN;
-      if(isFinite(cStart)&&isFinite(cEnd)){
-        windows.push({evId:'champ',name:champ.Name||'',start:cStart-24*3600*1000,end:cEnd+24*3600*1000,types:['QUALIFY','RACE','RACEx2'],track:null});
-      }
-    }
-    // 2) Récupérer la liste de tous les /results du serveur
-    const allResults=await ahListResults(server);
-    // 3) Associer chaque résultat à une fenêtre dont il tombe dans [start-15min, end+15min]
-    // Pour les RACEx2: le type de fichier est 'RACE' mais on les distingue par le fait qu'il y a 2 RACE dans la fenêtre.
-    // On trie les résultats par date et on numérote les RACE d'une même fenêtre.
-    const MARGIN=30*60*1000;
-    // D'abord, grouper les candidats QUALIFY et RACE par fenêtre
-    const candidatesByWin=new Map();
-    windows.forEach(w=>candidatesByWin.set(w,[]));
-    for(const it of allResults){
-      const t=new Date(it.date).getTime();
-      if(it.type==='PRACTICE')continue;
-      if(/test/i.test(it.sessionName+' '+it.filename))continue;
-      const win=windows.find(w=>t>=w.start-MARGIN && t<=w.end+MARGIN);
-      if(!win)continue;
-      candidatesByWin.get(win).push({...it,_t:t});
-    }
-    const matched=[];
-    for(const w of windows){
-      const cands=candidatesByWin.get(w).sort((a,b)=>a._t-b._t);
-      let raceIdx=0;
-      for(const it of cands){
-        let assignedType=null;
-        if(it.type==='QUALIFY' && w.types.includes('QUALIFY'))assignedType='QUALIFY';
-        else if(it.type==='RACE'){
-          // 1re RACE → RACE; 2e RACE → RACEx2 (si l'event a des RACEx2)
-          raceIdx++;
-          if(raceIdx===1 && w.types.includes('RACE'))assignedType='RACE';
-          else if(raceIdx===2 && w.types.includes('RACEx2'))assignedType='RACEx2';
-          else if(w.types.includes('RACE'))assignedType='RACE';
+    // Complète les 'url' avec /results pour les sessions en cours non encore dans l'export
+    const needUrl=items.filter(x=>x.source==='url'&&x.date);
+    if(needUrl.length){
+      try{
+        const allResults=await ahListResults(server);
+        const pool=allResults.filter(x=>x.type!=='PRACTICE'&&!/test/i.test((x.sessionName||'')+' '+(x.filename||'')));
+        for(const it of needUrl){
+          const needType=(it.sessionType==='QUALIFY')?'QUALIFY':'RACE';
+          const base=new Date(it.date).getTime();
+          let best=null,bestDt=Infinity;
+          for(const r of pool){
+            if(r.type!==needType)continue;
+            const t=new Date(r.date).getTime();
+            const dt=Math.abs(t-base);
+            if(dt<bestDt && dt<=15*60*1000){best=r;bestDt=dt}
+          }
+          if(best){it.url=best.url;it.filename=best.filename}
+          else{it.source='missing'}
         }
-        if(assignedType){
-          matched.push({...it,type:assignedType,eventId:w.evId,eventName:w.name});
-        }
-      }
+      }catch(e){}
     }
-    res.json({server,uuid,championship:champ.Name,events:windows.length,items:matched});
+    const final=items.filter(x=>x.rawType!=='PRACTICE' && x.source!=='missing');
+    res.json({server,uuid,championship:champ.Name,events:Object.keys(events).length,items:final});
+  }catch(e){res.status(502).json({error:e.message})}
+});
+
+// Récupère les résultats d'une session directement depuis l'export AH (même format que /results/download/*.json)
+app.get('/api/ah-championship-session-json', async(req,res)=>{
+  const server=String(req.query.server||'').replace(/\/+$/,'');
+  const uuid=String(req.query.uuid||'');
+  const eventId=String(req.query.eventId||'');
+  const rawType=String(req.query.rawType||'');
+  if(!/^https?:\/\/(fr2|fr5)\.assettohosting\.com/i.test(server))return res.status(400).json({error:'Serveur non autorisé.'});
+  if(!/^[0-9a-f-]{36}$/i.test(uuid))return res.status(400).json({error:'UUID invalide.'});
+  if(!/^[0-9a-zA-Z_-]+$/.test(eventId))return res.status(400).json({error:'eventId invalide.'});
+  if(!/^(QUALIFY|RACE|RACEx2)$/.test(rawType))return res.status(400).json({error:'rawType invalide.'});
+  try{
+    const champ=await ahFetchChampionship(server,uuid);
+    const ev=champ.Events&&champ.Events[eventId];
+    if(!ev)return res.status(404).json({error:'Event introuvable.'});
+    const s=ev.Sessions&&ev.Sessions[rawType];
+    if(!s||!s.Results)return res.status(404).json({error:'Session sans résultats dans l\'export.'});
+    res.set('Cache-Control','public, max-age=300');
+    res.set('Content-Type','application/json');
+    res.send(JSON.stringify(s.Results));
   }catch(e){res.status(502).json({error:e.message})}
 });
 
