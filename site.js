@@ -290,7 +290,7 @@ function globalRankingSync(){
   function trendArrow(t){const v=t.trend||0; if(v>4)return `<span style="color:#3b6341">▲ ${v.toFixed(0)} places</span>`; if(v>1)return `<span style="color:#3b6341">↑ ${v.toFixed(1)}</span>`; if(v<-4)return `<span style="color:#9c3021">▼ ${Math.abs(v).toFixed(0)} places</span>`; if(v<-1)return `<span style="color:#9c3021">↓ ${Math.abs(v).toFixed(1)}</span>`; return `<span style="color:#6d726c">→ stable</span>`}
   // Blocs tiers (3 colonnes pour 1/2/3-4 ? Mieux 4 colonnes)
   const tierCards=[1,2,3,4].map(l=>{
-    const list=tiers[l].slice(0,18).map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #dbd0ba"><span><b>${esc(d.name)}</b>${d.team?`<br><span class="muted" style="font-size:11px">${esc(d.team)}</span>`:''}</span><span class="muted" style="font-size:12px">${d.count}c · ${d.score.toFixed(0)}</span></div>`).join('');
+    const list=tiers[l].slice(0,18).map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #dbd0ba"><span><b>${esc(d.name)}</b></span><span class="muted" style="font-size:12px">${d.count}c · ${d.score.toFixed(0)}</span></div>`).join('');
     return `<div class="lvl-block"><span class="tag lvl lvl-${l}">${l}</span><h2 style="margin-top:10px">${tierLabel[l]}</h2><p class="note">${tierDesc[l]}</p><p class="note" style="margin:10px 0"><b>${tiers[l].length}</b> pilote${tiers[l].length>1?'s':''} · top ${tiers[l][0]?tiers[l][0].score.toFixed(0):'—'} → ${tiers[l].length?tiers[l][tiers[l].length-1].score.toFixed(0):'—'}/100</p><div style="margin-top:8px">${list||'<p class="note" style="font-size:12px">—</p>'}</div></div>`;
   }).join('');
   const labels={regularite:'Régularité',proprete:'Propreté',vitesse:'Vitesse',resultats:'Résultats',progression:'Progression'};
@@ -299,7 +299,7 @@ function globalRankingSync(){
       const v=d.details[k]||0;
       return `<span title="${labels[k]}: ${v.toFixed(0)}" style="display:inline-block;width:34px;margin-right:3px"><span class="mini-bar"><i style="width:${Math.max(2,Math.min(100,v))}%"></i></span><span style="font-size:9px;color:#6d726c;display:block;text-align:center;margin-top:2px">${Math.round(v)}</span></span>`;
     }).join('');
-    return `<tr><td class="pos">${i+1}</td><td><span class="tag lvl lvl-${d.level}">${d.level}</span></td><td><b>${esc(d.name)}</b>${d.team?`<br><span class="muted">${esc(d.team)}</span>`:''}</td><td>${d.count}</td><td><b>${d.score.toFixed(0)}</b> ${trendArrow(d)}</td><td>${bars}</td></tr>`;
+    return `<tr><td class="pos">${i+1}</td><td><span class="tag lvl lvl-${d.level}">${d.level}</span></td><td><b>${esc(d.name)}</b></td><td>${d.count}</td><td><b>${d.score.toFixed(0)}</b> ${trendArrow(d)}</td><td>${bars}</td></tr>`;
   }).join('');
   return `${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
     <p class="note" style="margin-bottom:16px">Le niveau est établi sur <b>cinq critères</b> : position moyenne en course, régularité des tours, propreté (collisions & cuts), vitesse au tour et progression dans le temps. Les courses récentes comptent davantage (poids doublé par rapport à celles de trois mois). Il faut au moins <b>${GLOBAL_MIN_RACES} courses</b> pour être classé. Un administrateur peut exclure des pilotes du classement.</p>
