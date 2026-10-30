@@ -49,18 +49,20 @@ function nav(){
   const crumb = backendMulti && page!=='hub' && currentSlug
     ? `<div class="subcrumb" style="padding:6px 0 0 0"><a onclick="goHome()">← Tous les championnats</a></div>`
     : '';
+  // Page gpilote : actif sur l'onglet Global
+  const activePage=(page==='gpilote')?'global':page;
   document.getElementById('nav').innerHTML =
-    Object.entries(navLabels).map(([k,v])=>`<button class="${page===k?'active':''}" onclick="go('${k}')">${v.toUpperCase()}</button>`).join('');
+    Object.entries(navLabels).map(([k,v])=>`<button class="${activePage===k?'active':''}" onclick="go('${k}')">${v.toUpperCase()}</button>`).join('');
   renderEventSwitcher();
 }
 async function go(x){
   page=x;window.scrollTo(0,0);
-  if(x==='global'&&backendMulti){
+  if((x==='global'||x==='gpilote')&&backendMulti){
     app.innerHTML=`<div class="panel"><p class="note">Chargement des données de tous les événements…</p></div>`;
     nav();
     try{
-      const html=await globalRanking();
-      app.innerHTML=html;
+      await globalRanking(); // charge data pour tous les events
+      render();
     }catch(e){
       console.error('go global error:',e);
       app.innerHTML=`<div class="panel"><p class="note" style="color:#9c3021">✗ Erreur de chargement : ${esc(e.message||e)}</p></div>`;
@@ -290,7 +292,7 @@ function globalRankingSync(){
   function trendArrow(t){const v=t.trend||0; if(v>4)return `<span style="color:#3b6341">▲ ${v.toFixed(0)} places</span>`; if(v>1)return `<span style="color:#3b6341">↑ ${v.toFixed(1)}</span>`; if(v<-4)return `<span style="color:#9c3021">▼ ${Math.abs(v).toFixed(0)} places</span>`; if(v<-1)return `<span style="color:#9c3021">↓ ${Math.abs(v).toFixed(1)}</span>`; return `<span style="color:#6d726c">→ stable</span>`}
   // Blocs tiers (3 colonnes pour 1/2/3-4 ? Mieux 4 colonnes)
   const tierCards=[1,2,3,4].map(l=>{
-    const list=tiers[l].slice(0,18).map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #dbd0ba;cursor:pointer" data-pid="${esc(d.id)}" onclick="globalDriverId=this.dataset.pid;page='gpilote';render()"><span><b>${esc(d.name)}</b></span><span class="muted" style="font-size:12px">${d.count}c · ${d.score.toFixed(0)}</span></div>`).join('');
+    const list=tiers[l].slice(0,18).map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #dbd0ba;cursor:pointer" data-pid="${esc(d.id)}" onclick="globalDriverId=this.dataset.pid;go('gpilote')"><span><b>${esc(d.name)}</b></span><span class="muted" style="font-size:12px">${d.count}c · ${d.score.toFixed(0)}</span></div>`).join('');
     return `<div class="lvl-block"><span class="tag lvl lvl-${l}">${l}</span><h2 style="margin-top:10px">${tierLabel[l]}</h2><p class="note">${tierDesc[l]}</p><p class="note" style="margin:10px 0"><b>${tiers[l].length}</b> pilote${tiers[l].length>1?'s':''} · top ${tiers[l][0]?tiers[l][0].score.toFixed(0):'—'} → ${tiers[l].length?tiers[l][tiers[l].length-1].score.toFixed(0):'—'}/100</p><div style="margin-top:8px">${list||'<p class="note" style="font-size:12px">—</p>'}</div></div>`;
   }).join('');
   const labels={regularite:'Régularité',proprete:'Propreté',vitesse:'Vitesse',resultats:'Résultats',progression:'Progression'};
@@ -299,7 +301,7 @@ function globalRankingSync(){
       const v=d.details[k]||0;
       return `<span title="${labels[k]}: ${v.toFixed(0)}" style="display:inline-block;width:34px;margin-right:3px"><span class="mini-bar"><i style="width:${Math.max(2,Math.min(100,v))}%"></i></span><span style="font-size:9px;color:#6d726c;display:block;text-align:center;margin-top:2px">${Math.round(v)}</span></span>`;
     }).join('');
-    return `<tr style="cursor:pointer" onclick="globalDriverId=this.dataset.pid;page='gpilote';render()" data-pid="${esc(d.id)}"><td class="pos">${i+1}</td><td><span class="tag lvl lvl-${d.level}">${d.level}</span></td><td><b>${esc(d.name)}</b></td><td>${d.count}</td><td><b>${d.score.toFixed(0)}</b> ${trendArrow(d)}</td><td>${bars}</td></tr>`;
+    return `<tr style="cursor:pointer" onclick="globalDriverId=this.dataset.pid;go('gpilote')" data-pid="${esc(d.id)}"><td class="pos">${i+1}</td><td><span class="tag lvl lvl-${d.level}">${d.level}</span></td><td><b>${esc(d.name)}</b></td><td>${d.count}</td><td><b>${d.score.toFixed(0)}</b> ${trendArrow(d)}</td><td>${bars}</td></tr>`;
   }).join('');
   return `${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
     <p class="note" style="margin-bottom:16px">Le niveau est établi sur <b>cinq critères</b> : position moyenne en course, régularité des tours, propreté (collisions & cuts), vitesse au tour et progression dans le temps. Les courses récentes comptent davantage (poids doublé par rapport à celles de trois mois). Il faut au moins <b>${GLOBAL_MIN_RACES} courses</b> pour être classé. Un administrateur peut exclure des pilotes du classement.</p>
@@ -1083,7 +1085,7 @@ function globalDriverProfile(){
         delta:(typeof res.grid==='number'&&res.grid>0)?res.grid-(idx+1):null,collisions,laps,eventName:rd.eventName});
     }
   }
-  if(!r||!races.length)return `${head('global','Profil pilote','Classement GLOBAL Discord.')}<button class="btn secondary" onclick="globalDriverId='';render()">← Retour au classement</button><div class="panel"><p class="note">Pilote introuvable ou pas assez de courses.</p></div>`;
+  if(!r||!races.length)return `${head('global','Profil pilote','Classement GLOBAL Discord.')}<button class="btn secondary" onclick="go('global')">← Retour au classement</button><div class="panel"><p class="note">Pilote introuvable ou pas assez de courses.</p></div>`;
   const validD=races.filter(x=>x.delta!==null);
   const avgDelta=validD.length?validD.reduce((n,x)=>n+x.delta,0)/validD.length:null;
   const avgColl=races.length?races.reduce((n,x)=>n+x.collisions,0)/races.length:null;
@@ -1111,7 +1113,7 @@ function globalDriverProfile(){
   }).join('');
   const levelLabels={1:'Élite',2:'Confirmé',3:'Intermédiaire',4:'Débutant'};
   return `${head('global','Profil de '+r.name,'Classement GLOBAL Discord — profil tous événements confondus.')}
-    <button class="btn secondary" onclick="globalDriverId='';render()">← Retour au classement</button>
+    <button class="btn secondary" onclick="go('global')">← Retour au classement</button>
     <div class="profile-car" style="margin-top:15px"><span class="label">Niveau GLOBAL</span> &nbsp; <span class="tag lvl lvl-${r.level}" style="margin-left:8px">${r.level}</span> &nbsp; ${levelLabels[r.level]||''} — ${r.score.toFixed(0)} / 100</div>
     <div class="stats"><div class="stat"><span class="label">Courses</span><strong>${races.length}</strong></div><div class="stat"><span class="label">Meilleur</span><strong>${Math.min(...races.map(x=>x.position))}</strong></div><div class="stat"><span class="label">Pos. moy.</span><strong>${avgPos!==null?avgPos.toFixed(1):'—'}</strong></div><div class="stat"><span class="label">Δ départ</span><strong>${signed(avgDelta!==null?avgDelta.toFixed(1):null)}</strong></div><div class="stat"><span class="label">Coll./course</span><strong>${avgColl!==null?avgColl.toFixed(1):'—'}</strong></div></div>
     <div class="section-head"><div><div class="eyebrow">Évaluation GLOBALE</div><h2>Niveau et profil</h2></div></div>
@@ -1125,7 +1127,12 @@ function globalDriverProfile(){
 // ---------- RENDER ----------
 function render(){
   nav();
-  if(backendMulti&&page==='gpilote'){app.innerHTML=globalDriverProfile();return}
+  if(backendMulti&&page==='gpilote'){
+    // Sécurité : si les données ne sont pas encore chargées, passer par go('gpilote')
+    const anyLoaded=events.some(ev=>ev.__loaded);
+    if(!anyLoaded){go('gpilote');return}
+    app.innerHTML=globalDriverProfile();return;
+  }
   if(page==='hub'&&backendMulti){app.innerHTML=hub();return}
   const renderers={accueil:home,classement:ranking,manches:manche,pilotes:drivers,global:globalRankingSync,admin};
   app.innerHTML=(renderers[page]||home)();
