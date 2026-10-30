@@ -38,6 +38,7 @@ const labelsHub={hub:'Accueil',global:'Global',classement:'Classements',manches:
 function labels(){return backendMulti?labelsHub:labelsLegacy}
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=x=>new Date(x).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+function signed(x){return x===null||x===undefined||!isFinite(x)?'—':`${x>0?'+':''}${Number(x).toFixed(1)}`}
 function track(x){return ({'mt-tremblant_69':'Mont-Tremblant','riverside':'Riverside','sebring_90s':'Sebring','mid_ohio':'Mid-Ohio'})[x]||x}
 
 function nav(){
@@ -664,7 +665,6 @@ function drivers(){
     let races=sessions.filter(s=>s.type==='RACE'&&s.results.some(x=>x.id===driverId));
     let metrics=races.map(s=>{let index=s.results.findIndex(x=>x.id===driverId),r=s.results[index],name=(r.name||'').trim().toLowerCase();let collisions=(s.events||[]).filter(e=>[e.a,e.b].some(x=>String(x||'').trim().toLowerCase()===name)).length;return {race:s,result:r,position:index+1,delta:typeof r.grid==='number'&&r.grid>0?r.grid-(index+1):null,collisions}});
     let known=metrics.filter(x=>x.delta!==null),avgDelta=known.length?known.reduce((n,x)=>n+x.delta,0)/known.length:null,avgColl=metrics.length?metrics.reduce((n,x)=>n+x.collisions,0)/metrics.length:null,avgPos=metrics.length?metrics.reduce((n,x)=>n+x.position,0)/metrics.length:null;
-    let signed=x=>x===null?'—':`${x>0?'+':''}${x.toFixed(1)}`;
     let positives=[],weaknesses=[];
     if(known.length>=2){if(avgDelta>0.5)positives.push(`Progression moyenne de ${signed(avgDelta)} place(s) entre le départ et l'arrivée.`);else if(avgDelta<-.5)weaknesses.push(`Recul moyen de ${Math.abs(avgDelta).toFixed(1)} place(s) entre le départ et l'arrivée.`);else positives.push('Positions de départ globalement conservées en course.')}
     if(metrics.length>=2){if(avgColl<1)positives.push("Moins d'un événement de collision enregistré par course en moyenne.");else if(avgColl>=3)weaknesses.push("Plusieurs événements de collision enregistrés par course en moyenne.");if(avgPos<=5)positives.push('Position moyenne à l’arrivée dans les cinq premiers.')}
