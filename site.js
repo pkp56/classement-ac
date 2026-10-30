@@ -321,9 +321,6 @@ function hub(){
 
     <div class="hero-side hub-hero-side">
       <div class="hub-actions">
-        <a class="hub-link-discord" href="https://discord.gg/kDZXwRgRS" target="_blank" rel="noopener">
-          <span>💬 &nbsp; Rejoindre le Discord<small style="display:block;font-weight:400;font-size:11px;margin-top:2px;letter-spacing:0">discord.gg/kDZXwRgRS</small></span><span>↗</span>
-        </a>
         <button class="hub-link-global" onclick="go('global')">
           <span>🏆 &nbsp; Classement GLOBAL Discord<small style="display:block;font-weight:400;font-size:11px;margin-top:2px;letter-spacing:0">Niveau pilote tous événements</small></span><span>↗</span>
         </button>
