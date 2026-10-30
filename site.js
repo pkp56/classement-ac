@@ -310,57 +310,158 @@ function hub(){
 
   return `
   <div class="hero hub-hero">
-    <div class="hero-text">
+    <div class="hero-text hub-hero-text">
       <div class="hero-masthead">GENTLEMAN &nbsp; DRIVERS &nbsp; PROJECT</div>
       <h1>La piste,<br>entre gentlemen.<br><em>Compétition le mercredi. Arsouille entre copains toujours.</em></h1>
       <div class="hero-lede">Ici, nous roulons entre passionnés et Gentlemen Drivers. Nous cherchons à partager des moments simples, amicaux et sérieux — il y a de la place à la fois pour la compétition et pour l'arsouille.</div>
       <p>Notre organisation se concentre essentiellement sur <b>Assetto Corsa</b> à travers des championnats, opens et évènements spéciaux.</p>
       <p>Nous espérons que vous trouverez votre bonheur ici et que vous aurez l'occasion de rencontrer une communauté avec laquelle vous aurez plaisir à rouler et échanger.</p>
       <div class="hero-sign">— Au plaisir de vous croiser sur la route&nbsp;)</div>
-      <div class="hub-actions" style="display:flex;flex-direction:column;gap:8px;margin-top:22px">
-        <a class="btn hub-btn-discord" href="https://discord.gg/kDZXwRgRS" target="_blank" rel="noopener" style="display:flex;justify-content:space-between;align-items:center;gap:10px;text-decoration:none;background:#5865F2;color:#fff"><span>💬 &nbsp; Rejoindre le Discord<small style="display:block;font-weight:400;font-size:11px;margin-top:2px;letter-spacing:0">discord.gg/kDZXwRgRS</small></span><span>↗</span></a>
-        <button class="btn hub-btn-global" onclick="go('global')" style="display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;background:transparent;color:#f7ecd5;border:2px solid var(--gold);padding:11px 14px;font-weight:700;font-size:13px;letter-spacing:.4px;cursor:pointer;border-radius:2px;font-family:inherit;text-align:left"><span>🏆 &nbsp; Classement GLOBAL Discord<small style="display:block;font-weight:400;font-size:11px;margin-top:2px;color:#c9bfab;letter-spacing:0">Niveau pilote tous événements</small></span><span>↗</span></button>
-      </div>
-      ${details('rule-discord','📘 &nbsp; Règlement Discord',reglesDiscord)}
-      ${details('rule-piste','🏁 &nbsp; Règlement piste',reglesPiste,'📎 Règlement de piste (PDF)','https://cdn.discordapp.com/attachments/1027270562499809440/1312457170310135968/Reglement_Piste_GDSP.pdf?ex=6ae5703d&is=6ae41ebd&hm=21c799554a4f8d861f7020895ca7302307acda2c0310da87e4016c6323a0769e&')}
     </div>
-    <div class="hero-side hub-hero-side" style="background:linear-gradient(180deg,rgba(14,34,40,.55) 0%,rgba(14,34,40,.88) 100%);padding:42px 34px;color:#f7ecd5;display:flex;flex-direction:column;gap:22px;border-left:1px solid #d8a34740">
+
+    <div class="hero-side hub-hero-side">
+      <div class="hub-actions">
+        <a class="hub-link-discord" href="https://discord.gg/kDZXwRgRS" target="_blank" rel="noopener">
+          <span>💬 &nbsp; Rejoindre le Discord<small style="display:block;font-weight:400;font-size:11px;margin-top:2px;letter-spacing:0">discord.gg/kDZXwRgRS</small></span><span>↗</span>
+        </a>
+        <button class="hub-link-global" onclick="go('global')">
+          <span>🏆 &nbsp; Classement GLOBAL Discord<small style="display:block;font-weight:400;font-size:11px;margin-top:2px;letter-spacing:0">Niveau pilote tous événements</small></span><span>↗</span>
+        </button>
+      </div>
+
       <div>
-        <h3 class="hub-side-h" style="font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:15px;color:#d8a347;margin:0 0 8px;text-transform:uppercase;border-bottom:1px solid #d8a34760;padding-bottom:6px">📊 &nbsp; En un coup d'œil</h3>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
-          <div class="stat hub-stat" style="background:rgba(247,236,213,.05);border:1px solid #d8a34740;padding:12px 14px;border-left:3px solid #d8a347"><span class="label" style="color:#c9bfab">Championnats</span><strong style="color:#f7ecd5;font-size:30px">${String(champs.length).padStart(2,'0')}</strong></div>
-          <div class="stat hub-stat" style="background:rgba(247,236,213,.05);border:1px solid #d8a34740;padding:12px 14px;border-left:3px solid #d8a347"><span class="label" style="color:#c9bfab">Opens</span><strong style="color:#f7ecd5;font-size:30px">${String(opens.length).padStart(2,'0')}</strong></div>
-          <div class="stat hub-stat" style="background:rgba(247,236,213,.05);border:1px solid #d8a34740;padding:12px 14px;border-left:3px solid #d8a347"><span class="label" style="color:#c9bfab">Archives</span><strong style="color:#f7ecd5;font-size:30px">${String(archives.length).padStart(2,'0')}</strong></div>
-          <div class="stat hub-stat" style="background:rgba(247,236,213,.05);border:1px solid #d8a34740;padding:12px 14px;border-left:3px solid #d8a347"><span class="label" style="color:#c9bfab">Pilotes</span><strong style="color:#f7ecd5;font-size:30px">${pilotsCount||'—'}</strong></div>
+        <h3 class="hub-side-h">📘 &nbsp; Règlements</h3>
+        <div class="hub-rules">
+          <details class="hub-rule">
+            <summary>Règlement Discord<span class="chev"></span></summary>
+            <div class="hub-rule-body">${reglesDiscord.replace(/style="[^"]*"/g,'')}</div>
+          </details>
+          <details class="hub-rule">
+            <summary>Règlement piste<span class="chev"></span></summary>
+            <div class="hub-rule-body">${reglesPiste.replace(/style="[^"]*"/g,'')}
+              <div style="margin-top:10px"><a class="hub-pdf" href="https://cdn.discordapp.com/attachments/1027270562499809440/1312457170310135968/Reglement_Piste_GDSP.pdf?ex=6ae5703d&is=6ae41ebd&hm=21c799554a4f8d861f7020895ca7302307acda2c0310da87e4016c6323a0769e&" target="_blank" rel="noopener">📎 Règlement de piste (PDF) ↗</a></div>
+            </div>
+          </details>
         </div>
       </div>
+
       <div>
-        <h3 class="hub-side-h" style="font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:15px;color:#d8a347;margin:0 0 8px;text-transform:uppercase;border-bottom:1px solid #d8a34760;padding-bottom:6px">📍 &nbsp; Où nous trouver</h3>
-        <p class="note" style="color:#d1cbbd;line-height:1.6;margin:6px 0 10px;font-size:13px">Toutes les inscriptions, livrées, plaintes et annonces se passent sur le Discord. Passez dire bonjour !</p>
-        <a class="btn" href="https://discord.gg/kDZXwRgRS" target="_blank" rel="noopener" style="text-decoration:none;margin-top:10px;display:inline-block;background:#5865F2;color:#fff">discord.gg/kDZXwRgRS</a>
+        <h3 class="hub-side-h">📊 &nbsp; En un coup d'œil</h3>
+        <div class="hub-stats">
+          <div class="hub-stat-card"><div class="hub-stat-lbl">Championnats</div><strong>${String(champs.length).padStart(2,'0')}</strong></div>
+          <div class="hub-stat-card"><div class="hub-stat-lbl">Opens</div><strong>${String(opens.length).padStart(2,'0')}</strong></div>
+          <div class="hub-stat-card"><div class="hub-stat-lbl">Archives</div><strong>${String(archives.length).padStart(2,'0')}</strong></div>
+          <div class="hub-stat-card"><div class="hub-stat-lbl">Pilotes</div><strong>${pilotsCount||'—'}</strong></div>
+        </div>
+      </div>
+
+      <div class="hub-where">
+        <h3 class="hub-side-h">📍 &nbsp; Où nous trouver</h3>
+        <p>Inscriptions, livrées, plaintes et annonces se passent sur le Discord.</p>
+        <a class="hub-discord-btn" href="https://discord.gg/kDZXwRgRS" target="_blank" rel="noopener">discord.gg/kDZXwRgRS</a>
       </div>
     </div>
   </div>
+
   <style>
-    .hero.hub-hero{background:#132d35 url('/hero-gdsp.jpg?v=1') center/cover!important;position:relative;grid-template-columns:1.2fr 1fr!important;min-height:560px!important}
-    .hero.hub-hero::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(100deg,rgba(14,34,40,.68) 0%,rgba(14,34,40,.38) 38%,rgba(14,34,40,.45) 55%,rgba(14,34,40,.80) 100%),radial-gradient(ellipse at 30% 40%,transparent 0%,rgba(14,34,40,.25) 60%,rgba(14,34,40,.55) 100%)}
-    .hero.hub-hero .hero-text.hub-hero-text{position:relative;z-index:2;padding:56px 48px 52px 44px;background:linear-gradient(90deg,rgba(14,34,40,.72) 0%,rgba(14,34,40,.45) 70%,transparent 100%)}
-    .hero.hub-hero .hero-side.hub-hero-side{position:relative;z-index:2}
-    .hero-masthead{display:inline-block;font-family:'Bebas Neue',sans-serif;letter-spacing:4px;font-size:13px;color:#d8a347;border-top:1px solid #d8a347;border-bottom:1px solid #d8a347;padding:8px 0;margin-bottom:18px}
-    .hub-hero h1{text-shadow:1px 1px 0 #0006}
-    .hub-hero h1 em{font-family:'Playfair Display',serif;font-style:italic;font-weight:700;font-size:.42em;letter-spacing:1px;margin-top:10px;display:block}
-    .hero-lede{font-size:15px;color:#e8dfc5;margin:22px 0 16px;max-width:540px;line-height:1.7;border-left:3px solid #d8a347;padding-left:14px}
-    .hub-hero-text p{font-size:14px}
+    /* HERO LAYOUT — 65 / 35 ratio */
+    .hero.hub-hero{
+      background:#132d35 url('/hero-gdsp.jpg?v=1') center/cover!important;
+      position:relative;min-height:560px;
+      grid-template-columns:65% 35%!important;
+      overflow:hidden;color:#f7ecd5;
+    }
+    /* Overlay: diagonal darkening from left-deep to right-deep (photo visible center-left, readable panels both sides) */
+    .hero.hub-hero::before{
+      content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+      background:
+        linear-gradient(100deg,
+          rgba(14,34,40,.75) 0%,
+          rgba(14,34,40,.40) 40%,
+          rgba(14,34,40,.55) 55%,
+          rgba(14,34,40,.88) 100%),
+        radial-gradient(ellipse at 30% 40%, transparent 0%, rgba(14,34,40,.20) 55%, rgba(14,34,40,.55) 100%);
+    }
+    .hero.hub-hero::after{
+      content:"";position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.07;mix-blend-mode:multiply;
+      background-image:radial-gradient(circle at 1px 1px,#000 1px,transparent 1.2px);
+      background-size:3px 3px;
+    }
+    .hub-hero-text{position:relative;z-index:2;padding:56px 48px 52px 44px;
+      background:linear-gradient(90deg,rgba(14,34,40,.72) 0%,rgba(14,34,40,.40) 75%,transparent 100%)}
+    .hub-hero-side{
+      position:relative;z-index:2;padding:42px 34px;display:flex;flex-direction:column;gap:20px;
+      background:linear-gradient(180deg,rgba(14,34,40,.50) 0%,rgba(14,34,40,.82) 100%);
+      border-left:1px solid #d8a34740;
+    }
+    /* Masthead & title */
+    .hero-masthead{display:inline-block;font-family:'Bebas Neue',sans-serif;letter-spacing:4px;font-size:13px;color:#d8a347;
+      border-top:1px solid #d8a347;border-bottom:1px solid #d8a347;padding:8px 0;margin-bottom:18px}
+    .hub-hero h1{font-family:'Bebas Neue',sans-serif;letter-spacing:2px;line-height:.95;margin:0;
+      font-size:clamp(36px,5.2vw,70px);text-shadow:1px 1px 0 #0008}
+    .hub-hero h1 em{font-family:'Playfair Display',serif;font-style:italic;font-weight:700;color:#d8a347;
+      display:block;font-size:.42em;letter-spacing:1px;margin-top:10px;line-height:1.2}
+    .hero-lede{font-size:15px;color:#e8dfc5;margin:22px 0 14px;max-width:540px;line-height:1.7;border-left:3px solid #d8a347;padding-left:14px}
+    .hub-hero-text p{line-height:1.65;color:#d1cbbd;max-width:540px;margin:8px 0;font-size:14px}
     .hero-sign{font-family:'Playfair Display',serif;font-style:italic;color:#d8a347;margin-top:18px;font-size:15px}
-    .hub-btn-discord{background:#5865F2!important;color:#fff!important}
-    .hub-stat .label{color:#c9bfab!important}
-    .hub-stat strong{color:#f7ecd5!important;font-size:28px!important}
+
+    /* Side headings */
+    .hub-side-h{font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:15px;color:#d8a347;
+      margin:0 0 8px;text-transform:uppercase;border-bottom:1px solid #d8a34760;padding-bottom:6px;font-weight:400}
+
+    /* Actions */
+    .hub-actions{display:flex;flex-direction:column;gap:8px}
+    .hub-link-discord,.hub-link-global{
+      display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;
+      padding:11px 14px;border:none;font-weight:700;font-size:13px;letter-spacing:.4px;cursor:pointer;
+      border-radius:2px;font-family:inherit;text-align:left;text-decoration:none;
+    }
+    .hub-link-discord{background:#5865F2;color:#fff}
+    .hub-link-discord:hover{background:#4752c4}
+    .hub-link-global{background:transparent;color:#f7ecd5;border:2px solid #d8a347}
+    .hub-link-global:hover{background:#d8a34720}
+    .hub-link-discord small,.hub-link-global small{color:#e8dfc5}
+
+    /* Rules */
+    .hub-rules{display:flex;flex-direction:column;gap:2px}
+    .hub-rule{border-top:1px dashed #d8a34755;padding-top:6px}
+    .hub-rule summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;
+      color:#f7ecd5;font-weight:600;font-size:14px;user-select:none;padding:8px 0}
+    .hub-rule summary::-webkit-details-marker{display:none}
+    .hub-rule .chev{font-family:monospace;color:#d8a347;font-size:16px}
+    .hub-rule[open] .chev::before{content:"−"}
+    .hub-rule:not([open]) .chev::before{content:"+"}
+    .hub-rule-body{color:#d1cbbd;font-size:13px;line-height:1.6;padding:4px 0 8px}
+    .hub-rule-body ol{padding-left:18px;margin:6px 0}
+    .hub-rule-body ol li{margin:4px 0}
+    .hub-rule-body ul{list-style:none;padding-left:12px;margin:6px 0;font-size:12px;color:#bfb5a0}
+    .hub-rule-body .note{font-size:12px;color:#a9a28f;margin-top:8px;font-style:italic}
+    .hub-pdf{display:inline-block;margin-top:10px;padding:6px 12px;border:1px solid #d8a347;color:#f7ecd5;font-size:12px;font-weight:600;text-decoration:none}
+    .hub-pdf:hover{background:#d8a34720}
+
+    /* Stats */
+    .hub-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .hub-stat-card{background:rgba(247,236,213,.06);border:1px solid #d8a34740;padding:12px 14px;border-left:3px solid #d8a347}
+    .hub-stat-lbl{font-size:10px;letter-spacing:2px;color:#c9bfab;font-weight:700;text-transform:uppercase}
+    .hub-stat-card strong{font-family:'Bebas Neue',sans-serif;font-size:28px;color:#f7ecd5;letter-spacing:1px;display:block;line-height:1;margin-top:4px}
+
+    /* Where */
+    .hub-where p{font-size:13px;color:#d1cbbd;line-height:1.6;margin:6px 0 10px}
+    .hub-discord-btn{display:inline-block;padding:9px 16px;background:#5865F2;color:#fff;font-weight:700;font-size:13px;border-radius:2px;letter-spacing:.5px;text-decoration:none}
+    .hub-discord-btn:hover{background:#4752c4}
+
+    /* Hub sections (below hero) */
     #hub-sections details summary{padding:10px 0;border-top:1px solid #d9cfb5;cursor:pointer;display:flex;align-items:center;gap:12px;list-style:none;user-select:none}
     #hub-sections details summary::-webkit-details-marker{display:none}
     #hub-sections details[open] > summary .chev::before{content:"−"}
     #hub-sections details:not([open]) > summary .chev::before{content:"+"}
     #hub-sections details .chev{font-family:monospace;font-size:22px;color:#d8a347;margin-left:8px}
-    @media (max-width:900px){.hub-hero{grid-template-columns:1fr!important}.hub-hero-side{padding:28px 26px!important;border-left:none!important;border-top:1px solid #d8a34740}.hub-hero-text{padding:34px 26px!important}}
+
+    @media (max-width:960px){
+      .hero.hub-hero{grid-template-columns:1fr!important}
+      .hub-hero-side{padding:28px 26px;border-left:none!important;border-top:1px solid #d8a34740}
+      .hub-hero-text{padding:34px 26px!important;background:rgba(14,34,40,.75)!important}
+    }
   </style>
   <div id="hub-sections" style="margin-top:32px">
     ${section('Championnats en cours',champs)}
