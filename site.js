@@ -515,12 +515,15 @@ function globalRankingSync(){
     return `<div class="lvl-block"><div style="margin-bottom:8px">${levelBadge(l,72)}</div><h2 style="margin-top:10px">${tierLabel[l]}</h2><p class="note">${tierDesc[l]}</p><p class="note" style="margin:10px 0"><b>${tiers[l].length}</b> pilote${tiers[l].length>1?'s':''} · top ${tiers[l][0]?tiers[l][0].score.toFixed(0):'—'} → ${tiers[l].length?tiers[l][tiers[l].length-1].score.toFixed(0):'—'}/100</p><div style="margin-top:8px">${list||'<p class="note" style="font-size:12px">—</p>'}</div></div>`;
   }).join('');
   const labels={regularite:'Régularité',proprete:'Propreté',vitesse:'Vitesse',resultats:'Résultats',progression:'Progression'};
+  // Couleurs associées à chaque niveau (barre latérale + teinte de fond)
+  const LVL_COLORS={1:{bar:'#d7a347',bg:'rgba(215,163,71,0.10)'},2:{bar:'#9c3021',bg:'rgba(156,48,33,0.07)'},3:{bar:'#3b6341',bg:'rgba(59,99,65,0.07)'},4:{bar:'#6d726c',bg:'rgba(109,114,108,0.08)'}};
   const detailRows=ratings.map((d,i)=>{
     const bars=Object.keys(labels).map(k=>{
       const v=d.details[k]||0;
       return `<span title="${labels[k]}: ${v.toFixed(0)}" style="display:inline-block;width:34px;margin-right:3px"><span class="mini-bar"><i style="width:${Math.max(2,Math.min(100,v))}%"></i></span><span style="font-size:9px;color:#6d726c;display:block;text-align:center;margin-top:2px">${Math.round(v)}</span></span>`;
     }).join('');
-    return `<tr style="cursor:pointer" onclick="globalDriverId=this.dataset.pid;go('gpilote')" data-pid="${esc(d.id)}"><td class="pos">${i+1}</td><td>${levelBadge(d.level,40)}</td><td><b>${esc(d.name)}</b></td><td>${d.count}</td><td><b>${d.score.toFixed(0)}</b> ${trendArrow(d)}</td><td>${bars}</td></tr>`;
+    const c=LVL_COLORS[d.level]||LVL_COLORS[4];
+    return `<tr style="cursor:pointer;background:${c.bg};border-left:4px solid ${c.bar}" onclick="globalDriverId=this.dataset.pid;go('gpilote')" data-pid="${esc(d.id)}"><td class="pos">${i+1}</td><td>${levelBadge(d.level,40)}</td><td><b>${esc(d.name)}</b></td><td>${d.count}</td><td><b>${d.score.toFixed(0)}</b> ${trendArrow(d)}</td><td>${bars}</td></tr>`;
   }).join('');
   return `${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
     <p class="note" style="margin-bottom:16px">Le niveau est établi sur <b>cinq critères</b> : position moyenne en course, régularité des tours, propreté (collisions & cuts), vitesse au tour et progression dans le temps. Les courses récentes comptent davantage (poids doublé par rapport à celles de trois mois). Il faut au moins <b>${GLOBAL_MIN_RACES} courses</b> pour être classé. Un administrateur peut exclure des pilotes du classement.</p>
