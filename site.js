@@ -46,6 +46,9 @@ const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const date=x=>new Date(x).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
 function signed(x){return x===null||x===undefined||!isFinite(x)?'—':`${x>0?'+':''}${Number(x).toFixed(1)}`}
 function track(x){return ({'mt-tremblant_69':'Mont-Tremblant','riverside':'Riverside','sebring_90s':'Sebring','mid_ohio':'Mid-Ohio'})[x]||x}
+// Level badge images (circular pin style, one car per GDSP championship/open)
+const LVL_BADGES={1:'/assets/lvl1-elite.png',2:'/assets/lvl2-confirme.png',3:'/assets/lvl3-inter.png',4:'/assets/lvl4-debut.png'};
+function levelBadge(level,size){const src=LVL_BADGES[level];return src?`<img class="lvl-badge" src="${src}?v=1" alt="Niveau ${level}" width="${size}" height="${size}" loading="lazy" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-block;vertical-align:middle">`:`<span class="tag lvl lvl-${level}">${level}</span>`}
 
 function nav(){
   // Hide event-specific tabs (classement/manches/pilotes) if no event is selected
@@ -509,7 +512,7 @@ function globalRankingSync(){
   // Blocs tiers (3 colonnes pour 1/2/3-4 ? Mieux 4 colonnes)
   const tierCards=[1,2,3,4].map(l=>{
     const list=tiers[l].slice(0,18).map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #dbd0ba;cursor:pointer" data-pid="${esc(d.id)}" onclick="globalDriverId=this.dataset.pid;go('gpilote')"><span><b>${esc(d.name)}</b></span><span class="muted" style="font-size:12px">${d.count}c · ${d.score.toFixed(0)}</span></div>`).join('');
-    return `<div class="lvl-block"><span class="tag lvl lvl-${l}">${l}</span><h2 style="margin-top:10px">${tierLabel[l]}</h2><p class="note">${tierDesc[l]}</p><p class="note" style="margin:10px 0"><b>${tiers[l].length}</b> pilote${tiers[l].length>1?'s':''} · top ${tiers[l][0]?tiers[l][0].score.toFixed(0):'—'} → ${tiers[l].length?tiers[l][tiers[l].length-1].score.toFixed(0):'—'}/100</p><div style="margin-top:8px">${list||'<p class="note" style="font-size:12px">—</p>'}</div></div>`;
+    return `<div class="lvl-block"><div style="margin-bottom:8px">${levelBadge(l,72)}</div><h2 style="margin-top:10px">${tierLabel[l]}</h2><p class="note">${tierDesc[l]}</p><p class="note" style="margin:10px 0"><b>${tiers[l].length}</b> pilote${tiers[l].length>1?'s':''} · top ${tiers[l][0]?tiers[l][0].score.toFixed(0):'—'} → ${tiers[l].length?tiers[l][tiers[l].length-1].score.toFixed(0):'—'}/100</p><div style="margin-top:8px">${list||'<p class="note" style="font-size:12px">—</p>'}</div></div>`;
   }).join('');
   const labels={regularite:'Régularité',proprete:'Propreté',vitesse:'Vitesse',resultats:'Résultats',progression:'Progression'};
   const detailRows=ratings.map((d,i)=>{
@@ -517,7 +520,7 @@ function globalRankingSync(){
       const v=d.details[k]||0;
       return `<span title="${labels[k]}: ${v.toFixed(0)}" style="display:inline-block;width:34px;margin-right:3px"><span class="mini-bar"><i style="width:${Math.max(2,Math.min(100,v))}%"></i></span><span style="font-size:9px;color:#6d726c;display:block;text-align:center;margin-top:2px">${Math.round(v)}</span></span>`;
     }).join('');
-    return `<tr style="cursor:pointer" onclick="globalDriverId=this.dataset.pid;go('gpilote')" data-pid="${esc(d.id)}"><td class="pos">${i+1}</td><td><span class="tag lvl lvl-${d.level}">${d.level}</span></td><td><b>${esc(d.name)}</b></td><td>${d.count}</td><td><b>${d.score.toFixed(0)}</b> ${trendArrow(d)}</td><td>${bars}</td></tr>`;
+    return `<tr style="cursor:pointer" onclick="globalDriverId=this.dataset.pid;go('gpilote')" data-pid="${esc(d.id)}"><td class="pos">${i+1}</td><td>${levelBadge(d.level,40)}</td><td><b>${esc(d.name)}</b></td><td>${d.count}</td><td><b>${d.score.toFixed(0)}</b> ${trendArrow(d)}</td><td>${bars}</td></tr>`;
   }).join('');
   return `${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
     <p class="note" style="margin-bottom:16px">Le niveau est établi sur <b>cinq critères</b> : position moyenne en course, régularité des tours, propreté (collisions & cuts), vitesse au tour et progression dans le temps. Les courses récentes comptent davantage (poids doublé par rapport à celles de trois mois). Il faut au moins <b>${GLOBAL_MIN_RACES} courses</b> pour être classé. Un administrateur peut exclure des pilotes du classement.</p>
@@ -1375,7 +1378,7 @@ function globalDriverProfile(){
   const levelLabels={1:'Élite',2:'Confirmé',3:'Intermédiaire',4:'Débutant'};
   return `${head('global','Profil de '+r.name,'Classement GLOBAL Discord — profil tous événements confondus.')}
     <button class="btn secondary" onclick="go('global')">← Retour au classement</button>
-    <div class="profile-car" style="margin-top:15px"><span class="label">Niveau GLOBAL</span> &nbsp; <span class="tag lvl lvl-${r.level}" style="margin-left:8px">${r.level}</span> &nbsp; ${levelLabels[r.level]||''} — ${r.score.toFixed(0)} / 100</div>
+    <div class="profile-car" style="margin-top:15px;display:flex;align-items:center;gap:12px"><span class="label">Niveau GLOBAL</span>${levelBadge(r.level,56)}<span>${levelLabels[r.level]||''} — ${r.score.toFixed(0)} / 100</span></div>
     <div class="stats"><div class="stat"><span class="label">Courses</span><strong>${races.length}</strong></div><div class="stat"><span class="label">Meilleur</span><strong>${Math.min(...races.map(x=>x.position))}</strong></div><div class="stat"><span class="label">Pos. moy.</span><strong>${avgPos!==null?avgPos.toFixed(1):'—'}</strong></div><div class="stat"><span class="label">Δ départ</span><strong>${signed(avgDelta!==null?avgDelta.toFixed(1):null)}</strong></div><div class="stat"><span class="label">Coll./course</span><strong>${avgColl!==null?avgColl.toFixed(1):'—'}</strong></div></div>
     <div class="section-head"><div><div class="eyebrow">Évaluation GLOBALE</div><h2>Niveau et profil</h2></div></div>
     <div class="panel">${bars}</div>
