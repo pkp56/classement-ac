@@ -307,9 +307,9 @@ function hub(){
       </div>
     </details>`;
 
-  const pilotsCount = events.reduce((n,e)=>{
-    const d=(e.data&&e.data.drivers)?e.data.drivers.length:0;return n+d;
-  },0);
+  // Nombre de pilotes CLASSÉS au GLOBAL (≥5 courses + non exclus par l'admin)
+  const _gRatings=globalPerformanceRatings();
+  const pilotsCount=_gRatings.length;
 
   return `
   <div class="hero hub-hero">
