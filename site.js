@@ -296,47 +296,58 @@ function hub(){
   },0);
 
   return `
-  <div class="hero" style="grid-template-columns:1fr 400px">
+  <div class="hero hub-hero">
     <div class="hero-text">
-      <div class="eyebrow" style="color:#d8a347">● &nbsp; GENTLEMAN DRIVERS PROJECT</div>
-      <h1>La piste, entre<br><em>gentlemen drivers</em>.</h1>
-      <p style="margin-top:16px">Ici, nous roulons entre passionnés et Gentlemen Drivers. Nous cherchons à partager des moments simples, amicaux et sérieux ! Il y a de la place à la fois pour la <b>compétition</b> et pour l'<b>arsouille entre copains</b>.</p>
+      <div class="hero-masthead">GENTLEMAN &nbsp; DRIVERS &nbsp; PROJECT</div>
+      <h1>La piste,<br>entre gentlemen.<br><em>Compétition le mercredi. Arsouille entre copains toujours.</em></h1>
+      <div class="hero-lede">Ici, nous roulons entre passionnés et Gentlemen Drivers. Nous cherchons à partager des moments simples, amicaux et sérieux — il y a de la place à la fois pour la compétition et pour l'arsouille.</div>
       <p>Notre organisation se concentre essentiellement sur <b>Assetto Corsa</b> à travers des championnats, opens et évènements spéciaux.</p>
       <p>Nous espérons que vous trouverez votre bonheur ici et que vous aurez l'occasion de rencontrer une communauté avec laquelle vous aurez plaisir à rouler et échanger.</p>
-      <p style="font-style:italic;color:#d8a347;margin-top:14px">Au plaisir de vous croiser sur la route&nbsp;)</p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:22px">
-        <a class="btn" href="https://discord.gg/kDZXwRgRS" target="_blank" rel="noopener" style="text-decoration:none">Rejoindre le Discord &nbsp; ↗</a>
-        <button class="btn secondary" onclick="go('global')">Classement GLOBAL &nbsp; ↗</button>
+      <div class="hero-sign">— Au plaisir de vous croiser sur la route&nbsp;)</div>
+      <div class="hub-actions" style="display:flex;flex-direction:column;gap:8px;margin-top:22px">
+        <a class="btn hub-btn-discord" href="https://discord.gg/kDZXwRgRS" target="_blank" rel="noopener" style="display:flex;justify-content:space-between;align-items:center;gap:10px;text-decoration:none;background:#5865F2;color:#fff"><span>💬 &nbsp; Rejoindre le Discord<small style="display:block;font-weight:400;font-size:11px;margin-top:2px;letter-spacing:0">discord.gg/kDZXwRgRS</small></span><span>↗</span></a>
+        <button class="btn hub-btn-global" onclick="go('global')" style="display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;background:transparent;color:#f7ecd5;border:2px solid var(--gold);padding:11px 14px;font-weight:700;font-size:13px;letter-spacing:.4px;cursor:pointer;border-radius:2px;font-family:inherit;text-align:left"><span>🏆 &nbsp; Classement GLOBAL Discord<small style="display:block;font-weight:400;font-size:11px;margin-top:2px;color:#c9bfab;letter-spacing:0">Niveau pilote tous événements</small></span><span>↗</span></button>
       </div>
       ${details('rule-discord','📘 &nbsp; Règlement Discord',reglesDiscord)}
       ${details('rule-piste','🏁 &nbsp; Règlement piste',reglesPiste,'📎 Règlement de piste (PDF)','https://cdn.discordapp.com/attachments/1027270562499809440/1312457170310135968/Reglement_Piste_GDSP.pdf?ex=6ae5703d&is=6ae41ebd&hm=21c799554a4f8d861f7020895ca7302307acda2c0310da87e4016c6323a0769e&')}
     </div>
-    <div class="hero-side" style="background:linear-gradient(160deg,#0e2228 0%,#1b3d47 100%);padding:44px 30px;color:#f7ecd5;display:flex;flex-direction:column;gap:26px">
+    <div class="hero-side hub-hero-side" style="background:linear-gradient(180deg,rgba(14,34,40,.55) 0%,rgba(14,34,40,.88) 100%);padding:42px 34px;color:#f7ecd5;display:flex;flex-direction:column;gap:22px;border-left:1px solid #d8a34740">
       <div>
-        <div class="eyebrow" style="color:#d8a347">● &nbsp; EN UN COUP D'ŒIL</div>
+        <h3 class="hub-side-h" style="font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:15px;color:#d8a347;margin:0 0 8px;text-transform:uppercase;border-bottom:1px solid #d8a34760;padding-bottom:6px">📊 &nbsp; En un coup d'œil</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
-          <div class="stat" style="background:#0e2228;border:1px solid #d8a34750;padding:14px 16px"><span class="label" style="color:#c9bfab">Championnats</span><strong style="color:#f7ecd5;font-size:30px">${String(champs.length).padStart(2,'0')}</strong></div>
-          <div class="stat" style="background:#0e2228;border:1px solid #d8a34750;padding:14px 16px"><span class="label" style="color:#c9bfab">Opens</span><strong style="color:#f7ecd5;font-size:30px">${String(opens.length).padStart(2,'0')}</strong></div>
-          <div class="stat" style="background:#0e2228;border:1px solid #d8a34750;padding:14px 16px"><span class="label" style="color:#c9bfab">Archives</span><strong style="color:#f7ecd5;font-size:30px">${String(archives.length).padStart(2,'0')}</strong></div>
-          <div class="stat" style="background:#0e2228;border:1px solid #d8a34750;padding:14px 16px"><span class="label" style="color:#c9bfab">Pilotes</span><strong style="color:#f7ecd5;font-size:30px">${pilotsCount||'—'}</strong></div>
+          <div class="stat hub-stat" style="background:rgba(247,236,213,.05);border:1px solid #d8a34740;padding:12px 14px;border-left:3px solid #d8a347"><span class="label" style="color:#c9bfab">Championnats</span><strong style="color:#f7ecd5;font-size:30px">${String(champs.length).padStart(2,'0')}</strong></div>
+          <div class="stat hub-stat" style="background:rgba(247,236,213,.05);border:1px solid #d8a34740;padding:12px 14px;border-left:3px solid #d8a347"><span class="label" style="color:#c9bfab">Opens</span><strong style="color:#f7ecd5;font-size:30px">${String(opens.length).padStart(2,'0')}</strong></div>
+          <div class="stat hub-stat" style="background:rgba(247,236,213,.05);border:1px solid #d8a34740;padding:12px 14px;border-left:3px solid #d8a347"><span class="label" style="color:#c9bfab">Archives</span><strong style="color:#f7ecd5;font-size:30px">${String(archives.length).padStart(2,'0')}</strong></div>
+          <div class="stat hub-stat" style="background:rgba(247,236,213,.05);border:1px solid #d8a34740;padding:12px 14px;border-left:3px solid #d8a347"><span class="label" style="color:#c9bfab">Pilotes</span><strong style="color:#f7ecd5;font-size:30px">${pilotsCount||'—'}</strong></div>
         </div>
       </div>
       <div>
-        <div class="eyebrow" style="color:#d8a347">● &nbsp; OÙ NOUS TROUVER</div>
-        <p class="note" style="color:#d1cbbd;line-height:1.6;margin-top:8px">Toutes les inscriptions, livrées, plaintes et annonces se passent sur le Discord. Passez dire bonjour !</p>
-        <a class="btn" href="https://discord.gg/kDZXwRgRS" target="_blank" rel="noopener" style="text-decoration:none;margin-top:14px;display:inline-block">discord.gg/kDZXwRgRS</a>
+        <h3 class="hub-side-h" style="font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:15px;color:#d8a347;margin:0 0 8px;text-transform:uppercase;border-bottom:1px solid #d8a34760;padding-bottom:6px">📍 &nbsp; Où nous trouver</h3>
+        <p class="note" style="color:#d1cbbd;line-height:1.6;margin:6px 0 10px;font-size:13px">Toutes les inscriptions, livrées, plaintes et annonces se passent sur le Discord. Passez dire bonjour !</p>
+        <a class="btn" href="https://discord.gg/kDZXwRgRS" target="_blank" rel="noopener" style="text-decoration:none;margin-top:10px;display:inline-block;background:#5865F2;color:#fff">discord.gg/kDZXwRgRS</a>
       </div>
     </div>
   </div>
   <style>
-    .rules-details[open] > summary .chev::before,
-    #hub-sections details[open] > summary .chev::before{content:"−"}
-    .rules-details:not([open]) > summary .chev::before,
-    #hub-sections details:not([open]) > summary .chev::before{content:"+"}
-    .rules-details > div ol li{margin:6px 0}
+    .hub-hero{background:#132d35 url('/hero-gdsp.jpg?v=1') center/cover;position:relative}
+    .hub-hero::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(100deg,rgba(14,34,40,.68) 0%,rgba(14,34,40,.38) 38%,rgba(14,34,40,.45) 55%,rgba(14,34,40,.80) 100%),radial-gradient(ellipse at 30% 40%,transparent 0%,rgba(14,34,40,.25) 60%,rgba(14,34,40,.55) 100%)}
+    .hub-hero-text{position:relative;z-index:2;background:linear-gradient(90deg,rgba(14,34,40,.72) 0%,rgba(14,34,40,.45) 70%,transparent 100%)}
+    .hub-hero-side{position:relative;z-index:2}
+    .hero-masthead{display:inline-block;font-family:'Bebas Neue',sans-serif;letter-spacing:4px;font-size:13px;color:#d8a347;border-top:1px solid #d8a347;border-bottom:1px solid #d8a347;padding:8px 0;margin-bottom:18px}
+    .hub-hero h1{text-shadow:1px 1px 0 #0006}
+    .hub-hero h1 em{font-family:'Playfair Display',serif;font-style:italic;font-weight:700;font-size:.42em;letter-spacing:1px;margin-top:10px;display:block}
+    .hero-lede{font-size:15px;color:#e8dfc5;margin:22px 0 16px;max-width:540px;line-height:1.7;border-left:3px solid #d8a347;padding-left:14px}
+    .hub-hero-text p{font-size:14px}
+    .hero-sign{font-family:'Playfair Display',serif;font-style:italic;color:#d8a347;margin-top:18px;font-size:15px}
+    .hub-btn-discord{background:#5865F2!important;color:#fff!important}
+    .hub-stat .label{color:#c9bfab!important}
+    .hub-stat strong{color:#f7ecd5!important;font-size:28px!important}
+    #hub-sections details summary{padding:10px 0;border-top:1px solid #d9cfb5;cursor:pointer;display:flex;align-items:center;gap:12px;list-style:none;user-select:none}
     #hub-sections details summary::-webkit-details-marker{display:none}
-    #hub-sections details summary{padding:10px 0;border-top:1px solid #d9cfb5}
-    @media (max-width:900px){.hero{grid-template-columns:1fr !important}.hero-side{padding:30px 24px}}
+    #hub-sections details[open] > summary .chev::before{content:"−"}
+    #hub-sections details:not([open]) > summary .chev::before{content:"+"}
+    #hub-sections details .chev{font-family:monospace;font-size:22px;color:#d8a347;margin-left:8px}
+    @media (max-width:900px){.hub-hero{grid-template-columns:1fr!important}.hub-hero-side{padding:28px 26px!important;border-left:none!important;border-top:1px solid #d8a34740}.hub-hero-text{padding:34px 26px!important}}
   </style>
   <div id="hub-sections" style="margin-top:32px">
     ${section('Championnats en cours',champs)}
