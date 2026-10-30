@@ -35,6 +35,12 @@ function pointsConfig(){
 // ---------- Helpers génériques ----------
 const labelsLegacy={accueil:'Accueil',classement:'Classements',manches:'Résultats',pilotes:'Pilotes',admin:'Administration'};
 const labelsHub={hub:'Accueil',global:'Global',classement:'Classements',manches:'Résultats',pilotes:'Pilotes',admin:'Administration'};
+// Map legacy 'accueil' key to 'hub' in multi mode
+function pageKey(){
+  if(!backendMulti)return page;
+  if(page==='accueil')return currentSlug?'accueil':'hub';
+  return page;
+}
 function labels(){return backendMulti?labelsHub:labelsLegacy}
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=x=>new Date(x).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
@@ -45,19 +51,26 @@ function nav(){
   // Hide event-specific tabs (classement/manches/pilotes) if no event is selected
   let navLabels={...labels()};
   if(backendMulti&&!eventContext){
+    // When on the hub, show hub as Accueil and hide event-specific tabs
     delete navLabels.classement;delete navLabels.manches;delete navLabels.pilotes;
+  }else if(backendMulti&&eventContext){
+    // When on an event, show hub link as "← Accueil" to return to portal
+    navLabels={hub:'← Accueil',...navLabels};
+    delete navLabels.accueil;
   }
   const crumb = backendMulti && page!=='hub' && currentSlug
     ? `<div class="subcrumb" style="padding:6px 0 0 0"><a onclick="goHome()">← Tous les championnats</a></div>`
     : '';
-  // Page gpilote : actif sur l'onglet Global
-  const activePage=(page==='gpilote')?'global':page;
+  // Page gpilote : actif sur l'onglet Global ; sur hub (portail) c'est l'onglet Accueil
+  let activePage=(page==='gpilote')?'global':pageKey();
+  if(activePage==='accueil'&&!currentSlug)activePage='hub';
   document.getElementById('nav').innerHTML =
     Object.entries(navLabels).map(([k,v])=>`<button class="${activePage===k?'active':''}" onclick="go('${k}')">${v.toUpperCase()}</button>`).join('');
   renderEventSwitcher();
 }
 async function go(x){
   page=x;window.scrollTo(0,0);
+  if(x==='hub'&&backendMulti){goHome();return}
   if((x==='global'||x==='gpilote')&&backendMulti){
     app.innerHTML=`<div class="panel"><p class="note">Chargement des données de tous les événements…</p></div>`;
     nav();
@@ -72,7 +85,7 @@ async function go(x){
   }
   render();
 }
-function goHome(){currentSlug=null;eventContext=null;sessions.length=0;penMap={};manualDrivers=null;customCalendar=null;go('hub')}
+function goHome(){currentSlug=null;eventContext=null;sessions.length=0;penMap={};manualDrivers=null;customCalendar=null;page='hub';window.scrollTo(0,0);render();nav()}
 
 function renderEventSwitcher(){
   const sw=document.getElementById('event-switcher');
@@ -329,10 +342,10 @@ function hub(){
     </div>
   </div>
   <style>
-    .hub-hero{background:#132d35 url('/hero-gdsp.jpg?v=1') center/cover;position:relative}
-    .hub-hero::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(100deg,rgba(14,34,40,.68) 0%,rgba(14,34,40,.38) 38%,rgba(14,34,40,.45) 55%,rgba(14,34,40,.80) 100%),radial-gradient(ellipse at 30% 40%,transparent 0%,rgba(14,34,40,.25) 60%,rgba(14,34,40,.55) 100%)}
-    .hub-hero-text{position:relative;z-index:2;background:linear-gradient(90deg,rgba(14,34,40,.72) 0%,rgba(14,34,40,.45) 70%,transparent 100%)}
-    .hub-hero-side{position:relative;z-index:2}
+    .hero.hub-hero{background:#132d35 url('/hero-gdsp.jpg?v=1') center/cover!important;position:relative;grid-template-columns:1.2fr 1fr!important;min-height:560px!important}
+    .hero.hub-hero::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(100deg,rgba(14,34,40,.68) 0%,rgba(14,34,40,.38) 38%,rgba(14,34,40,.45) 55%,rgba(14,34,40,.80) 100%),radial-gradient(ellipse at 30% 40%,transparent 0%,rgba(14,34,40,.25) 60%,rgba(14,34,40,.55) 100%)}
+    .hero.hub-hero .hero-text.hub-hero-text{position:relative;z-index:2;padding:56px 48px 52px 44px;background:linear-gradient(90deg,rgba(14,34,40,.72) 0%,rgba(14,34,40,.45) 70%,transparent 100%)}
+    .hero.hub-hero .hero-side.hub-hero-side{position:relative;z-index:2}
     .hero-masthead{display:inline-block;font-family:'Bebas Neue',sans-serif;letter-spacing:4px;font-size:13px;color:#d8a347;border-top:1px solid #d8a347;border-bottom:1px solid #d8a347;padding:8px 0;margin-bottom:18px}
     .hub-hero h1{text-shadow:1px 1px 0 #0006}
     .hub-hero h1 em{font-family:'Playfair Display',serif;font-style:italic;font-weight:700;font-size:.42em;letter-spacing:1px;margin-top:10px;display:block}
@@ -1313,11 +1326,13 @@ function render(){
       await loadEvent(events[0].slug);
       page='accueil';
     }else if(events.length>1){
-      // Plusieurs événements: afficher le hub
-      // Auto-load default Lola if present and no last-event stored
+      // Plusieurs événements: accueil = hub (portail)
+      // Charger en arrière-plan le dernier événement visité pour que le switcher l'ait prêt, mais rester sur le hub.
       const last=localStorage.getItem('gdsp_last_event');
-      if(last&&events.find(e=>e.slug===last)){await loadEvent(last);page='accueil'}
-      else page='hub';
+      if(last&&events.find(e=>e.slug===last)){
+        try{await loadEvent(last)}catch(e){}
+      }
+      page='hub';
     }else{
       page='hub';
     }
