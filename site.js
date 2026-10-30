@@ -107,6 +107,11 @@ async function apiPost(path,body){
   if(r.status===401){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');render()}
   return r;
 }
+async function apiPut(path,body){
+  const r=await fetch(path,{method:'PUT',headers:{'Content-Type':'application/json',...(adminToken?{Authorization:'Bearer '+adminToken}:{})},body:body?JSON.stringify(body):undefined});
+  if(r.status===401){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');render()}
+  return r;
+}
 
 async function detectBackend(){
   try{
@@ -248,9 +253,97 @@ function hub(){
     return `<div class="event-card" onclick="switchEvent('${esc(e.slug)}')">${coef}${tag}<h3>${esc(e.name)}</h3><p class="note">Mis à jour le ${new Date(e.updated_at).toLocaleDateString('fr-FR')}</p><span class="label">Ouvrir →</span></div>`;
   }
   const section=(title,arr)=>arr.length?`<div class="section-head"><div><div class="eyebrow">${title}</div><h2>${arr.length} événement${arr.length>1?'s':''}</h2></div></div><div class="cardlist">${arr.map(card).join('')}</div>`:'';
-  const hero=`<div class="hero"><div class="hero-text"><div class="eyebrow" style="color:#d7a347">● &nbsp; GENTLEMAN DRIVERS PROJECT</div><h1>Portail des<br>Championnats <em>communautaires</em></h1><p>Championnats historiques, opens et week-ends de course. Retrouve tes pilotes, tes classements et toute l'actualité de la ligue GDSP.</p><button class="btn" onclick="go('global')">Classement GLOBAL Discord &nbsp; ↗</button></div><div class="hero-image"></div></div>`;
-  const stats=`<div class="stats"><div class="stat"><span class="label">Championnats</span><strong>${String(champs.length).padStart(2,'0')}</strong></div><div class="stat"><span class="label">Opens en cours/à venir</span><strong>${String(opens.length).padStart(2,'0')}</strong></div><div class="stat"><span class="label">Archives</span><strong>${String(archives.length).padStart(2,'0')}</strong></div><div class="stat"><span class="label">Pilotes Discord répertoriés</span><strong>—</strong></div></div>`;
-  return `${hero}${stats}<div id="hub-sections">${section('Championnats en cours',champs)}${section('Opens & week-ends',opens)}${section('Saisons archivées',archives)}${(!events.length)?'<p class="note">Aucun événement configuré pour l\'instant.</p>':''}</div>`;
+
+  const reglesDiscord = `
+    <ol style="padding-left:20px;line-height:1.65">
+      <li>Soyez respectueux. Les commentaires racistes, vulgaires, offensants… sont bannis de ce Discord.</li>
+      <li>Toute forme de spam est interdite. La promotion et publicité pour vos évènements/channels/discords n'est autorisée que dans le channel dédié et sous validation d'un administrateur.</li>
+      <li>Tout le monde est le bienvenue, peu importe l'âge et le niveau en piste de chacun. Cependant, en intégrant cette communauté, vous acceptez de vous plier aux règles de bienséance et de savoir-vivre.</li>
+      <li>Il n'y a pas de questions bêtes, mais généralement vous avez déjà toutes les réponses devant vos yeux : lisez attentivement les règlements et informations disponibles sur le Discord. Si vous ne trouvez pas la réponse, n'hésitez pas à contacter un membre du Staff.</li>
+      <li>Merci de respecter les délais : skins, inscriptions, changements divers et variés. Hors délai, le staff se donne le droit de rejeter une demande.</li>
+      <li>La distribution des mods payants est strictement interdite dans ce Discord.</li>
+      <li>Les personnes qui s'inscrivent à un championnat/événement sont priées de s'y tenir. Si vous ne respectez pas ce principe, les sanctions sont les suivantes :
+        <ul style="list-style:none;padding-left:14px;margin-top:6px">
+          <li>2 absences consécutives non prévenues lors d'un championnat → <b>disqualification du championnat</b>.</li>
+          <li>2 disqualifications de championnat pour absence → <b>expulsé du Discord Gentlemen Drivers Project</b>.</li>
+          <li>2 absences non prévenues pour des évènements hors championnats → votre inscription ne sera pas prioritaire et vous ne roulerez que s'il y a de la place.</li>
+        </ul>
+      </li>
+    </ol>
+    <p class="note" style="margin-top:10px">Nous pouvons comprendre que chacun a une vie et des contraintes, mais l'organisation d'évènements demande du temps et de l'énergie. Par respect pour le staff, veillez à faire acte de présence ou à signaler vos absences.</p>`;
+
+  const reglesPiste = `
+    <ol style="padding-left:20px;line-height:1.65">
+      <li>Tous les pilotes acceptent de suivre le règlement de piste donné sous format PDF ci-dessous. Ce règlement suit les principes de base, il peut y avoir des manques ou des oublis. Mais le bon-sens et le respect en piste primeront toujours.</li>
+      <li>Le staff se donne le droit de disqualifier ou d'expulser un pilote dont le comportement est jugé dangereux, anti-sportif ou problématique lors d'une session entraînement, qualification et course.</li>
+      <li>Les pilotes sont responsables de leur connexion et de leur matériel. Le Staff se donne la liberté de mettre des avertissements aux pilotes dont la connexion ou le matériel peut poser problème. Si la situation ne change pas après avertissement(s), le Staff se donnera également le droit de disqualifier un pilote.</li>
+      <li>Les plaintes sont à déposer dans le channel dédié. Merci de ne pas encombrer les channels informatifs et de discussion inutilement.</li>
+      <li>Le redémarrage d'une course ou d'un serveur doit rester exceptionnel. Il ne sera accordé qu'à la demande de la majorité des pilotes et selon certaines conditions : bug serveur, problème de connexion, mauvaise mise en place d'un évènement, etc.</li>
+    </ol>`;
+
+  const details = (id,titre,contenu,pdfLabel=null,pdfHref=null)=>`
+    <details class="rules-details" id="${id}" style="margin-top:14px;border-top:1px solid #3a5a63;padding-top:14px">
+      <summary style="cursor:pointer;font-weight:600;font-size:15px;color:#f7ecd5;user-select:none;list-style:none;display:flex;justify-content:space-between;align-items:center">
+        <span>${titre}</span><span class="chev" style="font-family:monospace;font-size:20px;color:#d8a347">+</span>
+      </summary>
+      <div style="margin-top:12px;color:#d1cbbd;font-size:14px">${contenu}
+        ${pdfLabel?`<div style="margin-top:14px"><a class="btn secondary small" href="${pdfHref||'#'}" target="_blank" rel="noopener" style="text-decoration:none;color:#f7ecd5;border-color:#d8a347">${pdfLabel}</a></div>`:''}
+      </div>
+    </details>`;
+
+  const pilotsCount = events.reduce((n,e)=>{
+    const d=(e.data&&e.data.drivers)?e.data.drivers.length:0;return n+d;
+  },0);
+
+  return `
+  <div class="hero" style="grid-template-columns:1fr 400px">
+    <div class="hero-text">
+      <div class="eyebrow" style="color:#d8a347">● &nbsp; GENTLEMAN DRIVERS PROJECT</div>
+      <h1>La piste, entre<br><em>gentlemen drivers</em>.</h1>
+      <p style="margin-top:16px">Ici, nous roulons entre passionnés et Gentlemen Drivers. Nous cherchons à partager des moments simples, amicaux et sérieux ! Il y a de la place à la fois pour la <b>compétition</b> et pour l'<b>arsouille entre copains</b>.</p>
+      <p>Notre organisation se concentre essentiellement sur <b>Assetto Corsa</b> à travers des championnats, opens et évènements spéciaux.</p>
+      <p>Nous espérons que vous trouverez votre bonheur ici et que vous aurez l'occasion de rencontrer une communauté avec laquelle vous aurez plaisir à rouler et échanger.</p>
+      <p style="font-style:italic;color:#d8a347;margin-top:14px">Au plaisir de vous croiser sur la route&nbsp;)</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:22px">
+        <a class="btn" href="https://discord.gg/kDZXwRgRS" target="_blank" rel="noopener" style="text-decoration:none">Rejoindre le Discord &nbsp; ↗</a>
+        <button class="btn secondary" onclick="go('global')">Classement GLOBAL &nbsp; ↗</button>
+      </div>
+      ${details('rule-discord','📘 &nbsp; Règlement Discord',reglesDiscord)}
+      ${details('rule-piste','🏁 &nbsp; Règlement piste',reglesPiste,'📎 Règlement de piste (PDF)','https://cdn.discordapp.com/attachments/1027270562499809440/1312457170310135968/Reglement_Piste_GDSP.pdf?ex=6ae5703d&is=6ae41ebd&hm=21c799554a4f8d861f7020895ca7302307acda2c0310da87e4016c6323a0769e&')}
+    </div>
+    <div class="hero-side" style="background:linear-gradient(160deg,#0e2228 0%,#1b3d47 100%);padding:44px 30px;color:#f7ecd5;display:flex;flex-direction:column;gap:26px">
+      <div>
+        <div class="eyebrow" style="color:#d8a347">● &nbsp; EN UN COUP D'ŒIL</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+          <div class="stat" style="background:#0e2228;border:1px solid #d8a34750;padding:14px 16px"><span class="label" style="color:#c9bfab">Championnats</span><strong style="color:#f7ecd5;font-size:30px">${String(champs.length).padStart(2,'0')}</strong></div>
+          <div class="stat" style="background:#0e2228;border:1px solid #d8a34750;padding:14px 16px"><span class="label" style="color:#c9bfab">Opens</span><strong style="color:#f7ecd5;font-size:30px">${String(opens.length).padStart(2,'0')}</strong></div>
+          <div class="stat" style="background:#0e2228;border:1px solid #d8a34750;padding:14px 16px"><span class="label" style="color:#c9bfab">Archives</span><strong style="color:#f7ecd5;font-size:30px">${String(archives.length).padStart(2,'0')}</strong></div>
+          <div class="stat" style="background:#0e2228;border:1px solid #d8a34750;padding:14px 16px"><span class="label" style="color:#c9bfab">Pilotes</span><strong style="color:#f7ecd5;font-size:30px">${pilotsCount||'—'}</strong></div>
+        </div>
+      </div>
+      <div>
+        <div class="eyebrow" style="color:#d8a347">● &nbsp; OÙ NOUS TROUVER</div>
+        <p class="note" style="color:#d1cbbd;line-height:1.6;margin-top:8px">Toutes les inscriptions, livrées, plaintes et annonces se passent sur le Discord. Passez dire bonjour !</p>
+        <a class="btn" href="https://discord.gg/kDZXwRgRS" target="_blank" rel="noopener" style="text-decoration:none;margin-top:14px;display:inline-block">discord.gg/kDZXwRgRS</a>
+      </div>
+    </div>
+  </div>
+  <style>
+    .rules-details[open] > summary .chev::before,
+    #hub-sections details[open] > summary .chev::before{content:"−"}
+    .rules-details:not([open]) > summary .chev::before,
+    #hub-sections details:not([open]) > summary .chev::before{content:"+"}
+    .rules-details > div ol li{margin:6px 0}
+    #hub-sections details summary::-webkit-details-marker{display:none}
+    #hub-sections details summary{padding:10px 0;border-top:1px solid #d9cfb5}
+    @media (max-width:900px){.hero{grid-template-columns:1fr !important}.hero-side{padding:30px 24px}}
+  </style>
+  <div id="hub-sections" style="margin-top:32px">
+    ${section('Championnats en cours',champs)}
+    ${section('Opens & week-ends',opens)}
+    ${archives.length?`<details style="margin-top:42px"><summary style="cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none;list-style:none"><div class="eyebrow">Saisons archivées</div><h2 style="margin:4px 0 0;font-size:22px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:#5d5b56">${archives.length} saison${archives.length>1?'s':''} terminée${archives.length>1?'s':''}</h2><span class="chev" style="font-family:monospace;font-size:22px;color:#d8a347;margin-left:8px"></span></summary><div style="margin-top:14px"><div class="cardlist">${archives.map(card).join('')}</div></div></details>`:''}
+    ${(!events.length)?'<p class="note">Aucun événement configuré pour l\'instant.</p>':''}
+  </div>`;
 }
 
 // Global ranking across all events — shown only in multi mode, built on demand
@@ -843,18 +936,64 @@ function renderGlobalExclusions(){
     <p class="note"><b>${Object.keys(globalHidden).length}</b> pilote(s) exclu(s).</p>
     ${table(['Pilote','Statut','Action'],rows)}`;
 }
+async function setEventKind(slug,kind){
+  const label=kind==='archive'?'clôturer':kind==='open'?'passer en open':'passer en championnat';
+  if(!confirm(`Valider pour ${label} cet événement ?`))return;
+  try{
+    const r=await apiPut('/api/events/'+encodeURIComponent(slug),{kind});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){alert(j.error||'Erreur.');return}
+    const ev=events.find(e=>e.slug===slug);if(ev){ev.kind=kind;ev.updated_at=new Date().toISOString()}
+    // Recharger le listing
+    const lr=await apiGet('/api/events');const lj=await lr.json().catch(()=>({}));
+    if(Array.isArray(lj.events))events=lj.events;
+    if(currentSlug===slug){
+      // Mettre à jour eventContext
+      const ec=events.find(e=>e.slug===slug);
+      if(ec){eventContext={slug:ec.slug,name:ec.name,kind:ec.kind,pointsConfig:ec.points_config||{},data:ec.data||{}}}
+    }
+    render();
+  }catch(e){alert('Erreur : '+e.message)}
+}
+function renderEventsAdmin(){
+  if(!events.length)return '<p class="note">Aucun événement.</p>';
+  const topBar=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><button class="btn" onclick="createEventPrompt()">+ Créer un événement</button>${currentSlug?`<button class="btn secondary" onclick="deleteCurrentEvent()">Supprimer l'événement courant (${esc(eventContext.name)})</button>`:''}</div>`;
+  const row=(e)=>{
+    const tag = e.kind==='championship'?'<span class="tag live">CHAMPIONNAT</span>':e.kind==='open'?'<span class="tag open">OPEN</span>':'<span class="tag archive">ARCHIVÉ</span>';
+    let actions;
+    if(e.kind==='archive'){
+      actions=`<button class="btn secondary small" onclick="setEventKind('${e.slug.replace(/'/g,"\\'")}','championship')">Réactiver en championnat</button>
+               <button class="btn secondary small" onclick="setEventKind('${e.slug.replace(/'/g,"\\'")}','open')">Réactiver en open</button>`;
+    }else{
+      actions=`<button class="btn secondary small" onclick="setEventKind('${e.slug.replace(/'/g,"\\'")}','archive')">🏁 Clôturer (archiver)</button>`;
+    }
+    return `<tr>
+      <td>${tag}</td>
+      <td><b>${esc(e.name)}</b><br><span class="muted" style="font-size:12px">${esc(e.slug)}</span></td>
+      <td>${currentSlug===e.slug?'<span class="tag live">▶</span>':''}</td><td>${e.points_config&&e.points_config.globalCoef?'×'+e.points_config.globalCoef:'—'}</td>
+      <td>${new Date(e.updated_at).toLocaleDateString('fr-FR')}</td>
+      <td style="white-space:nowrap;text-align:right">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+          <button class="btn secondary small" onclick="switchEvent('${e.slug.replace(/'/g,"\\'")}')">Ouvrir</button>
+          ${actions}
+        </div>
+      </td>
+    </tr>`;
+  };
+  return topBar+table(['','Événement','Courant','Coeff','Mis à jour',''],events.map(row));
+}
+
 function admin(){
   if(!adminAuth){return `${head('administration','Direction de course','Accès direction de course.')}<div class="panel"><h2>Connexion direction de course</h2><p class="note">Identifiant et mot de passe configurés dans les variables d'environnement Render (<code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code>). Les classements restent consultables librement.</p><div style="display:flex;gap:10px;align-items:center;max-width:520px;flex-wrap:wrap"><input id="adminuser" type="text" placeholder="Identifiant" class="admin-input" style="min-width:140px"><input id="adminpass" type="password" placeholder="Mot de passe" style="flex:1;min-width:200px" class="admin-input"><button class="btn" onclick="adminLogin()">Entrer</button></div></div>`}
   const rs=rounds();
   const adjList=Object.entries(penMap).map(([k,v])=>{const [rj,sj,did]=k.split(':');const ri=+rj,si=+sj,r=rs[ri],s=r&&r.sessions[si];const drv=s&&s.results.find(x=>x.id===did);const raceCount=r?r.sessions.slice(0,si+1).filter(x=>x.type==='RACE').length:0;let label='';if(v.dq)label='DQ';else if(typeof v.timeAdd==='number'&&v.timeAdd!==0)label=(v.timeAdd>0?'+':'')+v.timeAdd+' s';else if(v.warning)label='Avertissement';return `<tr><td>${r?'M'+r.number:'—'}</td><td>${s?(s.type==='QUALIFY'?'Qualif':'Course '+raceCount):'—'}</td><td>${esc(drv?drv.name:'(pilote)')}</td><td>${label}</td><td>${esc(v.note||'')}</td><td><button class="btn secondary small" onclick="removeAdjustment('${k}')">Retirer</button></td></tr>`});
   const roundCards=rs.map((r,i)=>`<div class="admin-round"><b>Manche ${r.number} · ${esc(track(r.track))}</b><div class="muted">${date(r.date)} · ${r.sessions.length-1} course(s)</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn secondary small" onclick="openAdj(${i})">Pénalités</button><button class="btn secondary small" onclick="resetRound(${i})">Effacer</button></div></div>`).join('');
-  const multiAdmin = backendMulti?`
-    <div class="panel" style="margin-top:16px"><h2>Gestion des championnats & opens</h2><p class="note">Crée un nouveau championnat ou open (week-end). Chaque événement possède son propre barème, son propre calendrier et ses propres résultats.</p><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="createEventPrompt()">+ Créer un événement (championnat/open/archive)</button>${currentSlug?`<button class="btn secondary" onclick="deleteCurrentEvent()">Supprimer l'événement courant</button>`:''}</div></div>`:'';
+  const multiAdmin = '';
   if(backendMulti&&!eventContext&&adminTab==='import'){
     // Empêcher l'import si aucun événement sélectionné
     return `${head('administration','Direction de course','')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="panel"><h2>Sélectionne d'abord un événement</h2><p class="note">Choisis un championnat/open dans le menu en haut à droite, ou retourne à l'accueil et clique sur une vignette, avant d'importer des résultats.</p><button class="btn secondary" onclick="goHome()">← Retour à l'accueil</button></div>${multiAdmin}`;
   }
-  return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['ah','Serveurs AH'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Pénalités temps (positives ou négatives pour annuler une pénalité serveur abusive), DQ ou avertissements. Les pénalités temps reclashent automatiquement.</p>${selectedRaceAdj!==null?renderAdjPanel(rs[selectedRaceAdj]):`<p class="note">Choisis une manche depuis « Manches ».</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='globalexc'?renderGlobalExclusions()
+  return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Pénalités temps (positives ou négatives pour annuler une pénalité serveur abusive), DQ ou avertissements. Les pénalités temps reclashent automatiquement.</p>${selectedRaceAdj!==null?renderAdjPanel(rs[selectedRaceAdj]):`<p class="note">Choisis une manche depuis « Manches ».</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='globalexc'?renderGlobalExclusions()
 :`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>${multiAdmin}`;
 }
 function renderAdjPanel(r){let html=`<div class="controls"><select onchange="selectedRaceAdj=null;render()">${rounds().map((x,i)=>`<option value="${i}" ${i===rounds().indexOf(r)?'selected':''}>Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div><p class="note">Sélectionne un pilote.</p><div class="grid">`;r.sessions.forEach((s,sj)=>{if(s.type!=='RACE')return;html+=`<div class="panel"><h3>Course ${r.sessions.slice(0,sj+1).filter(x=>x.type==='RACE').length}</h3>${table(['Pos.','Pilote','Ajuster'],s.results.map((p,i)=>`<tr><td class="pos">${i+1}</td><td>${esc(p.name)}</td><td><button class="btn secondary small" onclick="openAdjForm(${r.number-1},${sj},'${p.id}')">Modifier</button></td></tr>`))}</div>`});return html+'</div>'}
