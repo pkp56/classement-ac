@@ -941,7 +941,21 @@ function saveState(){
 }
 async function adminLogin(){
   const u=(document.getElementById('adminuser')||{}).value||'gdspadmin';const p=document.getElementById('adminpass').value;
-  try{const r=await apiPost('/api/admin/login',{username:u,password:p});const j=await r.json();if(!r.ok||!j.token){alert(j.error||j.message||'Identifiant ou mot de passe incorrect.');return}adminToken=j.token;localStorage.setItem('gdsp_admin_token',adminToken);adminAuth=true;adminUser='Direction de course';try{if(backendMulti){if(currentSlug)await loadEvent(currentSlug)}else await loadRemoteLegacy()}catch(e){}render()}catch(e){alert('Erreur de connexion : '+e.message)}
+  try{
+    const r=await apiPost('/api/admin/login',{username:u,password:p});
+    const j=await r.json();
+    if(!r.ok||!j.token){alert(j.error||j.message||'Identifiant ou mot de passe incorrect.');return}
+    adminToken=j.token;
+    // Stocker aussi dans sessionStorage pour que les tokens JWT (expirant) ne survivent pas
+    // à la fermeture du navigateur, MAIS garder dans localStorage pour compatibilité.
+    localStorage.setItem('gdsp_admin_token',adminToken);
+    sessionStorage.setItem('gdsp_admin_token',adminToken);
+    adminAuth=true;
+    adminUser=j.user||'Direction de course';
+    if(j.warning)alert('⚠ Connexion en mode secours :\n\n'+j.warning);
+    try{if(backendMulti){if(currentSlug)await loadEvent(currentSlug)}else await loadRemoteLegacy()}catch(e){}
+    render()
+  }catch(e){alert('Erreur de connexion : '+e.message)}
 }
 async function adminLogout(){adminToken=null;adminAuth=false;adminUser='';localStorage.removeItem('gdsp_admin_token');render()}
 async function doSaveRemote(){
@@ -1229,12 +1243,28 @@ function renderAhChamps(){
   out.innerHTML=`<p class="note">${ahChampsCache.length} championnats/opens détectés. Les championnats de type « test » et doublons ont été filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème.</p>${table(['','Nom','Progression','Manches','Barème (places)',''],rows)}`;
   }catch(e){out.innerHTML='<p class="note" style="color:#9c3021">✗ '+esc(e.message)+'<br><pre style="font-size:11px;overflow:auto">'+esc(e.stack||'')+'</pre></p>'}
 }
-function ahCreateEventFromBtn(btn){
+async function ahCreateEventFromBtn(btn){
   if(btn.disabled)return;
   const server=btn.dataset.ahServer, uuid=btn.dataset.ahUuid, slug=btn.dataset.ahSlug;
   const oldText=btn.textContent;
   btn.disabled=true;btn.textContent='⏳ Création…';
-  return ahCreateEvent(server,uuid,slug).finally(()=>{btn.disabled=false;btn.textContent=oldText});
+  try{
+    // Vérifie d'abord que le backend répond (sinon ça va rester bloqué en erreur silencieuse)
+    const h=await fetch('/api/events',{cache:'no-store'}).catch(()=>null);
+    if(!h||!h.ok||!/json/i.test(h.headers.get('content-type')||'')){
+      alert("❌ Le backend n'est pas joignable (API introuvable).\n\nLe frontend est actuellement servi en mode statique (GitHub Pages ou preview) sans proxy API. Pour créer des événements via AH, il faut déployer le serveur Node (app.js) sur Render avec le backend, ou utiliser le serveur local.\n\nLes autres pages (classements, résultats, GLOBAL) restent consultables normalement.");
+      return;
+    }
+    if(!adminAuth||!adminToken){
+      alert("Tu dois être connecté en tant qu'administrateur pour créer un événement.");
+      return;
+    }
+    await ahCreateEvent(server,uuid,slug);
+  }catch(e){
+    alert('Erreur : '+e.message);
+  }finally{
+    btn.disabled=false;btn.textContent=oldText;
+  }
 }
 async function ahCreateEvent(server,uuid,slug){
   try{
@@ -1252,17 +1282,31 @@ async function ahCreateEvent(server,uuid,slug){
       globalCoef:c.kind==='open'?0.5:1.0,
       secondRaceMultiplier:c.secondRaceMultiplier||1
     };
-    const r=await apiPost('/api/events',{slug:c.slug,name:c.name,kind:c.kind,pointsConfig:cfg,data:{ahServer:c.server,ahUuid:c.uuid}});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(j.error||'HTTP '+r.status);
-    // Sauvegarder le lien AH aussi en local (clé par slug) au cas où le backend ne l'a pas encore stocké (déploiement en attente)
-    try{localStorage.setItem('gdsp_ah_map',JSON.stringify(Object.assign({},JSON.parse(localStorage.getItem('gdsp_ah_map')||'{}'),{[c.slug]:{server:c.server,uuid:c.uuid}})))}catch(e){}
+    // Normalise le slug généré par AH (caractères non autorisés)
+    const safeSlug=String(c.slug||'').toLowerCase()
+      .replace(/[^a-z0-9]+/g,'-')
+      .replace(/^-+|-+$/g,'')
+      .slice(0,60);
+    if(!/^[a-z0-9][a-z0-9-]{1,60}$/.test(safeSlug)){
+      throw new Error('Slug généré invalide ("'+c.slug+'"). Renomme le championnat sur AH puis rescane.');
+    }
+    const r=await apiPost('/api/events',{slug:safeSlug,name:c.name,kind:c.kind,pointsConfig:cfg,data:{ahServer:c.server,ahUuid:c.uuid}});
+    let j={};
+    try{j=await r.json()}catch(e){
+      const text=await r.text().catch(()=>'');
+      throw new Error('Réponse inattendue du serveur (HTTP '+r.status+')'+(text?' : '+text.slice(0,200):''));
+    }
+    if(!r.ok)throw new Error(j.error||'Erreur HTTP '+r.status+' lors de la création.');
+    // Sauvegarder le lien AH aussi en local
+    try{localStorage.setItem('gdsp_ah_map',JSON.stringify(Object.assign({},JSON.parse(localStorage.getItem('gdsp_ah_map')||'{}'),{[safeSlug]:{server:c.server,uuid:c.uuid}})))}catch(e){}
     // Recharger events
-    const lr=await apiGet('/api/events');const lj=await lr.json();events=Array.isArray(lj.events)?lj.events:events;
-    alert('Événement créé : '+c.name+'. Tu peux maintenant le sélectionner dans le menu et y importer ses résultats (📥 Auto-import ou Import AH sessions à venir).');
-    await switchEvent(c.slug);
+    const lr=await apiGet('/api/events');
+    let lj={};try{lj=await lr.json()}catch(e){}
+    if(Array.isArray(lj.events))events=lj.events;
+    alert('✅ Événement créé : '+c.name+' (slug: '+safeSlug+').\n\nTu peux maintenant le sélectionner dans le menu et y importer ses résultats.');
+    await switchEvent(safeSlug);
     render();
-  }catch(e){alert('Erreur : '+e.message)}
+  }catch(e){alert('❌ Erreur création événement : '+e.message)}
 }
 
 async function ahImport(){

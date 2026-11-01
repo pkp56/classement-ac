@@ -357,46 +357,54 @@ function checkAdminAuth(req){
   let diff=0; for(let i=0;i<token.length;i++) diff|=token.charCodeAt(i)^expected.charCodeAt(i);
   return diff===0;
 }
-// Endpoint de login admin : essaie d'abord le backend déployé (Render), retombe sur le
-// mot de passe local (ADMIN_USERNAME/ADMIN_PASSWORD) seulement si le backend est indisponible.
-// Important : le token renvoyé doit être accepté par le backend pour que POST/PUT /api/...
-// (création d'événement, sauvegarde, etc.) fonctionnent — c'est pourquoi on relaie d'abord
-// la requête au backend et on n'utilise le fallback local que si le backend ne répond pas.
+// Login admin : relaie systématiquement vers le backend Render.
+// Si le backend ne répond pas (timeout/erreur réseau), on retombe sur les identifiants
+// locaux (ADMIN_USERNAME/ADMIN_PASSWORD) mais AVEC UN AVERTISSEMENT : le token local ne
+// sera PAS accepté par le backend pour les écritures (POST/PUT), donc la création
+// d'événement / sauvegarde échouera tant que le backend est injoignable.
 app.post('/api/admin/login', (req,res)=>{
   const body=JSON.stringify(req.body||{});
   const hdrs={'Content-Type':'application/json','Content-Length':Buffer.byteLength(body)};
-  // Relai vers le backend
   const target=new URL('/api/admin/login', BACKEND_URL);
   const proto=target.protocol==='https:'?https:http;
   const up=proto.request({method:'POST',hostname:target.hostname,port:target.port,path:target.pathname+target.search,headers:hdrs,timeout:10000},(upRes)=>{
     const buf=[];upRes.on('data',c=>buf.push(c));upRes.on('end',()=>{
       const payload=Buffer.concat(buf).toString('utf8');
       if(upRes.statusCode>=200&&upRes.statusCode<300){
-        // Backend a répondu OK → renvoyer son token tel quel
         res.writeHead(upRes.statusCode,{'Content-Type':'application/json'});
         res.end(payload);return;
       }
       if(upRes.statusCode===401){
-        // Mauvais identifiants côté backend → ne pas fallback sur le local, renvoyer l'erreur
+        // Identifiants incorrects côté backend → essayer en fallback local
+        // (permet de se connecter avec ADMIN_PASSWORD local pour consulter, mais les écritures
+        // backend ne fonctionneront pas tant que le backend n'accepte pas ces identifiants).
+        if(fallbackLocal(req,res,true))return;
         res.writeHead(401,{'Content-Type':'application/json'});
         res.end(payload);return;
       }
-      // Autre erreur (5xx/0/timeout) → fallback local
-      fallbackLocal(req,res);
+      // Erreur 5xx/0
+      if(fallbackLocal(req,res,true))return;
+      res.writeHead(upRes.statusCode,{'Content-Type':'application/json'});
+      res.end(payload);
     });
   });
-  up.on('timeout',()=>{up.destroy();fallbackLocal(req,res)});
-  up.on('error',()=>fallbackLocal(req,res));
+  up.on('timeout',()=>{up.destroy();fallbackLocal(req,res,true)});
+  up.on('error',()=>fallbackLocal(req,res,true));
   up.write(body);up.end();
 });
-function fallbackLocal(req,res){
+function fallbackLocal(req,res,warn){
   const {username, password} = req.body||{};
   const expectedUser=(process.env.ADMIN_USERNAME||'admin').trim();
   const expectedPass=(process.env.ADMIN_PASSWORD||'').trim();
-  if(!expectedPass){return res.status(503).json({error:'Administrateur non configuré (ADMIN_PASSWORD manquant) et backend indisponible.'})}
-  if(username!==expectedUser||password!==expectedPass){return res.status(401).json({error:'Identifiant ou mot de passe incorrect (local).'})}
+  if(!expectedPass)return false;
+  if(username!==expectedUser||password!==expectedPass)return false;
   res.set('X-Admin-Source','local-fallback');
-  res.json({token: expectedPass, user: expectedUser});
+  res.json({
+    token: expectedPass,
+    user: expectedUser,
+    warning: warn ? 'Connecté en mode local (backend indisponible). Les sauvegardes et créations sur le serveur ne fonctionneront pas tant que la connexion au backend n\'est pas rétablie.' : undefined
+  });
+  return true;
 }
 
 // Vérification rapide qu'un token admin est valide (utilisé au boot du frontend)
