@@ -57,23 +57,26 @@ function nav(){
     // When on the hub, show hub as Accueil and hide event-specific tabs
     delete navLabels.classement;delete navLabels.manches;delete navLabels.pilotes;
   }else if(backendMulti&&eventContext){
-    // When on an event, show hub link as "← Accueil" to return to portal
-    navLabels={hub:'← Accueil',...navLabels};
+    // When on an event, add a "← Accueil" link that returns to the EVENT home (not the portal).
+    // The portal is reached via the breadcrumb "← Tous les championnats" or logo from hub.
+    navLabels={home:'← Accueil',...navLabels};
     delete navLabels.accueil;
   }
   const crumb = backendMulti && page!=='hub' && currentSlug
-    ? `<div class="subcrumb" style="padding:6px 0 0 0"><a onclick="goHome()">← Tous les championnats</a></div>`
+    ? `<div class="subcrumb" style="padding:6px 0 0 0"><a onclick="goPortal()">← Tous les championnats</a></div>`
     : '';
-  // Page gpilote : actif sur l'onglet Global ; sur hub (portail) c'est l'onglet Accueil
-  let activePage=(page==='gpilote')?'global':pageKey();
+  // Page gpilote : actif sur l'onglet Global ; 'home'/'accueil' (événement) → bouton ← Accueil
+  let activePage=(page==='gpilote')?'global':(page==='home'||pageKey()==='accueil'?'home':pageKey());
   if(activePage==='accueil'&&!currentSlug)activePage='hub';
   document.getElementById('nav').innerHTML =
     Object.entries(navLabels).map(([k,v])=>`<button class="${activePage===k?'active':''}" onclick="go('${k}')">${v.toUpperCase()}</button>`).join('');
   renderEventSwitcher();
 }
 async function go(x){
+  // 'home' = retour à l'accueil DE L'ÉVÉNEMENT COURANT (ne reset rien)
+  if(x==='home'){goHome();return}
   page=x;window.scrollTo(0,0);
-  if(x==='hub'&&backendMulti){goHome();return}
+  if(x==='hub'&&backendMulti){goPortal();return}
   if((x==='global'||x==='gpilote')&&backendMulti){
     app.innerHTML=`<div class="panel"><p class="note">Chargement des données de tous les événements…</p></div>`;
     nav();
@@ -88,7 +91,15 @@ async function go(x){
   }
   render();
 }
-function goHome(){currentSlug=null;eventContext=null;sessions.length=0;penMap={};manualDrivers=null;customCalendar=null;page='hub';window.scrollTo(0,0);render();nav()}
+// goPortal : retour au portail (liste TOUS les championnats/opens) — reset complet
+function goPortal(){currentSlug=null;eventContext=null;sessions.length=0;penMap={};manualDrivers=null;customCalendar=null;page='hub';window.scrollTo(0,0);render();nav()}
+// goHome : retour à l'accueil DE L'ÉVÉNEMENT COURANT (ne reset pas les données).
+// Si aucun événement n'est sélectionné → va au portail.
+function goHome(){
+  if(!backendMulti){page='accueil';render();return}
+  if(!currentSlug||!eventContext){goPortal();return}
+  page='accueil';window.scrollTo(0,0);render();
+}
 
 function renderEventSwitcher(){
   const sw=document.getElementById('event-switcher');
@@ -1054,7 +1065,7 @@ async function deleteCurrentEvent(){
   const j=await r.json().catch(()=>({}));
   if(!r.ok)return alert('Erreur : '+(j.error||r.status));
   events=events.filter(e=>e.slug!==currentSlug);
-  goHome();
+  goPortal(); // événement supprimé → retour au portail
 }
 
 function saveGlobalHidden(){
@@ -1158,7 +1169,7 @@ function admin(){
   const multiAdmin = '';
   if(backendMulti&&!eventContext&&adminTab==='import'){
     // Empêcher l'import si aucun événement sélectionné
-    return `${head('administration','Direction de course','')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="panel"><h2>Sélectionne d'abord un événement</h2><p class="note">Choisis un championnat/open dans le menu en haut à droite, ou retourne à l'accueil et clique sur une vignette, avant d'importer des résultats.</p><button class="btn secondary" onclick="goHome()">← Retour à l'accueil</button></div>${multiAdmin}`;
+    return `${head('administration','Direction de course','')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="panel"><h2>Sélectionne d'abord un événement</h2><p class="note">Choisis un championnat/open dans le menu en haut à droite, ou retourne à l'accueil et clique sur une vignette, avant d'importer des résultats.</p><button class="btn secondary" onclick="goPortal()">← Retour à l'accueil</button></div>${multiAdmin}`;
   }
   return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Pénalités temps (positives ou négatives pour annuler une pénalité serveur abusive), DQ ou avertissements. Les pénalités temps reclashent automatiquement.</p>${selectedRaceAdj!==null?renderAdjPanel(rs[selectedRaceAdj]):`<p class="note">Choisis une manche depuis « Manches ».</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='globalexc'?renderGlobalExclusions()
 :`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>${multiAdmin}`;
