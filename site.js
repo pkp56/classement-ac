@@ -34,11 +34,11 @@ function pointsConfig(){
 
 // ---------- Helpers génériques ----------
 const labelsLegacy={accueil:'Accueil',classement:'Classements',manches:'Résultats',pilotes:'Pilotes',admin:'Administration'};
-const labelsHub={hub:'Accueil',global:'Global',classement:'Classements',manches:'Résultats',pilotes:'Pilotes',admin:'Administration'};
-// Map legacy 'accueil' key to 'hub' in multi mode
+const labelsHub={accueil:'Accueil',global:'Global',classement:'Classements',manches:'Résultats',pilotes:'Pilotes',admin:'Administration'};
 function pageKey(){
   if(!backendMulti)return page;
-  if(page==='accueil')return currentSlug?'accueil':'hub';
+  // 'accueil' et 'hub' désignent tous les deux la page d'accueil du championnat courant
+  if(page==='accueil'||page==='hub')return 'accueil';
   return page;
 }
 function labels(){return backendMulti?labelsHub:labelsLegacy}
@@ -51,37 +51,47 @@ const LVL_BADGES={1:'/assets/lvl1-elite.png',2:'/assets/lvl2-confirme.png',3:'/a
 function levelBadge(level,size){const src=LVL_BADGES[level];return src?`<img class="lvl-badge" src="${src}?v=26" alt="Niveau ${level}" width="${size}" height="${size}" loading="lazy" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-block;vertical-align:middle">`:`<span class="tag lvl lvl-${level}">${level}</span>`}
 
 function nav(){
-  // Hide event-specific tabs (classement/manches/pilotes) if no event is selected
-  let navLabels={...labels()};
-  if(backendMulti&&!eventContext){
-    // When on the hub, show hub as Accueil and hide event-specific tabs
-    delete navLabels.classement;delete navLabels.manches;delete navLabels.pilotes;
-  }else if(backendMulti&&eventContext){
-    // When on an event, add a "← Accueil" link that returns to the EVENT home (not the portal).
-    // The portal is reached via the breadcrumb "← Tous les championnats" or logo from hub.
-    navLabels={home:'← Accueil',...navLabels};
-    delete navLabels.accueil;
-  }
-  const crumb = backendMulti && page!=='hub' && currentSlug
-    ? `<div class="subcrumb" style="padding:6px 0 0 0"><a onclick="goPortal()">← Tous les championnats</a></div>`
-    : '';
-  // Page gpilote : actif sur l'onglet Global ; 'home'/'accueil' (événement) → bouton ← Accueil
-  let activePage=(page==='gpilote')?'global':(page==='home'||pageKey()==='accueil'?'home':pageKey());
-  if(activePage==='accueil'&&!currentSlug)activePage='hub';
+  // Tous les onglets sont TOUJOURS visibles — pas de suppression conditionnelle.
+  const navLabels={...labels()};
+  // Pas de breadcrumb supplémentaire: la navigation vers le portail/changements d'event
+  // se fait via le sélecteur d'événements en haut à droite.
+  const crumb='';
+  // Page gpilote → onglet Global actif ; accueil/hub → onglet Accueil actif
+  const activePage=(page==='gpilote')?'global':pageKey();
   document.getElementById('nav').innerHTML =
     Object.entries(navLabels).map(([k,v])=>`<button class="${activePage===k?'active':''}" onclick="go('${k}')">${v.toUpperCase()}</button>`).join('');
   renderEventSwitcher();
 }
 async function go(x){
-  // 'home' = retour à l'accueil DE L'ÉVÉNEMENT COURANT (ne reset rien)
-  if(x==='home'){goHome();return}
   page=x;window.scrollTo(0,0);
-  if(x==='hub'&&backendMulti){goPortal();return}
+  // En mode multi, 'hub' et 'accueil' = page d'accueil du championnat courant
+  if(x==='hub'||x==='accueil'){
+    if(backendMulti){
+      // Si aucun événement n'est chargé, charger le championnat par défaut (ou le premier)
+      if(!eventContext){
+        const last=localStorage.getItem('gdsp_last_event');
+        const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
+        if(target){
+          try{await loadEvent(target.slug)}catch(e){}
+        }
+      }
+      page='accueil';
+    }else{
+      page='accueil';
+    }
+    render();return;
+  }
   if((x==='global'||x==='gpilote')&&backendMulti){
     app.innerHTML=`<div class="panel"><p class="note">Chargement des données de tous les événements…</p></div>`;
     nav();
     try{
-      await globalRanking(); // charge data pour tous les events
+      // Charger au moins un événement au préalable pour que les onglets restent valides
+      if(!eventContext){
+        const last=localStorage.getItem('gdsp_last_event');
+        const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
+        if(target){try{await loadEvent(target.slug)}catch(e){}}
+      }
+      await globalRanking();
       render();
     }catch(e){
       console.error('go global error:',e);
@@ -91,38 +101,37 @@ async function go(x){
   }
   render();
 }
-// goPortal : retour au portail (liste TOUS les championnats/opens) — reset complet
-function goPortal(){currentSlug=null;eventContext=null;sessions.length=0;penMap={};manualDrivers=null;customCalendar=null;page='hub';window.scrollTo(0,0);render();nav()}
-// goHome : retour à l'accueil DE L'ÉVÉNEMENT COURANT (ne reset pas les données).
-// Si aucun événement n'est sélectionné → va au portail.
-function goHome(){
-  if(!backendMulti){page='accueil';render();return}
-  if(!currentSlug||!eventContext){goPortal();return}
-  page='accueil';window.scrollTo(0,0);render();
-}
+// Retour à l'accueil du championnat courant (appelé par le logo GDSP)
+function goHome(){go('accueil')}
 
 function renderEventSwitcher(){
   const sw=document.getElementById('event-switcher');
   const tr=document.getElementById('topRight');
   if(!backendMulti){sw.innerHTML='';tr.textContent='INTERNATIONAL SERIES · LOLA T290';return}
   if(!events.length){sw.innerHTML='';tr.textContent='GDSP';return}
-  if(events.length===1&&!eventContext){
-    sw.innerHTML='';tr.textContent=events[0].name.toUpperCase();return
-  }
-  if(page==='hub'||page==='global'){sw.innerHTML='';tr.textContent='GENTLEMAN DRIVERS PROJECT';return}
+  // L'événement courant est toujours affiché (sauf s'il n'y en a pas du tout)
   const ev=events.find(e=>e.slug===currentSlug);
-  tr.textContent=ev?ev.name.toUpperCase():'GDSP';
+  // Sur la page Global (et gpilote), on affiche aussi le sélecteur + "GLOBAL" en label
+  if(page==='global'||page==='gpilote'){
+    tr.textContent='CLASSEMENT GLOBAL';
+  }else{
+    tr.textContent=ev?ev.name.toUpperCase():events[0].name.toUpperCase();
+  }
+  // Sélecteur toujours visible pour pouvoir changer d'événement depuis n'importe quelle page
   const champOpts=events.filter(e=>e.kind==='championship');
   const openOpts=events.filter(e=>e.kind==='open');
   const archOpts=events.filter(e=>e.kind==='archive');
   const grp=(label,arr)=>arr.length?`<optgroup label="${label}">${arr.map(e=>`<option value="${esc(e.slug)}" ${e.slug===currentSlug?'selected':''}>${esc(e.name)}</option>`).join('')}</optgroup>`:'';
+  if(events.length===1&&!champOpts.length&&!openOpts.length>0){
+    sw.innerHTML='';return
+  }
   sw.innerHTML=`<select onchange="switchEvent(this.value)"><option value="">— Changer de championnat/open —</option>${grp('Championnats',champOpts)}${grp('Opens',openOpts)}${grp('Archives',archOpts)}</select>`;
 }
 
 async function switchEvent(slug){
   if(!slug){goHome();return}
   await loadEvent(slug);
-  page='classement';
+  page='accueil'; // aller sur la page d'accueil du championnat sélectionné
   round=0;sessionIndex=1;driverId='';compareA='';compareB='';ranktab='pilotes';
   render();window.scrollTo(0,0);
 }
@@ -1065,7 +1074,14 @@ async function deleteCurrentEvent(){
   const j=await r.json().catch(()=>({}));
   if(!r.ok)return alert('Erreur : '+(j.error||r.status));
   events=events.filter(e=>e.slug!==currentSlug);
-  goPortal(); // événement supprimé → retour au portail
+  // Charger un autre événement (ou portail si aucun ne reste)
+  const next=events.find(e=>e.kind==='championship')||events[0];
+  if(next){
+    try{await loadEvent(next.slug)}catch(e){}
+  }else{
+    currentSlug=null;eventContext=null;sessions.length=0;
+  }
+  page='accueil';render();
 }
 
 function saveGlobalHidden(){
@@ -1169,7 +1185,7 @@ function admin(){
   const multiAdmin = '';
   if(backendMulti&&!eventContext&&adminTab==='import'){
     // Empêcher l'import si aucun événement sélectionné
-    return `${head('administration','Direction de course','')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="panel"><h2>Sélectionne d'abord un événement</h2><p class="note">Choisis un championnat/open dans le menu en haut à droite, ou retourne à l'accueil et clique sur une vignette, avant d'importer des résultats.</p><button class="btn secondary" onclick="goPortal()">← Retour à l'accueil</button></div>${multiAdmin}`;
+    return `${head('administration','Direction de course','')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="panel"><h2>Sélectionne d'abord un événement</h2><p class="note">Choisis un championnat/open dans le menu en haut à droite avant d'importer des résultats.</p><button class="btn secondary" onclick="goHome()">← Retour à l'accueil</button></div>${multiAdmin}`;
   }
   return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Pénalités temps (positives ou négatives pour annuler une pénalité serveur abusive), DQ ou avertissements. Les pénalités temps reclashent automatiquement.</p>${selectedRaceAdj!==null?renderAdjPanel(rs[selectedRaceAdj]):`<p class="note">Choisis une manche depuis « Manches ».</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='globalexc'?renderGlobalExclusions()
 :`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>${multiAdmin}`;
@@ -1450,7 +1466,11 @@ function render(){
     if(!anyLoaded){go('gpilote');return}
     app.innerHTML=globalDriverProfile();return;
   }
-  if(page==='hub'&&backendMulti){app.innerHTML=hub();return}
+  if(page==='hub'&&backendMulti){
+    // Page 'hub' : si un événement est chargé on redirige vers accueil ; sinon liste des événements (portail)
+    if(eventContext){page='accueil'}
+    else{app.innerHTML=hub();return}
+  }
   const renderers={accueil:home,classement:ranking,manches:manche,pilotes:drivers,global:globalRankingSync,admin};
   app.innerHTML=(renderers[page]||home)();
 }
@@ -1470,25 +1490,23 @@ function render(){
   await detectBackend();
 
   if(backendMulti){
-    // Multi mode
+    // Multi mode : toujours charger un événement au démarrage pour que TOUS les onglets
+    // soient visibles dès l'accueil (Accueil, Global, Classements, Résultats, Pilotes, Admin).
     try{
       const lr=await apiGet('/api/events');
       if(lr.ok){const j=await lr.json();events=Array.isArray(j.events)?j.events:[]}
     }catch(e){}
-    if(events.length===1){
-      // Un seul événement: on y entre directement (pas de hub vide)
-      await loadEvent(events[0].slug);
-      page='accueil';
-    }else if(events.length>1){
-      // Plusieurs événements: accueil = hub (portail)
-      // Charger en arrière-plan le dernier événement visité pour que le switcher l'ait prêt, mais rester sur le hub.
+    // Choisir l'événement à charger : dernier visité > premier championnat > premier événement
+    let target=null;
+    if(events.length){
       const last=localStorage.getItem('gdsp_last_event');
-      if(last&&events.find(e=>e.slug===last)){
-        try{await loadEvent(last)}catch(e){}
-      }
-      page='hub';
+      target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
+    }
+    if(target){
+      try{await loadEvent(target.slug)}catch(e){}
+      page='accueil';
     }else{
-      page='hub';
+      page='hub'; // aucun événement → portail vide
     }
   }else{
     // Legacy mode: same behaviour as before
