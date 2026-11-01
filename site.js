@@ -1222,12 +1222,19 @@ function renderAhChamps(){
         <td>${prog}</td>
         <td>${nev}</td>
         <td>${scale.slice(0,5).join('/')}${scale.length>5?'…':''}</td>
-        <td>${exists?'<span class="tag archive">déjà présent</span>':`<button class="btn secondary small" onclick="ahCreateEvent(\`${esc(c.server)}\`,\`${esc(c.uuid)}\`,\`${esc(c.slug)}\`)">+ Créer</button>`}</td>
+        <td>${exists?'<span class="tag archive">déjà présent</span>':`<button class="btn secondary small" data-ah-server="${esc(c.server)}" data-ah-uuid="${esc(c.uuid)}" data-ah-slug="${esc(c.slug)}" onclick="ahCreateEventFromBtn(this)">+ Créer</button>`}</td>
       </tr>`;
     }catch(e){return `<tr><td colspan="6" class="muted">Erreur ligne : ${esc(e.message)}</td></tr>`}
   });
   out.innerHTML=`<p class="note">${ahChampsCache.length} championnats/opens détectés. Les championnats de type « test » et doublons ont été filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème.</p>${table(['','Nom','Progression','Manches','Barème (places)',''],rows)}`;
   }catch(e){out.innerHTML='<p class="note" style="color:#9c3021">✗ '+esc(e.message)+'<br><pre style="font-size:11px;overflow:auto">'+esc(e.stack||'')+'</pre></p>'}
+}
+function ahCreateEventFromBtn(btn){
+  if(btn.disabled)return;
+  const server=btn.dataset.ahServer, uuid=btn.dataset.ahUuid, slug=btn.dataset.ahSlug;
+  const oldText=btn.textContent;
+  btn.disabled=true;btn.textContent='⏳ Création…';
+  return ahCreateEvent(server,uuid,slug).finally(()=>{btn.disabled=false;btn.textContent=oldText});
 }
 async function ahCreateEvent(server,uuid,slug){
   try{

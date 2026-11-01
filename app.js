@@ -38,10 +38,13 @@ function proxyRequest(req, res, opts = {}) {
   const send = (body) => {
     if (body && body.length) headers['content-length'] = body.length;
     const proto = target.protocol === 'https:' ? https : http;
+    // Timeout plus long pour les méthodes d'écriture (POST/PUT) qui peuvent subir un cold start Render (~30-60s)
+    const method=(opts.method||req.method||'GET').toUpperCase();
+    const upTimeout=(method==='GET'||method==='HEAD')?25000:90000;
     const upstream = proto.request(target, {
-      method: opts.method || req.method,
+      method,
       headers,
-      timeout: 25000,
+      timeout: upTimeout,
     }, (upRes) => {
       res.writeHead(upRes.statusCode || 502, upRes.headers);
       upRes.pipe(res);
@@ -354,20 +357,47 @@ function checkAdminAuth(req){
   let diff=0; for(let i=0;i<token.length;i++) diff|=token.charCodeAt(i)^expected.charCodeAt(i);
   return diff===0;
 }
-// Endpoint de login admin local (MVP). Vérifie ADMIN_USERNAME / ADMIN_PASSWORD.
-// Retourne {token} où le token est simplement le mot de passe (utilisé comme Bearer).
-// En production avec le backend déployé, le frontend continue de fonctionner :
-// si ce fichier n'est pas servi (GitHub Pages), c'est le backend /api/admin/login qui répond.
+// Endpoint de login admin : essaie d'abord le backend déployé (Render), retombe sur le
+// mot de passe local (ADMIN_USERNAME/ADMIN_PASSWORD) seulement si le backend est indisponible.
+// Important : le token renvoyé doit être accepté par le backend pour que POST/PUT /api/...
+// (création d'événement, sauvegarde, etc.) fonctionnent — c'est pourquoi on relaie d'abord
+// la requête au backend et on n'utilise le fallback local que si le backend ne répond pas.
 app.post('/api/admin/login', (req,res)=>{
+  const body=JSON.stringify(req.body||{});
+  const hdrs={'Content-Type':'application/json','Content-Length':Buffer.byteLength(body)};
+  // Relai vers le backend
+  const target=new URL('/api/admin/login', BACKEND_URL);
+  const proto=target.protocol==='https:'?https:http;
+  const up=proto.request({method:'POST',hostname:target.hostname,port:target.port,path:target.pathname+target.search,headers:hdrs,timeout:10000},(upRes)=>{
+    const buf=[];upRes.on('data',c=>buf.push(c));upRes.on('end',()=>{
+      const payload=Buffer.concat(buf).toString('utf8');
+      if(upRes.statusCode>=200&&upRes.statusCode<300){
+        // Backend a répondu OK → renvoyer son token tel quel
+        res.writeHead(upRes.statusCode,{'Content-Type':'application/json'});
+        res.end(payload);return;
+      }
+      if(upRes.statusCode===401){
+        // Mauvais identifiants côté backend → ne pas fallback sur le local, renvoyer l'erreur
+        res.writeHead(401,{'Content-Type':'application/json'});
+        res.end(payload);return;
+      }
+      // Autre erreur (5xx/0/timeout) → fallback local
+      fallbackLocal(req,res);
+    });
+  });
+  up.on('timeout',()=>{up.destroy();fallbackLocal(req,res)});
+  up.on('error',()=>fallbackLocal(req,res));
+  up.write(body);up.end();
+});
+function fallbackLocal(req,res){
   const {username, password} = req.body||{};
   const expectedUser=(process.env.ADMIN_USERNAME||'admin').trim();
   const expectedPass=(process.env.ADMIN_PASSWORD||'').trim();
-  if(!expectedPass) return res.status(503).json({error:'Administrateur non configuré (ADMIN_PASSWORD manquant).'});
-  if(username!==expectedUser||password!==expectedPass){
-    return res.status(401).json({error:'Identifiant ou mot de passe incorrect.'});
-  }
+  if(!expectedPass){return res.status(503).json({error:'Administrateur non configuré (ADMIN_PASSWORD manquant) et backend indisponible.'})}
+  if(username!==expectedUser||password!==expectedPass){return res.status(401).json({error:'Identifiant ou mot de passe incorrect (local).'})}
+  res.set('X-Admin-Source','local-fallback');
   res.json({token: expectedPass, user: expectedUser});
-});
+}
 
 // Vérification rapide qu'un token admin est valide (utilisé au boot du frontend)
 app.get('/api/admin/verify', (req,res)=>{
