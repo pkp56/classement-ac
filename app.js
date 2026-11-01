@@ -18,6 +18,7 @@ const ROOT = __dirname;
 
 // Fichiers interdits au public
 const FORBIDDEN = /(^|\/)(?:\.env|node_modules|\.git|\.github|package\.json|package-lock\.json|README\.md|render\.yaml|\.gitignore|\.gitattributes|app\.js|tests?\/|backups?\/)/i;
+app.use(express.json({ limit: '256kb' }));
 app.use((req, res, next) => {
   if (FORBIDDEN.test(req.path)) return res.sendStatus(404);
   next();
@@ -321,13 +322,109 @@ app.get('/api/ah-championship-session-json', async(req,res)=>{
 // 1) sauvegarde un championnat VIDE mais valide (avec une clé _reset pour satisfaire isNonEmptyObject) ;
 // 2) efface aussi l'ancienne table drivers/penalties via PUT /api/results ;
 // 3) renvoie le résultat agrégé au frontend.
+// ---------- GLOBAL EXCLUSIONS (partagées entre tous les admins/navigateurs) ----------
+// Les exclusions du Classement GLOBAL sont stockées dans un fichier JSON sur le serveur
+// (pas uniquement dans localStorage du navigateur de l'admin).
+const GLOBAL_EXC_PATH = path.join(ROOT, 'data', 'global-exclusions.json');
+function readGlobalExc(){
+  try{
+    const raw=fs.readFileSync(GLOBAL_EXC_PATH,'utf8');
+    const j=JSON.parse(raw);
+    // Format accepté : { ids: { "<id>": true } } ou bien tableau d'ids
+    if(j && typeof j==='object' && j.ids && typeof j.ids==='object') return j.ids;
+    if(Array.isArray(j)){const o={};j.forEach(id=>{if(typeof id==='string')o[id]=true});return o}
+    return {};
+  }catch(e){return {}}
+}
+function writeGlobalExc(ids){
+  const payload={ids, updated_at:new Date().toISOString(), updated_by:process.env.ADMIN_USERNAME||'admin'};
+  fs.mkdirSync(path.dirname(GLOBAL_EXC_PATH),{recursive:true});
+  fs.writeFileSync(GLOBAL_EXC_PATH, JSON.stringify(payload,null,2),'utf8');
+}
+function checkAdminAuth(req){
+  // Vérifie le Bearer token : mot de passe admin en clair (simple, pour MVP interne).
+  // Le frontend envoie adminToken qui est le mot de passe saisi (cf adminLogin).
+  const hdr=req.headers.authorization||'';
+  if(!hdr.startsWith('Bearer '))return false;
+  const token=hdr.slice(7);
+  const expected=(process.env.ADMIN_PASSWORD||'').trim();
+  if(!expected) return false; // pas d'admin configuré → endpoint protégé
+  // timing-safe compare
+  if(token.length!==expected.length) return false;
+  let diff=0; for(let i=0;i<token.length;i++) diff|=token.charCodeAt(i)^expected.charCodeAt(i);
+  return diff===0;
+}
+// Endpoint de login admin local (MVP). Vérifie ADMIN_USERNAME / ADMIN_PASSWORD.
+// Retourne {token} où le token est simplement le mot de passe (utilisé comme Bearer).
+// En production avec le backend déployé, le frontend continue de fonctionner :
+// si ce fichier n'est pas servi (GitHub Pages), c'est le backend /api/admin/login qui répond.
+app.post('/api/admin/login', (req,res)=>{
+  const {username, password} = req.body||{};
+  const expectedUser=(process.env.ADMIN_USERNAME||'admin').trim();
+  const expectedPass=(process.env.ADMIN_PASSWORD||'').trim();
+  if(!expectedPass) return res.status(503).json({error:'Administrateur non configuré (ADMIN_PASSWORD manquant).'});
+  if(username!==expectedUser||password!==expectedPass){
+    return res.status(401).json({error:'Identifiant ou mot de passe incorrect.'});
+  }
+  res.json({token: expectedPass, user: expectedUser});
+});
+
+// Vérification rapide qu'un token admin est valide (utilisé au boot du frontend)
+app.get('/api/admin/verify', (req,res)=>{
+  if(!checkAdminAuth(req)) return res.status(401).json({ok:false});
+  res.json({ok:true, user: process.env.ADMIN_USERNAME||'admin'});
+});
+
+// Lecture publique (utilisée par la page Classement GLOBAL pour tout visiteur)
+app.get('/api/global-exclusions', (_req,res)=>{
+  res.set('Cache-Control','no-store');
+  res.json({ ids: readGlobalExc() });
+});
+// Mise à jour (admin seulement). Vérifie soit avec le mot de passe local (MVP),
+// soit en relayant la requête vers le backend (/api/admin/verify).
+async function verifyAdmin(req){
+  if(checkAdminAuth(req)) return true;
+  try{
+    const {status} = await new Promise((resolve,reject)=>{
+      const target=new URL('/api/admin/verify', BACKEND_URL);
+      const hdrs=Object.assign({}, req.headers);
+      delete hdrs.host;delete hdrs.connection;delete hdrs.origin;delete hdrs.referer;delete hdrs['content-length'];
+      const proto=target.protocol==='https:'?https:http;
+      const up=proto.request({method:'GET',hostname:target.hostname,port:target.port,path:target.pathname+target.search,headers:hdrs,timeout:8000},(upRes)=>{
+        // consume body
+        upRes.on('data',()=>{});
+        upRes.on('end',()=>resolve({status:upRes.statusCode||0}));
+      });
+      up.on('timeout',()=>up.destroy(new Error('timeout')));
+      up.on('error',reject);
+      up.end();
+    });
+    if(status>=200&&status<300)return true;
+  }catch(e){/* backend indisponible → échec silencieux, renverra 401 */}
+  return false;
+}
+app.put('/api/global-exclusions', async (req,res)=>{
+  if(!(await verifyAdmin(req))) return res.status(401).json({error:'Connexion administrateur requise.'});
+  const body=req.body||{};
+  const ids=body.ids;
+  if(!ids || typeof ids!=='object') return res.status(400).json({error:'ids doit être un objet { id: true }.'});
+  // Valider que toutes les clés sont des chaînes courtes et que les valeurs sont booléennes
+  const clean={};
+  for(const k of Object.keys(ids)){
+    if(typeof k!=='string'||k.length>120) continue;
+    if(ids[k]) clean[k]=true;
+  }
+  writeGlobalExc(clean);
+  res.json({ok:true, count:Object.keys(clean).length, updated_at:new Date().toISOString(), source:'local'});
+});
+
+// Endpoint de réinitialisation TOTALE (doit être déclaré AVANT le générique /api/*) :
+// 1) sauvegarde un championnat VIDE mais valide (avec une clé _reset pour satisfaire isNonEmptyObject) ;
+// 2) efface aussi l'ancienne table drivers/penalties via PUT /api/results ;
+// 3) renvoie le résultat agrégé au frontend.
 app.all('/api/admin/reset', (req, res) => {
-  const chunks=[];
-  req.on('data',c=>chunks.push(c));
-  req.on('end',()=>{
-    let body={};
-    try{body=chunks.length?JSON.parse(Buffer.concat(chunks).toString('utf8')):{}}catch{}
-    if(body.confirmation!=='REINIT_CHAMPIONNAT')return res.status(400).json({error:'Confirmation manquante.'});
+  let body=req.body||{};
+  if(body.confirmation!=='REINIT_CHAMPIONNAT')return res.status(400).json({error:'Confirmation manquante.'});
     const auth=req.headers.authorization||'';
     if(!auth.startsWith('Bearer '))return res.status(401).json({error:'Connexion administrateur requise.'});
     const hdrs={'Authorization':auth,'Content-Type':'application/json'};
@@ -348,7 +445,6 @@ app.all('/api/admin/reset', (req, res) => {
         res.json({status:'ok', championship:{status:s1,body:tryParse(data1)}, results:{status:s2,body:tryParse(data2)}});
       });
     });
-  });
 });
 app.all('/api/*', (req,res)=>proxyRequest(req,res));
 

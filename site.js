@@ -1057,8 +1057,34 @@ async function deleteCurrentEvent(){
   goHome();
 }
 
-function saveGlobalHidden(){localStorage.setItem('gdsp_global_hidden',JSON.stringify(globalHidden))}
-function toggleGlobalHidden(id,hide){if(hide)globalHidden[id]=true;else delete globalHidden[id];saveGlobalHidden();render()}
+function saveGlobalHidden(){
+  localStorage.setItem('gdsp_global_hidden',JSON.stringify(globalHidden));
+  // Sauvegarde SERVEUR (partagée entre tous les admins / navigateurs).
+  apiPut('/api/global-exclusions',{ids:globalHidden})
+    .then(r=>{if(!r.ok&&r.status!==404&&r.status!==503)console.warn('global-exclusions: sauvegarde serveur HTTP',r.status)})
+    .catch(e=>console.warn('global-exclusions: serveur indisponible, sauvegarde locale conservée.'));
+}
+async function loadGlobalHidden(){
+  // 1) Charger depuis le serveur (exclusions partagées entre admins)
+  try{
+    const r=await fetch('/api/global-exclusions',{cache:'no-store'});
+    if(r.ok){
+      const j=await r.json();
+      if(j&&typeof j.ids==='object'){globalHidden=j.ids||{};localStorage.setItem('gdsp_global_hidden',JSON.stringify(globalHidden));return}
+    }
+  }catch(e){}
+  // 2) Fallback: localStorage (pour le mode GitHub Pages sans serveur)
+  try{globalHidden=JSON.parse(localStorage.getItem('gdsp_global_hidden')||'{}')}catch(e){globalHidden={}}
+}
+function toggleGlobalHidden(id,hide){
+  if(hide)globalHidden[id]=true;else delete globalHidden[id];
+  localStorage.setItem('gdsp_global_hidden',JSON.stringify(globalHidden));
+  // Push serveur
+  apiPut('/api/global-exclusions',{ids:globalHidden})
+    .then(r=>{if(!r.ok)console.warn('global-exclusions: échec push serveur HTTP',r.status)})
+    .catch(e=>console.warn('global-exclusions: push serveur impossible',e));
+  render();
+}
 function renderGlobalExclusions(){
   const pilots=new Map();
   allDrivers().forEach(d=>pilots.set(d.id,{name:d.name,team:d.team||''}));
@@ -1073,7 +1099,7 @@ function renderGlobalExclusions(){
       :`<button class="btn secondary small" onclick="toggleGlobalHidden(this.dataset.id,true)" data-id="${esc(d.id)}">Exclure du Global</button>`}</td>
   </tr>`).join('');
   return `<h2>Classement GLOBAL · pilotes exclus</h2>
-    <p class="note">Exclut des pilotes du Classement GLOBAL Discord (invités, organisateurs, remplaçants, faux comptes). Les autres classements (par événement) ne sont pas affectés. <b>Sauvegardé dans ce navigateur</b> : exclusions conservées sur cet ordinateur uniquement.</p>
+    <p class="note">Exclut des pilotes du Classement GLOBAL Discord (invités, organisateurs, remplaçants, faux comptes). Les autres classements (par événement) ne sont pas affectés. La liste est <b>sauvegardée sur le serveur</b> et partagée entre tous les administrateurs (une copie locale dans le navigateur sert de secours si le serveur est indisponible).</p>
     <p class="note"><b>${Object.keys(globalHidden).length}</b> pilote(s) exclu(s).</p>
     ${table(['Pilote','Statut','Action'],rows)}`;
 }
@@ -1422,7 +1448,7 @@ function render(){
 (async()=>{
   // Migrate legacy penMap local storage
   let penMapRaw=JSON.parse(localStorage.getItem('gdsp_penalties')||'{}');
-  try{globalHidden=JSON.parse(localStorage.getItem('gdsp_global_hidden')||'{}')}catch(e){globalHidden={}}
+  await loadGlobalHidden();
   for(const k in penMapRaw){if('pts' in penMapRaw[k]&&!('timeAdd' in penMapRaw[k])&&!('warning' in penMapRaw[k]))delete penMapRaw[k]}
   penMap=penMapRaw;
   manualDrivers=JSON.parse(localStorage.getItem('gdsp_drivers')||'null');
