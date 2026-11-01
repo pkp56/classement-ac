@@ -63,37 +63,26 @@ function nav(){
   renderEventSwitcher();
 }
 async function go(x){
-  page=x;window.scrollTo(0,0);
-  // En mode multi, 'hub' et 'accueil' = page d'accueil du championnat courant
-  if(x==='hub'||x==='accueil'){
-    if(backendMulti){
-      // Si aucun événement n'est chargé, charger le championnat par défaut (ou le premier)
-      if(!eventContext){
-        const last=localStorage.getItem('gdsp_last_event');
-        const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
-        if(target){
-          try{await loadEvent(target.slug)}catch(e){}
-        }
-      }
-      page='accueil';
-    }else{
-      page='accueil';
+  // Pré-charger un événement par défaut si on va sur une page événementielle (classement/manches/pilotes)
+  // sans avoir d'eventContext (ex: on arrive sur un lien profond).
+  const eventPages=['classement','manches','pilotes'];
+  if(backendMulti && eventPages.includes(x) && !eventContext){
+    const last=localStorage.getItem('gdsp_last_event');
+    const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
+    if(target){
+      app.innerHTML=`<div class="panel"><p class="note">Chargement du championnat…</p></div>`;
+      nav();
+      try{await loadEvent(target.slug)}catch(e){}
     }
-    render();return;
   }
+  page=x;window.scrollTo(0,0);
+  // 'accueil' et 'hub' = la VRAIE page d'accueil GDSP (hero 65/35, Règlements, Stats, Discord)
+  if(x==='accueil'||x==='hub'){page='hub';render();return}
   if((x==='global'||x==='gpilote')&&backendMulti){
     app.innerHTML=`<div class="panel"><p class="note">Chargement des données de tous les événements…</p></div>`;
     nav();
-    try{
-      // Charger au moins un événement au préalable pour que les onglets restent valides
-      if(!eventContext){
-        const last=localStorage.getItem('gdsp_last_event');
-        const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
-        if(target){try{await loadEvent(target.slug)}catch(e){}}
-      }
-      await globalRanking();
-      render();
-    }catch(e){
+    try{await globalRanking();render()}
+    catch(e){
       console.error('go global error:',e);
       app.innerHTML=`<div class="panel"><p class="note" style="color:#9c3021">✗ Erreur de chargement : ${esc(e.message||e)}</p></div>`;
     }
@@ -101,7 +90,7 @@ async function go(x){
   }
   render();
 }
-// Retour à l'accueil du championnat courant (appelé par le logo GDSP)
+// Retour à la page d'accueil GDSP (appelé par le logo GDSP et le bouton Accueil)
 function goHome(){go('accueil')}
 
 function renderEventSwitcher(){
@@ -109,29 +98,30 @@ function renderEventSwitcher(){
   const tr=document.getElementById('topRight');
   if(!backendMulti){sw.innerHTML='';tr.textContent='INTERNATIONAL SERIES · LOLA T290';return}
   if(!events.length){sw.innerHTML='';tr.textContent='GDSP';return}
-  // L'événement courant est toujours affiché (sauf s'il n'y en a pas du tout)
+  // L'événement courant est affiché ; sur la page d'accueil hub → "GENTLEMAN DRIVERS PROJECT"
   const ev=events.find(e=>e.slug===currentSlug);
-  // Sur la page Global (et gpilote), on affiche aussi le sélecteur + "GLOBAL" en label
   if(page==='global'||page==='gpilote'){
     tr.textContent='CLASSEMENT GLOBAL';
+  }else if(page==='hub'){
+    tr.textContent='GENTLEMAN DRIVERS PROJECT';
   }else{
-    tr.textContent=ev?ev.name.toUpperCase():events[0].name.toUpperCase();
+    tr.textContent=ev?ev.name.toUpperCase():(events[0]?events[0].name.toUpperCase():'GDSP');
   }
   // Sélecteur toujours visible pour pouvoir changer d'événement depuis n'importe quelle page
   const champOpts=events.filter(e=>e.kind==='championship');
   const openOpts=events.filter(e=>e.kind==='open');
   const archOpts=events.filter(e=>e.kind==='archive');
   const grp=(label,arr)=>arr.length?`<optgroup label="${label}">${arr.map(e=>`<option value="${esc(e.slug)}" ${e.slug===currentSlug?'selected':''}>${esc(e.name)}</option>`).join('')}</optgroup>`:'';
-  if(events.length===1&&!champOpts.length&&!openOpts.length>0){
-    sw.innerHTML='';return
-  }
+  // N'afficher le sélecteur que s'il y a plusieurs événements (ou au moins un + archives)
+  const totalEvents=champOpts.length+openOpts.length+archOpts.length;
+  if(totalEvents<2){sw.innerHTML='';return}
   sw.innerHTML=`<select onchange="switchEvent(this.value)"><option value="">— Changer de championnat/open —</option>${grp('Championnats',champOpts)}${grp('Opens',openOpts)}${grp('Archives',archOpts)}</select>`;
 }
 
 async function switchEvent(slug){
-  if(!slug){goHome();return}
+  if(!slug){goHome();return} // choix "— Changer…" vide → retour accueil GDSP
   await loadEvent(slug);
-  page='accueil'; // aller sur la page d'accueil du championnat sélectionné
+  page='classement'; // ouvrir sur le classement du championnat sélectionné
   round=0;sessionIndex=1;driverId='';compareA='';compareB='';ranktab='pilotes';
   render();window.scrollTo(0,0);
 }
@@ -1466,11 +1456,9 @@ function render(){
     if(!anyLoaded){go('gpilote');return}
     app.innerHTML=globalDriverProfile();return;
   }
-  if(page==='hub'&&backendMulti){
-    // Page 'hub' : si un événement est chargé on redirige vers accueil ; sinon liste des événements (portail)
-    if(eventContext){page='accueil'}
-    else{app.innerHTML=hub();return}
-  }
+  if(page==='hub'&&backendMulti){app.innerHTML=hub();return}
+  // En mode multi, 'accueil' = LA PAGE D'ACCUEIL GDSP (hero 65/35, Règlements, Stats, Discord)
+  if(page==='accueil'&&backendMulti){app.innerHTML=hub();return}
   const renderers={accueil:home,classement:ranking,manches:manche,pilotes:drivers,global:globalRankingSync,admin};
   app.innerHTML=(renderers[page]||home)();
 }
@@ -1490,23 +1478,19 @@ function render(){
   await detectBackend();
 
   if(backendMulti){
-    // Multi mode : toujours charger un événement au démarrage pour que TOUS les onglets
-    // soient visibles dès l'accueil (Accueil, Global, Classements, Résultats, Pilotes, Admin).
+    // Multi mode : on démarre TOUJOURS sur la page d'accueil GDSP (hero 65/35).
+    // Les onglets Classements/Résultats/Pilotes chargeront l'événement au clic si besoin.
     try{
       const lr=await apiGet('/api/events');
       if(lr.ok){const j=await lr.json();events=Array.isArray(j.events)?j.events:[]}
     }catch(e){}
-    // Choisir l'événement à charger : dernier visité > premier championnat > premier événement
-    let target=null;
-    if(events.length){
-      const last=localStorage.getItem('gdsp_last_event');
-      target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
-    }
-    if(target){
-      try{await loadEvent(target.slug)}catch(e){}
-      page='accueil';
-    }else{
-      page='hub'; // aucun événement → portail vide
+    page='hub';
+    // Pré-charger en arrière-plan le dernier événement visité pour que les onglets
+    // Classements/Résultats/Pilotes répondent vite au premier clic.
+    const last=localStorage.getItem('gdsp_last_event');
+    const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
+    if(target&&!eventContext){
+      loadEvent(target.slug).catch(e=>{});
     }
   }else{
     // Legacy mode: same behaviour as before
