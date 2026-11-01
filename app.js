@@ -29,36 +29,51 @@ function proxyRequest(req, res, opts = {}) {
   let target;
   try { target = new URL(opts.path || req.url, BACKEND_URL); } catch(e) { return res.status(400).end('URL invalide'); }
   const headers = Object.assign({}, req.headers);
+  // Nettoyer les headers qui ne doivent pas être relayés
   delete headers.host;
   delete headers.connection;
   delete headers.origin;
   delete headers.referer;
-  if (opts.method) headers['content-length'] = Buffer.byteLength(opts.body||'');
+  delete headers['content-length'];
+  delete headers['transfer-encoding'];
+  delete headers['accept-encoding']; // évite les problèmes de décompression
+  headers.host = target.host; // important pour HTTPS / Cloudflare
   const chunks = [];
   const send = (body) => {
-    if (body && body.length) headers['content-length'] = body.length;
-    const proto = target.protocol === 'https:' ? https : http;
-    // Timeout plus long pour les méthodes d'écriture (POST/PUT) qui peuvent subir un cold start Render (~30-60s)
+    if (body && body.length) headers['content-length'] = Buffer.byteLength(body);
+    else delete headers['content-length'];
     const method=(opts.method||req.method||'GET').toUpperCase();
+    const proto = target.protocol === 'https:' ? https : http;
     const upTimeout=(method==='GET'||method==='HEAD')?25000:90000;
-    const upstream = proto.request(target, {
+    const upstream = proto.request({
+      protocol: target.protocol, hostname: target.hostname, port: target.port,
+      path: target.pathname + target.search,
       method,
       headers,
       timeout: upTimeout,
+      rejectUnauthorized: true,
     }, (upRes) => {
       res.writeHead(upRes.statusCode || 502, upRes.headers);
       upRes.pipe(res);
     });
     upstream.on('timeout', () => upstream.destroy(new Error('upstream timeout')));
     upstream.on('error', (e) => {
-      console.error('proxy error:', opts.method||req.method, opts.path||req.url, '->', e.message);
+      console.error('proxy error:', method, opts.path||req.url, '->', e.message);
       if (!res.headersSent) res.status(502).json({ error: 'Backend indisponible', detail: e.message });
-      else res.end();
+      else if (!res.writableEnded) res.end();
     });
     if (body) upstream.write(body);
     upstream.end();
   };
   if (opts.method) { send(opts.body); return; }
+  // Si le body a déjà été parsé par express.json() (pour nos endpoints POST locaux),
+  // rawBody est disponible sur req. Sinon on lit le flux.
+  if (req.rawBody && req.rawBody.length) { send(req.rawBody); return; }
+  if (req.body && typeof req.body === 'object' && Object.keys(req.body).length && !req._bodyConsumed) {
+    // body parsé: le resérialiser pour le relayer
+    send(JSON.stringify(req.body));
+    return;
+  }
   req.on('data', c => chunks.push(c));
   req.on('end', () => send(chunks.length ? Buffer.concat(chunks) : null));
   req.on('error', () => { if (!res.headersSent) res.sendStatus(500); });
