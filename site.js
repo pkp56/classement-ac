@@ -48,7 +48,7 @@ function signed(x){return x===null||x===undefined||!isFinite(x)?'—':`${x>0?'+'
 function track(x){return ({'mt-tremblant_69':'Mont-Tremblant','riverside':'Riverside','sebring_90s':'Sebring','mid_ohio':'Mid-Ohio'})[x]||x}
 // Level badge images (circular pin style, one car per GDSP championship/open)
 const LVL_BADGES={1:'/assets/lvl1-elite.png',2:'/assets/lvl2-confirme.png',3:'/assets/lvl3-inter.png',4:'/assets/lvl4-debut.png'};
-function levelBadge(level,size){const src=LVL_BADGES[level];return src?`<img class="lvl-badge" src="${src}?v=1" alt="Niveau ${level}" width="${size}" height="${size}" loading="lazy" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-block;vertical-align:middle">`:`<span class="tag lvl lvl-${level}">${level}</span>`}
+function levelBadge(level,size){const src=LVL_BADGES[level];return src?`<img class="lvl-badge" src="${src}?v=26" alt="Niveau ${level}" width="${size}" height="${size}" loading="lazy" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-block;vertical-align:middle">`:`<span class="tag lvl lvl-${level}">${level}</span>`}
 
 function nav(){
   // Hide event-specific tabs (classement/manches/pilotes) if no event is selected
@@ -308,8 +308,8 @@ function hub(){
     </details>`;
 
   // Nombre de pilotes CLASSÉS au GLOBAL (≥5 courses + non exclus par l'admin)
-  const _gRatings=globalPerformanceRatings();
-  const pilotsCount=_gRatings.length;
+  // (Appelée une seule fois ici : globalRankingSync la rappelle mais elle est pure et rapide.)
+  const pilotsCount = globalPerformanceRatings().length;
 
   return `
   <div class="hero hub-hero">
@@ -517,18 +517,27 @@ function globalRankingSync(){
   const labels={regularite:'Régularité',proprete:'Propreté',vitesse:'Vitesse',resultats:'Résultats',progression:'Progression'};
   // Couleurs associées à chaque niveau (barre latérale + teinte de fond)
   const LVL_COLORS={1:{bar:'#d7a347',bg:'rgba(215,163,71,0.10)'},2:{bar:'#9c3021',bg:'rgba(156,48,33,0.07)'},3:{bar:'#3b6341',bg:'rgba(59,99,65,0.07)'},4:{bar:'#6d726c',bg:'rgba(109,114,108,0.08)'}};
-  const detailRows=ratings.map((d,i)=>{
+  const LVL_NAMES={1:'Élite',2:'Confirmé',3:'Intermédiaire',4:'Débutant'};
+  const detailRows=[];
+  let lastLevel=null;
+  ratings.forEach((d,i)=>{
+    // Séparateur visuel quand on change de niveau
+    if(lastLevel!==null&&d.level!==lastLevel){
+      detailRows.push(`<tr data-tier-divider><td colspan="6" style="padding:8px 14px;background:#132d35;color:#f7ecd5;font-family:Impact,sans-serif;font-size:13px;letter-spacing:2px">${levelBadge(d.level,24)} &nbsp; ${LVL_NAMES[d.level]} &nbsp;·&nbsp; niveau ${d.level}</td></tr>`);
+    }
+    lastLevel=d.level;
     const bars=Object.keys(labels).map(k=>{
       const v=d.details[k]||0;
       return `<span title="${labels[k]}: ${v.toFixed(0)}" style="display:inline-block;width:34px;margin-right:3px"><span class="mini-bar"><i style="width:${Math.max(2,Math.min(100,v))}%"></i></span><span style="font-size:9px;color:#6d726c;display:block;text-align:center;margin-top:2px">${Math.round(v)}</span></span>`;
     }).join('');
     const c=LVL_COLORS[d.level]||LVL_COLORS[4];
-    return `<tr style="cursor:pointer;background:${c.bg};border-left:4px solid ${c.bar}" onclick="globalDriverId=this.dataset.pid;go('gpilote')" data-pid="${esc(d.id)}"><td class="pos">${i+1}</td><td>${levelBadge(d.level,40)}</td><td><b>${esc(d.name)}</b></td><td>${d.count}</td><td><b>${d.score.toFixed(0)}</b> ${trendArrow(d)}</td><td>${bars}</td></tr>`;
-  }).join('');
+    detailRows.push(`<tr style="cursor:pointer;background:${c.bg};border-left:4px solid ${c.bar}" onclick="globalDriverId=this.dataset.pid;go('gpilote')" data-pid="${esc(d.id)}"><td class="pos">${i+1}</td><td>${levelBadge(d.level,40)}</td><td><b>${esc(d.name)}</b></td><td>${d.count}</td><td><b>${d.score.toFixed(0)}</b> ${trendArrow(d)}</td><td>${bars}</td></tr>`);
+  });
+  const detailHtml=detailRows.join('');
   return `${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
     <p class="note" style="margin-bottom:16px">Le niveau est établi sur <b>cinq critères</b> : position moyenne en course, régularité des tours, propreté (collisions & cuts), vitesse au tour et progression dans le temps. Les courses récentes comptent davantage (poids doublé par rapport à celles de trois mois). Il faut au moins <b>${GLOBAL_MIN_RACES} courses</b> pour être classé. Un administrateur peut exclure des pilotes du classement.</p>
     <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">${tierCards}</div>
-    <div class="panel"><h2>Détail des pilotes classés</h2><p class="note">Trié par score global. Les 5 mini-barres représentent Régularité / Propreté / Vitesse / Résultats / Progression (0-100).</p>${table(['','Niv.','Pilote','Courses','Score / 100','5 critères (0-100)'],detailRows)}</div>`;
+    <div class="panel"><h2>Détail des pilotes classés</h2><p class="note">Trié par score global. Les 5 mini-barres représentent Régularité / Propreté / Vitesse / Résultats / Progression (0-100). Les séparateurs bleu foncé marquent les changements de niveau.</p>${table(['#','','Pilote','Courses','Score / 100','5 critères (0-100)'],detailRows)}</div>`;
 }
 
 // Calcule un score 0-100 par pilote, tous événements confondus, pondération récente (demi-vie 90 jours).
@@ -722,6 +731,10 @@ function computeEventStandings(sArr,penMapArg,cfg){
 // Home for legacy mode OR when an event is loaded (becomes that event's "home")
 function home(){
   if(backendMulti&&!eventContext)return hub();
+  if(backendMulti&&eventContext&&!events.find(e=>e.slug===eventContext.slug)){
+    // eventContext périmé (ex: événement supprimé) → retour au hub
+    eventContext=null;currentSlug=null;return hub();
+  }
   let rs=rounds(),last=rs.at(-1);
   const isLola=!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG;
   // Hero original Lola T290
@@ -1060,7 +1073,7 @@ function renderGlobalExclusions(){
       :`<button class="btn secondary small" onclick="toggleGlobalHidden(this.dataset.id,true)" data-id="${esc(d.id)}">Exclure du Global</button>`}</td>
   </tr>`).join('');
   return `<h2>Classement GLOBAL · pilotes exclus</h2>
-    <p class="note">Exclut des pilotes du Classement GLOBAL Discord (invités, organisateurs, remplaçants, faux comptes). Les autres classements (par événement) ne sont pas affectés. Sauvegardé dans ton navigateur.</p>
+    <p class="note">Exclut des pilotes du Classement GLOBAL Discord (invités, organisateurs, remplaçants, faux comptes). Les autres classements (par événement) ne sont pas affectés. <b>Sauvegardé dans ce navigateur</b> : exclusions conservées sur cet ordinateur uniquement.</p>
     <p class="note"><b>${Object.keys(globalHidden).length}</b> pilote(s) exclu(s).</p>
     ${table(['Pilote','Statut','Action'],rows)}`;
 }
