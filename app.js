@@ -18,7 +18,7 @@ const ROOT = __dirname;
 
 // Fichiers interdits au public
 const FORBIDDEN = /(^|\/)(?:\.env|node_modules|\.git|\.github|package\.json|package-lock\.json|README\.md|render\.yaml|\.gitignore|\.gitattributes|app\.js|tests?\/|backups?\/)/i;
-app.use(express.json({ limit: '256kb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
   if (FORBIDDEN.test(req.path)) return res.sendStatus(404);
   next();
@@ -382,29 +382,21 @@ app.post('/api/admin/login', (req,res)=>{
   const hdrs={'Content-Type':'application/json','Content-Length':Buffer.byteLength(body)};
   const target=new URL('/api/admin/login', BACKEND_URL);
   const proto=target.protocol==='https:'?https:http;
-  const up=proto.request({method:'POST',hostname:target.hostname,port:target.port,path:target.pathname+target.search,headers:hdrs,timeout:10000},(upRes)=>{
+  // Timeout long (60s) : les deux services sont sur Render free tier et peuvent
+  // chacun avoir un cold start de 20-30s au premier appel.
+  const up=proto.request({method:'POST',hostname:target.hostname,port:target.port,path:target.pathname+target.search,headers:hdrs,timeout:60000},(upRes)=>{
     const buf=[];upRes.on('data',c=>buf.push(c));upRes.on('end',()=>{
       const payload=Buffer.concat(buf).toString('utf8');
-      if(upRes.statusCode>=200&&upRes.statusCode<300){
-        res.writeHead(upRes.statusCode,{'Content-Type':'application/json'});
-        res.end(payload);return;
-      }
-      if(upRes.statusCode===401){
-        // Identifiants incorrects côté backend → essayer en fallback local
-        // (permet de se connecter avec ADMIN_PASSWORD local pour consulter, mais les écritures
-        // backend ne fonctionneront pas tant que le backend n'accepte pas ces identifiants).
-        if(fallbackLocal(req,res,true))return;
-        res.writeHead(401,{'Content-Type':'application/json'});
-        res.end(payload);return;
-      }
-      // Erreur 5xx/0
-      if(fallbackLocal(req,res,true))return;
+      // Relaye tel quel TOUTES les réponses du backend (y compris 401/5xx) :
+      // on ne retombe en fallback local QUE sur erreur réseau/timeout (ci-dessous).
       res.writeHead(upRes.statusCode,{'Content-Type':'application/json'});
       res.end(payload);
     });
   });
-  up.on('timeout',()=>{up.destroy();fallbackLocal(req,res,true)});
-  up.on('error',()=>fallbackLocal(req,res,true));
+  // Fallback local UNIQUEMENT si le backend ne répond pas (réseau/timeout),
+  // PAS si le backend répond 401 (identifiants incorrects).
+  up.on('timeout',()=>{up.destroy();if(!res.headersSent)fallbackLocal(req,res,true)||res.status(504).json({error:'Backend indisponible (timeout).'})});
+  up.on('error',()=>{if(!res.headersSent)fallbackLocal(req,res,true)||res.status(502).json({error:'Backend indisponible.'})});
   up.write(body);up.end();
 });
 function fallbackLocal(req,res,warn){

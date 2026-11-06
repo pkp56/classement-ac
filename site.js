@@ -105,7 +105,8 @@ function renderEventSwitcher(){
   }else if(page==='hub'){
     tr.textContent='GENTLEMAN DRIVERS PROJECT';
   }else{
-    tr.textContent=ev?ev.name.toUpperCase():(events[0]?events[0].name.toUpperCase():'GDSP');
+    const nameOf=x=>x&&typeof x.name==='string'?x.name:'';
+    tr.textContent=ev?nameOf(ev).toUpperCase():(events[0]?nameOf(events[0]).toUpperCase():'GDSP');
   }
   // Sélecteur toujours visible pour pouvoir changer d'événement depuis n'importe quelle page
   const champOpts=events.filter(e=>e.kind==='championship');
@@ -129,12 +130,16 @@ async function switchEvent(slug){
 // ---------- API helpers ----------
 async function apiGet(path,opts){const r=await fetch(path,Object.assign({cache:'no-store',headers:adminToken?{Authorization:'Bearer '+adminToken}:{}},opts||{}));return r}
 async function apiPost(path,body){
-  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json',...(adminToken?{Authorization:'Bearer '+adminToken}:{})},body:body?JSON.stringify(body):undefined});
+  const headers={'Content-Type':'application/json'};
+  if(adminToken)headers['Authorization']='Bearer '+adminToken;
+  const r=await fetch(path,{method:'POST',headers,body:body?JSON.stringify(body):undefined});
   if(r.status===401){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');render()}
   return r;
 }
 async function apiPut(path,body){
-  const r=await fetch(path,{method:'PUT',headers:{'Content-Type':'application/json',...(adminToken?{Authorization:'Bearer '+adminToken}:{})},body:body?JSON.stringify(body):undefined});
+  const headers={'Content-Type':'application/json'};
+  if(adminToken)headers['Authorization']='Bearer '+adminToken;
+  const r=await fetch(path,{method:'PUT',headers,body:body?JSON.stringify(body):undefined});
   if(r.status===401){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');render()}
   return r;
 }
@@ -161,7 +166,8 @@ async function loadEvent(slug){
     const r=await apiGet('/api/events/'+encodeURIComponent(slug));
     if(!r.ok)return null;
     const ev=await r.json();
-    eventContext={slug:ev.slug,name:ev.name,kind:ev.kind,pointsConfig:ev.points_config||{},data:ev.data||{}};
+    if(!ev||!ev.slug||!ev.name){console.warn('loadEvent: event invalide',ev);return null}
+    eventContext={slug:ev.slug,name:ev.name,kind:ev.kind||'championship',pointsConfig:ev.points_config||{},data:ev.data||{}};
     currentSlug=ev.slug;
     const d=ev.data||{};
     let _ah=(d.ahServer&&d.ahUuid)?{server:d.ahServer,uuid:d.ahUuid}:null;
@@ -203,7 +209,7 @@ function rounds(){let m={};sessions.filter(s=>s&&s.date).forEach(s=>(m[s.date.sl
 function allDrivers(){let map=new Map;for(const s of sessions)for(const r of s.results){if(!map.has(r.id))map.set(r.id,{...r});}return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name))}
 function info(){return ''}
 function head(k,t,desc=''){
-  const prefix = backendMulti && eventContext ? eventContext.kind.toUpperCase()+' · '+eventContext.name : '';
+  const prefix = backendMulti && eventContext && eventContext.name ? (eventContext.kind||'').toUpperCase()+' · '+eventContext.name : '';
   const eye = prefix ? prefix : 'GDSP / '+k;
   return `<div class="eyebrow">${esc(eye)}</div><h1>${t}</h1>${desc?`<p class="note">${desc}</p>`:''}`;
 }
@@ -752,8 +758,8 @@ function home(){
     return `<div class="hero"><div class="hero-text"><div class="eyebrow" style="color:#d7a347">● &nbsp; LE CHAMPIONNAT HISTORIQUE GDSP</div><h1>International<br>Series <em>Lola T290</em></h1><p>Six manches, une voiture de légende et l’esprit gentleman driver. Revivez le championnat comme si vous y étiez.</p><button class="btn" onclick="go('manches')">Explorer les résultats &nbsp; ↗</button></div><div class="hero-image"></div></div><div class="stats"><div class="stat"><span class="label">Manches prévues</span><strong>06</strong></div><div class="stat"><span class="label">Manches importées</span><strong>${String(rs.length).padStart(2,'0')}</strong></div><div class="stat"><span class="label">Pilotes dans les fichiers</span><strong>${allDrivers().length}</strong></div><div class="stat"><span class="label">Voitures sur le serveur</span><strong>30 max.</strong></div></div>${info()}<div class="section-head"><div><div class="eyebrow">Le carnet de course</div><h2>Au cœur de la saison</h2></div></div><div class="grid"><div class="panel"><div class="eyebrow">Dernière manche importée</div><h2>${last?esc(last.track):'—'}</h2><p class="note">${last?`${date(last.date)} · ${last.sessions.length-1} course(s) · Manche ${last.number}`:'Aucune session importée.'}</p>${last?`<button class="btn secondary" onclick="round=${rs.length-1};sessionIndex=1;go('manches')">Voir les résultats →</button>`:''}</div><div class="panel"><div class="eyebrow">La formule</div><h2>Un retour aux années 70</h2><p class="note">Quatre manches en 2 × 25 minutes, deux manches d’une heure, un calendrier évolutif et une seule ambition : faire vivre la compétition historique.</p><span class="tag">ASSETTO CORSA</span> &nbsp; <span class="tag">LOLA T290</span></div></div>`;
   }
   // Hero générique pour les autres événements (opens, autres championnats)
-  const evName=eventContext.name;
-  return `<div class="hero"><div class="hero-text"><div class="eyebrow" style="color:#d7a347">● &nbsp; ${esc(eventContext.kind.toUpperCase())} GDSP</div><h1>${esc(evName)}</h1><p>Saison en cours, classements, résultats course par course et profils pilotes.</p><button class="btn" onclick="go('manches')">Explorer les résultats &nbsp; ↗</button></div><div class="hero-image"></div></div><div class="stats"><div class="stat"><span class="label">Manches importées</span><strong>${String(rs.length).padStart(2,'0')}</strong></div><div class="stat"><span class="label">Pilotes</span><strong>${allDrivers().length}</strong></div><div class="stat"><span class="label">Coefficient global</span><strong>×${(pointsConfig().globalCoef||1).toFixed(1)}</strong></div><div class="stat"><span class="label">Type</span><strong>${esc(eventContext.kind)}</strong></div></div><div class="section-head"><div><div class="eyebrow">Le carnet de course</div><h2>Au cœur de la saison</h2></div></div><div class="grid"><div class="panel"><div class="eyebrow">Dernière manche importée</div><h2>${last?esc(last.track):'—'}</h2><p class="note">${last?`${date(last.date)} · ${last.sessions.length-1} course(s) · Manche ${last.number}`:'Aucune session importée.'}</p>${last?`<button class="btn secondary" onclick="round=${rs.length-1};sessionIndex=1;go('manches')">Voir les résultats →</button>`:''}</div><div class="panel"><div class="eyebrow">Barème appliqué</div><h2>${(pointsConfig().pointsScale||[]).slice(0,5).join('/')}…</h2><p class="note">${pointsConfig().doubleLongRaces?'Points doublés pour les courses d’1h. ':''}+${pointsConfig().polePoints||0} pt pôle · ${Math.round((pointsConfig().minPercentDistance||0.75)*100)}% de distance · coeff ×${(pointsConfig().globalCoef||1).toFixed(1)}.</p><span class="tag">ASSETTO CORSA</span></div></div>`;
+  const evName=eventContext.name||'Événement';
+  return `<div class="hero"><div class="hero-text"><div class="eyebrow" style="color:#d7a347">● &nbsp; ${esc((eventContext.kind||'').toUpperCase())} GDSP</div><h1>${esc(evName)}</h1><p>Saison en cours, classements, résultats course par course et profils pilotes.</p><button class="btn" onclick="go('manches')">Explorer les résultats &nbsp; ↗</button></div><div class="hero-image"></div></div><div class="stats"><div class="stat"><span class="label">Manches importées</span><strong>${String(rs.length).padStart(2,'0')}</strong></div><div class="stat"><span class="label">Pilotes</span><strong>${allDrivers().length}</strong></div><div class="stat"><span class="label">Coefficient global</span><strong>×${(pointsConfig().globalCoef||1).toFixed(1)}</strong></div><div class="stat"><span class="label">Type</span><strong>${esc(eventContext.kind)}</strong></div></div><div class="section-head"><div><div class="eyebrow">Le carnet de course</div><h2>Au cœur de la saison</h2></div></div><div class="grid"><div class="panel"><div class="eyebrow">Dernière manche importée</div><h2>${last?esc(last.track):'—'}</h2><p class="note">${last?`${date(last.date)} · ${last.sessions.length-1} course(s) · Manche ${last.number}`:'Aucune session importée.'}</p>${last?`<button class="btn secondary" onclick="round=${rs.length-1};sessionIndex=1;go('manches')">Voir les résultats →</button>`:''}</div><div class="panel"><div class="eyebrow">Barème appliqué</div><h2>${(pointsConfig().pointsScale||[]).slice(0,5).join('/')}…</h2><p class="note">${pointsConfig().doubleLongRaces?'Points doublés pour les courses d’1h. ':''}+${pointsConfig().polePoints||0} pt pôle · ${Math.round((pointsConfig().minPercentDistance||0.75)*100)}% de distance · coeff ×${(pointsConfig().globalCoef||1).toFixed(1)}.</p><span class="tag">ASSETTO CORSA</span></div></div>`;
 }
 
 // Liveries (Lola T290 2026 — gardé en dur, d'autres championnats pourront avoir leurs propres visuels plus tard)
@@ -967,7 +973,30 @@ async function doSaveRemote(){
 }
 async function saveRemote(){
   if(!adminToken)throw new Error('Non connecté administrateur.');
-  const payload={sessions,penMap,manualDrivers,customCalendar};
+  // Minifier le payload : les données tour-par-tour (laps) représentent 90%+ de la taille.
+  // On ne garde que les champs nécessaires aux calculs (id/time/cuts) ; on supprime
+  // skin, sector, lapNumber, etc. Pour events (collisions), on garde seulement aid/bid/speed.
+  const minSessions=sessions.map(ss=>{
+    const o={...ss};
+    if(Array.isArray(o.laps)){
+      o.laps=o.laps.map(l=>({id:l.id,time:l.time,cuts:l.cuts||0}));
+    }
+    if(Array.isArray(o.events)){
+      o.events=o.events.map(e=>({type:e.type||'COLLISION_WITH_CAR',aid:e.aid,bid:e.bid,speed:e.speed,a:e.a,b:e.b,timestamp:e.timestamp}));
+    }
+    if(Array.isArray(o.results)){
+      o.results=o.results.map(r=>{
+        const rr={id:r.id,name:r.name,team:r.team||'',grid:r.grid,laps:r.laps,best:r.best,time:r.time};
+        if(r.disqualified)rr.disqualified=true;
+        if(r.hasPenalty)rr.hasPenalty=true;
+        if(r.penaltyTime)rr.penaltyTime=r.penaltyTime;
+        if(r.lapPenalty)rr.lapPenalty=r.lapPenalty;
+        return rr;
+      });
+    }
+    return o;
+  });
+  const payload={sessions:minSessions,penMap,manualDrivers,customCalendar};
   let path;
   if(backendMulti&&currentSlug)path='/api/events/'+encodeURIComponent(currentSlug)+'/data';
   else path='/api/save-championship';
@@ -1540,6 +1569,9 @@ function render(){
       if(lr.ok){const j=await lr.json();events=Array.isArray(j.events)?j.events:[]}
     }catch(e){}
     page='hub';
+    // Warmup ping : réveille le backend Render (free tier = cold start 30-60s) en arrière-plan
+    // pour que les premières actions (login, save, import) ne prennent pas 1 minute.
+    fetch('/health',{method:'GET',cache:'no-store'}).catch(()=>{});
     // Pré-charger en arrière-plan le dernier événement visité pour que les onglets
     // Classements/Résultats/Pilotes répondent vite au premier clic.
     const last=localStorage.getItem('gdsp_last_event');
