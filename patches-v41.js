@@ -88,7 +88,7 @@
       return;
     }
     // Défaut : pénalité de temps
-    const ta=prompt('Ajustement temps en secondes (+10 / -10 pour annuler une pénalité serveur) ?','0');
+    const ta=prompt('Ajustement temps en secondes (exemples : +10 pour ajouter 10s, -5 pour annuler 5s de pénalité serveur, +120 pour 2 minutes, etc.) ?','0');
     if(ta===null)return;
     const timeAdd=+ta||0;
     const dq=false;
