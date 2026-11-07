@@ -1,5 +1,5 @@
 /* =========================================================================
- * patches-v71.js — CLASSEMENT REPARTI DE ZÉRO
+ * patches-v72.js — CLASSEMENT REPARTI DE ZÉRO
  * =========================================================================
  * Règles implémentées (source de vérité unique) :
  *
@@ -50,7 +50,7 @@
 (function(){
 'use strict';
 if(window.__gdspV71)return; window.__gdspV71=true;
-console.log('[v71] classement reparti de zero');
+console.log('[v72] classement reparti de zero');
 
 const DEFAULT_MIN_PCT = 0.75;
 
@@ -288,9 +288,9 @@ window.sortSession=mySortSession;
  */
 /* =========================================================================
  * calculate() COMPLÈTEMENT REMPLACÉE — plus aucun recours à site.js pour
- * le calcul des points. Source de vérité unique : mySortSession + v71_calculate.
+ * le calcul des points. Source de vérité unique : mySortSession + v72_calculate.
  * ========================================================================= */
-function v71_calculate(){
+function v72_calculate(){
   stripServerPens();
   const rs=rounds();
   const all=allDrivers();
@@ -373,7 +373,7 @@ function v71_calculate(){
     return{...d,total:d.rounds.reduce((a,b)=>a+b,0),joker:jokerRounds.reduce((a,b)=>a+b,0),meritTotal:d.merit.reduce((a,b)=>a+b,0)};
   });
 }
-window.calculate=v71_calculate;
+window.calculate=v72_calculate;
 
 /* ---------- manche() : wrapper pour corriger les écarts et ajouter Pénal. ----------
  * Problème : site.js eff()/gapTo() utilise x._t si fini, sinon recalcul en ajoutant
@@ -462,7 +462,7 @@ window.manche=function(){
       return newRow;
     });
     return out;
-  }catch(e){console.warn('[v71] manche wrap',e);return html;}
+  }catch(e){console.warn('[v72] manche wrap',e);return html;}
 };
 
 /* ---------- openAdjForm multi-choix (remplacer la version site.js) ---------- */
@@ -481,8 +481,30 @@ window.openAdjForm=function(rj,sj,did){
 const _pc0=window.pointsConfig;
 if(_pc0){window.pointsConfig=function(){const c=_pc0();c.doubleLongRaces=true;return c;};}
 
-/* ---------- Premier rendu ---------- */
-stripServerPens();
-setTimeout(()=>{try{if(window.render)window.render();}catch(e){console.warn('[v71] first render',e);}},50);
+/* ---------- Forcer le chargement du premier événement en mode multi ----------
+ * Le hub site.js pré-charge `target` en arrière-plan via loadEvent() lors du
+ * boot, MAIS si le warmup ne se déclenche pas (ex. tab non focus, throttle
+ * navigateur), la page classement affiche "Aucune manche importée". On force
+ * le chargement du championnat dès que possible. */
+async function v72_boot(){
+  try{
+    if(window.backendMulti){
+      if(!Array.isArray(window.events)||!window.events.length){
+        try{const r=await fetch('/api/events',{cache:'no-store'});if(r.ok){const j=await r.json();window.events=Array.isArray(j.events)?j.events:[];}}catch(e){}
+      }
+      const last=localStorage.getItem('gdsp_last_event');
+      const target=(window.events||[]).find(e=>e.slug===last)||(window.events||[]).find(e=>e.kind==='championship')||(window.events||[])[0];
+      if(target&&typeof window.loadEvent==='function'){
+        await window.loadEvent(target.slug);
+        window.page='classement';
+        localStorage.setItem('gdsp_last_event',target.slug);
+      }
+    }
+    stripServerPens();
+    if(window.render)window.render();
+  }catch(e){console.warn('[v72] boot',e);}
+}
+if(document.readyState==='complete')setTimeout(v72_boot,200);
+else window.addEventListener('load',()=>setTimeout(v72_boot,200));
 
 })();
