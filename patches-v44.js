@@ -84,23 +84,18 @@
         });
       }
 
-      // === Pour tous les types : préparer efftime (temps total + pénalités serveur)
-      // pour que sortForResults l'utilise et que le bug comTimeAdd sans *1000
-      // soit corrigé indirectement : on passe comTimeAdd (sec) en efftime après *=1000.
+      // === Pour tous les types : préparer efftime.
+      // IMPORTANT : r.time = TotalTime d'Assetto Corsa, qui INCLUT DÉJÀ penaltyTime.
+      // On n'ajoute DONC PAS penMs (ça double-comptait).
+      // On ajoute juste les pénalités Commission (comTimeAdd, en secondes dans
+      // le penMap, ajoutées en ms par v42 via x.comTimeAdd). Pour compenser le bug
+      // v42 qui ajoute comTimeAdd en secondes (et non *1000), on utilise l'astuce
+      // efftime = base + comT*1000 - comT.
       sess.results=sess.results.map(r=>{
         const x={...r};
-        const penMs=acPenaltyMs(x.penaltyTime);
         const base=Number.isFinite(x.time)?x.time:1e18;
-        // On NE TOUCHE PAS à x.comTimeAdd (il est ajouté en secondes à _t par v42).
-        // Pour contourner le bug, on utilise efftime = base + penMs + comTimeAdd*1000.
-        // Mais v42 ajoute ENCORE x.comTimeAdd secondes à _eff après. Donc il faut
-        // soustraire comTimeAdd secondes (ajoutées en trop par v42).
-        // Astuce : on soustrait la partie "secondes" du comTimeAdd en mettant
-        // comTimeAddAdditionnel à -comTimeAdd après que v42 a fait +(comTimeAdd||0).
-        // Plus simple : on ajoute (comTimeAdd||0)*1000 - (comTimeAdd||0) à efftime
-        // ce qui compense : v42 fera _t = efftime + comTimeAdd = base+penMs+comT*1000-comT + comT = base+penMs+comT*1000
         const comT=x.comTimeAdd||0;
-        x.efftime=base+penMs+comT*1000-comT;
+        x.efftime=base+comT*1000-comT;
         if(x.lapPenalty)x.efftime=1e18;
         return x;
       });

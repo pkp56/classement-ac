@@ -1,4 +1,4 @@
-/* patches-v45.js — v62
+/* patches-v45.js — v63
  *  1) openAdjForm multi-choix (Pénal./DNF<75%/DNS/DQ/Avertissement)
  *  2) Règle 75% classante : DNF ≥75% marque les points de sa position (derrière
  *     les finishers), DNF <75% = 0 pt. DNS/DQ = 0 pt.
@@ -70,7 +70,7 @@
         if(sess&&sess.type==='RACE'&&Array.isArray(arr)){
           markDNFOnArr(arr,rIdx,sIdx);
         }
-      }catch(e){console.warn('[v62] markDNF error',e);}
+      }catch(e){console.warn('[v63] markDNF error',e);}
       return ret;
     };
     return true;
@@ -123,7 +123,7 @@
     window.sortSession=function(sess){
       const arr=_ss(sess);
       if(!sess||sess.type!=='RACE')return arr;
-      try{return reclassify(arr);}catch(e){console.warn('[v62] reclassify',e);return arr;}
+      try{return reclassify(arr);}catch(e){console.warn('[v63] reclassify',e);return arr;}
     };
 
     // Post-calcul : ajouter points aux classés-DNF (que site.js a ignorés) + pole
@@ -173,8 +173,8 @@
     const _pc=window.pointsConfig;
     if(_pc){window.pointsConfig=function(){const c=_pc();c.doubleLongRaces=true;return c;};}
 
-    console.log('[v62] installed (doubleLongRaces forced true, hook comDNF on clones).');
-    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v62] init',e)}
+    console.log('[v63] installed (doubleLongRaces forced true, hook comDNF on clones).');
+    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v63] init',e)}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);
   else install();
