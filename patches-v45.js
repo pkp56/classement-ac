@@ -1,4 +1,4 @@
-/* patches-v45.js — v63
+/* patches-v45.js — v64
  *  1) openAdjForm multi-choix (Pénal./DNF<75%/DNS/DQ/Avertissement)
  *  2) Règle 75% classante : DNF ≥75% marque les points de sa position (derrière
  *     les finishers), DNF <75% = 0 pt. DNS/DQ = 0 pt.
@@ -70,7 +70,7 @@
         if(sess&&sess.type==='RACE'&&Array.isArray(arr)){
           markDNFOnArr(arr,rIdx,sIdx);
         }
-      }catch(e){console.warn('[v63] markDNF error',e);}
+      }catch(e){console.warn('[v64] markDNF error',e);}
       return ret;
     };
     return true;
@@ -102,8 +102,43 @@
     return [...fin,...cls,...nc,...bak];
   }
 
+  // Convertir penaltyTime AC (format ticks*1e9) en millisecondes
+  function penMs(v){
+    v=Number(v)||0;
+    if(v>=1e8)return v/1e6;   // 5e9 ticks = 5000 ms
+    if(v>=1e4)return v;       // déjà en ms
+    return v*1000;            // secondes
+  }
+
+  // Supprimer TOUTES les pénalités serveur des JSON AC :
+  //   - penaltyTime remis à 0
+  //   - hasPenalty=false
+  //   - lapPenalty=0
+  //   - time = temps BRUT sans pénalité (on retire penaltyTime de TotalTime)
+  // Seules les pénalités ajoutées via la Commission (penMap) sont prises en compte.
+  function stripServerPens(){
+    if(typeof sessions==='undefined'||!Array.isArray(sessions))return;
+    sessions.forEach(sess=>{
+      (sess.results||[]).forEach(r=>{
+        if(!r)return;
+        if(r.penaltyTime){
+          const ms=penMs(r.penaltyTime);
+          if(Number.isFinite(r.time)&&ms>0)r.time=Math.max(0,r.time-ms);
+          r.penaltyTime=0;
+        }
+        r.hasPenalty=false;
+        r.lapPenalty=0;
+      });
+    });
+  }
+
   function install(){
     if(typeof sortSession!=='function'||typeof calculate!=='function'||typeof addAdjustment!=='function'||typeof rounds!=='function'){setTimeout(install,80);return;}
+
+    // Strip server penalties NOW, and wrap render/calculate to re-strip each call
+    stripServerPens();
+    const _origR=window.render;if(_origR){window.render=function(){stripServerPens();return _origR.apply(this,arguments);};}
+    const _origCalc0=window.calculate;if(_origCalc0){window.calculate=function(){stripServerPens();return _origCalc0.apply(this,arguments);};}
 
     // Hook applyCommissionToArr pour marquer comDNF sur les clones
     if(!hookPatchAll()){setTimeout(install,80);return;}
@@ -123,7 +158,7 @@
     window.sortSession=function(sess){
       const arr=_ss(sess);
       if(!sess||sess.type!=='RACE')return arr;
-      try{return reclassify(arr);}catch(e){console.warn('[v63] reclassify',e);return arr;}
+      try{return reclassify(arr);}catch(e){console.warn('[v64] reclassify',e);return arr;}
     };
 
     // Post-calcul : ajouter points aux classés-DNF (que site.js a ignorés) + pole
@@ -173,8 +208,8 @@
     const _pc=window.pointsConfig;
     if(_pc){window.pointsConfig=function(){const c=_pc();c.doubleLongRaces=true;return c;};}
 
-    console.log('[v63] installed (doubleLongRaces forced true, hook comDNF on clones).');
-    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v63] init',e)}
+    console.log('[v64] installed (doubleLongRaces forced true, hook comDNF on clones).');
+    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v64] init',e)}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);
   else install();
