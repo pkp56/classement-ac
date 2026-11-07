@@ -1,16 +1,25 @@
-/* patches-v45.js — v53
- *  1) Option « Abandon (DNF) » absente dans la Commission : site.js définissait
- *     window.openAdjForm APRÈS patches-v42 et écrasait la version multi-choix
- *     de v42. On la réinstalle APRÈS le chargement complet.
- *  2) DÉTECTION AUTOMATIQUE DES DNF par tours :
- *       - Courses 25 min (2 courses/manche) : pilote marqué DNF si tours < 75%
- *         des tours du vainqueur.
- *       - Courses 60 min (1 course/manche, double points) : même seuil 75%.
- *       - 0 tour = DNS (absent).
- *     Les marques manuelles de la Commission (DQ/DNS/DNF) n'écrasent pas l'auto-
- *     détection (DQ prime, puis DNS, puis DNF auto si sous le seuil).
- *     Un pilote au-dessus du seuil garde son statut finishers (même si comDNF
- *     avait été posé manuellement par erreur : on l'efface).
+/* patches-v45.js — v54
+ *  1) Rétablit l'option Abandon(DNF)/Absent(DNS)/Avertissement dans la
+ *     fenêtre Commission (écrasée par site.js après v42).
+ *  2) Détection automatique des abandons depuis les données JSON AC, avec
+ *     application de la RÈGLE OFFICIELLE DES 75% :
+ *
+ *        • Un pilote qui a bouclé ≥ 75% des tours du vainqueur EST CLASSÉ :
+ *          il est placé DERRIÈRE LE DERNIER FINISHER et marque les points de
+ *          sa position. Les DNF classés sont triés entre eux par ordre
+ *          d'abandon : le plus tard abandonné (plus de tours, puis temps le
+ *          plus élevé) est le mieux placé.
+ *          Ex. Sebring : 51R Sherman a fait 28/29 t. (97%) → classé 16ᵉ,
+ *          marque les points de la 16ᵉ place (derrière les 15 finishers).
+ *
+ *        • Un pilote qui a bouclé < 75% des tours n'est PAS CLASSÉ (DNF jaune)
+ *          → 0 point de place (conserve la pole si concerné).
+ *
+ *        • DNS (0 tour) ou DQ → 0 point, fond de grille.
+ *
+ *     La détection AC du "a abandonné avant le checkered" se fait par le
+ *     critère : laps < winnerLaps ET totalTime < winnerTime (chrono stoppé
+ *     avant la fin).
  */
 (function(){
   'use strict';
@@ -19,35 +28,115 @@
 
   const MIN_PCT=0.75;
 
-  // Détecte les DNF directement depuis le JSON de résultats AC.
-  // Règle AC (vérifiée sur le vrai JSON Sebring avec Sherman) :
-  //   - Les FINISHERS ont tous le même nombre de tours (ou 1 tour de moins
-  //     mais ont dépassé la ligne d'arrivée au moment du checkered flag →
-  //     leur temps total est SUPÉRIEUR au temps du vainqueur).
-  //   - Les pilotes qui ont abandonné ont 1 tour (ou plus) de retard ET un
-  //     temps total INFÉRIEUR au temps du vainqueur : ils ont coupé/rentré aux
-  //     stands avant la fin, et le chrono s'est arrêté avant que le vainqueur
-  //     ne passe la ligne.
-  //   - Un pilote avec 0 tour est DNS (absent).
-  // Le seuil 75% reste appliqué en complément pour les cas évidents (gros
-  // abandons en début de course où le temps est manifestement trop court).
-  function isJSONDNF(r,winnerLaps,winnerTime){
-    if(!r)return false;
-    const laps=r.laps||0;
-    const t=Number.isFinite(r.time)?r.time:1e18;
-    if(laps<=0)return false; // DNS traité séparément
-    if(laps>=winnerLaps)return false;
-    // Règle AC fiable : temps < temps winner + moins de tours = abandon
-    if(t<winnerTime)return true;
-    // Seuil 75% en complément (pilote qui a fait 50% des tours en se traînant)
-    if(laps<Math.ceil(winnerLaps*MIN_PCT))return true;
-    return false;
+  // Classement AC complet d'une liste de results (objets {laps,time}).
+  // Retourne les 4 groupes dans l'ordre final.
+  function classifyAC(results){
+    if(!Array.isArray(results)||!results.length)return {finishers:[],classifiedDNF:[],ncDNF:[],back:[],winnerLaps:0,winnerTime:0,minLaps:0};
+    let winnerLaps=0,winnerTime=1e18;
+    results.forEach(r=>{
+      if(!r)return;
+      const L=r.laps||0;const T=Number.isFinite(r.time)?r.time:1e18;
+      if(L>winnerLaps || (L===winnerLaps && T<winnerTime)){winnerLaps=L;winnerTime=T;}
+    });
+    const minLaps=Math.ceil(winnerLaps*MIN_PCT);
+    const finishers=[],classifiedDNF=[],ncDNF=[],back=[];
+    results.forEach(r=>{
+      if(!r)return;
+      const L=r.laps||0;
+      const T=Number.isFinite(r.time)?r.time:1e18;
+      const dq=r.disqualified||r.comDQ||r.comDNS||L<=0;
+      if(L<=0||r.comDNS){back.push(r);return;}
+      if(r.disqualified||r.comDQ){back.push(r);return;}
+      // Finisher : même nb de tours que winner, OU à 1 tour mais temps >= winnerTime
+      if(L===winnerLaps){finishers.push(r);return;}
+      if(L===winnerLaps-1 && T>=winnerTime){finishers.push(r);return;}
+      // ≥75% → classé DNF (marque des points)
+      if(L>=minLaps){classifiedDNF.push(r);return;}
+      // <75% → non classé
+      ncDNF.push(r);
+    });
+    finishers.sort((a,b)=>{
+      const ta=Number.isFinite(a.time)?a.time:1e18;
+      const tb=Number.isFinite(b.time)?b.time:1e18;
+      return ta-tb;
+    });
+    // Classés-DNF triés par ordre d'abandon : + de tours d'abord, puis temps le
+    // plus élevé (dernier à abandonner = mieux placé).
+    classifiedDNF.sort((a,b)=>{
+      if((b.laps||0)!==(a.laps||0))return (b.laps||0)-(a.laps||0);
+      const ta=Number.isFinite(a.time)?a.time:0;
+      const tb=Number.isFinite(b.time)?b.time:0;
+      return tb-ta;
+    });
+    return {finishers,classifiedDNF,ncDNF,back,winnerLaps,winnerTime,minLaps};
   }
 
+  // Injecte efftime sur les résultats pour que le tri v42 positionne
+  // correctement les classés-DNF (≥75%) derrière les finishers, tout en leur
+  // donnant des points (cls=0, pas comDNF=true).
+  function autoDNF(){
+    if(!Array.isArray(window.events))return;
+    for(const ev of window.events){
+      const d=ev&&ev.data;if(!d||!Array.isArray(d.sessions))continue;
+      const pm=d.penMap=d.penMap||{};
+      if(typeof rounds!=='function')continue;
+      const rs=rounds();
+      rs.forEach((rd,rIdx)=>{
+        rd.sessions.forEach((s,sIdx)=>{
+          if(!s||s.type!=='RACE'||!Array.isArray(s.results))return;
+          const res=s.results;
+          if(!res.length)return;
+
+          // Nettoyer les fanions auto
+          res.forEach(r=>{
+            if(!r||!r.id)return;
+            const key=`${rIdx}:${sIdx}:${r.id}`;
+            const ex=pm[key]||{};
+            if(!ex.dq&&!ex.dns&&!ex.dnf){
+              r.comDNF=false;r.comDNS=false;r._classifiedDNF=false;
+              // efftime sera repositionné ci-dessous si besoin
+            }
+          });
+
+          const cls=classifyAC(res);
+
+          // 1) Finishers : ne pas toucher à efftime (v44 le renseigne déjà correctement).
+          // 2) Classified-DNF (≥75%) : injecter un efftime synthétique qui les
+          //    place APRÈS le dernier finisher dans le tri v42.
+          const lastFin=cls.finishers[cls.finishers.length-1];
+          let base=0;
+          if(lastFin){
+            // Utiliser le temps effectif (après pénalités) du dernier finisher
+            const srv_last=((lastFin.penaltyTime&&lastFin.penaltyTime>=1e8)?lastFin.penaltyTime/1e6:(lastFin.penaltyTime>=1e4?lastFin.penaltyTime:(lastFin.penaltyTime||0)*1000));
+            const penKey_last=`${rIdx}:${sIdx}:${lastFin.id}`;
+            const com_last=(pm[penKey_last]&&pm[penKey_last].timeAdd)?pm[penKey_last].timeAdd*1000:0;
+            base=(lastFin.time||1e18)+srv_last+com_last;
+          }else{
+            base=1;
+          }
+          cls.classifiedDNF.forEach((r,k)=>{
+            r.efftime=base+1+k; // croissant : k=0 mieux placé
+            r._classifiedDNF=true;
+            r.comDNF=false;r.comDNS=false;
+          });
+
+          // 3) NC-DNF (<75%) : marquer comDNF=true → 0 pt
+          cls.ncDNF.forEach(r=>{
+            const key=`${rIdx}:${sIdx}:${r.id}`;
+            if(!pm[key])pm[key]={timeAdd:0,dq:false,warning:false,dnf:true,dns:false,note:`Abandon (${r.laps||0}/${cls.winnerLaps} t., < 75%)`};
+            else if(!pm[key].dnf && !pm[key].dq && !pm[key].dns)pm[key].dnf=true;
+            r.comDNF=true;r.comDNS=false;
+          });
+          // 4) back (DQ/DNS): laissé tel quel (v42 leur donne 0 pt)
+        });
+      });
+    }
+  }
+
+  // ---- Rétablir openAdjForm multi-choix ----
   function install(){
     if(typeof addAdjustment!=='function'||typeof rounds!=='function'){setTimeout(install,80);return;}
 
-    // ---- Réinstaller openAdjForm multi-choix (écrasé par site.js) ----
     window.openAdjForm=function(rj,sj,did){
       const choix=prompt(
         "Type d'ajustement :\n"+
@@ -62,7 +151,7 @@
       const c=String(choix).trim();
       if(c==='0'||c==='')return;
       if(c==='2'){
-        if(!confirm("Marquer en ABANDON (DNF) ? Le pilote ne marque pas de point de place mais conserve son point de pole s'il était en pole."))return;
+        if(!confirm("Marquer en ABANDON (DNF <75%) ? 0 point de place, conserve la pole. (Les DNF ≥75% sont détectés automatiquement.)"))return;
         const note=prompt("Note / motif d'abandon ?",'Abandon')||'Abandon';
         addAdjustment(rj,sj,did,0,false,false,note,{dnf:true});return;
       }
@@ -87,73 +176,23 @@
       addAdjustment(rj,sj,did,timeAdd,false,false,note);
     };
 
-    // ---- Auto-DNF / Auto-DNS depuis les données JSON ----
-    function autoDNF(){
-      if(!Array.isArray(window.events))return;
-      for(const ev of window.events){
-        const d=ev&&ev.data;if(!d||!Array.isArray(d.sessions))continue;
-        const pm=d.penMap=d.penMap||{};
-        const rs=(typeof rounds==='function')?rounds():[];
-        rs.forEach((rd,rIdx)=>{
-          rd.sessions.forEach((s,sIdx)=>{
-            if(!s||s.type!=='RACE'||!Array.isArray(s.results))return;
-            const res=s.results;
-            if(!res.length)return;
-            // Trouver le vrai vainqueur (1er après tri pénalités incluses ? On prend le 1er au temps brut avec le max de tours)
-            let winner=null;
-            let winnerLaps=0;let winnerTime=1e18;
-            res.forEach(r=>{
-              if(!r)return;
-              const L=r.laps||0;const T=Number.isFinite(r.time)?r.time:1e18;
-              if(L>winnerLaps || (L===winnerLaps && T<winnerTime)){winnerLaps=L;winnerTime=T;winner=r;}
-            });
-            if(!winner)return;
-            const minLaps=Math.ceil(winnerLaps*MIN_PCT);
-            res.forEach(r=>{
-              if(!r||!r.id)return;
-              const key=`${rIdx}:${sIdx}:${r.id}`;
-              const existing=pm[key]||{};
-              if(existing.dq)return;
-              if(existing.dns){r.comDNS=true;r.comDNF=false;return;}
-              if(existing.dnf){r.comDNF=true;return;}
-              const laps=r.laps||0;
-              const t=Number.isFinite(r.time)?r.time:1e18;
-              if(laps<=0){
-                pm[key]={timeAdd:0,dq:false,warning:false,dnf:false,dns:true,note:'Absent (0 tour)'};
-                r.comDNS=true;r.comDNF=false;
-              }else if(isJSONDNF(r,winnerLaps,winnerTime)){
-                // Abandon détecté (temps < vainqueur avec -1 tour ou <75% des tours)
-                const reason=(t<winnerTime && laps<winnerLaps)?`Abandon (${laps}/${winnerLaps} t., chrono < vainqueur)`:`Abandon (${laps}/${winnerLaps} t., < 75%)`;
-                pm[key]={timeAdd:0,dq:false,warning:false,dnf:true,dns:false,note:reason};
-                r.comDNF=true;
-              }else{
-                r.comDNF=false;
-                if(!existing.dns)r.comDNS=false;
-              }
-            });
-          });
-        });
-      }
-    }
-
-    // Patcher render/calculate
-    const _origRender=window.render;
-    if(_origRender){
-      window.render=function(){
+    // Installer autoDNF dans le pipeline de rendu
+    // On intercepte render() et calculate() : autoDNF() est appelé APRÈS tous
+    // les autres patches (v44 qui pose efftime des pénalités serveur) grâce à
+    // l'ordre d'installation des patches.
+    function wrap(name){
+      const orig=window[name];
+      if(!orig)return;
+      window[name]=function(){
         try{autoDNF();}catch(e){console.warn('[v45] autoDNF error',e)}
-        return _origRender.apply(this,arguments);
+        return orig.apply(this,arguments);
       };
     }
-    const _origCalc=window.calculate;
-    if(_origCalc){
-      window.calculate=function(){
-        try{autoDNF();}catch(e){console.warn('[v45] autoDNF error',e)}
-        return _origCalc.apply(this,arguments);
-      };
-    }
+    wrap('render');
+    wrap('calculate');
 
     try{autoDNF();if(window.render)window.render();}catch(e){console.warn('[v45] init error',e)}
-    console.log('[v45] installed: DNF/DNS en Commission + auto-DNF 75% tours.');
+    console.log('[v45] installed: Commission DNF/DNS + auto-classement 75% (DNF≥75% classés, DNF<75% à 0 pt).');
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);
   else install();
