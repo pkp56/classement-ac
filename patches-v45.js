@@ -1,4 +1,4 @@
-/* patches-v45.js — v68
+/* patches-v45.js — v69
  *
  * Règle 75% classante, suppression des pénalités serveur, application des
  * pénalités Commission, doubleLongRaces=true, colonne "Pénal." dans les résultats.
@@ -136,8 +136,24 @@
   }
 
   // ------------- Setup -------------
+  // Override findSessionIdx pour renvoyer des indices COMPATIBLES avec penMap
+  // (mêmes indices utilisés par rounds: ri = 0-based du round, si = index DANS le round
+  // avec Q=0, R1=1, R2=2... car penMap est construit comme ça par addAdjustment
+  // de site.js ligne 1057).
+  function myFindSessionIdx(sess){
+    if(typeof rounds!=='function')return[-1,-1];
+    const rs=rounds();
+    for(let i=0;i<rs.length;i++){
+      const j=rs[i].sessions.indexOf(sess);
+      if(j>=0)return[i,j];
+    }
+    return[-1,-1];
+  }
+  // Remplacer la fonction globale
+  window.findSessionIdx=myFindSessionIdx;
+
   function install(){
-    if(typeof addAdjustment==='undefined'||typeof rounds!=='function'||typeof findSessionIdx!=='function'||typeof calculate!=='function'){
+    if(typeof addAdjustment==='undefined'||typeof rounds!=='function'||typeof calculate!=='function'){
       setTimeout(install,80);return;
     }
 
@@ -258,13 +274,13 @@
             return match.slice(0,pos)+cell+match.slice(pos);
           });
           return out;
-        }catch(e){console.warn('[v68] pen-col',e);return html;}
+        }catch(e){console.warn('[v69] pen-col',e);return html;}
       };
     }
 
-    console.log('[v68] installed (self-contained sortSession, no v44 dependency for pen).');
+    console.log('[v69] installed (self-contained sortSession, no v44 dependency for pen).');
     stripServerPens();
-    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v68] init',e)}
+    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v69] init',e)}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);
   else install();
