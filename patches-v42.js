@@ -273,49 +273,120 @@
     return globalPerfPatched();
   };
 
+  // Regroupe des sessions par date (manche/week-end) comme rounds()
+  function groupByDate(sessions){
+    const m={};
+    sessions.filter(s=>s&&s.date).forEach(s=>(m[s.date.slice(0,10)]??=[]).push(s));
+    return Object.entries(m).sort().map(([d,s])=>({date:d,sessions:s,ts:new Date(d).getTime()}));
+  }
+
+  function weekendBestLaps(round){
+    // Retourne Map<id, {best, bestSession:'Q'|'R'}> pour le week-end.
+    // Parcourir qualif et toutes les courses, prendre le min des best.
+    const best=new Map();
+    // IMPORTANT : les best de course doivent être calculés APRÈS application des pénalités temps ?
+    // Non : le "meilleur tour" n'est pas affecté par les pénalités de temps (pénalités ajoutées au total).
+    // Mais on utilise sortForResults pour avoir la liste triée (r.best reste le meilleur tour en ms).
+    // Qualif : on trie juste pour cohérence mais r.best donne déjà le meilleur tour.
+    for(const s of round.sessions){
+      if(!s||(s.type!=='RACE'&&s.type!=='QUALIFY'))continue;
+      const sorted=(s.type==='RACE')?sortForResults(s.results):(s.results||[]);
+      const tag=s.type==='QUALIFY'?'Q':'R';
+      for(const r of sorted){
+        if(!r||!r.id)continue;
+        const b=Number.isFinite(r.best)&&r.best>0?r.best:null;
+        if(b==null)continue;
+        const cur=best.get(r.id);
+        if(!cur||b<cur.best)best.set(r.id,{best:b,bestSession:tag});
+      }
+    }
+    return best;
+  }
+
   function globalPerfPatched(){
-    // Copie adaptée de globalPerformanceRatings() avec la nouvelle formule.
-    const allRaces=[];
+    const allWeekends=[];     // par week-end (manche)
     const idName=new Map(),idTeam=new Map();
     for(const ev of events){
       const d=ev.data||{};
       const sessions=Array.isArray(d.sessions)?d.sessions:[];
-      const races=sessions.filter(s=>s&&s.type==='RACE');
-      for(const s of races){
-        const ts=new Date(s.date).getTime();
-        if(!isFinite(ts))continue;
-        const lapsById={};
-        (s.laps||[]).forEach(l=>{if(!l||!l.id)return;if(!lapsById[l.id])lapsById[l.id]=[];lapsById[l.id].push(l)});
-        const collById={};
-        (s.events||[]).forEach(e=>{
-          if(!e||e.type!=='COLLISION_WITH_CAR')return;
-          if(e.aid){collById[e.aid]=(collById[e.aid]||0)+1}
-          if(e.bid){collById[e.bid]=(collById[e.bid]||0)+1}
-        });
-        // Trier dans l'ordre final Commission pour avoir les positions officielles
-        const sorted=sortForResults(s.results);
-        const N=sorted.length;
+      const rounds=groupByDate(sessions);
+      for(const rd of rounds){
+        // Ne compter le week-end que s'il y a au moins une course
+        const raceSessions=rd.sessions.filter(s=>s.type==='RACE');
+        if(raceSessions.length===0)continue;
+        // Construire entries : une ligne par pilote présent sur le week-end
         const entries=[];
-        sorted.forEach((r,i)=>{
-          if(!r||!r.id)return;
-          idName.set(r.id,r.name);idTeam.set(r.id,r.team||'');
-          const myLaps=(lapsById[r.id]||[]).filter(l=>Number.isFinite(l.time)&&l.time>0&&l.time<600000);
-          const consistency=raceConsistencyMs(myLaps);
-          const cuts=myLaps.reduce((n,l)=>n+(Number.isFinite(l.cuts)?Math.max(0,l.cuts):0),0);
-          const isOut=!!(r._dq||r.comDQ||r.comDNS||r.disqualified||r.comDNF); // DNF=0 aussi, DQ/DNS=0
-          // Note : DNF reçoit 0, conformément au choix utilisateur (même traitement que DQ/DNS).
-          const resScore=scoreResults(N,i+1,isOut);
-          entries.push({
-            id:r.id,name:r.name,pos:i+1,resScore,
-            grid:(typeof r.grid==='number'&&r.grid>0)?r.grid:null,
-            consistency,
-            collisions:collById[r.id]||0,cuts,
-            best:Number.isFinite(r.best)&&r.best>0?r.best:null
+        const bestMap=weekendBestLaps(rd);
+        // Pour la propreté/régularité/résultats, on les calcule COURSE PAR COURSE puis on moyenne
+        // au sein du week-end (on pondère chaque course du week-end à parts égales si plusieurs).
+        const raceEntries=[]; // [{entries:[…], ts}]
+        let ws=0,wN=0; // somme poids/somme
+        let firstRaceTs=rd.ts;
+        for(const s of raceSessions){
+          const ts=new Date(s.date).getTime();
+          if(isFinite(ts))firstRaceTs=Math.min(firstRaceTs||ts,ts);
+          const lapsById={};
+          (s.laps||[]).forEach(l=>{if(!l||!l.id)return;if(!lapsById[l.id])lapsById[l.id]=[];lapsById[l.id].push(l)});
+          const collById={};
+          (s.events||[]).forEach(e=>{
+            if(!e||e.type!=='COLLISION_WITH_CAR')return;
+            if(e.aid){collById[e.aid]=(collById[e.aid]||0)+1}
+            if(e.bid){collById[e.bid]=(collById[e.bid]||0)+1}
           });
-        });
-        if(entries.length>=1)allRaces.push({ts,entries});
+          const sorted=sortForResults(s.results);
+          const N=sorted.length;
+          const raceEntriesThis=[];
+          sorted.forEach((r,i)=>{
+            if(!r||!r.id)return;
+            idName.set(r.id,r.name);idTeam.set(r.id,r.team||'');
+            const myLaps=(lapsById[r.id]||[]).filter(l=>Number.isFinite(l.time)&&l.time>0&&l.time<600000);
+            const consistency=raceConsistencyMs(myLaps);
+            const cuts=myLaps.reduce((n,l)=>n+(Number.isFinite(l.cuts)?Math.max(0,l.cuts):0),0);
+            const isOut=!!(r._dq||r.comDQ||r.comDNS||r.disqualified||r.comDNF);
+            const resScore=scoreResults(N,i+1,isOut);
+            raceEntriesThis.push({
+              id:r.id,consistency,collisions:collById[r.id]||0,cuts,resScore,
+              isOut
+            });
+          });
+          raceEntries.push({entries:raceEntriesThis});
+        }
+        // Agréger par pilote sur le week-end : régularité = moyenne des consistencies (en ms,
+        // puis on percentile au niveau week-end après la liste), propreté = somme collisions*3 + cuts,
+        // résultats = meilleur score (meilleure course du week-end) OU moyenne ?
+        // On choisit : MOYENNE des scores résultats / régularité par course, SOMME collisions/cuts,
+        // et vitesse = MEILLEUR tour du week-end.
+        const pilotAgg=new Map();
+        for(const re of raceEntries){
+          for(const e of re.entries){
+            if(!pilotAgg.has(e.id))pilotAgg.set(e.id,{id:e.id,n:0,consS:0,consN:0,coll:0,cuts:0,resS:0,resN:0,outCount:0});
+            const p=pilotAgg.get(e.id);
+            p.n++;
+            if(e.consistency!=null){p.consS+=e.consistency;p.consN++;}
+            p.coll+=e.collisions;p.cuts+=e.cuts;
+            p.resS+=e.resScore;p.resN++;
+            if(e.isOut)p.outCount++;
+          }
+        }
+        // Construire entries du week-end
+        for(const [id,p]of pilotAgg){
+          const b=bestMap.get(id);
+          const weekendBest=b?b.best:null;
+          const weekendBestSession=b?b.bestSession:null;
+          const avgCons=p.consN?p.consS/p.consN:null;
+          entries.push({
+            id,
+            consistency:avgCons,           // ms, gap moyen au best (moyenne des courses du we)
+            collisions:p.coll,cuts:p.cuts, // cumul sur toutes les courses
+            best:weekendBest,              // meilleur tour du week-end (Q ou R)
+            bestSession:weekendBestSession,
+            resScore:p.resN?p.resS/p.resN:0 // moyenne des scores résultats
+          });
+        }
+        if(entries.length>=1)allWeekends.push({ts:firstRaceTs,entries});
       }
     }
+    const allRaces=allWeekends; // alias utilisé par la suite
     if(allRaces.length===0)return [];
     const now=Date.now();const HALF_LIFE=90*24*3600*1000;
     const pilot=new Map();
@@ -337,12 +408,17 @@
       // (finishers + ceux qui ont tourné avant d'abandonner).
       const pspd=pct(rc.entries,'best',true);
       rc.entries.forEach((e,i)=>{
-        if(!pilot.has(e.id))pilot.set(e.id,{id:e.id,sumW:0,ax:{regularite:0,proprete:0,vitesse:0,resultats:0},positions:[],ts:[]});
+        if(!pilot.has(e.id))pilot.set(e.id,{id:e.id,sumW:0,ax:{regularite:0,proprete:0,vitesse:0,resultats:0},positions:[],ts:[],bestSessions:[]});
         const p=pilot.get(e.id);
+        // Pour la "position" servant à la progression, on utilise le rang de résultat du week-end
+        // (basé sur resScore : meilleur resScore = 1re position)
+        const weekendRank=rc.entries.slice().sort((a,b)=>b.resScore-a.resScore).findIndex(x=>x.id===e.id)+1;
         const vals={regularite:pcons[i],proprete:pcln[i],vitesse:pspd[i],resultats:e.resScore};
         for(const k in vals){const v=vals[k]; if(Number.isFinite(v)){p.ax[k]+=v*weight;}}
         p.sumW+=weight;
-        p.positions.push(e.pos);p.ts.push(rc.ts);
+        p.positions.push(weekendRank);
+        p.ts.push(rc.ts);
+        if(e.bestSession)p.bestSessions.push(e.bestSession);
       });
     }
     const out=[];const GLOBAL_MIN_RACES=(window.GLOBAL_MIN_RACES??5);
@@ -400,27 +476,45 @@
           equal=eligible.filter(x=>x[key]===item[key]).length;
       return 100*(1-(better+(equal-1)/2)/(eligible.length-1));
     };
-    for(let race of sessions.filter(s=>s.type==='RACE')){
-      const sorted=sortForResults(race.results);
-      const N=sorted.length;
-      let entries=sorted.map((r,idx)=>{
-        let laps=(race.laps||[]).filter(l=>l.id===r.id&&Number.isFinite(l.time)&&l.time>0&&l.time<600000);
-        const consistency=raceConsistencyMs(laps);
-        let name=(r.name||'').trim().toLowerCase();
-        let collisions=(race.events||[]).filter(e=>[e.a,e.b].some(v=>String(v||'').trim().toLowerCase()===name)).length;
-        let cuts=laps.reduce((n,l)=>n+(Number.isFinite(l.cuts)?Math.max(0,l.cuts):0),0);
-        const isOut=!!(r._dq||r.comDQ||r.comDNS||r.disqualified||r.comDNF);
-        return {id:r.id,regularity:consistency,cleanliness:collisions+cuts,
-                speed:Number.isFinite(r.best)&&r.best>0&&r.best<600000?r.best:null,
-                resScore:scoreResults(N,idx+1,isOut)};
-      });
-      for(let e of entries){
+    // Grouper par week-end (comme pour le GLOBAL)
+    const rounds=groupByDate((typeof sessions!=='undefined')?sessions:[]);
+    for(const rd of rounds){
+      const raceSessions=rd.sessions.filter(s=>s.type==='RACE');
+      if(raceSessions.length===0)continue;
+      const bestMap=weekendBestLaps(rd);
+      const pilotAgg=new Map();
+      for(const race of raceSessions){
+        const sorted=sortForResults(race.results);
+        const N=sorted.length;
+        sorted.forEach((r,idx)=>{
+          let laps=(race.laps||[]).filter(l=>l.id===r.id&&Number.isFinite(l.time)&&l.time>0&&l.time<600000);
+          const consistency=raceConsistencyMs(laps);
+          let name=(r.name||'').trim().toLowerCase();
+          let collisions=(race.events||[]).filter(e=>[e.a,e.b].some(v=>String(v||'').trim().toLowerCase()===name)).length;
+          let cuts=laps.reduce((n,l)=>n+(Number.isFinite(l.cuts)?Math.max(0,l.cuts):0),0);
+          const isOut=!!(r._dq||r.comDQ||r.comDNS||r.disqualified||r.comDNF);
+          const resScore=scoreResults(N,idx+1,isOut);
+          if(!pilotAgg.has(r.id))pilotAgg.set(r.id,{id:r.id,n:0,consS:0,consN:0,coll:0,cuts:0,resS:0,resN:0});
+          const p=pilotAgg.get(r.id);p.n++;
+          if(consistency!=null){p.consS+=consistency;p.consN++;}
+          p.coll+=collisions;p.cuts+=cuts;p.resS+=resScore;p.resN++;
+        });
+      }
+      const entries=[];
+      for(const [id,p]of pilotAgg){
+        const b=bestMap.get(id);
+        entries.push({
+          id,regularity:p.consN?p.consS/p.consN:null,
+          cleanliness:p.coll*3+p.cuts,
+          best:b?b.best:null,
+          bestSession:b?b.bestSession:null,
+          resScore:p.resN?p.resS/p.resN:0
+        });
+      }
+      for(const e of entries){
         let v={regularite:pct(entries,e.id,'regularity'),proprete:pct(entries,e.id,'cleanliness'),
-               vitesse:pct(entries,e.id,'speed'),resultats:e.resScore};
-        // Ne conserver que si au moins la regul ou la vitesse ou la propreté sont dispo
-        // (sinon ça ne vaut pas la peine de compter cette course)
+               vitesse:pct(entries,e.id,'best'),resultats:e.resScore};
         if(v.regularite===null&&v.vitesse===null&&v.proprete===null)continue;
-        // Remplacer les null (peu de données) par 50 (neutre) pour les autres axes
         for(const k in v)if(v[k]===null)v[k]=50;
         if(!pilots.has(e.id))pilots.set(e.id,[]);
         pilots.get(e.id).push(v);
@@ -491,32 +585,62 @@
 
   function buildRythmeCard(driverId){
     const list=[];
-    const sessList=(typeof sessions!=='undefined')?sessions.filter(s=>s&&s.type==='RACE'):[];
-    if(!sessList.length)return '';
-    sessList.forEach((s)=>{
-      const myLaps=(s.laps||[]).filter(l=>l.id===driverId&&Number.isFinite(l.time)&&l.time>0&&l.time<600000);
-      const me=myLaps.map(l=>l.time);
-      if(me.length<2){list.push({track:track(s.track),valid:false,laps:me.length});return;}
-      const rest=me.slice(1);
-      const best1=Math.min(...rest);
-      const PIT=21000;
-      const nonPit=rest.filter(t=>t-best1<=PIT);
-      if(nonPit.length<2){list.push({track:track(s.track),valid:false,laps:me.length});return;}
-      const best2=Math.min(...nonPit);
-      const nonBest=nonPit.filter(t=>t>best2);
-      const avg=nonBest.length?nonBest.reduce((a,t)=>a+(t-best2),0)/nonBest.length:0;
-      const pitCount=rest.length-nonPit;
-      const r=(s.results||[]).find(x=>x.id===driverId);
-      list.push({track:track(s.track),valid:true,laps:me.length,best:best2/1000,moy:nonPit.reduce((a,t)=>a+t,0)/nonPit.length/1000,gap:avg/1000,pits:pitCount,pos:r?s.results.indexOf(r)+1:null});
+    const allSess=(typeof sessions!=='undefined')?sessions:[];
+    const rounds=groupByDate(allSess);
+    if(!rounds.length)return '';
+    rounds.forEach((rd)=>{
+      const raceSess=rd.sessions.filter(s=>s.type==='RACE');
+      if(raceSess.length===0)return;
+      // Meilleur tour du week-end (Q ou R)
+      const bestMap=weekendBestLaps(rd);
+      const b=bestMap.get(driverId);
+      const weekendBest=b?b.best/1000:null;
+      const weekendTag=b?b.bestSession:null;
+      // Agréger les tours de TOUTES les courses du week-end pour calculer la consistance en course
+      // (la formule de consistance s'applique aux tours de course uniquement — pas la qualif)
+      const lapsAll=[];
+      let totalLaps=0,totalPits=0,cons=null,bestPos=null;
+      raceSess.forEach((s)=>{
+        const myLaps=(s.laps||[]).filter(l=>l.id===driverId&&Number.isFinite(l.time)&&l.time>0&&l.time<600000);
+        const me=myLaps.map(l=>l.time);
+        if(me.length<2)return;
+        const rest=me.slice(1);
+        const best1=Math.min(...rest);
+        const PIT=21000;
+        const nonPit=rest.filter(t=>t-best1<=PIT);
+        if(nonPit.length<2)return;
+        const best2=Math.min(...nonPit);
+        const nonBest=nonPit.filter(t=>t>best2);
+        const avg=nonBest.length?nonBest.reduce((a,t)=>a+(t-best2),0)/nonBest.length:0;
+        const pitCount=rest.length-nonPit;
+        lapsAll.push(...nonPit);
+        totalLaps+=me.length;totalPits+=pitCount;
+        const sorted=sortForResults(s.results);
+        const pos=sorted.findIndex(r=>r.id===driverId)+1;
+        if(pos>0&&(bestPos==null||pos<bestPos))bestPos=pos;
+      });
+      // Calcul consistance sur l'ensemble des tours de course agrégés
+      if(lapsAll.length>=2){
+        const ball=Math.min(...lapsAll)/1000;
+        const nonB=lapsAll.filter(t=>Math.abs(t/1000-ball)>0.001);
+        if(nonB.length>=1)cons=nonB.reduce((a,t)=>a+(t/1000-ball),0)/nonB.length;
+      }
+      const tr=track(rd.sessions[0].track);
+      if(!weekendBest&&!cons){list.push({track:tr,valid:false,laps:totalLaps});return;}
+      list.push({track:tr,valid:true,laps:totalLaps,best:weekendBest,tag:weekendTag,gap:cons,pits:totalPits,pos:bestPos});
     });
     if(!list.some(x=>x.valid))return '';
+    const tagStyle='display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle;font-family:Arial,sans-serif;line-height:1.3';
+    const qStyle=tagStyle+';background:#3b6341;color:#f7ecd5';
+    const rStyle=tagStyle+';background:#9c3021;color:#f7ecd5';
     const rows=list.map(x=>{
       if(!x.valid)return '<tr><td>'+esc(x.track)+'</td><td colspan="5" class="muted" style="text-align:center">tours insuffisants ('+x.laps+')</td></tr>';
-      return '<tr><td>'+esc(x.track)+(x.pos?' <span class="muted">· P'+x.pos+'</span>':'')+'</td><td>'+fmt(x.best*1000)+'</td><td>'+fmt(x.moy*1000)+'</td><td><b>+'+x.gap.toFixed(2)+'s</b></td><td>'+x.laps+' t.</td><td>'+x.pits+'</td></tr>';
+      const tagHtml=x.tag?('<span style="'+(x.tag==='Q'?qStyle:rStyle)+'">'+x.tag+'</span>'):'';
+      return '<tr><td>'+esc(x.track)+(x.pos?' <span class="muted">· P'+x.pos+'</span>':'')+'</td><td>'+fmt(x.best*1000)+tagHtml+'</td><td>'+fmt((x.best+x.gap)*1000)+'</td><td><b>+'+(x.gap!=null?x.gap.toFixed(2):'—')+'s</b></td><td>'+x.laps+' t.</td><td>'+x.pits+'</td></tr>';
     }).join('');
-    return '<div class="panel"><div class="eyebrow">Analyse du rythme</div><h2>Race consistency</h2>'
-      +'<p class="note">Écart moyen au meilleur tour (Δ rythme). 1<sup>er</sup> tour et tours aux stands exclus (tours &gt; +21 s du meilleur tour = pit / sortie).</p>'
-      +'<table class="rythme-table"><thead><tr><th>Manche</th><th>Meilleur</th><th>Moyenne</th><th>Δ rythme</th><th>Tours</th><th>Pit/exclu</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    return '<div class="panel"><div class="eyebrow">Analyse du rythme</div><h2>Race consistency &amp; meilleur tour week-end</h2>'
+      +'<p class="note">Meilleur tour du week-end (qualif <span style="'+qStyle+'">Q</span> ou course <span style="'+rStyle+'">R</span>). Δ rythme = écart moyen au meilleur tour en course (1<sup>er</sup> tour et pit laps exclus).</p>'
+      +'<table class="rythme-table"><thead><tr><th>Manche</th><th>Meilleur WE</th><th>Moy. course</th><th>Δ rythme</th><th>Tours</th><th>Pit/exclu</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }
 
 
@@ -546,7 +670,7 @@
     const TIPS={
       regularite:`<b>Régularité (Race Consistency)</b><br>Écart moyen entre chaque tour et le MEILLEUR tour du pilote sur la course (en secondes).<br>Le premier tour et les tours aux stands / lents (>21 s plus lent que le meilleur tour) sont exclus.<br>Plus l'écart moyen est petit, plus le score est élevé.<br><i>Méthode iRacing — best minus average non-best.</i>`,
       proprete:`<b>Propreté</b><br>Indice basé sur les collisions voitures (×3) et les cuts/pénalités de piste (×1).<br>100 = aucun contact ni cut.`,
-      vitesse:`<b>Vitesse</b><br>Basé sur le MEILLEUR TOUR en course du pilote.<br>100 = tour le plus rapide du plateau.`,
+      vitesse:`<b>Vitesse</b><br>Basé sur le MEILLEUR TOUR du week-end (meilleur temps entre <b>Q</b>ualification et toutes les <b>R</b>aces de la manche, au choix du pilote).<br>Le petit <b>Q</b> ou <b>R</b> à côté du temps indique si le meilleur tour du week-end a été réalisé en qualif ou en course.<br>100 = pilote le plus rapide du plateau sur le week-end.`,
       resultats:`<b>Résultats</b><br>Basé sur la position finale APRÈS pénalités Commission (DNF/DNS/DQ = derniers).<br>• 1 pilote → 50<br>• 2 pilotes : 55 / 45<br>• Entre 2 et 28 pilotes : l'écart entre le 1er et le dernier augmente linéairement de 10 à 100 points (milieu = 50)<br>• 28+ pilotes : 100 au vainqueur, 0 au dernier, linéaire entre les deux.<br>• DNF / DNS / DQ → <b>0</b>.<br>Arrondi à 1 décimale.`,
       progression:`<b>Progression</b><br>Pente de régression linéaire de la position en fonction du temps.<br>100 = plus forte amélioration ; 0 = plus forte régression.<br>Moins de 3 courses → 50 (neutre).`
     };
