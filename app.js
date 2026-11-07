@@ -207,12 +207,22 @@ app.get('/api/ah-championships', async(req,res)=>{
             }
             // Lister résultats /results/download correspondant aux dates des events (on ne télécharge pas ici, on calcule juste le nombre)
             let qual=0, race=0;
+            function countSession(s){
+              const nm=((s&&s.Results&&s.Results.Type)||(s&&s.SessionConfig&&s.SessionConfig.name)||'').toUpperCase();
+              if(/PRACTICE/i.test(nm))return;
+              if(/QUALIF|QUALIFY/i.test(nm)){qual++;return;}
+              race++;
+            }
             eventList.forEach(ev=>{
               const sess=ev.Sessions||{};
               if(typeof sess==='object'){
                 if(sess.QUALIFY)qual++;
-                ['RACE','RACEx2','RACE2','RACE_2'].forEach(k=>{if(sess[k])race++});
-                // Ignore PRACTICE
+                ['RACE','RACEx2','RACE2','RACE_2','RACE3','RACE_3'].forEach(k=>{if(sess[k])race++});
+              }
+              // Parcourir aussi RaceWeekend.Sessions (format ACSR open)
+              const rw=ev.RaceWeekend;
+              if(rw&&Array.isArray(rw.Sessions)){
+                rw.Sessions.forEach(s=>countSession(s));
               }
             });
             out.push({
@@ -266,51 +276,111 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
   try{
     const champ=await ahFetchChampionship(server,uuid);
     const items=[];
-    const events=champ.Events||{};
-    for(const evId in events){
-      const ev=events[evId];if(!ev)continue;
+    const diagnostics={ignored:[],missing:[]};
+    const events=champ.Events||[];
+    const evList=Array.isArray(events)?events:Object.values(events);
+    const DATE_WINDOW_MS=45*60*1000; // fenêtre de correspondance portée à 45 minutes
+    // Type → sessionType
+    function toSessionType(rawType,sess){
+      const name=((sess&&sess.SessionConfig&&sess.SessionConfig.name)||rawType||'').toUpperCase();
+      if(/QUALIF|QUALIFY|Q$/i.test(name))return 'QUALIFY';
+      if(/PRACTICE/i.test(name))return 'PRACTICE';
+      return 'RACE';
+    }
+    function rawLabel(sess,fallback){
+      const n=(sess&&sess.SessionConfig&&sess.SessionConfig.name)||fallback||'';
+      return n;
+    }
+    function pushSession(ev,evId,sess,rawType){
+      if(!sess)return;
+      const rObj=sess.Results||{};
+      const hasFull=Array.isArray(rObj.Result) && rObj.Result.length>0;
+      const date=(rObj.Date)||sess.StartedTime||sess.CompletedTime||ev.StartedTime||null;
+      const track=rObj.TrackName||(ev.RaceSetup&&ev.RaceSetup.Track)||null;
+      const sessionType=toSessionType(rawType,sess);
+      const item={
+        source: hasFull?'export':'url',
+        eventId,eventName:ev.Name||champ.Name||'',
+        rawType,
+        sessionType,
+        rawLabel:rawLabel(sess,rawType),
+        date:date?new Date(date).toISOString():null,
+        track,
+        server,url:null,filename:null
+      };
+      if(sessionType==='PRACTICE'){diagnostics.ignored.push({reason:'practice',item});return;}
+      items.push(item);
+    }
+    evList.forEach(ev=>{
+      const evId=ev.ID||'';
+      // 1) Sessions au format simple : ev.Sessions.{QUALIFY,RACE,RACEx2,RACE2,RACE_2,RACE3}
       const sess=ev.Sessions||{};
-      const ordered=['QUALIFY','RACE','RACEx2'];
-      for(const rawType of ordered){
-        const s=sess[rawType];if(!s)continue;
-        const rObj=s.Results||{};
-        const hasFull=Array.isArray(rObj.Result) && rObj.Result.length>0;
-        const date=(rObj.Date)||s.StartedTime||s.CompletedTime||ev.StartedTime||null;
-        const track=rObj.TrackName||(ev.RaceSetup&&ev.RaceSetup.Track)||null;
-        items.push({
-          source: hasFull?'export':'url',
-          eventId:evId,eventName:ev.Name||champ.Name||'',
-          rawType,
-          sessionType:(rawType==='QUALIFY')?'QUALIFY':'RACE',
-          date:date?new Date(date).toISOString():null,
-          track,
-          server,url:null,filename:null
+      ['QUALIFY','RACE','RACEx2','RACE2','RACE_2','RACE3','RACE_3'].forEach(rt=>{
+        pushSession(ev,evId,sess[rt],rt);
+      });
+      // 2) Sessions au format RaceWeekend (week-end ACSR : ev.RaceWeekend.Sessions[i])
+      const rw=ev.RaceWeekend;
+      if(rw&&Array.isArray(rw.Sessions)){
+        rw.Sessions.forEach((s,i)=>{
+          // Utiliser un rawType spécial "RW:<i>" pour pointer directement dans RaceWeekend.Sessions[i]
+          const rawType='RW:'+i;
+          // Déterminer le nom d'affichage (SessionConfig.name ou Results.Type)
+          const lbl=(s.Results&&s.Results.Type)||(s.SessionConfig&&s.SessionConfig.name)||('Session '+(i+1));
+          // Stocker aussi le nom pour affichage
+          const fakeSess={...s,__rwIndex:i,SessionConfig:{name:lbl}};
+          const rObj=s.Results||{};
+          const hasFull=Array.isArray(rObj.Result) && rObj.Result.length>0;
+          const date=(rObj.Date)||s.StartedTime||s.CompletedTime||ev.StartedTime||null;
+          const track=rObj.TrackName||(ev.RaceSetup&&ev.RaceSetup.Track)||null;
+          const sessionType=(/QUALIF|QUALIFY/i.test(lbl))?'QUALIFY':(/PRACTICE/i.test(lbl)?'PRACTICE':'RACE');
+          if(sessionType==='PRACTICE'){diagnostics.ignored.push({reason:'practice (rw)',rawType});return;}
+          items.push({
+            source: hasFull?'export':'url',
+            eventId, eventName:ev.Name||champ.Name||'',
+            rawType, sessionType,
+            rawLabel:lbl,
+            rwIndex:i,
+            date:date?new Date(date).toISOString():null,
+            track,server,url:null,filename:null
+          });
         });
       }
-    }
+    });
     // Complète les 'url' avec /results pour les sessions en cours non encore dans l'export
     const needUrl=items.filter(x=>x.source==='url'&&x.date);
     if(needUrl.length){
       try{
         const allResults=await ahListResults(server);
-        const pool=allResults.filter(x=>x.type!=='PRACTICE'&&!/test/i.test((x.sessionName||'')+' '+(x.filename||'')));
+        // Filtre "test" moins agressif : ignorer seulement si le nom entier est "test" ou commence par "test "
+        const pool=allResults.filter(x=>{
+          if(x.type==='PRACTICE')return false;
+          const full=((x.sessionName||'')+' '+(x.filename||'')).trim().toLowerCase();
+          const base=full.replace(/^.*[\\/]/,'');
+          if(/^test(\b|[-_])/i.test(base))return false;
+          if(/\bduplicate\b/i.test(full))return false;
+          return true;
+        });
         for(const it of needUrl){
-          const needType=(it.sessionType==='QUALIFY')?'QUALIFY':'RACE';
+          const needType=it.sessionType;
           const base=new Date(it.date).getTime();
           let best=null,bestDt=Infinity;
           for(const r of pool){
-            if(r.type!==needType)continue;
+            // type AC brut peut être 'RACE','QUALIFY','PRACTICE', parfois 'RACE2' etc.
+            const rt=(r.type||'').toUpperCase();
+            const matchType=(needType==='QUALIFY')? rt.startsWith('QUALIF')||rt==='QUALIFY'
+                           : rt.startsWith('RACE');
+            if(!matchType)continue;
             const t=new Date(r.date).getTime();
             const dt=Math.abs(t-base);
-            if(dt<bestDt && dt<=15*60*1000){best=r;bestDt=dt}
+            if(dt<bestDt && dt<=DATE_WINDOW_MS){best=r;bestDt=dt}
           }
           if(best){it.url=best.url;it.filename=best.filename}
-          else{it.source='missing'}
+          else{it.source='missing';diagnostics.missing.push(it);}
         }
       }catch(e){}
     }
-    const final=items.filter(x=>x.rawType!=='PRACTICE' && x.source!=='missing');
-    res.json({server,uuid,championship:champ.Name,events:Object.keys(events).length,items:final});
+    const final=items.filter(x=>x.source!=='missing');
+    res.json({server,uuid,championship:champ.Name,events:evList.length,items:final,diagnostics});
   }catch(e){res.status(502).json({error:e.message})}
 });
 
@@ -323,16 +393,26 @@ app.get('/api/ah-championship-session-json', async(req,res)=>{
   if(!/^https?:\/\/(fr2|fr5)\.assettohosting\.com/i.test(server))return res.status(400).json({error:'Serveur non autorisé.'});
   if(!/^[0-9a-f-]{36}$/i.test(uuid))return res.status(400).json({error:'UUID invalide.'});
   if(!/^[0-9a-zA-Z_-]+$/.test(eventId))return res.status(400).json({error:'eventId invalide.'});
-  if(!/^(QUALIFY|RACE|RACEx2)$/.test(rawType))return res.status(400).json({error:'rawType invalide.'});
+  // Accepter QUALIFY/RACE/RACEx2/RACE2/RACE_2/RACE3/RW:<index>
+  if(!/^(QUALIFY|RACE|RACEx2|RACE2|RACE_2|RACE3|RACE_3|RW:\d+)$/.test(rawType))return res.status(400).json({error:'rawType invalide.'});
   try{
     const champ=await ahFetchChampionship(server,uuid);
-    const ev=champ.Events&&champ.Events[eventId];
-    if(!ev)return res.status(404).json({error:'Event introuvable.'});
-    const s=ev.Sessions&&ev.Sessions[rawType];
-    if(!s||!s.Results)return res.status(404).json({error:'Session sans résultats dans l\'export.'});
+    const evObj=champ.Events&&(champ.Events[eventId]||(Array.isArray(champ.Events)?champ.Events.find(e=>e&&e.ID===eventId):null));
+    if(!evObj)return res.status(404).json({error:'Event introuvable.'});
+    let s=null;
+    if(rawType.startsWith('RW:')){
+      const idx=parseInt(rawType.slice(3),10);
+      const rw=evObj.RaceWeekend;
+      if(rw&&Array.isArray(rw.Sessions)&&rw.Sessions[idx])s=rw.Sessions[idx];
+    }else{
+      s=evObj.Sessions&&evObj.Sessions[rawType];
+    }
+    if(!s)return res.status(404).json({error:'Session introuvable (ni simple, ni RaceWeekend).'});
+    const rObj=s.Results;
+    if(!rObj||!Array.isArray(rObj.Result))return res.status(404).json({error:'Session sans résultats dans l\'export.'});
     res.set('Cache-Control','public, max-age=300');
     res.set('Content-Type','application/json');
-    res.send(JSON.stringify(s.Results));
+    res.send(JSON.stringify(rObj));
   }catch(e){res.status(502).json({error:e.message})}
 });
 
