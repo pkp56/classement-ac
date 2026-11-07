@@ -1,4 +1,4 @@
-/* patches-v45.js — v69
+/* patches-v45.js — v70
  *
  * Règle 75% classante, suppression des pénalités serveur, application des
  * pénalités Commission, doubleLongRaces=true, colonne "Pénal." dans les résultats.
@@ -274,13 +274,13 @@
             return match.slice(0,pos)+cell+match.slice(pos);
           });
           return out;
-        }catch(e){console.warn('[v69] pen-col',e);return html;}
+        }catch(e){console.warn('[v70] pen-col',e);return html;}
       };
     }
 
-    console.log('[v69] installed (self-contained sortSession, no v44 dependency for pen).');
+    console.log('[v70] installed (self-contained sortSession, no v44 dependency for pen).');
     stripServerPens();
-    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v69] init',e)}
+    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v70] init',e)}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);
   else install();

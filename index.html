@@ -128,12 +128,16 @@ code{background:#e6dcc3;padding:2px 5px}
 </header>
 <div class="page" id="app"></div>
 <footer class="footer">GDSP — Gentleman Drivers Project · Classements et résultats communautaires.</footer>
-<script src="/patches-v40.js?v=69"></script>
-<script src="/patches-v41.js?v=69"></script>
-<script src="/patches-v42.js?v=69"></script>
-<script src="/patches-v43.js?v=69"></script>
-<script src="/patches-v44.js?v=69"></script>
-<script src="/patches-v45.js?v=69"></script>
-<script src="/site.js?v=69"></script>
+<script src="/patches-v40.js?v=70"></script>
+<script src="/patches-v41.js?v=70"></script>
+<script src="/patches-v42.js?v=70"></script>
+<script src="/patches-v43.js?v=70"></script>
+<!-- v44 désactivé : il pré-clone sess.results avec efftime=time mais utilise un
+     index de session global (si) incompatible avec penMap (rIdx:sIdx:did), ce
+     qui casse les pénalités de qualif et interfère avec v45 qui reconstruit
+     lui-même ses clones à partir du time brut. -->
+<!-- <script src="/patches-v44.js?v=70"></script> -->
+<script src="/site.js?v=70"></script>
+<script src="/patches-v45.js?v=70"></script>
 </body>
 </html>
