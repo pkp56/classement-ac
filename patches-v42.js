@@ -292,23 +292,28 @@
           if(e.aid){collById[e.aid]=(collById[e.aid]||0)+1}
           if(e.bid){collById[e.bid]=(collById[e.bid]||0)+1}
         });
+        // Trier dans l'ordre final Commission pour avoir les positions officielles
+        const sorted=sortForResults(s.results);
+        const N=sorted.length;
         const entries=[];
-        (s.results||[]).forEach((r,i)=>{
+        sorted.forEach((r,i)=>{
           if(!r||!r.id)return;
           idName.set(r.id,r.name);idTeam.set(r.id,r.team||'');
           const myLaps=(lapsById[r.id]||[]).filter(l=>Number.isFinite(l.time)&&l.time>0&&l.time<600000);
-          // NOUVELLE formule : cohérence de course
           const consistency=raceConsistencyMs(myLaps);
           const cuts=myLaps.reduce((n,l)=>n+(Number.isFinite(l.cuts)?Math.max(0,l.cuts):0),0);
+          const isOut=!!(r._dq||r.comDQ||r.comDNS||r.disqualified||r.comDNF); // DNF=0 aussi, DQ/DNS=0
+          // Note : DNF reçoit 0, conformément au choix utilisateur (même traitement que DQ/DNS).
+          const resScore=scoreResults(N,i+1,isOut);
           entries.push({
-            id:r.id,name:r.name,pos:i+1,
+            id:r.id,name:r.name,pos:i+1,resScore,
             grid:(typeof r.grid==='number'&&r.grid>0)?r.grid:null,
             consistency,
             collisions:collById[r.id]||0,cuts,
             best:Number.isFinite(r.best)&&r.best>0?r.best:null
           });
         });
-        if(entries.length>=3)allRaces.push({ts,entries});
+        if(entries.length>=1)allRaces.push({ts,entries});
       }
     }
     if(allRaces.length===0)return [];
@@ -328,12 +333,13 @@
       const weight=Math.exp(-(now-rc.ts)/HALF_LIFE);
       const pcons=pct(rc.entries,'consistency',true); // +petit = mieux
       const pcln=pct(rc.entries.map(e=>({...e,clean:(e.collisions*3)+e.cuts})),'clean',true);
-      const pspd=pct(rc.entries,'best',true); // best +petit = mieux
-      const pres=pct(rc.entries,'pos',true);  // pos +petit = mieux
+      // Vitesse : percentiliser parmi tous les pilotes ayant un best tour valide
+      // (finishers + ceux qui ont tourné avant d'abandonner).
+      const pspd=pct(rc.entries,'best',true);
       rc.entries.forEach((e,i)=>{
         if(!pilot.has(e.id))pilot.set(e.id,{id:e.id,sumW:0,ax:{regularite:0,proprete:0,vitesse:0,resultats:0},positions:[],ts:[]});
         const p=pilot.get(e.id);
-        const vals={regularite:pcons[i],proprete:pcln[i],vitesse:pspd[i],resultats:pres[i]};
+        const vals={regularite:pcons[i],proprete:pcln[i],vitesse:pspd[i],resultats:e.resScore};
         for(const k in vals){const v=vals[k]; if(Number.isFinite(v)){p.ax[k]+=v*weight;}}
         p.sumW+=weight;
         p.positions.push(e.pos);p.ts.push(rc.ts);
@@ -395,21 +401,27 @@
       return 100*(1-(better+(equal-1)/2)/(eligible.length-1));
     };
     for(let race of sessions.filter(s=>s.type==='RACE')){
-      let entries=race.results.map((r)=>{
+      const sorted=sortForResults(race.results);
+      const N=sorted.length;
+      let entries=sorted.map((r,idx)=>{
         let laps=(race.laps||[]).filter(l=>l.id===r.id&&Number.isFinite(l.time)&&l.time>0&&l.time<600000);
-        // NOUVELLE formule
         const consistency=raceConsistencyMs(laps);
         let name=(r.name||'').trim().toLowerCase();
         let collisions=(race.events||[]).filter(e=>[e.a,e.b].some(v=>String(v||'').trim().toLowerCase()===name)).length;
         let cuts=laps.reduce((n,l)=>n+(Number.isFinite(l.cuts)?Math.max(0,l.cuts):0),0);
+        const isOut=!!(r._dq||r.comDQ||r.comDNS||r.disqualified||r.comDNF);
         return {id:r.id,regularity:consistency,cleanliness:collisions+cuts,
                 speed:Number.isFinite(r.best)&&r.best>0&&r.best<600000?r.best:null,
-                result:race.results.indexOf(r)+1};
+                resScore:scoreResults(N,idx+1,isOut)};
       });
       for(let e of entries){
         let v={regularite:pct(entries,e.id,'regularity'),proprete:pct(entries,e.id,'cleanliness'),
-               vitesse:pct(entries,e.id,'speed'),resultats:pct(entries,e.id,'result')};
-        if(Object.values(v).some(x=>x===null))continue;
+               vitesse:pct(entries,e.id,'speed'),resultats:e.resScore};
+        // Ne conserver que si au moins la regul ou la vitesse ou la propreté sont dispo
+        // (sinon ça ne vaut pas la peine de compter cette course)
+        if(v.regularite===null&&v.vitesse===null&&v.proprete===null)continue;
+        // Remplacer les null (peu de données) par 50 (neutre) pour les autres axes
+        for(const k in v)if(v[k]===null)v[k]=50;
         if(!pilots.has(e.id))pilots.set(e.id,[]);
         pilots.get(e.id).push(v);
       }
@@ -426,6 +438,53 @@
     for(let i=0;i<out.length;i++){let rank=out.findIndex(x=>Math.abs(x.score-out[i].score)<1e-9);out[i].level=4-Math.min(3,Math.floor(rank*4/out.length));}
     return out;
   }
+  // ---- NOUVELLE formule du critère Résultats ----
+  // N=1 → 50
+  // N=2 → 55/45
+  // Entre N=2 et N=28 : amplitude linéaire de 10 à 100 (milieu = 50)
+  // N≥28 : amplitude 100 (1er=100, dernier=0, linéaire entre les deux)
+  // DNF/DNS/DQ → 0.
+  // 1 décimale.
+  function scoreResults(N,P,isOut){
+    if(isOut)return 0.0;                  // DNF/DNS/DQ
+    if(N<=1)return 50.0;
+    const pos=Math.max(1,Math.min(N,P)); // clamp
+    let amplitude;
+    if(N>=28)amplitude=100;
+    else amplitude=10+(90*(N-2)/26);     // 10 à 100 entre N=2 et N=28
+    let s=50+amplitude*(N+1-2*pos)/(2*(N-1));
+    s=Math.max(0,Math.min(100,s));
+    return Math.round(s*10)/10;          // 1 décimale
+  }
+  // Tri une liste de results (session) dans l'ordre final Commission :
+  // finishers → DNF (tours décroissants) → DQ/DNS (tours décroissants), chacun
+  // trié au temps effectif + pénalités temps. Les DNS (p.comDNS ET pas de tour du tout)
+  // sont dans la classe 2 (DQ/DNS).
+  function sortForResults(results){
+    const arr=(results||[]).map(r=>({...r}));
+    // Appliquer pénalités temps brutes (penaltyTime)
+    arr.forEach(x=>{
+      const base=Number.isFinite(x.time)?x.time:10**18;
+      const sn=Number(x.penaltyTime)||0;
+      let et=base+sn/1e6;
+      if(x.lapPenalty)et=10**18;
+      if(Number.isFinite(x.efftime))et=x.efftime;
+      x._eff=et;
+    });
+    const isDQ= x=> !!(x.disqualified||x.comDQ||x.comDNS);
+    const isDNF= x=> !!x.comDNF && !isDQ(x);
+    arr.forEach(x=>{
+      x._t=x._eff+(x.comTimeAdd||0);
+      x._dq=false;x.finalDQ=false;
+      if(isDQ(x)){x._t=10**18;x._dq=true;x.finalDQ=true;}
+      else if(isDNF(x)){x._t=10**18;x._dq=false;x.finalDQ=false;}
+    });
+    function cls(x){if(x._dq)return 2;if(isDNF(x))return 1;return 0;}
+    arr.sort((a,b)=>cls(a)-cls(b)||(b.laps||0)-(a.laps||0)||a._t-b._t);
+    return arr;
+  }
+
+  window.scoreResultsV45=scoreResults;
   window.performanceRatings=perfRatingsPatched;
 
 
@@ -488,7 +547,7 @@
       regularite:`<b>Régularité (Race Consistency)</b><br>Écart moyen entre chaque tour et le MEILLEUR tour du pilote sur la course (en secondes).<br>Le premier tour et les tours aux stands / lents (>21 s plus lent que le meilleur tour) sont exclus.<br>Plus l'écart moyen est petit, plus le score est élevé.<br><i>Méthode iRacing — best minus average non-best.</i>`,
       proprete:`<b>Propreté</b><br>Indice basé sur les collisions voitures (×3) et les cuts/pénalités de piste (×1).<br>100 = aucun contact ni cut.`,
       vitesse:`<b>Vitesse</b><br>Basé sur le MEILLEUR TOUR en course du pilote.<br>100 = tour le plus rapide du plateau.`,
-      resultats:`<b>Résultats</b><br>Basé sur la position finale après pénalités Commission.<br>100 = victoire, 0 = dernière place classée.`,
+      resultats:`<b>Résultats</b><br>Basé sur la position finale APRÈS pénalités Commission (DNF/DNS/DQ = derniers).<br>• 1 pilote → 50<br>• 2 pilotes : 55 / 45<br>• Entre 2 et 28 pilotes : l'écart entre le 1er et le dernier augmente linéairement de 10 à 100 points (milieu = 50)<br>• 28+ pilotes : 100 au vainqueur, 0 au dernier, linéaire entre les deux.<br>• DNF / DNS / DQ → <b>0</b>.<br>Arrondi à 1 décimale.`,
       progression:`<b>Progression</b><br>Pente de régression linéaire de la position en fonction du temps.<br>100 = plus forte amélioration ; 0 = plus forte régression.<br>Moins de 3 courses → 50 (neutre).`
     };
     const bubble=k=>`<i class="gdsp-i">?</i><span class="gdsp-bubble">${TIPS[k]}</span>`;
