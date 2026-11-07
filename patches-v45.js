@@ -1,10 +1,14 @@
-/* patches-v45.js — v64
+/* patches-v45.js — v65
  *  1) openAdjForm multi-choix (Pénal./DNF<75%/DNS/DQ/Avertissement)
  *  2) Règle 75% classante : DNF ≥75% marque les points de sa position (derrière
  *     les finishers), DNF <75% = 0 pt. DNS/DQ = 0 pt.
  *     Critère finisher AC = T final >= T final vainqueur (a vu le drapeau).
- *  3) Patcher patchAll de v44 pour que comDNF/comDNS soient marqués SUR LES
- *     CLONES que v44 crée (sinon sortForResults ne les voit pas).
+ *  3) Supprime TOUTES les pénalités serveur du JSON (penaltyTime/hasPenalty/
+ *     lapPenalty) : time est remis au temps brut. Seules les pénalités
+ *     Commission (penMap) sont appliquées.
+ *  4) Force doubleLongRaces=true (course 1h = ×2).
+ *  5) Colonne "Pénal." dans le tableau des résultats de chaque manche
+ *     affiche les pénalités Commission (+5s, DNF, DNS, DQ, Aver.).
  */
 (function(){
   'use strict';
@@ -12,7 +16,6 @@
   window.__gdspV45Installed=true;
   const MIN_PCT=0.75;
 
-  // Étendre addAdjustment pour supporter dnf/dns
   const _addAdj=window.addAdjustment;
   window.addAdjustment=function(rj,sj,did,timeAdd,dq,warning,note,extra){
     if(extra&&(extra.dnf||extra.dns)){
@@ -29,13 +32,32 @@
     return _addAdj.apply(this,arguments);
   };
 
-  // Appliquer comDNF/comDNS sur un tableau de résultats (puisque site.js ne
-  // les reset PAS lui-même, on les met à la main sur les clones AVANT le tri).
+  function penMs(v){
+    v=Number(v)||0;
+    if(v>=1e8)return v/1e6;
+    if(v>=1e4)return v;
+    return v*1000;
+  }
+
+  function stripServerPens(){
+    if(typeof sessions==='undefined'||!Array.isArray(sessions))return;
+    sessions.forEach(sess=>{
+      (sess.results||[]).forEach(r=>{
+        if(!r)return;
+        if(r.penaltyTime){
+          const ms=penMs(r.penaltyTime);
+          if(Number.isFinite(r.time)&&ms>0)r.time=Math.max(0,r.time-ms);
+          r.penaltyTime=0;
+        }
+        r.hasPenalty=false;
+        r.lapPenalty=0;
+      });
+    });
+  }
+
   function markDNFOnArr(arr,rIdx,sIdx){
     if(!arr)return;
-    // Reset sur chaque clone
     arr.forEach(y=>{y.comDNF=false;y.comDNS=false;});
-    // 1) PenMap manuelle
     if(typeof penMap==='object'){
       for(const k in penMap){
         const [rj,sj,did]=k.split(':');
@@ -46,7 +68,6 @@
         if(adj.dns)y.comDNS=true;
       }
     }
-    // 2) Auto NC-DNF : <75% des tours
     const wl=Math.max(0,...arr.map(y=>(y.laps)||0));
     const ml=Math.ceil(wl*MIN_PCT);
     arr.forEach(y=>{
@@ -55,28 +76,19 @@
     });
   }
 
-  // Intercepter patchAll de v44 : il est appelé avant chaque calculate et
-  // il remplace sess.results par des clones. On lui ajoute un post-traitement
-  // qui marque comDNF/comDNS sur ces clones.
-  function hookPatchAll(){
-    // v44 ne l'expose pas ; on intercepte via le wrapper calculate/render que
-    // v44 a installé. Plus simple : on intercepte la fonction applyCommissionToArr
-    // de site.js qui est appelée sur CHAQUE tri et qui reçoit arr, rIdx, sIdx.
+  function hookApplyCommission(){
     const _applyCommission=window.applyCommissionToArr;
     if(!_applyCommission)return false;
     window.applyCommissionToArr=function(arr,sess,rIdx,sIdx){
       const ret=_applyCommission.apply(this,arguments);
       try{
-        if(sess&&sess.type==='RACE'&&Array.isArray(arr)){
-          markDNFOnArr(arr,rIdx,sIdx);
-        }
-      }catch(e){console.warn('[v64] markDNF error',e);}
+        if(sess&&sess.type==='RACE'&&Array.isArray(arr)){markDNFOnArr(arr,rIdx,sIdx);}
+      }catch(e){console.warn('[v65] markDNF error',e);}
       return ret;
     };
     return true;
   }
 
-  // Après sortSession, reclasser correctement.
   function reclassify(arr){
     if(!arr||!arr.length)return arr;
     let wl=0,wt=1e18;
@@ -102,46 +114,14 @@
     return [...fin,...cls,...nc,...bak];
   }
 
-  // Convertir penaltyTime AC (format ticks*1e9) en millisecondes
-  function penMs(v){
-    v=Number(v)||0;
-    if(v>=1e8)return v/1e6;   // 5e9 ticks = 5000 ms
-    if(v>=1e4)return v;       // déjà en ms
-    return v*1000;            // secondes
-  }
-
-  // Supprimer TOUTES les pénalités serveur des JSON AC :
-  //   - penaltyTime remis à 0
-  //   - hasPenalty=false
-  //   - lapPenalty=0
-  //   - time = temps BRUT sans pénalité (on retire penaltyTime de TotalTime)
-  // Seules les pénalités ajoutées via la Commission (penMap) sont prises en compte.
-  function stripServerPens(){
-    if(typeof sessions==='undefined'||!Array.isArray(sessions))return;
-    sessions.forEach(sess=>{
-      (sess.results||[]).forEach(r=>{
-        if(!r)return;
-        if(r.penaltyTime){
-          const ms=penMs(r.penaltyTime);
-          if(Number.isFinite(r.time)&&ms>0)r.time=Math.max(0,r.time-ms);
-          r.penaltyTime=0;
-        }
-        r.hasPenalty=false;
-        r.lapPenalty=0;
-      });
-    });
-  }
-
   function install(){
     if(typeof sortSession!=='function'||typeof calculate!=='function'||typeof addAdjustment!=='function'||typeof rounds!=='function'){setTimeout(install,80);return;}
 
-    // Strip server penalties NOW, and wrap render/calculate to re-strip each call
     stripServerPens();
     const _origR=window.render;if(_origR){window.render=function(){stripServerPens();return _origR.apply(this,arguments);};}
     const _origCalc0=window.calculate;if(_origCalc0){window.calculate=function(){stripServerPens();return _origCalc0.apply(this,arguments);};}
 
-    // Hook applyCommissionToArr pour marquer comDNF sur les clones
-    if(!hookPatchAll()){setTimeout(install,80);return;}
+    if(!hookApplyCommission()){setTimeout(install,80);return;}
 
     window.openAdjForm=function(rj,sj,did){
       const c=String(prompt("Ajustement :\n1=Pénalité temps\n2=DNF<75% (0pt)\n3=DNS (absent)\n4=DQ\n5=Avertissement\n0=Annuler",'1')||'').trim();
@@ -158,10 +138,9 @@
     window.sortSession=function(sess){
       const arr=_ss(sess);
       if(!sess||sess.type!=='RACE')return arr;
-      try{return reclassify(arr);}catch(e){console.warn('[v64] reclassify',e);return arr;}
+      try{return reclassify(arr);}catch(e){console.warn('[v65] reclassify',e);return arr;}
     };
 
-    // Post-calcul : ajouter points aux classés-DNF (que site.js a ignorés) + pole
     const _calc=window.calculate;
     window.calculate=function(){
       const ds=_calc();
@@ -188,13 +167,10 @@
             const x=arr[i];
             if(x._dq||x.comDNS||x._t>=1e18)continue;
             if((x.laps||0)<ml)continue;
-            if(x._t<wt){ // classé-DNF : pas eu de points
+            if(x._t<wt){
               const p=(i<sc.length?sc[i]*rm:0);
               const d=ds.find(dd=>dd.id===x.id);if(d){d.rounds[j]+=p;}
-              if(!poleGiven && x.id===poleId){
-                if(d)d.rounds[j]+=polePts*mult;
-                poleGiven=true;
-              }
+              if(!poleGiven && x.id===poleId){if(d)d.rounds[j]+=polePts*mult;poleGiven=true;}
             }
           }
         });
@@ -202,14 +178,53 @@
       ds.forEach(d=>{d.total=d.rounds.reduce((a,b)=>a+b,0);});
       return ds;
     };
-    // Forcer doubleLongRaces=true (règlement GDSP : course 1h = points x2).
-    // Le backend a été configuré avec doubleLongRaces=false par erreur, ce qui
-    // neutralise le x2 sur la manche endurance.
+
     const _pc=window.pointsConfig;
     if(_pc){window.pointsConfig=function(){const c=_pc();c.doubleLongRaces=true;return c;};}
 
-    console.log('[v64] installed (doubleLongRaces forced true, hook comDNF on clones).');
-    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v64] init',e)}
+    // --- Colonne "Pénal." dans le tableau résultats de manche() ---
+    const _manche=window.manche;
+    if(_manche){
+      window.manche=function(){
+        const html=_manche.apply(this,arguments);
+        try{
+          const rs=rounds();if(!rs||typeof round!=='number'||round>=rs.length)return html;
+          const r=rs[round];if(!r||typeof sessionIndex!=='number'||sessionIndex>=r.sessions.length)return html;
+          const s=r.sessions[sessionIndex];if(!s)return html;
+          const sorted=(typeof sortSession==='function')?sortSession(s):(s.results||[]);
+          function penLbl(x){
+            const tags=[];
+            if(x.comDQ)tags.push('DQ');
+            if(x.comDNS)tags.push('DNS');
+            if(x.comDNF&&!x.comDQ&&!x.comDNS)tags.push('DNF');
+            if(typeof x.comTimeAdd==='number'&&x.comTimeAdd>0)tags.push('+'+Math.round(x.comTimeAdd/1000)+'s');
+            if(x.comWarning)tags.push('Aver.');
+            return tags.join(', ');
+          }
+          let out=html;
+          const hdr='<th>Meilleur tour</th>';
+          const hpos=out.lastIndexOf(hdr);
+          if(hpos>=0){
+            out=out.slice(0,hpos+hdr.length)+'<th>Pénal.</th>'+out.slice(hpos+hdr.length);
+          }
+          let idx=0;
+          out=out.replace(/<tr><td class="pos">[\s\S]*?<\/tr>/g,function(match){
+            if(!/:\d\d\.\d{3}/.test(match))return match;  // pas une ligne de résultats (ex: collisions)
+            const x=sorted[idx++];if(!x)return match;
+            const lbl=penLbl(x);
+            const cell=lbl?`<td style="color:#e57a47;font-weight:600">${lbl}</td>`:`<td class="muted">—</td>`;
+            // Insérer après le 5e </td> → colonne "Meilleur tour"
+            let pos=0,count=0;
+            while(count<5){const nd=match.indexOf('</td>',pos);if(nd<0)break;pos=nd+5;count++;}
+            return match.slice(0,pos)+cell+match.slice(pos);
+          });
+          return out;
+        }catch(e){console.warn('[v65] pen-col error',e);return html;}
+      };
+    }
+
+    console.log('[v65] installed.');
+    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v65] init',e)}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);
   else install();
