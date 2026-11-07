@@ -336,7 +336,7 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
           if(sessionType==='PRACTICE'){diagnostics.ignored.push({reason:'practice (rw)',rawType});return;}
           items.push({
             source: hasFull?'export':'url',
-            eventId, eventName:ev.Name||champ.Name||'',
+            eventId:evId, eventName:ev.Name||champ.Name||'',
             rawType, sessionType,
             rawLabel:lbl,
             rwIndex:i,
