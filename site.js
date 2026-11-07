@@ -1383,10 +1383,13 @@ async function ahImport(){
     const isTest=x=>/test/i.test((x.eventName||'')+' '+(x.sessionName||'')+' '+(x.filename||'')+' '+(x.server||''));
     items=items.filter(x=>!isTest(x));
     // 3) Enlever celles déjà importées (même date+type)
-    const existing=new Set(sessions.map(s=>`${new Date(s.date).toISOString().slice(0,16)}|${s.type}`));
+    const existing=new Set(sessions.filter(s=>s&&s.date).map(s=>{
+      const k=new Date(s.date);return isFinite(k)?k.toISOString().slice(0,16)+'|'+s.type:null;
+    }).filter(Boolean));
     const pending=items.filter(x=>{
       if(!x.date)return false;
-      const key=new Date(x.date).toISOString().slice(0,16)+'|'+x._type;
+      const d=new Date(x.date);if(!isFinite(d))return false;
+      const key=d.toISOString().slice(0,16)+'|'+x._type;
       return !existing.has(key);
     });
     const alreadyKnown=items.length-pending.length;

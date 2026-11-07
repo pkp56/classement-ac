@@ -130,6 +130,7 @@ async function ahListResults(serverUrl){
     const type=rest.pop().toUpperCase();
     const serverName=rest.join('_');
     const dObj=new Date(+y,+mo-1,+d,+h,+mi);
+    if(!isFinite(dObj))continue;
     out.push({filename,url:serverUrl.replace(/\/+$/,'')+'/results/download/'+filename,type,date:dObj.toISOString(),sessionName:serverName});
   }
   return out;
@@ -291,6 +292,11 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
       const n=(sess&&sess.SessionConfig&&sess.SessionConfig.name)||fallback||'';
       return n;
     }
+    function safeIso(d){
+      if(!d)return null;
+      const t=new Date(d);
+      return isFinite(t)?t.toISOString():null;
+    }
     function pushSession(ev,evId,sess,rawType){
       if(!sess)return;
       const rObj=sess.Results||{};
@@ -298,13 +304,15 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
       const date=(rObj.Date)||sess.StartedTime||sess.CompletedTime||ev.StartedTime||null;
       const track=rObj.TrackName||(ev.RaceSetup&&ev.RaceSetup.Track)||null;
       const sessionType=toSessionType(rawType,sess);
+      const iso=safeIso(date);
+      if(!iso && !hasFull){return;} // pas de date et pas de résultats → rien à matcher
       const item={
         source: hasFull?'export':'url',
         eventId:evId,eventName:ev.Name||champ.Name||'',
         rawType,
         sessionType,
         rawLabel:rawLabel(sess,rawType),
-        date:date?new Date(date).toISOString():null,
+        date:iso,
         track,
         server,url:null,filename:null
       };
@@ -334,13 +342,15 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
           const track=rObj.TrackName||(ev.RaceSetup&&ev.RaceSetup.Track)||null;
           const sessionType=(/QUALIF|QUALIFY/i.test(lbl))?'QUALIFY':(/PRACTICE/i.test(lbl)?'PRACTICE':'RACE');
           if(sessionType==='PRACTICE'){diagnostics.ignored.push({reason:'practice (rw)',rawType});return;}
+          const iso=safeIso(date);
+          if(!iso && !hasFull){return;}
           items.push({
             source: hasFull?'export':'url',
             eventId:evId, eventName:ev.Name||champ.Name||'',
             rawType, sessionType,
             rawLabel:lbl,
             rwIndex:i,
-            date:date?new Date(date).toISOString():null,
+            date:iso,
             track,server,url:null,filename:null
           });
         });
@@ -362,7 +372,9 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
         });
         for(const it of needUrl){
           const needType=it.sessionType;
-          const base=new Date(it.date).getTime();
+          const baseTs=new Date(it.date).getTime();
+          if(!isFinite(baseTs)){diagnostics.missing.push(it);continue;}
+          const base=baseTs;
           let best=null,bestDt=Infinity;
           for(const r of pool){
             // type AC brut peut être 'RACE','QUALIFY','PRACTICE', parfois 'RACE2' etc.
