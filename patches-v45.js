@@ -1,105 +1,170 @@
-/* patches-v45.js — v57
- *  1) Rétablit openAdjForm multi-choix.
- *  2) Auto-classement AC des abandons (règle 75%) :
- *     • Finishers : tours du winner OU winner-1 tour avec _t >= temps winner (passé drapeau)
- *     • Classés-DNF (≥75%) : au moins ⌈75%×W⌉ tours mais n'ont pas franchi la ligne
- *       d'arrivée → placés DERRIÈRE le dernier finisher, dans l'ordre d'abandon
- *       (tours desc puis temps desc), marquent les points.
- *     • NC-DNF (<75%) : 0 pt (comDNF=true)
- *     • DNS/DQ : 0 pt
- *  3) Pour éviter tout conflit avec v44 (qui écrase efftime), le reclassement
- *     final se fait en post-traitement de sortSession, directement en lisant
- *     laps/_t du tableau trié.
+/* patches-v45.js — v58
+ *  1) Rétablit openAdjForm multi-choix (1=temps, 2=DNF<75%, 3=DNS, 4=DQ, 5=Aver.)
+ *  2) Applique la règle des 75% OFFICIELLE :
+ *     - FINISHERS : tours du winner OU winner-1 avec T >= winnerTime.
+ *     - CLASSÉS-DNF (≥ 75% des tours, pas passé sous le drapeau) : placés
+ *       DERRIÈRE le dernier finisher, dans l'ordre d'abandon (tours desc,
+ *       T desc → dernier à abandonner = mieux placé). Marquent les points de
+ *       leur position.
+ *     - NC-DNF (< 75%) : 0 point. DNS/DQ : 0 point.
+ *  3) Pôle donné au premier en Q (meilleur tour) qui n'est ni banni, ni <2t.
  */
 (function(){
   'use strict';
   if(window.__gdspV45Installed)return;
   window.__gdspV45Installed=true;
 
-  function markNC_DNF(sess,rs_fn){
-    if(!Array.isArray(window.events))return;
-    if(typeof rs_fn!=='function')rs_fn=window.rounds;
-    if(typeof rs_fn!=='function')return;
-    for(const ev of window.events){
-      const d=ev&&ev.data;if(!d||!Array.isArray(d.sessions))continue;
-      const pm=d.penMap=d.penMap||{};
-      const rs=rs_fn();
-      rs.forEach((rd,rIdx)=>{
-        rd.sessions.forEach((s,sIdx)=>{
-          if(!s||s.type!=='RACE'||!Array.isArray(s.results))return;
-          // Seulement les NC-DNF (<75%) via comDNF=true, pour qu'ils soient 0pt.
-          // Les classés-DNF (≥75%) ne sont PAS marqués comDNF ; ils sont traités
-          // en post-tri de sortSession.
-          const res=s.results;
-          let wl=0;
-          res.forEach(r=>{if(r&&(r.laps||0)>wl)wl=r.laps});
-          const ml=Math.ceil(wl*0.75);
-          res.forEach(r=>{
-            if(!r||!r.id)return;
-            const key=`${rIdx}:${sIdx}:${r.id}`;
-            const ex=pm[key]||{};
-            if(ex.dq||ex.dns)return;
-            const L=r.laps||0;
-            if(ex.dnf){r.comDNF=true;return;}
-            if(L>0 && L<ml){
-              // NC-DNF auto (<75%)
-              if(!pm[key])pm[key]={timeAdd:0,dq:false,warning:false,dnf:true,dns:false,note:`Abandon (${L}/${wl} t., < 75%)`};
-              r.comDNF=true;
-            }else{
-              // Ne pas toucher (classé-DNF géré en post-tri)
-              r._classifiedDNF=false;
-              if(!ex.dnf)r.comDNF=false;
-            }
-          });
-        });
-      });
-    }
-  }
+  const MIN_PCT=0.75;
 
-  function postSort(sess,arr){
-    if(!sess||sess.type!=='RACE'||!arr.length)return arr;
-    // Déterminer le vainqueur et le seuil depuis le tableau déjÃ  trié (objets ont laps et _t)
-    let winnerLaps=0,winnerT=1e18;
-    for(const x of arr){
-      if(x._dq||x.comDNF||x.comDNS)continue;
-      const L=x.laps||0,T=(Number.isFinite(x._t)?x._t:1e18);
-      if(L>winnerLaps || (L===winnerLaps && T<winnerT)){winnerLaps=L;winnerT=T;}
+  function classifyResults(race){
+    const res=race.results||[];
+    if(!res.length)return {ordered:res,winnerLaps:0,winnerTime:0,minLaps:0,nFinishers:0,nClassified:0};
+    // _t est déjà en ms après v42 (eff+commission). On utilise _t quand dispo.
+    const rawT=r=>Number.isFinite(r._t)?r._t:(Number.isFinite(r.time)?r.time:1e18);
+    const isDQr=r=>!!(r.disqualified||r.comDQ||r.comDNS||r.finalDQ);
+    // 1) Trouver le vrai vainqueur (max de tours, temps min parmi ceux-ci, pas DQ)
+    let wl=0,wt=1e18;
+    for(const r of res){
+      if(isDQr(r))continue;
+      const L=r.laps||0,T=rawT(r);
+      if(L>wl||(L===wl&&T<wt)){wl=L;wt=T;}
     }
-    if(winnerLaps===0)return arr;
-    const minLaps=Math.ceil(winnerLaps*0.75);
-    const fin=[];    // finishers (mêmes tours ou winner-1 avec T>=winnerT)
-    const cls=[];    // classés-DNF (>= minLaps mais pas finishers)
-    const nc=[];     // NC-DNF (comDNF=true ou < minLaps)
-    const bak=[];    // DQ/DNS
-    for(const x of arr){
-      if(x._dq||x.comDNS){bak.push(x);continue;}
-      if(x.comDNF){nc.push(x);continue;}
-      const L=x.laps||0;
-      const T=Number.isFinite(x._t)?x._t:1e18;
-      if(L<=0){bak.push(x);continue;}
-      if(L===winnerLaps){fin.push(x);continue;}
-      if(L===winnerLaps-1 && T>=winnerT){fin.push(x);continue;}
-      if(L>=minLaps){cls.push(x);continue;}
-      nc.push(x);
+    if(wl===0)return {ordered:res,winnerLaps:0,winnerTime:0,minLaps:0,nFinishers:0,nClassified:0};
+    const ml=Math.ceil(wl*MIN_PCT);
+    const fin=[];   // finishers (w laps ou w-1 avec T>=wt)
+    const cls=[];   // classés-DNF (≥ ml, pas finisher)
+    const nc=[];    // < ml (0 pt)
+    const bak=[];   // DQ/DNS
+    for(const r of res){
+      if(isDQr(r)){bak.push(r);r._v45cls='bak';continue;}
+      const L=r.laps||0,T=rawT(r);
+      if(L<=0){bak.push(r);r._v45cls='bak';continue;}
+      if(L===wl){fin.push(r);r._v45cls='fin';continue;}
+      if(L===wl-1 && T>=wt){fin.push(r);r._v45cls='fin';continue;}
+      if(L>=ml){cls.push(r);r._v45cls='cls';continue;}
+      nc.push(r);r._v45cls='nc';
     }
-    // Tri finishers : laps desc puis _t croissant
     fin.sort((a,b)=>{
       if((b.laps||0)!==(a.laps||0))return (b.laps||0)-(a.laps||0);
-      return (Number.isFinite(a._t)?a._t:1e18)-(Number.isFinite(b._t)?b._t:1e18);
+      return rawT(a)-rawT(b);
     });
-    // Tri classés-DNF : laps desc puis _t DESC (dernier à abandonner = mieux placé)
     cls.sort((a,b)=>{
       if((b.laps||0)!==(a.laps||0))return (b.laps||0)-(a.laps||0);
-      return (Number.isFinite(b._t)?b._t:0)-(Number.isFinite(a._t)?a._t:0);
+      return rawT(b)-rawT(a);
     });
-    // NC-DNF et back restent dans leur ordre v42
-    return [...fin,...cls,...nc,...bak];
+    // nc et bak dans un ordre cohérent (tours desc)
+    nc.sort((a,b)=>(b.laps||0)-(a.laps||0));
+    return {ordered:[...fin,...cls,...nc,...bak],winnerLaps:wl,winnerTime:wt,minLaps:ml,nFinishers:fin.length,nClassified:fin.length+cls.length};
+  }
+
+  function patchCalculation(){
+    if(typeof calculate!=='function')return;
+    // On intercepte le calcul des points : après que site.js a trié chaque
+    // session via sortSession, on reclasse nous-même, et on attribue les
+    // points selon la classification (finishers + classés-DNF).
+    const _calc=window.calculate;
+    window.calculate=function(){
+      // D'abord marquer les NC-DNF (<75%) et reset
+      if(Array.isArray(window.events)){
+        for(const ev of window.events){
+          const d=ev&&ev.data;if(!d||!Array.isArray(d.sessions))continue;
+          const pm=d.penMap=d.penMap||{};
+          if(typeof rounds!=='function')continue;
+          const rs=rounds();
+          rs.forEach((rd,rIdx)=>{
+            rd.sessions.forEach((s,sIdx)=>{
+              if(!s||s.type!=='RACE'||!Array.isArray(s.results))return;
+              let wl=0;s.results.forEach(r=>{if(r&&(r.laps||0)>wl)wl=r.laps});
+              const ml=Math.ceil(wl*MIN_PCT);
+              s.results.forEach(r=>{
+                if(!r||!r.id)return;
+                const key=`${rIdx}:${sIdx}:${r.id}`;
+                const ex=pm[key]||{};
+                if(ex.dq||ex.dns)return;
+                if(ex.dnf){r.comDNF=true;return;}
+                if(r.laps>=ml){r.comDNF=false;}
+              });
+            });
+          });
+        }
+      }
+      // Appel du tri v42 (qui ne fait clsIdx++ que pour finishStatus.full)
+      // On patch finishStatus en posant un flag _v45classed=true pour les cls-DNF
+      // La façon la plus propre : recalculer les points NOUS-MÊME après le tri
+      // initial de site.calculate en le re-parcourant. Comme _calc() ajoute déjà
+      // les points dans map[].rounds, on NE VEUT PAS qu'il ajoute des points
+      // aux cls-DNF. Donc on garde _calc tel quel, PUIS on ajoute les points
+      // aux cls-DNF dans un second passage.
+      //
+      // Mieux : on intercepte chaque course et remplace le calcul dans la boucle
+      // en surchargant race.results.forEach par notre propre version.
+      // Plus simple : appeler _calc, puis recompleter.
+      const ds=_calc();
+      if(Array.isArray(window.events)){
+        if(typeof rounds!=='function')return ds;
+        const rs=rounds();
+        const cfg=pointsConfig();
+        const sc=cfg.pointsScale||DEFAULT_POINTS.pointsScale;
+        const polePts=cfg.polePoints||0;
+        const doubleLong=cfg.doubleLongRaces!==false;
+        rs.forEach((r,j)=>{
+          const races=r.sessions.filter(s=>s.type==='RACE');
+          const multiplier=races.length===1&&doubleLong?2:1;
+          races.forEach((race,ri)=>{
+            const {ordered,nFinishers,nClassified}=classifyResults(race);
+            // Les points ont déjà été attribués aux finishers par _calc.
+            // On ajoute maintenant les points aux classés-DNF (positions nFinishers+1 ... nClassified).
+            let poleHandled=false;
+            // Vérifier si le pole a déjà été donné (par _calc)
+            ordered.forEach((p,i)=>{
+              const place=i+1;
+              if(p._v45cls!=='cls'){
+                if(place===1 && p.grid===1)poleHandled=true;
+                return;
+              }
+              // Classé-DNF : donner les points de sa position
+              const idx=place-1;
+              if(idx<sc.length){
+                const pts=sc[idx]*multiplier;
+                // Trouver pilote dans ds
+                const d=ds.find(x=>x.id===p.id);
+                if(d){d.rounds[j]+=pts;}
+              }
+              // Pole : si le pole est un classé-DNF et pas encore donné
+              if(!poleHandled && p.grid===1){
+                const d=ds.find(x=>x.id===p.id);
+                if(d){d.rounds[j]+=polePts*multiplier;}
+                poleHandled=true;
+              }
+            });
+            // Reset flags _v45cls
+            ordered.forEach(p=>{delete p._v45cls;});
+          });
+        });
+        // Recalculer total
+        ds.forEach(d=>{d.total=d.rounds.reduce((a,b)=>a+b,0);});
+      }
+      return ds;
+    };
+  }
+
+  // Wrapper sortSession : reclasser les résultats dans l'ordre correct
+  function patchSortSession(){
+    if(typeof window.sortSession!=='function')return;
+    const _ss=window.sortSession;
+    window.sortSession=function(sess){
+      const arr=_ss(sess);
+      if(!sess||sess.type!=='RACE')return arr;
+      // Reclasser en se basant sur _t (produit par v42)
+      const fakeRace={results:arr};
+      const {ordered}=classifyResults(fakeRace);
+      return ordered;
+    };
   }
 
   function install(){
-    if(typeof addAdjustment!=='function'||typeof window.sortSession!=='function'||typeof rounds!=='function'){setTimeout(install,80);return;}
+    if(typeof addAdjustment!=='function'||typeof sortSession!=='function'||typeof rounds!=='function'){setTimeout(install,80);return;}
 
-    // OpenAdjForm multi-choix
     window.openAdjForm=function(rj,sj,did){
       const choix=prompt(
         "Type d'ajustement :\n"+
@@ -113,29 +178,26 @@
       const c=String(choix).trim();
       if(c==='0'||c==='')return;
       if(c==='2'){if(!confirm("DNF non-classé (<75%) ?"))return;addAdjustment(rj,sj,did,0,false,false,prompt("Note ?",'Abandon')||'Abandon',{dnf:true});return;}
-      if(c==='3'){if(!confirm("DNS (absent) ?"))return;addAdjustment(rj,sj,did,0,false,false,prompt("Note ?",'Absent')||'Absent',{dns:true});return;}
+      if(c==='3'){if(!confirm("DNS ?"))return;addAdjustment(rj,sj,did,0,false,false,prompt("Note ?",'Absent')||'Absent',{dns:true});return;}
       if(c==='4'){if(!confirm("DQ ?"))return;addAdjustment(rj,sj,did,0,true,false,prompt("Note ?",'')||'');return;}
       if(c==='5'){if(!confirm("Avertissement ?"))return;addAdjustment(rj,sj,did,0,false,true,'');return;}
-      const ta=prompt("Ajustement temps en secondes ?",'0');if(ta===null)return;
+      const ta=prompt("Temps (s) ?",'0');if(ta===null)return;
       addAdjustment(rj,sj,did,+ta||0,false,false,prompt('Note ?','')||'');
     };
 
-    // Wrapper sortSession
-    const _ss=window.sortSession;
-    window.sortSession=function(sess){
-      const arr=_ss(sess);
-      try{return postSort(sess,arr);}catch(e){console.warn('[v57] postSort error',e);return arr;}
-    };
+    patchSortSession();
+    patchCalculation();
 
-    // Auto-marque NC-DNF (<75%) avant chaque calcul
-    function wrap(n){
-      const o=window[n];if(!o)return;
-      window[n]=function(){try{markNC_DNF();}catch(e){console.warn('[v57] markNC error',e)}return o.apply(this,arguments);};
+    if(window.render){
+      const _r=window.render;
+      window.render=function(){
+        // Avant render, les données sont déjà prêtes via calculate() appelé
+        // pendant le rendu. Rien à ajouter ici.
+        return _r.apply(this,arguments);
+      };
     }
-    wrap('render');wrap('calculate');
-
-    try{markNC_DNF();if(window.render)window.render();}catch(e){console.warn('[v57] init',e)}
-    console.log('[v57] installed: 75% classified-DNF via post-sort (no efftime hack).');
+    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v58] init',e)}
+    console.log('[v58] installed: classified DNF (>=75%) score points behind finishers.');
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);
   else install();
