@@ -205,6 +205,9 @@ function mySortSession(sess){
   }
 
   // ---- Course : marquer les DNF auto (<75% des tours du leader virtuel) ----
+  // IMPORTANT : on calcule d'abord wlInit sur les TEMPS BRUTS (avant ajout comT),
+  // car c'est le nombre de tours effectués sur piste qui compte, pas le temps
+  // final après pénalité.
   const wlInit=Math.max(0,...arr.map(y=>y.laps||0));
   const mlInit=Math.ceil(wlInit*DEFAULT_MIN_PCT);
   arr.forEach(y=>{
@@ -214,10 +217,25 @@ function mySortSession(sess){
     if(y.comDNF){y._t=1e18;y._dq=false;y.finalDQ=false;y.hasPenalty=true;y.finalTime=y._t;}
   });
 
+  // ---- TRI PRINCIPAL par temps final _t (APRÈS application de comTimeAdd) ----
+  // D'abord trier tous les non-DQ/non-DNF par tours DESC puis _t ASC pour
+  // identifier correctement le vainqueur et les finishers.
+  arr.sort((a,b)=>{
+    function isOut(x){return x._dq||x.comDNS||x._t>=1e18;}
+    const aOut=isOut(a),bOut=isOut(b);
+    if(aOut&&!bOut)return 1;
+    if(!aOut&&bOut)return -1;
+    if(aOut&&bOut){
+      // DQ/DNS tout au fond
+      if(a.comDNS&&!b.comDNS)return 1;
+      if(!a.comDNS&&b.comDNS)return -1;
+      return (b.laps||0)-(a.laps||0)||a._t-b._t;
+    }
+    return (b.laps||0)-(a.laps||0)||a._t-b._t;
+  });
+
   // ---- Reclassement 75% ----
-  // Trouver le vainqueur (max de tours, temps final minimum parmi les non-DQ
-  // non-DNF non-NC)
-  let wl=0, wt=1e18;
+  let wl=0,wt=1e18;
   for(const x of arr){
     if(x._dq||x.comDNS||x._t>=1e18)continue;
     const L=x.laps||0,T=x._t;
@@ -227,24 +245,29 @@ function mySortSession(sess){
   if(wl>0&&wt<1e18){
     const ml=Math.ceil(wl*DEFAULT_MIN_PCT);
     for(const x of arr){
-      if(x._dq||x.comDNS||(x.laps||0)<=0){bak.push(x);continue;}
+      if(x._dq){bak.push(x);continue;}          // DQ tout au fond
+      if(x.comDNS){bak.push(x);continue;}
+      if((x.laps||0)<=0){bak.push(x);continue;}
       if(x._t>=1e18||x.comDNF){nc.push(x);continue;}
       const L=x.laps||0,T=x._t;
-      if(T>=wt){fin.push(x);continue;}
-      // T<wt : a fini avant le vainqueur (drapeau, coupure, DNF auto)
-      if(L>=ml){cls.push(x);continue;}
-      nc.push(x);
+      if(T>=wt){fin.push(x);continue;}          // finisher (temps >= vainqueur)
+      if(L>=ml){cls.push(x);continue;}          // classé-DNF (≥75%)
+      nc.push(x);                                // NC (<75%)
     }
-    fin.sort((a,b)=>(b.laps||0)-(a.laps||0)||a._t-b._t);
+    // fin déjà trié (par le sort principal) : tours DESC, _t ASC
+    // cls : tours DESC, _t DESC (ceux qui ont le plus de tours / temps le
+    //       plus proche du leader sont devant)
     cls.sort((a,b)=>(b.laps||0)-(a.laps||0)||b._t-a._t);
     nc.sort((a,b)=>(b.laps||0)-(a.laps||0)||a._t-b._t);
+    // Dans bak : DQ puis DNS, puis les nuls (0 tours)
+    bak.sort((a,b)=>{
+      const dnsA=a.comDNS?1:0,dnsB=b.comDNS?1:0;
+      if(dnsA!==dnsB)return dnsB-dnsA; // DQ avant DNS
+      return (b.laps||0)-(a.laps||0);
+    });
     return[...fin,...cls,...nc,...bak];
   }else{
-    arr.sort((a,b)=>{
-      function cat(x){if(x._dq)return 2;if(x.comDNF)return 1;return 0;}
-      return cat(a)-cat(b)||(b.laps||0)-(a.laps||0)||a._t-b._t;
-    });
-    return arr;
+    return arr; // déjà trié
   }
 }
 window.sortSession=mySortSession;
@@ -352,7 +375,12 @@ function v71_calculate(){
 }
 window.calculate=v71_calculate;
 
-/* ---------- manche() : wrapper pour ajouter la colonne Pénal. ---------- */
+/* ---------- manche() : wrapper pour corriger les écarts et ajouter Pénal. ----------
+ * Problème : site.js eff()/gapTo() utilise x._t si fini, sinon recalcul en ajoutant
+ * comTimeAdd à x.finalTime qui peut ne pas contenir la bonne valeur. On wrappe
+ * manche() pour (1) remplacer les écarts erronés par les écarts basés sur NOS
+ * _t, et (2) ajouter la colonne Pénal.
+ */
 const _origManche=window.manche;
 window.manche=function(){
   const html=_origManche.apply(this,arguments);
@@ -360,7 +388,12 @@ window.manche=function(){
     const rs=rounds();if(!rs||typeof round!=='number'||round>=rs.length)return html;
     const r=rs[round];if(!r||typeof sessionIndex!=='number'||sessionIndex>=r.sessions.length)return html;
     const s=r.sessions[sessionIndex];if(!s)return html;
-    const sorted=Array.isArray(s.results)&&s.results[0]&&typeof s.results[0]._t!=='undefined'?s.results:mySortSession(s);
+    // Utiliser s.results qui a déjà été trié par sortSession() (appelé par manche
+    // elle-même) — mais pour être sûr, on retrie via notre version.
+    const sorted=mySortSession(s);
+    // Également remettre s.results = sorted pour la cohérence
+    s.results=sorted;
+    const winner=sorted[0];
     function penLbl(x){
       const tags=[];
       if(x.comDQ)tags.push('DQ');
@@ -370,22 +403,66 @@ window.manche=function(){
       if(x.comWarning)tags.push('Aver.');
       return tags.join(', ');
     }
+    function fmtGap(x,ref){
+      if(!ref||x.laps!==ref.laps)return '—';
+      if(x._dq||x.comDNF||x.comDNS)return '—';
+      if(!Number.isFinite(x._t)||!Number.isFinite(ref._t)||x._t>=1e17||ref._t>=1e17)return '—';
+      const d=(x._t-ref._t)/1000;
+      return d>0?'+'+d.toFixed(3)+' s':'—';
+    }
+    // Construire notre propre tableau de résultats CORRECTS, avec colonne Pénal
+    // et écarts justes. Pour ne pas trop complexifier, on REGÉNÈRE les lignes
+    // de résultat (mais on garde l'en-tête, les controls etc).
+    // Plus simple : remplacer la table de résultats à l'intérieur du panel.
+    // En fait on fait la modif cellule par cellule sur le HTML généré.
     let out=html;
     const hdr='<th>Meilleur tour</th>';
     const hpos=out.lastIndexOf(hdr);
-    if(hpos>=0) out=out.slice(0,hpos+hdr.length)+'<th>Pénal.</th>'+out.slice(hpos+hdr.length);
+    if(hpos>=0){
+      // Remplacer l'en-tête pour insérer Pénal.
+      out=out.slice(0,hpos+hdr.length)+'<th>Pénal.</th>'+out.slice(hpos+hdr.length);
+      // Et modifier les en-têtes Écart/tête et Écart/préc si elles y sont
+      out=out.replace('<th>Écart / tête</th><th>Écart / préc.</th>','<th>Écart / tête</th><th>Écart / préc.</th>');
+    }
+    // Maintenant remplacer chaque ligne de résultat. La regex match les <tr>
+    // qui contiennent un meilleur tour (format m:ss.fff)
     let idx=0;
     out=out.replace(/<tr><td class="pos">[\s\S]*?<\/tr>/g,function(match){
+      // Ne matcher que les lignes de résultats (elles contiennent un temps
+      // au format 1:xx.xxx meilleur tour)
       if(!/:\d\d\.\d{3}/.test(match))return match;
-      const x=sorted[idx++];if(!x)return match;
+      const x=sorted[idx];
+      idx++;
+      if(!x)return match;
       const lbl=penLbl(x);
-      const cell=lbl?`<td style="color:#e57a47;font-weight:600">${lbl}</td>`:`<td class="muted">—</td>`;
+      const penCell=lbl?`<td style="color:#e57a47;font-weight:600">${lbl}</td>`:`<td class="muted">—</td>`;
+      // Insérer la cellule Pénal après le 5e <td>
       let pos=0,count=0;
       while(count<5){const nd=match.indexOf('</td>',pos);if(nd<0)break;pos=nd+5;count++;}
-      return match.slice(0,pos)+cell+match.slice(pos);
+      let newRow=match.slice(0,pos)+penCell+match.slice(pos);
+      // Puis remplacer les deux derniers <td> (écart/tête et écart/préc)
+      // On récupère le précédent
+      const prev=idx>=2?sorted[idx-2]:null;
+      const gapHead=fmtGap(x,winner);
+      const gapPrev=fmtGap(x,prev);
+      // Remplacer les deux dernières cellules : elles finissent par </tr>.
+      // On trouve le dernier <td et l'avant-dernier.
+      const tds=[];
+      let scan=0;
+      while(true){
+        const st=newRow.indexOf('<td',scan);if(st<0)break;
+        const en=newRow.indexOf('</td>',st);if(en<0)break;
+        tds.push({start:st,end:en+5});scan=en+5;
+      }
+      if(tds.length>=2){
+        const last2=tds[tds.length-2], last1=tds[tds.length-1];
+        // gap/tête = avant-dernière cellule ; gap/préc = dernière
+        newRow=newRow.slice(0,last2.start)+`<td>${gapHead}</td>`+newRow.slice(last2.end,last1.start)+`<td>${gapPrev}</td>`+newRow.slice(last1.end);
+      }
+      return newRow;
     });
     return out;
-  }catch(e){console.warn('[v71] pen-col',e);return html;}
+  }catch(e){console.warn('[v71] manche wrap',e);return html;}
 };
 
 /* ---------- openAdjForm multi-choix (remplacer la version site.js) ---------- */
