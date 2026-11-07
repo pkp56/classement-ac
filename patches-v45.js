@@ -1,4 +1,4 @@
-/* patches-v45.js — v65
+/* patches-v45.js — v66
  *  1) openAdjForm multi-choix (Pénal./DNF<75%/DNS/DQ/Avertissement)
  *  2) Règle 75% classante : DNF ≥75% marque les points de sa position (derrière
  *     les finishers), DNF <75% = 0 pt. DNS/DQ = 0 pt.
@@ -83,7 +83,7 @@
       const ret=_applyCommission.apply(this,arguments);
       try{
         if(sess&&sess.type==='RACE'&&Array.isArray(arr)){markDNFOnArr(arr,rIdx,sIdx);}
-      }catch(e){console.warn('[v65] markDNF error',e);}
+      }catch(e){console.warn('[v66] markDNF error',e);}
       return ret;
     };
     return true;
@@ -138,7 +138,7 @@
     window.sortSession=function(sess){
       const arr=_ss(sess);
       if(!sess||sess.type!=='RACE')return arr;
-      try{return reclassify(arr);}catch(e){console.warn('[v65] reclassify',e);return arr;}
+      try{return reclassify(arr);}catch(e){console.warn('[v66] reclassify',e);return arr;}
     };
 
     const _calc=window.calculate;
@@ -219,12 +219,12 @@
             return match.slice(0,pos)+cell+match.slice(pos);
           });
           return out;
-        }catch(e){console.warn('[v65] pen-col error',e);return html;}
+        }catch(e){console.warn('[v66] pen-col error',e);return html;}
       };
     }
 
-    console.log('[v65] installed.');
-    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v65] init',e)}
+    console.log('[v66] installed.');
+    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v66] init',e)}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);
   else install();
