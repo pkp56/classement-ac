@@ -489,5 +489,183 @@
     return r;
   };
 
-  console.log('[GDSP v42b] DNF/DNS/DQ + Race consistency (best-minus-avg, pits/T1 exclus).');
+  // ============================================================
+  //  Info-bulles (tooltips CSS) + renommage colonnes + encadré Rythme
+  // ============================================================
+
+  // Injecter le CSS des tooltips
+  (function injectTooltipCSS(){
+    if(document.getElementById('gdsp-tooltip-css'))return;
+    const st=document.createElement('style');
+    st.id='gdsp-tooltip-css';
+    st.textContent=`
+      .gdsp-tip{position:relative;display:inline-flex;align-items:center;gap:4px;cursor:help}
+      .gdsp-tip .gdsp-i{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#d7a347;color:#132d35;font-size:10px;font-weight:700;font-style:normal;line-height:1;}
+      .gdsp-tip .gdsp-bubble{visibility:hidden;opacity:0;position:absolute;z-index:999;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);min-width:240px;max-width:320px;padding:8px 10px;background:#1d2d22;color:#f7ecd5;font-size:11px;line-height:1.45;border:1px solid #d7a347;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.35);pointer-events:none;white-space:normal;text-align:left}
+      .gdsp-tip .gdsp-bubble::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#d7a347}
+      .gdsp-tip:hover .gdsp-bubble{visibility:visible;opacity:1}
+      .gdsp-tip.inline .gdsp-bubble{left:0;transform:none}
+      .gdsp-tip.inline .gdsp-bubble::after{left:10px;transform:none}
+      /* Encadré Rythme */
+      .rythme-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+      .rythme-table th,.rythme-table td{padding:5px 8px;border-bottom:1px dashed #dbd0ba;text-align:right;font-variant-numeric:tabular-nums}
+      .rythme-table th:first-child,.rythme-table td:first-child{text-align:left}
+      .rythme-table th{background:#f1e8cf;color:#132d35;font-weight:700;font-family:Impact,sans-serif;letter-spacing:1px;font-size:11px}
+      .rythme-table tr.best-row td{background:rgba(215,163,71,0.08);font-weight:700}
+    `;
+    document.head.appendChild(st);
+  })();
+
+  function tip(label,text,opts={}){
+    return `<span class="gdsp-tip${opts.inline?' inline':''}">${label}<i class="gdsp-i">?</i><span class="gdsp-bubble">${text}</span></span>`;
+  }
+
+  const TIPS={
+    regularite:`<b>Régularité (Race Consistency)</b><br>Écart moyen entre chaque tour et le MEILLEUR tour du pilote sur la course (en secondes).<br>Le premier tour et les tours aux stands / lents (>21 s plus lent que le meilleur tour) sont exclus.<br>Plus l'écart moyen est petit, plus le score est élevé.<br><i>Méthode iRacing — best minus average non-best.</i>`,
+    proprete:`<b>Propreté</b><br>Indice basé sur les collisions voitures (×3) et les cuts/pénalités de piste (×1) enregistrés par le jeu.<br>100 = aucun contact, aucun cut sur la course.<br>Pondéré dans le temps (demi-vie 90 jours).`,
+    vitesse:`<b>Vitesse</b><br>Basé sur le MEILLEUR TOUR en course du pilote.<br>100 = tour le plus rapide du plateau.<br>Ne tient pas compte de la position finale — un pilote rapide qui a abandonné reste rapide.`,
+    resultats:`<b>Résultats</b><br>Basé sur la position finale en course après application des pénalités Commission.<br>100 = victoire, 0 = dernière place classée.`,
+    progression:`<b>Progression</b><br>Pente d'une régression linéaire de la position du pilote en fonction du temps sur l'ensemble de ses courses.<br>100 = plus forte amélioration dans le temps ; 0 = plus forte régression.<br>Les pilotes avec moins de 3 courses obtiennent 50 (neutre).`
+  };
+
+  // ---- Patcher le tableau GLOBAL (remplacer les en-têtes des mini-barres et la note d'explication) ----
+  function patchGlobalTips(){
+    // Patch de la note d'intro
+    document.querySelectorAll('p.note').forEach(p=>{
+      if(/cinq critères/.test(p.textContent)){
+        p.innerHTML='Le niveau est établi sur <b>cinq critères</b> : position moyenne en course, <b>régularité de course</b> (écart au meilleur tour, tours aux stands exclus), propreté (collisions & cuts), vitesse au tour et progression dans le temps. Survolez le <i class="gdsp-i" style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#d7a347;color:#132d35;font-size:9px;font-weight:700;font-style:normal">?</i> pour le détail de chaque critère. Les courses récentes comptent davantage (demi-vie de 90 jours). Il faut au moins <b>'+(window.GLOBAL_MIN_RACES??5)+' courses</b> pour être classé. Un administrateur peut exclure des pilotes du classement.';
+      }
+    });
+    // Patcher les en-têtes du tableau détail : les mini-barres ne portent pas de <th> dédié à chaque critère,
+    // mais on remplace la ligne d'en-tête de la colonne pour mettre 5 tips.
+    // Plus simple : on ajoute des tips sous les mini-barres dans chaque cellule.
+    document.querySelectorAll('td').forEach(td=>{
+      if(td.querySelector('.mini-bar')){
+        // C'est une cellule de mini-barres : 5 barres. On ajoute une ligne d'en-tête au-dessus.
+        if(td.dataset.gdspTipped)return;td.dataset.gdspTipped='1';
+        const bars=td.querySelectorAll('span[title]');
+        const order=['regularite','proprete','vitesse','resultats','progression'];
+        bars.forEach((b,i)=>{
+          const k=order[i];if(!k)return;
+          b.classList.add('gdsp-tip');
+          b.removeAttribute('title');
+          const bubble=document.createElement('span');
+          bubble.className='gdsp-bubble';
+          bubble.innerHTML=TIPS[k];
+          b.appendChild(bubble);
+        });
+      }
+    });
+  }
+
+  // ---- Patcher ratingCard (event) : ajouter un tooltip à chaque barre ----
+  function patchRatingCardTips(){
+    document.querySelectorAll('.panel').forEach(panel=>{
+      const h2=panel.querySelector('h2');if(!h2||!/Niveau \d/.test(h2.textContent))return;
+      panel.querySelectorAll('.bar').forEach(barWrap=>{
+        const parent=barWrap.parentElement;if(!parent)return;
+        const label=parent.querySelector('b');if(!label)return;
+        const txt=label.textContent.trim().toLowerCase();
+        let key=null;
+        if(/régularité|regularite/.test(txt))key='regularite';
+        else if(/propret/.test(txt))key='proprete';
+        else if(/vitesse/.test(txt))key='vitesse';
+        else if(/résultat|resultat/.test(txt))key='resultats';
+        if(key&&!label.closest('.gdsp-tip')){
+          label.classList.add('gdsp-tip');
+          const i=document.createElement('i');i.className='gdsp-i';i.textContent='?';
+          const bubble=document.createElement('span');bubble.className='gdsp-bubble';
+          bubble.innerHTML=TIPS[key];
+          label.appendChild(i);label.appendChild(bubble);
+        }
+      });
+    });
+  }
+
+  // ---- Patcher la colonne "σ" en "Rythme Δ" avec tooltip + contenu déjà bon (gap en s) ----
+  function patchSigmaHeader(){
+    document.querySelectorAll('table').forEach(tbl=>{
+      const hdr=tbl.querySelector('tr:first-child');if(!hdr)return;
+      const ths=[...hdr.querySelectorAll('th,td')];
+      const sigmaTh=ths.find(th=>/^\s*σ\s*$/.test(th.textContent)||/régularité|écart/i.test(th.textContent)&&th.textContent.length<15);
+      if(!sigmaTh)return;
+      if(sigmaTh.dataset.gdspTipped)return;sigmaTh.dataset.gdspTipped='1';
+      sigmaTh.innerHTML=`<span class="gdsp-tip">Δ rythme<i class="gdsp-i">?</i><span class="gdsp-bubble">${TIPS.regularite}</span></span>`;
+    });
+  }
+
+  // ---- Encadré Rythme : meilleur tour, moyenne, écart moyen, nb tours, pit laps détectés ----
+  // Injection à côté de "Évaluation de performance" sur la fiche pilote d'un event.
+  function buildRythmeCard(driverId){
+    const list=[];
+    const sessList=(typeof sessions!=='undefined')?sessions.filter(s=>s&&s.type==='RACE'):[];
+    sessList.forEach((s,i)=>{
+      const myLaps=(s.laps||[]).filter(l=>l.id===driverId&&Number.isFinite(l.time)&&l.time>0&&l.time<600000);
+      const me=myLaps.map(l=>l.time);
+      if(me.length<2){
+        list.push({track:track(s.track),date:s.date,laps:me.length,valid:false});return;
+      }
+      const rest=me.slice(1);
+      const best1=Math.min(...rest);
+      const PIT=21000;
+      const nonPit=rest.filter(t=>t-best1<=PIT);
+      if(nonPit.length<2){list.push({track:track(s.track),date:s.date,laps:me.length,valid:false});return;}
+      const best2=Math.min(...nonPit);
+      const nonBest=nonPit.filter(t=>t>best2);
+      const avg=nonBest.length?nonBest.reduce((a,t)=>a+(t-best2),0)/nonBest.length:0;
+      const pitCount=rest.length-nonPit.length;
+      const r=(s.results||[]).find(x=>x.id===driverId);
+      list.push({
+        track:track(s.track),date:s.date,laps:me.length,
+        best:best2/1000,moy:nonPit.reduce((a,t)=>a+t,0)/nonPit.length/1000,gap:avg/1000,
+        pits:pitCount,pos:r?s.results.indexOf(r)+1:null,
+        valid:true
+      });
+    });
+    if(!list.some(x=>x.valid))return '';
+    const rows=list.map(x=>{
+      if(!x.valid)return `<tr><td>${esc(x.track)}</td><td colspan="5" class="muted" style="text-align:center">tours insuffisants (${x.laps})</td></tr>`;
+      return `<tr><td>${esc(x.track)} ${x.pos?'<span class="muted">· P'+x.pos+'</span>':''}</td><td>${fmt(x.best*1000)}</td><td>${fmt(x.moy*1000)}</td><td><b>+${x.gap.toFixed(2)}s</b></td><td>${x.laps} t.</td><td>${x.pits}</td></tr>`;
+    }).join('');
+    return `<div class="panel"><div class="eyebrow">Analyse du rythme</div><h2>Race consistency</h2>
+      <p class="note">Écart moyen au meilleur tour (Δ rythme), 1<sup>er</sup> tour et tours aux stands exclus (tours &gt; +21 s du meilleur tour = pit/sortie).</p>
+      <table class="rythme-table"><thead><tr><th>Manche</th><th>Meilleur</th><th>Moyenne</th><th>Δ rythme</th><th>Tours</th><th>Pit/exclu</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function injectRythmeCard(){
+    // Page pilote event : on cherche driverId
+    let id=null;
+    if(typeof driverId!=='undefined'&&driverId)id=driverId;
+    else if(typeof globalDriverId!=='undefined'&&globalDriverId){id=globalDriverId;}
+    if(!id)return;
+    if(document.getElementById('gdsp-rythme'))return;
+    // Chercher le panel d'évaluation de performance, insérer après
+    const panels=[...document.querySelectorAll('.panel')];
+    const evalPanel=panels.find(p=>{const h=p.querySelector('h2');return h&&/Évaluation de performance|Niveau \d/.test(h.textContent)});
+    if(!evalPanel)return;
+    const wrap=document.createElement('div');
+    wrap.id='gdsp-rythme';
+    wrap.innerHTML=buildRythmeCard(id);
+    evalPanel.after(wrap);
+  }
+
+  // ---- Post-traitement global ----
+  function gdspPatchUI(){
+    injectTooltipCSS();
+    patchGlobalTips();
+    patchRatingCardTips();
+    patchSigmaHeader();
+    injectRythmeCard();
+  }
+  // Remplacer le hook render précédent pour y ajouter le UI patching
+  const _renderFinal=window.render;
+  window.render=function(){
+    const r=_renderFinal.apply(this,arguments);
+    setTimeout(gdspPatchUI,0);
+    return r;
+  };
+  // Appliquer une première fois (la page est peut-être déjà rendue)
+  setTimeout(gdspPatchUI,0);
+
+  console.log('[GDSP v44] Infobulles de définition des 5 critères + tableau Rythme sur fiches pilote.');
 })();
