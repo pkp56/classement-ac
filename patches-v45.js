@@ -1,4 +1,4 @@
-/* patches-v45.js — v66
+/* patches-v45.js — v67
  *  1) openAdjForm multi-choix (Pénal./DNF<75%/DNS/DQ/Avertissement)
  *  2) Règle 75% classante : DNF ≥75% marque les points de sa position (derrière
  *     les finishers), DNF <75% = 0 pt. DNS/DQ = 0 pt.
@@ -49,10 +49,25 @@
           if(Number.isFinite(r.time)&&ms>0)r.time=Math.max(0,r.time-ms);
           r.penaltyTime=0;
         }
-        r.hasPenalty=false;
         r.lapPenalty=0;
+        // hasPenalty : true uniquement si une pénalité COMMISSION existe pour ce pilote
+        // (timeAdd>0, dq, dnf, dns, warning). On le détermine à partir du penMap.
+        r.hasPenalty=false;
       });
     });
+    // Marquer hasPenalty=true pour les pilotes avec une commission
+    if(typeof penMap==='object'&&typeof rounds==='function'){
+      const rs=rounds();
+      rs.forEach((rd,rj)=>{
+        rd.sessions.forEach((s,sj)=>{
+          if(!s||!(s.results||[]).length)return;
+          s.results.forEach(r=>{
+            const k=`${rj}:${sj}:${r.id}`;const adj=penMap[k];
+            if(adj&&(adj.timeAdd||adj.dq||adj.dnf||adj.dns||adj.warning))r.hasPenalty=true;
+          });
+        });
+      });
+    }
   }
 
   function markDNFOnArr(arr,rIdx,sIdx){
@@ -83,7 +98,7 @@
       const ret=_applyCommission.apply(this,arguments);
       try{
         if(sess&&sess.type==='RACE'&&Array.isArray(arr)){markDNFOnArr(arr,rIdx,sIdx);}
-      }catch(e){console.warn('[v66] markDNF error',e);}
+      }catch(e){console.warn('[v67] markDNF error',e);}
       return ret;
     };
     return true;
@@ -138,7 +153,7 @@
     window.sortSession=function(sess){
       const arr=_ss(sess);
       if(!sess||sess.type!=='RACE')return arr;
-      try{return reclassify(arr);}catch(e){console.warn('[v66] reclassify',e);return arr;}
+      try{return reclassify(arr);}catch(e){console.warn('[v67] reclassify',e);return arr;}
     };
 
     const _calc=window.calculate;
@@ -219,12 +234,12 @@
             return match.slice(0,pos)+cell+match.slice(pos);
           });
           return out;
-        }catch(e){console.warn('[v66] pen-col error',e);return html;}
+        }catch(e){console.warn('[v67] pen-col error',e);return html;}
       };
     }
 
-    console.log('[v66] installed.');
-    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v66] init',e)}
+    console.log('[v67] installed.');
+    try{if(window.calculate)window.calculate();if(window.render)window.render();}catch(e){console.warn('[v67] init',e)}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);
   else install();

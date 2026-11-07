@@ -85,16 +85,16 @@
       }
 
       // === Pour tous les types : préparer efftime.
-      // IMPORTANT : r.time = TotalTime d'Assetto Corsa (en ms), qui INCLUT DÉJÀ penaltyTime.
+      // IMPORTANT : r.time = TotalTime d'AC (en ms), INCLUT DÉJÀ penaltyTime serveur.
       // v63+ : on ne rajoute PAS penMs (double compte).
-      // comTimeAdd est déjà en MILLESIMES (appliqué par applyCommissionToArr qui fait
-      // y.comTimeAdd += adj.timeAdd*1000). Il n'y a donc PAS de *1000 à refaire : on
-      // ajoute comT directement.
+      // comTimeAdd est déjà en MILLESIMES après applyCommissionToArr (qui fait
+      // y.comTimeAdd += adj.timeAdd*1000). Mais v40/v42 font ENSUITE
+      // x._t = x._eff + (x.comTimeAdd||0) — donc on NE DOIT PAS ajouter comT dans
+      // efftime, sinon il serait ajouté DEUX FOIS. On met juste le temps brut ;
+      // v40/v42 se chargent d'ajouter comT pour obtenir le temps final.
       sess.results=sess.results.map(r=>{
         const x={...r};
-        const base=Number.isFinite(x.time)?x.time:1e18;
-        const comT=x.comTimeAdd||0;
-        x.efftime=base+comT;
+        x.efftime=Number.isFinite(x.time)?x.time:1e18;
         if(x.lapPenalty)x.efftime=1e18;
         return x;
       });
