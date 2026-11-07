@@ -19,6 +19,31 @@
 
   const MIN_PCT=0.75;
 
+  // Détecte les DNF directement depuis le JSON de résultats AC.
+  // Règle AC (vérifiée sur le vrai JSON Sebring avec Sherman) :
+  //   - Les FINISHERS ont tous le même nombre de tours (ou 1 tour de moins
+  //     mais ont dépassé la ligne d'arrivée au moment du checkered flag →
+  //     leur temps total est SUPÉRIEUR au temps du vainqueur).
+  //   - Les pilotes qui ont abandonné ont 1 tour (ou plus) de retard ET un
+  //     temps total INFÉRIEUR au temps du vainqueur : ils ont coupé/rentré aux
+  //     stands avant la fin, et le chrono s'est arrêté avant que le vainqueur
+  //     ne passe la ligne.
+  //   - Un pilote avec 0 tour est DNS (absent).
+  // Le seuil 75% reste appliqué en complément pour les cas évidents (gros
+  // abandons en début de course où le temps est manifestement trop court).
+  function isJSONDNF(r,winnerLaps,winnerTime){
+    if(!r)return false;
+    const laps=r.laps||0;
+    const t=Number.isFinite(r.time)?r.time:1e18;
+    if(laps<=0)return false; // DNS traité séparément
+    if(laps>=winnerLaps)return false;
+    // Règle AC fiable : temps < temps winner + moins de tours = abandon
+    if(t<winnerTime)return true;
+    // Seuil 75% en complément (pilote qui a fait 50% des tours en se traînant)
+    if(laps<Math.ceil(winnerLaps*MIN_PCT))return true;
+    return false;
+  }
+
   function install(){
     if(typeof addAdjustment!=='function'||typeof rounds!=='function'){setTimeout(install,80);return;}
 
@@ -62,39 +87,46 @@
       addAdjustment(rj,sj,did,timeAdd,false,false,note);
     };
 
-    // ---- Auto-DNF / Auto-DNS ----
+    // ---- Auto-DNF / Auto-DNS depuis les données JSON ----
     function autoDNF(){
       if(!Array.isArray(window.events))return;
       for(const ev of window.events){
         const d=ev&&ev.data;if(!d||!Array.isArray(d.sessions))continue;
         const pm=d.penMap=d.penMap||{};
         const rs=(typeof rounds==='function')?rounds():[];
-        // Parcourir chaque manche et chaque session
         rs.forEach((rd,rIdx)=>{
           rd.sessions.forEach((s,sIdx)=>{
             if(!s||s.type!=='RACE'||!Array.isArray(s.results))return;
             const res=s.results;
             if(!res.length)return;
-            const winnerLaps=Math.max(...res.map(r=>(r&&r.laps)||0));
+            // Trouver le vrai vainqueur (1er après tri pénalités incluses ? On prend le 1er au temps brut avec le max de tours)
+            let winner=null;
+            let winnerLaps=0;let winnerTime=1e18;
+            res.forEach(r=>{
+              if(!r)return;
+              const L=r.laps||0;const T=Number.isFinite(r.time)?r.time:1e18;
+              if(L>winnerLaps || (L===winnerLaps && T<winnerTime)){winnerLaps=L;winnerTime=T;winner=r;}
+            });
+            if(!winner)return;
             const minLaps=Math.ceil(winnerLaps*MIN_PCT);
             res.forEach(r=>{
               if(!r||!r.id)return;
               const key=`${rIdx}:${sIdx}:${r.id}`;
               const existing=pm[key]||{};
-              if(existing.dq)return;        // DQ manuel prime
+              if(existing.dq)return;
               if(existing.dns){r.comDNS=true;r.comDNF=false;return;}
               if(existing.dnf){r.comDNF=true;return;}
               const laps=r.laps||0;
+              const t=Number.isFinite(r.time)?r.time:1e18;
               if(laps<=0){
-                // DNS (absent, 0 tour)
                 pm[key]={timeAdd:0,dq:false,warning:false,dnf:false,dns:true,note:'Absent (0 tour)'};
                 r.comDNS=true;r.comDNF=false;
-              }else if(laps<minLaps){
-                // DNF automatique
-                pm[key]={timeAdd:0,dq:false,warning:false,dnf:true,dns:false,note:`Abandon (${laps}/${winnerLaps} t., < 75%)`};
+              }else if(isJSONDNF(r,winnerLaps,winnerTime)){
+                // Abandon détecté (temps < vainqueur avec -1 tour ou <75% des tours)
+                const reason=(t<winnerTime && laps<winnerLaps)?`Abandon (${laps}/${winnerLaps} t., chrono < vainqueur)`:`Abandon (${laps}/${winnerLaps} t., < 75%)`;
+                pm[key]={timeAdd:0,dq:false,warning:false,dnf:true,dns:false,note:reason};
                 r.comDNF=true;
               }else{
-                // Finisher — ne devrait pas porter de marquage DNF/DNS hérité
                 r.comDNF=false;
                 if(!existing.dns)r.comDNS=false;
               }
