@@ -300,7 +300,7 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
       const sessionType=toSessionType(rawType,sess);
       const item={
         source: hasFull?'export':'url',
-        eventId,eventName:ev.Name||champ.Name||'',
+        eventId:evId,eventName:ev.Name||champ.Name||'',
         rawType,
         sessionType,
         rawLabel:rawLabel(sess,rawType),
