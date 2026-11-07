@@ -39,8 +39,10 @@
       if(isDQr(r)){bak.push(r);r._v45cls='bak';continue;}
       const L=r.laps||0,T=rawT(r);
       if(L<=0){bak.push(r);r._v45cls='bak';continue;}
-      if(L===wl){fin.push(r);r._v45cls='fin';continue;}
-      if(L===wl-1 && T>=wt){fin.push(r);r._v45cls='fin';continue;}
+      // Critère VRAI d'AC : un pilote est finisher si son temps T >= temps vainqueur
+    // (il a franchi la ligne sous le drapeau à damier, quel que soit le nb de
+    // tours de retard). Un DNF a T < wt : son chrono a été coupé avant le checkered.
+      if(T>=wt && L>=ml){fin.push(r);r._v45cls='fin';continue;}
       if(L>=ml){cls.push(r);r._v45cls='cls';continue;}
       nc.push(r);r._v45cls='nc';
     }
