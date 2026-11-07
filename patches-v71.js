@@ -1,5 +1,5 @@
 /* =========================================================================
- * patches-v74.js — CLASSEMENT REPARTI DE ZÉRO
+ * patches-v75.js — CLASSEMENT REPARTI DE ZÉRO
  * =========================================================================
  * Règles implémentées (source de vérité unique) :
  *
@@ -50,7 +50,7 @@
 (function(){
 'use strict';
 if(window.__gdspV71)return; window.__gdspV71=true;
-console.log('[v74] classement reparti de zero');
+console.log('[v75] classement reparti de zero');
 
 const DEFAULT_MIN_PCT = 0.75;
 
@@ -288,9 +288,9 @@ window.sortSession=mySortSession;
  */
 /* =========================================================================
  * calculate() COMPLÈTEMENT REMPLACÉE — plus aucun recours à site.js pour
- * le calcul des points. Source de vérité unique : mySortSession + v74_calculate.
+ * le calcul des points. Source de vérité unique : mySortSession + v75_calculate.
  * ========================================================================= */
-function v74_calculate(){
+function v75_calculate(){
   stripServerPens();
   const rs=rounds();
   const all=allDrivers();
@@ -373,7 +373,7 @@ function v74_calculate(){
     return{...d,total:d.rounds.reduce((a,b)=>a+b,0),joker:jokerRounds.reduce((a,b)=>a+b,0),meritTotal:d.merit.reduce((a,b)=>a+b,0)};
   });
 }
-window.calculate=v74_calculate;
+window.calculate=v75_calculate;
 
 /* ---------- manche() : wrapper pour corriger les écarts et ajouter Pénal. ----------
  * Problème : site.js eff()/gapTo() utilise x._t si fini, sinon recalcul en ajoutant
@@ -462,7 +462,7 @@ window.manche=function(){
       return newRow;
     });
     return out;
-  }catch(e){console.warn('[v74] manche wrap',e);return html;}
+  }catch(e){console.warn('[v75] manche wrap',e);return html;}
 };
 
 /* ---------- addAdjustment étendu (dnf/dns/warning) - remplace v41 ---------- */
@@ -503,7 +503,7 @@ if(_pc0){window.pointsConfig=function(){const c=_pc0();c.doubleLongRaces=true;re
  * Comme on n'utilise qu'un seul championnat (International Series Lola T290),
  * on force son chargement direct et on affiche la page classement. */
 const V71_CHAMP_SLUG='lola-t290-gdsp-championnat-2026';
-async function v74_boot(){
+async function v75_boot(){
   try{
     // Forcer le mode multi (loadEvent fonctionne dans ce mode)
     window.backendMulti=true;
@@ -522,18 +522,22 @@ async function v74_boot(){
     if(typeof window.loadEvent==='function'){
       await window.loadEvent(V71_CHAMP_SLUG);
       localStorage.setItem('gdsp_last_event',V71_CHAMP_SLUG);
-      // Post-chargement : rerouter vers la page classement
-      window.page='classement';
-      window.round=0;window.sessionIndex=1;
+      // Post-chargement : si on n'est pas dans l'admin, aller sur l'onglet
+      // "RÉSULTATS" pour voir les manches immédiatement.
+      if(window.page!=='admin'){
+        window.page='manches';
+        window.eventtab='resultats';
+        window.round=0;window.sessionIndex=1;
+      }
     }
     stripServerPens();
     if(window.render)window.render();
-  }catch(e){console.warn('[v74] boot',e);if(window.render)window.render();}
+  }catch(e){console.warn('[v75] boot',e);if(window.render)window.render();}
 }
 // Lancer plusieurs fois (avant/après load) pour être sûr de passer après le
 // bootstrap IIFE de site.js
-setTimeout(v74_boot,100);
-setTimeout(v74_boot,500);
-setTimeout(v74_boot,2000);
+setTimeout(v75_boot,100);
+setTimeout(v75_boot,500);
+setTimeout(v75_boot,2000);
 
 })();
