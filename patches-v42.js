@@ -280,6 +280,132 @@
     return Object.entries(m).sort().map(([d,s])=>({date:d,sessions:s,ts:new Date(d).getTime()}));
   }
 
+  // ---- Option 3 : Propreté = fautes basées sur les collisions qui font PERDRE DU TEMPS à l'adversaire ----
+  // Seuils (ajustables par la suite) :
+  const FAULT_SIDE_Z=1.0;       // |Z| >= 1.0 m → considéré comme latéral/côte à côte → 0-0
+  const FAULT_REAR_X=0.4;      // |X| >= 0.4 derrière/devant → choc arrière
+  const FAULT_LOSS_MIN=1.5;    // la victime doit perdre au moins 1.5s pour que ça compte
+  const FAULT_DIVISOR=2;       // points = secondes perdues / 2
+  const FAULT_CUT_WEIGHT=1;    // 1 point par cut
+
+  function driverPace(lapsByCar,carId){
+    const ls=(lapsByCar[carId]||[]).map(l=>l.LapTime).filter(t=>t>0&&t<600000);
+    if(ls.length<2)return null;
+    const rest=ls.slice(1);const best=Math.min(...rest);
+    const nonPit=rest.filter(t=>t-best<=21000);
+    return nonPit.length>=2?Math.min(...nonPit):null;
+  }
+  function lapAtOrAfter(lapsByCar,carId,tsSec){
+    const ls=lapsByCar[carId]||[];
+    for(const l of ls){if(l.Timestamp>=tsSec-5)return l;}
+    return ls[ls.length-1]||null;
+  }
+  // Calcule le score "fautes" d'une course : Map<id, points>
+  function raceFoulScores(race){
+    const lapsById={};
+    (race.laps||[]).forEach(l=>{if(!l||!l.id)return;if(!lapsById[l.id])lapsById[l.id]=[];lapsById[l.id].push(l)});
+    // Les "id" dans events sont des GUID Steam, mais nos résultats utilisent le même id.
+    // Convertir en id "court" si besoin → en fait events utilise aid/bid qui sont les GUID.
+    // On doit faire correspondre events.aid → r.id. Heureusement race.events est déjà normalisé
+    // par le backend : dans les données chargées, events ont des champs 'a'/'b' qui sont les
+    // indexes ou les noms… Attendez je vérifie la structure actuelle.
+    // Regardons le format des events qui passe dans le code (v40 patches) :
+    // Dans globalPerformanceRatings du site.js original, la détection utilise le nom :
+    //   collisions=(race.events||[]).filter(e=>[e.a,e.b].some(v=>String(v||'').trim().toLowerCase()===name))
+    // Donc events.a / events.b sont des NOMS (string). Mais on a besoin de lier aux résultats (id).
+    // Plus robuste : matcher par CarId si disponible, sinon par nom.
+    // Struct events AC brute : {CarId, OtherCarId, RelPosition, ImpactSpeed, Timestamp}.
+    // Mais après import backend, events est normalisé en {a,b,aid,bid,...} ?
+    // Vérifier la structure réelle. On va supporter les deux formats.
+    const evs=(race.events||[]).filter(e=>e.type==='COLLISION_WITH_CAR'||e.Type==='COLLISION_WITH_CAR');
+    // On indexe les results par name et id
+    const byCarId={},byName={};
+    (race.results||[]).forEach(r=>{
+      if(!r)return;
+      if(r.CarId!=null)byCarId[r.CarId]=r.id;
+      if(r.DriverName)byName[r.DriverName.trim().toLowerCase()]=r.id;
+      if(r.name)byName[r.name.trim().toLowerCase()]=r.id;
+    });
+    const scores=new Map();
+    // Résoudre un "driver" (event ou AC brut) vers l'id canonique du pilote dans results
+    function resolveId(ev,which){
+      // Format AC brut : .CarId/.OtherCarId
+      const cid=ev[which==='a'?'CarId':'OtherCarId'];
+      if(cid!=null){
+        if(byCarId[cid])return byCarId[cid];
+        // peut-être un index lapsByCar avec clé 'id:xxx'
+        return null;
+      }
+      // Format normalisé : .aid/.bid (id), .a/.b (nom)
+      const idKey=which==='a'?'aid':'bid';const nKey=which==='a'?'a':'b';
+      if(ev[idKey])return ev[idKey];
+      const n=ev[nKey];if(n){const k=String(n).trim().toLowerCase();if(byName[k])return byName[k];}
+      return null;
+    }
+    // Laps d'un pilote (par id canonique)
+    function lapsOf(id){return lapsById[id]||[];}
+    function add(id,pts){if(!id)return;scores.set(id,(scores.get(id)||0)+pts);}
+    // Cuts (parcourir tous les laps de tous les pilotes présents dans results)
+    (race.results||[]).forEach(r=>{
+      if(!r||!r.id)return;
+      const ls=lapsOf(r.id);
+      let c=0;
+      ls.forEach(l=>{c+=Math.max(0,Number.isFinite(l.cuts)?l.cuts:(l.Cuts||0));});
+      add(r.id,FAULT_CUT_WEIGHT*c);
+    });
+    // Pairer les événements bilatéraux
+    for(let i=0;i<evs.length;i++){
+      const a=evs[i];
+      const aid=resolveId(a,'a'),bid=resolveId(a,'b');
+      if(!aid||!bid)continue;
+      // Trouver le jumeau
+      let b=null;
+      for(let j=i+1;j<evs.length;j++){
+        const o=evs[j];
+        const oid=resolveId(o,'a'),ooid=resolveId(o,'b');
+        if(!oid||!ooid)continue;
+        const pairOK=((oid===aid&&ooid===bid)||(oid===bid&&ooid===aid))&&Math.abs((o.Timestamp||0)-(a.Timestamp||0))<=2000;
+        if(pairOK){b=o;break;}
+      }
+      if(!b)continue;
+      // Clé unique pour éviter de traiter deux fois
+      const key=[aid,bid].sort().join('-')+':'+Math.round((a.Timestamp||0)/1000);
+      if(scores.has('__key:'+key))continue;
+      scores.set('__key:'+key,1);
+      // RelPosition : format AC brut
+      const rp=a.RelPosition||{};
+      const rx=rp.X,rz=rp.Z;
+      if(rx==null||rz==null)continue;
+      const absZ=Math.abs(rz);
+      const ts=a.Timestamp||0;
+      let culpritId=null,victimId=null;
+      if(absZ<FAULT_SIDE_Z){
+        if(rx>FAULT_REAR_X){culpritId=aid;victimId=bid;}
+        else if(rx<-FAULT_REAR_X){culpritId=bid;victimId=aid;}
+      }
+      if(!culpritId||!victimId)continue;
+      // Perte de temps victime
+      const vLaps=lapsOf(victimId);
+      let victimLap=null;
+      for(const L of vLaps){if((L.Timestamp||0)>=ts-5){victimLap=L;break;}}
+      if(!victimLap&&vLaps.length)victimLap=vLaps[vLaps.length-1];
+      // Rythme
+      const vPaceMs=driverPace(lapsById,victimId);
+      if(!victimLap||!vPaceMs)continue;
+      const lapMs=Number.isFinite(victimLap.LapTime)?victimLap.LapTime:victimLap.time;
+      if(!lapMs||lapMs<=0)continue;
+      // Détection ms vs s (si lap < 1000, c'est probablement en secondes)
+      const lapSec=lapMs>1000?lapMs/1000:lapMs;
+      const paceSec=vPaceMs>1000?vPaceMs/1000:vPaceMs;
+      const lossSec=lapSec-paceSec;
+      if(lossSec<FAULT_LOSS_MIN)continue;
+      add(culpritId,lossSec/FAULT_DIVISOR);
+    }
+    // Nettoyer les clés internes
+    for(const k of Array.from(scores.keys()))if(String(k).startsWith('__key:'))scores.delete(k);
+    return scores;
+  }
+
   function weekendBestLaps(round){
     // Retourne Map<id, {best, bestSession:'Q'|'R'}> pour le week-end.
     // Parcourir qualif et toutes les courses, prendre le min des best.
@@ -327,43 +453,45 @@
           if(isFinite(ts))firstRaceTs=Math.min(firstRaceTs||ts,ts);
           const lapsById={};
           (s.laps||[]).forEach(l=>{if(!l||!l.id)return;if(!lapsById[l.id])lapsById[l.id]=[];lapsById[l.id].push(l)});
-          const collById={};
-          (s.events||[]).forEach(e=>{
-            if(!e||e.type!=='COLLISION_WITH_CAR')return;
-            if(e.aid){collById[e.aid]=(collById[e.aid]||0)+1}
-            if(e.bid){collById[e.bid]=(collById[e.bid]||0)+1}
+          // Indexer laps par CarId aussi (pour que raceFoulScores fonctionne en mode AC brut)
+          const lapsByCar={};
+          (s.laps||[]).forEach(l=>{
+            if(!l)return;const cid=l.CarId;
+            if(cid==null){if(l.id){if(!lapsByCar['id:'+l.id])lapsByCar['id:'+l.id]=[];lapsByCar['id:'+l.id].push(l);}return;}
+            if(!lapsByCar[cid])lapsByCar[cid]=[];lapsByCar[cid].push(l);
           });
           const sorted=sortForResults(s.results);
           const N=sorted.length;
+          // Calculer les fautes (Option 3) sur cette course
+          const foulScores=raceFoulScores({...s,laps:s.laps,results:sorted});
           const raceEntriesThis=[];
           sorted.forEach((r,i)=>{
             if(!r||!r.id)return;
             idName.set(r.id,r.name);idTeam.set(r.id,r.team||'');
             const myLaps=(lapsById[r.id]||[]).filter(l=>Number.isFinite(l.time)&&l.time>0&&l.time<600000);
             const consistency=raceConsistencyMs(myLaps);
-            const cuts=myLaps.reduce((n,l)=>n+(Number.isFinite(l.cuts)?Math.max(0,l.cuts):0),0);
             const isOut=!!(r._dq||r.comDQ||r.comDNS||r.disqualified||r.comDNF);
             const resScore=scoreResults(N,i+1,isOut);
+            // Trouver le score de fautes pour ce pilote (par id ou par CarId préfixé)
+            let fouls=foulScores.get(r.id);
+            if(fouls==null&&r.CarId!=null)fouls=foulScores.get(r.CarId);
+            if(fouls==null&&r.DriverName)fouls=foulScores.get(r.DriverName.trim().toLowerCase());
+            if(fouls==null)fouls=0;
             raceEntriesThis.push({
-              id:r.id,consistency,collisions:collById[r.id]||0,cuts,resScore,
-              isOut
+              id:r.id,consistency,fouls,resScore,isOut
             });
           });
           raceEntries.push({entries:raceEntriesThis});
         }
-        // Agréger par pilote sur le week-end : régularité = moyenne des consistencies (en ms,
-        // puis on percentile au niveau week-end après la liste), propreté = somme collisions*3 + cuts,
-        // résultats = meilleur score (meilleure course du week-end) OU moyenne ?
-        // On choisit : MOYENNE des scores résultats / régularité par course, SOMME collisions/cuts,
-        // et vitesse = MEILLEUR tour du week-end.
+        // Agréger par pilote sur le week-end
         const pilotAgg=new Map();
         for(const re of raceEntries){
           for(const e of re.entries){
-            if(!pilotAgg.has(e.id))pilotAgg.set(e.id,{id:e.id,n:0,consS:0,consN:0,coll:0,cuts:0,resS:0,resN:0,outCount:0});
+            if(!pilotAgg.has(e.id))pilotAgg.set(e.id,{id:e.id,n:0,consS:0,consN:0,foulS:0,foulN:0,resS:0,resN:0,outCount:0});
             const p=pilotAgg.get(e.id);
             p.n++;
             if(e.consistency!=null){p.consS+=e.consistency;p.consN++;}
-            p.coll+=e.collisions;p.cuts+=e.cuts;
+            p.foulS+=e.fouls;p.foulN++;
             p.resS+=e.resScore;p.resN++;
             if(e.isOut)p.outCount++;
           }
@@ -374,13 +502,14 @@
           const weekendBest=b?b.best:null;
           const weekendBestSession=b?b.bestSession:null;
           const avgCons=p.consN?p.consS/p.consN:null;
+          const avgFouls=p.foulN?p.foulS/p.foulN:0;
           entries.push({
             id,
-            consistency:avgCons,           // ms, gap moyen au best (moyenne des courses du we)
-            collisions:p.coll,cuts:p.cuts, // cumul sur toutes les courses
-            best:weekendBest,              // meilleur tour du week-end (Q ou R)
+            consistency:avgCons,
+            foul:avgFouls,                   // moyenne des fautes par course du we
+            best:weekendBest,
             bestSession:weekendBestSession,
-            resScore:p.resN?p.resS/p.resN:0 // moyenne des scores résultats
+            resScore:p.resN?p.resS/p.resN:0
           });
         }
         if(entries.length>=1)allWeekends.push({ts:firstRaceTs,entries});
@@ -403,7 +532,7 @@
     for(const rc of allRaces){
       const weight=Math.exp(-(now-rc.ts)/HALF_LIFE);
       const pcons=pct(rc.entries,'consistency',true); // +petit = mieux
-      const pcln=pct(rc.entries.map(e=>({...e,clean:(e.collisions*3)+e.cuts})),'clean',true);
+      const pcln=pct(rc.entries,'foul',true);         // +petit = mieux (moins de fautes)
       // Vitesse : percentiliser parmi tous les pilotes ayant un best tour valide
       // (finishers + ceux qui ont tourné avant d'abandonner).
       const pspd=pct(rc.entries,'best',true);
@@ -486,18 +615,28 @@
       for(const race of raceSessions){
         const sorted=sortForResults(race.results);
         const N=sorted.length;
+        // Construire un map lapsByCar pour raceFoulScores
+        const lapsById={},lapsByCar={};
+        (race.laps||[]).forEach(l=>{
+          if(!l||!l.id)return;
+          if(!lapsById[l.id])lapsById[l.id]=[];lapsById[l.id].push(l);
+          if(l.CarId!=null){if(!lapsByCar[l.CarId])lapsByCar[l.CarId]=[];lapsByCar[l.CarId].push(l);}
+          else {const k='id:'+l.id;if(!lapsByCar[k])lapsByCar[k]=[];lapsByCar[k].push(l);}
+        });
+        const foulScores=raceFoulScores({...race,laps:race.laps,results:sorted});
         sorted.forEach((r,idx)=>{
-          let laps=(race.laps||[]).filter(l=>l.id===r.id&&Number.isFinite(l.time)&&l.time>0&&l.time<600000);
+          let laps=(lapsById[r.id]||[]).filter(l=>Number.isFinite(l.time)&&l.time>0&&l.time<600000);
           const consistency=raceConsistencyMs(laps);
-          let name=(r.name||'').trim().toLowerCase();
-          let collisions=(race.events||[]).filter(e=>[e.a,e.b].some(v=>String(v||'').trim().toLowerCase()===name)).length;
-          let cuts=laps.reduce((n,l)=>n+(Number.isFinite(l.cuts)?Math.max(0,l.cuts):0),0);
           const isOut=!!(r._dq||r.comDQ||r.comDNS||r.disqualified||r.comDNF);
           const resScore=scoreResults(N,idx+1,isOut);
-          if(!pilotAgg.has(r.id))pilotAgg.set(r.id,{id:r.id,n:0,consS:0,consN:0,coll:0,cuts:0,resS:0,resN:0});
+          let fouls=foulScores.get(r.id);
+          if(fouls==null&&r.CarId!=null)fouls=foulScores.get(r.CarId);
+          if(fouls==null&&r.DriverName)fouls=foulScores.get(r.DriverName.trim().toLowerCase());
+          if(fouls==null)fouls=0;
+          if(!pilotAgg.has(r.id))pilotAgg.set(r.id,{id:r.id,n:0,consS:0,consN:0,foulS:0,foulN:0,resS:0,resN:0});
           const p=pilotAgg.get(r.id);p.n++;
           if(consistency!=null){p.consS+=consistency;p.consN++;}
-          p.coll+=collisions;p.cuts+=cuts;p.resS+=resScore;p.resN++;
+          p.foulS+=fouls;p.foulN++;p.resS+=resScore;p.resN++;
         });
       }
       const entries=[];
@@ -505,14 +644,14 @@
         const b=bestMap.get(id);
         entries.push({
           id,regularity:p.consN?p.consS/p.consN:null,
-          cleanliness:p.coll*3+p.cuts,
+          foul:p.foulN?p.foulS/p.foulN:0,
           best:b?b.best:null,
           bestSession:b?b.bestSession:null,
           resScore:p.resN?p.resS/p.resN:0
         });
       }
       for(const e of entries){
-        let v={regularite:pct(entries,e.id,'regularity'),proprete:pct(entries,e.id,'cleanliness'),
+        let v={regularite:pct(entries,e.id,'regularity'),proprete:pct(entries,e.id,'foul'),
                vitesse:pct(entries,e.id,'best'),resultats:e.resScore};
         if(v.regularite===null&&v.vitesse===null&&v.proprete===null)continue;
         for(const k in v)if(v[k]===null)v[k]=50;
@@ -669,7 +808,7 @@
 
     const TIPS={
       regularite:`<b>Régularité (Race Consistency)</b><br>Écart moyen entre chaque tour et le MEILLEUR tour du pilote sur la course (en secondes).<br>Le premier tour et les tours aux stands / lents (>21 s plus lent que le meilleur tour) sont exclus.<br>Plus l'écart moyen est petit, plus le score est élevé.<br><i>Méthode iRacing — best minus average non-best.</i>`,
-      proprete:`<b>Propreté</b><br>Indice basé sur les collisions voitures (×3) et les cuts/pénalités de piste (×1).<br>100 = aucun contact ni cut.`,
+      proprete:`<b>Propreté</b><br>Pénalités attribuées selon les contacts en course qui font PERDRE DU TEMPS à l'adversaire :<br>• Touchettes sans conséquence (< 1,5 s de perte pour l'autre) → 0<br>• Choc latéral / côte à côte (bagarre) → 0 pour les deux (le pilote devant n'est pas en tort s'il ne referme pas)<br>• Choc arrière clair → secondes perdues par la victime / 2, au pilote responsable<br>• Cuts de piste : +1 point par cut<br>100 = aucun contact responsable ni cut.<br>Seuils : |Z| latéral ≥ 1,0 m = côte à côte ; perte min. 1,5 s pour compter.`,
       vitesse:`<b>Vitesse</b><br>Basé sur le MEILLEUR TOUR du week-end (meilleur temps entre <b>Q</b>ualification et toutes les <b>R</b>aces de la manche, au choix du pilote).<br>Le petit <b>Q</b> ou <b>R</b> à côté du temps indique si le meilleur tour du week-end a été réalisé en qualif ou en course.<br>100 = pilote le plus rapide du plateau sur le week-end.`,
       resultats:`<b>Résultats</b><br>Basé sur la position finale APRÈS pénalités Commission (DNF/DNS/DQ = derniers).<br>• 1 pilote → 50<br>• 2 pilotes : 55 / 45<br>• Entre 2 et 28 pilotes : l'écart entre le 1er et le dernier augmente linéairement de 10 à 100 points (milieu = 50)<br>• 28+ pilotes : 100 au vainqueur, 0 au dernier, linéaire entre les deux.<br>• DNF / DNS / DQ → <b>0</b>.<br>Arrondi à 1 décimale.`,
       progression:`<b>Progression</b><br>Pente de régression linéaire de la position en fonction du temps.<br>100 = plus forte amélioration ; 0 = plus forte régression.<br>Moins de 3 courses → 50 (neutre).`
