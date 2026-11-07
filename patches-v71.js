@@ -1,5 +1,5 @@
 /* =========================================================================
- * patches-v72.js — CLASSEMENT REPARTI DE ZÉRO
+ * patches-v73.js — CLASSEMENT REPARTI DE ZÉRO
  * =========================================================================
  * Règles implémentées (source de vérité unique) :
  *
@@ -50,7 +50,7 @@
 (function(){
 'use strict';
 if(window.__gdspV71)return; window.__gdspV71=true;
-console.log('[v72] classement reparti de zero');
+console.log('[v73] classement reparti de zero');
 
 const DEFAULT_MIN_PCT = 0.75;
 
@@ -288,9 +288,9 @@ window.sortSession=mySortSession;
  */
 /* =========================================================================
  * calculate() COMPLÈTEMENT REMPLACÉE — plus aucun recours à site.js pour
- * le calcul des points. Source de vérité unique : mySortSession + v72_calculate.
+ * le calcul des points. Source de vérité unique : mySortSession + v73_calculate.
  * ========================================================================= */
-function v72_calculate(){
+function v73_calculate(){
   stripServerPens();
   const rs=rounds();
   const all=allDrivers();
@@ -373,7 +373,7 @@ function v72_calculate(){
     return{...d,total:d.rounds.reduce((a,b)=>a+b,0),joker:jokerRounds.reduce((a,b)=>a+b,0),meritTotal:d.merit.reduce((a,b)=>a+b,0)};
   });
 }
-window.calculate=v72_calculate;
+window.calculate=v73_calculate;
 
 /* ---------- manche() : wrapper pour corriger les écarts et ajouter Pénal. ----------
  * Problème : site.js eff()/gapTo() utilise x._t si fini, sinon recalcul en ajoutant
@@ -462,7 +462,24 @@ window.manche=function(){
       return newRow;
     });
     return out;
-  }catch(e){console.warn('[v72] manche wrap',e);return html;}
+  }catch(e){console.warn('[v73] manche wrap',e);return html;}
+};
+
+/* ---------- addAdjustment étendu (dnf/dns/warning) - remplace v41 ---------- */
+const _addAdj_v71=window.addAdjustment;
+window.addAdjustment=function(roundKey,sessionIdx,drvId,timeAdd,dq,warning,note,opts){
+  opts=opts||{};
+  if(opts.dnf||opts.dns){
+    window.penMap[`${roundKey}:${sessionIdx}:${drvId}`]={
+      timeAdd:0,dq:false,warning:false,
+      dnf:!!opts.dnf,dns:!!opts.dns,
+      note:note||(opts.dnf?'Abandon':'Absent')
+    };
+    if(window.saveState)window.saveState();
+    if(window.render)window.render();
+    return;
+  }
+  return _addAdj_v71.apply(this,arguments);
 };
 
 /* ---------- openAdjForm multi-choix (remplacer la version site.js) ---------- */
@@ -486,7 +503,7 @@ if(_pc0){window.pointsConfig=function(){const c=_pc0();c.doubleLongRaces=true;re
  * boot, MAIS si le warmup ne se déclenche pas (ex. tab non focus, throttle
  * navigateur), la page classement affiche "Aucune manche importée". On force
  * le chargement du championnat dès que possible. */
-async function v72_boot(){
+async function v73_boot(){
   try{
     if(window.backendMulti){
       if(!Array.isArray(window.events)||!window.events.length){
@@ -502,9 +519,9 @@ async function v72_boot(){
     }
     stripServerPens();
     if(window.render)window.render();
-  }catch(e){console.warn('[v72] boot',e);}
+  }catch(e){console.warn('[v73] boot',e);}
 }
-if(document.readyState==='complete')setTimeout(v72_boot,200);
-else window.addEventListener('load',()=>setTimeout(v72_boot,200));
+if(document.readyState==='complete')setTimeout(v73_boot,200);
+else window.addEventListener('load',()=>setTimeout(v73_boot,200));
 
 })();
