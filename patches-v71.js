@@ -1,5 +1,5 @@
 /* =========================================================================
- * patches-v73.js — CLASSEMENT REPARTI DE ZÉRO
+ * patches-v74.js — CLASSEMENT REPARTI DE ZÉRO
  * =========================================================================
  * Règles implémentées (source de vérité unique) :
  *
@@ -50,7 +50,7 @@
 (function(){
 'use strict';
 if(window.__gdspV71)return; window.__gdspV71=true;
-console.log('[v73] classement reparti de zero');
+console.log('[v74] classement reparti de zero');
 
 const DEFAULT_MIN_PCT = 0.75;
 
@@ -288,9 +288,9 @@ window.sortSession=mySortSession;
  */
 /* =========================================================================
  * calculate() COMPLÈTEMENT REMPLACÉE — plus aucun recours à site.js pour
- * le calcul des points. Source de vérité unique : mySortSession + v73_calculate.
+ * le calcul des points. Source de vérité unique : mySortSession + v74_calculate.
  * ========================================================================= */
-function v73_calculate(){
+function v74_calculate(){
   stripServerPens();
   const rs=rounds();
   const all=allDrivers();
@@ -373,7 +373,7 @@ function v73_calculate(){
     return{...d,total:d.rounds.reduce((a,b)=>a+b,0),joker:jokerRounds.reduce((a,b)=>a+b,0),meritTotal:d.merit.reduce((a,b)=>a+b,0)};
   });
 }
-window.calculate=v73_calculate;
+window.calculate=v74_calculate;
 
 /* ---------- manche() : wrapper pour corriger les écarts et ajouter Pénal. ----------
  * Problème : site.js eff()/gapTo() utilise x._t si fini, sinon recalcul en ajoutant
@@ -462,7 +462,7 @@ window.manche=function(){
       return newRow;
     });
     return out;
-  }catch(e){console.warn('[v73] manche wrap',e);return html;}
+  }catch(e){console.warn('[v74] manche wrap',e);return html;}
 };
 
 /* ---------- addAdjustment étendu (dnf/dns/warning) - remplace v41 ---------- */
@@ -498,30 +498,42 @@ window.openAdjForm=function(rj,sj,did){
 const _pc0=window.pointsConfig;
 if(_pc0){window.pointsConfig=function(){const c=_pc0();c.doubleLongRaces=true;return c;};}
 
-/* ---------- Forcer le chargement du premier événement en mode multi ----------
- * Le hub site.js pré-charge `target` en arrière-plan via loadEvent() lors du
- * boot, MAIS si le warmup ne se déclenche pas (ex. tab non focus, throttle
- * navigateur), la page classement affiche "Aucune manche importée". On force
- * le chargement du championnat dès que possible. */
-async function v73_boot(){
+/* ---------- Forcer le chargement du championnat Lola T290 2026 ----------
+ * Le backend expose /api/events ce qui met site.js en mode multi (hub).
+ * Comme on n'utilise qu'un seul championnat (International Series Lola T290),
+ * on force son chargement direct et on affiche la page classement. */
+const V71_CHAMP_SLUG='lola-t290-gdsp-championnat-2026';
+async function v74_boot(){
   try{
-    if(window.backendMulti){
-      if(!Array.isArray(window.events)||!window.events.length){
-        try{const r=await fetch('/api/events',{cache:'no-store'});if(r.ok){const j=await r.json();window.events=Array.isArray(j.events)?j.events:[];}}catch(e){}
-      }
-      const last=localStorage.getItem('gdsp_last_event');
-      const target=(window.events||[]).find(e=>e.slug===last)||(window.events||[]).find(e=>e.kind==='championship')||(window.events||[])[0];
-      if(target&&typeof window.loadEvent==='function'){
-        await window.loadEvent(target.slug);
-        window.page='classement';
-        localStorage.setItem('gdsp_last_event',target.slug);
-      }
+    // Forcer le mode multi (loadEvent fonctionne dans ce mode)
+    window.backendMulti=true;
+    window.page='classement';
+    window.eventtab='resultats';
+    window.round=0;
+    window.sessionIndex=1;
+    // Charger les événements si pas encore fait
+    if(!Array.isArray(window.events)||!window.events.length){
+      try{
+        const r=await fetch('/api/events',{cache:'no-store'});
+        if(r.ok){const j=await r.json();window.events=Array.isArray(j.events)?j.events:[];}
+      }catch(e){}
+    }
+    // Charger explicitement le championnat courant
+    if(typeof window.loadEvent==='function'){
+      await window.loadEvent(V71_CHAMP_SLUG);
+      localStorage.setItem('gdsp_last_event',V71_CHAMP_SLUG);
+      // Post-chargement : rerouter vers la page classement
+      window.page='classement';
+      window.round=0;window.sessionIndex=1;
     }
     stripServerPens();
     if(window.render)window.render();
-  }catch(e){console.warn('[v73] boot',e);}
+  }catch(e){console.warn('[v74] boot',e);if(window.render)window.render();}
 }
-if(document.readyState==='complete')setTimeout(v73_boot,200);
-else window.addEventListener('load',()=>setTimeout(v73_boot,200));
+// Lancer plusieurs fois (avant/après load) pour être sûr de passer après le
+// bootstrap IIFE de site.js
+setTimeout(v74_boot,100);
+setTimeout(v74_boot,500);
+setTimeout(v74_boot,2000);
 
 })();
