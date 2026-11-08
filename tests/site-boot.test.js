@@ -183,3 +183,91 @@ test('Commission tab lets admin add and remove championship points for a driver'
   assert.equal(vm.runInContext("calculate().find(d=>d.name==='Karl74').total", sandbox), karlBefore);
   assert.doesNotMatch(getElementById('app').innerHTML, /<th>Ajust\.<\/th>/);
 });
+
+test('event driver profile and global driver profile render ? tooltip icons on criteria, stats, and headers', async () => {
+  const makeRace = (idx) => ({
+    type: 'RACE',
+    date: `2026-06-0${idx}T20:00:00Z`,
+    track: 'riverside',
+    results: [
+      { id: 'd1', name: 'Karl74', team: 'GDSP', grid: 2, laps: 10, best: 90100, time: 905000 },
+      { id: 'd2', name: 'Pistol', team: 'GDSP', grid: 1, laps: 10, best: 90400, time: 908000 },
+      { id: 'd3', name: 'Sherman', team: 'GDSP', grid: 3, laps: 10, best: 90800, time: 912000 }
+    ],
+    laps: [
+      { id: 'd1', time: 90100, cuts: 0 }, { id: 'd1', time: 90300, cuts: 0 }, { id: 'd1', time: 90500, cuts: 0 },
+      { id: 'd2', time: 90400, cuts: 0 }, { id: 'd2', time: 90700, cuts: 0 }, { id: 'd2', time: 91000, cuts: 0 },
+      { id: 'd3', time: 90800, cuts: 0 }, { id: 'd3', time: 91100, cuts: 0 }, { id: 'd3', time: 91500, cuts: 0 }
+    ],
+    events: []
+  });
+  const multiRaceEv = {
+    slug: 'gt-open-2026',
+    name: 'GT Open 2026',
+    kind: 'championship',
+    points_config: { expectedRounds: 5 },
+    data: { sessions: [1, 2, 3, 4, 5].map(makeRace) }
+  };
+
+  const { sandbox, getElementById } = makeBrowser(
+    [multiRaceEv],
+    url => (url === '/api/events/gt-open-2026' ? response(multiRaceEv) : null)
+  );
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setImmediate(resolve));
+
+  // 1) Event driver profile (Pilotes -> Karl74)
+  await vm.runInContext("loadEvent('gt-open-2026')", sandbox);
+  vm.runInContext("driverId='d1';page='pilotes';render()", sandbox);
+  const eventProfileHtml = getElementById('app').innerHTML;
+  for (const label of [
+    'Régularité',
+    'Propreté',
+    'Vitesse au tour',
+    'Résultats',
+    'Courses enregistrées',
+    'Meilleur résultat brut',
+    'Places gagnées / course',
+    'Collisions / course',
+    'Delta',
+    'Collisions brutes',
+    'Écart-type'
+  ]) {
+    assert.ok(
+      eventProfileHtml.includes(label) && eventProfileHtml.includes('class="gdsp-i">?</i>'),
+      `Event driver profile should render tooltip for ${label}`
+    );
+  }
+  const eventTipCount = (eventProfileHtml.match(/class="gdsp-i">\?<\/i>/g) || []).length;
+  assert.ok(eventTipCount >= 12, `Expected at least 12 ? icons on event driver profile, got ${eventTipCount}`);
+
+  // 2) Global ranking & Global driver profile (Global -> Karl74)
+  await vm.runInContext("go('global')", sandbox);
+  const globalRankHtml = getElementById('app').innerHTML;
+  assert.match(globalRankHtml, /5 critères \(0-100\) <span class="gdsp-tip/);
+  assert.match(globalRankHtml, /class="gdsp-tip gdsp-bar"/);
+
+  await vm.runInContext("globalDriverId='d1';go('gpilote')", sandbox);
+  const globalProfileHtml = getElementById('app').innerHTML;
+  for (const label of [
+    'Niveau GLOBAL',
+    'Régularité inter-événements',
+    'Propreté',
+    'Vitesse au tour',
+    'Résultats',
+    'Progression',
+    'Courses',
+    'Meilleur',
+    'Pos. moy.',
+    'Δ départ',
+    'Coll./course',
+    'É-T'
+  ]) {
+    assert.ok(
+      globalProfileHtml.includes(label),
+      `Global driver profile should include ${label}`
+    );
+  }
+  const globalTipCount = (globalProfileHtml.match(/class="gdsp-i">\?<\/i>/g) || []).length;
+  assert.ok(globalTipCount >= 14, `Expected at least 14 ? icons on global driver profile, got ${globalTipCount}`);
+});
