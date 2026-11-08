@@ -358,7 +358,7 @@ test('restored formulas compute iRacing consistency, weekend Q/R best lap, Optio
   assert.equal(fouls.c, 2);
 });
 
-test('Administration / Événements lets admin insert, persist across saves, and remove an event poster on Classements', async () => {
+test('Administration / Événements lets admin insert, persist across saves, and remove an event poster on Event Accueil (omitted from Classements)', async () => {
   const upcomingEv = {
     slug: 'alfa-romeo-cup-2026',
     name: 'Alfa Romeo Cup',
@@ -415,22 +415,25 @@ test('Administration / Événements lets admin insert, persist across saves, and
   const lastLolaPost = calls.filter(c => c.url === `/api/events/${lolaSlug}/data` && c.method === 'POST').at(-1);
   assert.equal(lastLolaPost.body.posterImage, sampleDataUrl);
 
-  // Verify Classements page renders the poster on both Pilotes and Trophée du mérite tabs
-  await vm.runInContext("go('classement')", sandbox);
+  // Verify Event Accueil sub-tab renders the poster, while Classements no longer displays it
+  await vm.runInContext("go('event')", sandbox);
   assert.match(getElementById('app').innerHTML, /class="event-poster-img"/);
   assert.ok(getElementById('app').innerHTML.includes(sampleDataUrl));
+  await vm.runInContext("go('classement')", sandbox);
+  assert.doesNotMatch(getElementById('app').innerHTML, /class="event-poster-img"/);
   vm.runInContext("showrank('merite')", sandbox);
-  assert.match(getElementById('app').innerHTML, /class="event-poster-img"/);
+  assert.doesNotMatch(getElementById('app').innerHTML, /class="event-poster-img"/);
 
-  // 3) Upload poster for upcoming Alfa Romeo Cup (0 sessions) and switch to it
+  // 3) Upload poster for upcoming Alfa Romeo Cup (0 sessions) and switch to it (opens on Event Accueil)
   vm.runInContext("triggerEventPosterUpload('alfa-romeo-cup-2026')", sandbox);
   await vm.runInContext('handleEventPosterFile(__posterFileEvent)', sandbox);
   assert.equal(savedUpcomingCfg.hasPoster, true);
   await vm.runInContext("switchEvent('alfa-romeo-cup-2026')", sandbox);
+  assert.equal(vm.runInContext('page', sandbox), 'event');
   assert.match(getElementById('app').innerHTML, /class="event-poster-img"/);
   assert.match(getElementById('app').innerHTML, /Affiche — Alfa Romeo Cup/);
 
-  // 4) Removing the poster clears it from Classements and server state
+  // 4) Removing the poster clears it from Event Accueil and server state
   sandbox.confirm = () => true;
   await vm.runInContext("removeEventPoster('alfa-romeo-cup-2026')", sandbox);
   assert.doesNotMatch(getElementById('app').innerHTML, /class="event-poster-img"/);
@@ -469,4 +472,115 @@ test('Pilotes redesigned driver sheet renders 70s racing roundel, Lola livery, K
   assert.match(sheetHtml, /podium-pill p[123]/);
   assert.match(sheetHtml, /delta-pill (up|down|eq)/);
 });
+
+test('Unified Event tab displays active event name in header nav, groups Accueil/Classements/Résultats/Pilotes, and persists custom Accueil info & gallery', async () => {
+  const lolaSlug = fixture.event.slug;
+  let storedLolaData = null;
+  const upcomingEv = {
+    slug: 'alfa-gta-2026',
+    name: 'Coppa Alfa Romeo GTA',
+    kind: 'championship',
+    points_config: { expectedRounds: 5, globalCoef: 1.0 },
+    updated_at: '2026-11-08T15:00:00Z',
+    data: { sessions: [], penMap: {} }
+  };
+
+  const { sandbox, getElementById, calls } = makeBrowser(
+    [upcomingEv],
+    (url, opts = {}) => {
+      if (url === `/api/events/${lolaSlug}` && (!opts.method || opts.method === 'GET') && storedLolaData) {
+        return response({
+          slug: lolaSlug,
+          name: 'International Series Lola T290 - GDSP - Championnat',
+          kind: 'championship',
+          points_config: fixture.event.points_config,
+          updated_at: '2026-11-08T15:00:00Z',
+          data: storedLolaData
+        });
+      }
+      if (url === `/api/events/${lolaSlug}/data` && opts.method === 'POST') {
+        storedLolaData = JSON.parse(opts.body);
+        return response({ ok: true });
+      }
+      if (url === '/api/events/alfa-gta-2026' && (!opts.method || opts.method === 'GET')) {
+        return response(upcomingEv);
+      }
+      return null;
+    }
+  );
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setImmediate(resolve));
+
+  // 1) Top navbar shows 1 unified Event tab bearing the active event's name (not separate Classements/Résultats/Pilotes top buttons)
+  const navHtml = getElementById('nav').innerHTML;
+  assert.match(navHtml, /class="nav-event-tab/);
+  assert.match(navHtml, /International Series Lola T290 - GDSP - Championnat/);
+  assert.doesNotMatch(navHtml, />CLASSEMENTS<\/button>/);
+  assert.doesNotMatch(navHtml, />RÉSULTATS<\/button>/);
+  assert.doesNotMatch(navHtml, />PILOTES<\/button>/);
+
+  // 2) Opening the Event tab renders the Event Banner, 4 sub-tabs, Calendar, and Provisional Podium
+  await vm.runInContext("go('event')", sandbox);
+  const evHomeHtml = getElementById('app').innerHTML;
+  assert.match(evHomeHtml, /class="ev-shell"/);
+  assert.match(evHomeHtml, /Accueil <span class="ev-subtab-badge">Affiche &amp; Infos<\/span>/);
+  assert.match(evHomeHtml, /Classements <span class="ev-subtab-badge">/);
+  assert.match(evHomeHtml, /Résultats <span class="ev-subtab-badge">/);
+  assert.match(evHomeHtml, /Pilotes <span class="ev-subtab-badge">/);
+  assert.match(evHomeHtml, /Calendrier des manches/);
+  assert.match(evHomeHtml, /Podium provisoire/);
+
+  // 3) Admin can customize Event Accueil briefing/links, upcoming calendar round, and gallery images — and saveRemote() preserves them
+  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin';adminTab='events';page='admin';render()", sandbox);
+  getElementById('evinfo-car').value = 'Lola T290 · 1972';
+  getElementById('evinfo-schedule').value = 'Mercredi 21h15';
+  getElementById('evinfo-briefing').value = 'Briefing spécial championnat historique.';
+  getElementById('evinfo-format').value = '4 sprints + 2 endurances';
+  getElementById('evinfo-rules').value = 'https://example.com/reglement.pdf';
+  getElementById('evinfo-skins').value = 'https://example.com/skins.zip';
+  getElementById('evinfo-discord').value = 'https://discord.gg/kDZXwRgRS';
+  await vm.runInContext('saveEventInfoForm()', sandbox);
+
+  const galDataUrl = 'data:image/jpeg;base64,Z2FsbGVyeWltZw==';
+  getElementById('evgal-caption').value = 'Départ à Riverside';
+  sandbox.__galFileEvent = { target: { files: [{ dataUrl: galDataUrl }] } };
+  await vm.runInContext('handleEventGalleryFile(__galFileEvent)', sandbox);
+
+  vm.runInContext("customCalendar={'2026-11-25':{track:'road_atlanta'}}", sandbox);
+  await vm.runInContext('saveRemote()', sandbox);
+
+  const lastPost = calls.filter(c => c.url === `/api/events/${lolaSlug}/data` && c.method === 'POST').at(-1);
+  assert.equal(lastPost.body.eventInfo.briefing, 'Briefing spécial championnat historique.');
+  assert.equal(lastPost.body.galleryImages.length, 1);
+  assert.equal(lastPost.body.galleryImages[0].caption, 'Départ à Riverside');
+
+  await vm.runInContext("go('event')", sandbox);
+  const updatedEvHome = getElementById('app').innerHTML;
+  assert.match(updatedEvHome, /Briefing spécial championnat historique\./);
+  assert.match(updatedEvHome, /Mercredi 21h15/);
+  assert.match(updatedEvHome, /Règlement de l&#39;événement/);
+  assert.match(updatedEvHome, /Pack Skins \/ Téléchargement/);
+  assert.match(updatedEvHome, /Galerie de l'événement/);
+  assert.match(updatedEvHome, /Départ à Riverside/);
+  assert.match(updatedEvHome, /road_atlanta/);
+  assert.match(updatedEvHome, /À VENIR/);
+
+  // 4) Sub-tab navigation inside Event Shell & dynamic top nav label when switching events
+  vm.runInContext("setEventSubTab('classement')", sandbox);
+  assert.equal(vm.runInContext('page', sandbox), 'classement');
+  assert.match(getElementById('app').innerHTML, /Classement général/);
+
+  vm.runInContext('openEventRoundResult(1)', sandbox);
+  assert.equal(vm.runInContext('page', sandbox), 'manches');
+  assert.equal(vm.runInContext('round', sandbox), 1);
+
+  await vm.runInContext('removeEventGalleryImage(0)', sandbox);
+  assert.equal(storedLolaData.galleryImages, undefined);
+
+  await vm.runInContext("switchEvent('alfa-gta-2026')", sandbox);
+  assert.equal(vm.runInContext('page', sandbox), 'event');
+  assert.match(getElementById('nav').innerHTML, /Coppa Alfa Romeo GTA/);
+  assert.match(getElementById('app').innerHTML, /CHAMPIONNAT À VENIR/);
+});
+
 
