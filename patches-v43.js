@@ -32,9 +32,10 @@
         // (soit un .gdsp-v43 frère, soit un .gdsp-v43 dans le parent)
         let sib=b.nextSibling;
         while(sib && (sib.nodeType===3 /* text */ || (sib.classList && (sib.classList.contains('gdsp-v43')||sib.classList.contains('gdsp-tip'))))){
-          if(sib.classList && sib.classList.contains('gdsp-v43'))return; // bulle déjà posée
+          if(sib.classList && (sib.classList.contains('gdsp-v43')||sib.classList.contains('gdsp-tip')))return; // bulle déjà posée
           sib=sib.nextSibling;
         }
+        if(b.parentElement && b.parentElement.querySelector && b.parentElement.querySelector('.gdsp-tip'))return;
 
         const txt=b.textContent.trim();
         let key=null;
