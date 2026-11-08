@@ -9,7 +9,7 @@
   window.__gdspV43Installed=true;
 
   const TIPS={
-    regularite:`<b>Régularité inter-événements</b><br>Cohérence du rythme du pilote d'une course à l'autre (écart-type normalisé de ses meilleurs tours relatifs sur chaque meeting).<br>Plus le pilote est constant dans sa performance, plus son score est élevé.<br>Pondération récente : demi-vie 90 jours.`,
+    regularite:`<b>Régularité inter-événements (Race Consistency)</b><br>Écart moyen entre chaque tour et le MEILLEUR tour du pilote sur la course (en secondes).<br>Le 1<sup>er</sup> tour et les tours aux stands / lents (&gt; 21 s au-dessus du meilleur tour) sont exclus.<br>Plus l'écart moyen est petit, plus le score est élevé.<br>Pondération récente : demi-vie 90 jours.`,
     progression:`<b>Progression</b><br>Pente de régression linéaire de la position en fonction du temps, toutes compétitions confondues.<br>100 = plus forte amélioration ; 0 = plus forte régression.<br>Moins de 3 courses → 50 (neutre).`
   };
 

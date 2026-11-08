@@ -74,20 +74,22 @@ function track(x){return ({'mt-tremblant_69':'Mont-Tremblant','riverside':'River
 const LVL_BADGES={1:'/assets/lvl1-elite.png',2:'/assets/lvl2-confirme.png',3:'/assets/lvl3-inter.png',4:'/assets/lvl4-debut.png'};
 function levelBadge(level,size){const src=LVL_BADGES[level];return src?`<img class="lvl-badge" src="${src}?v=26" alt="Niveau ${level}" width="${size}" height="${size}" loading="lazy" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-block;vertical-align:middle">`:`<span class="tag lvl lvl-${level}">${level}</span>`}
 const PROFILE_TIPS={
-  regularite:`<b>Régularité</b><br>Constance du rythme en course (dispersion normalisée des tours propres hors cuts, comparée aux autres pilotes en percentile de 0 à 100).<br>Plus tes temps au tour sont réguliers, plus ce score est élevé.`,
-  regulariteGlobal:`<b>Régularité inter-événements</b><br>Cohérence du rythme du pilote d'une course à l'autre (écart-type normalisé de ses tours propres sur chaque course, comparé au plateau).<br>Plus le pilote est constant dans sa performance, plus son score est élevé.<br>Pondération récente : demi-vie 90 jours.`,
-  proprete:`<b>Propreté</b><br>Propreté en piste (percentile de 0 à 100 face au plateau sur chaque course), combinant les contacts entre voitures enregistrés par le serveur et les cuts de piste.<br>100 = pilote le plus propre de la course.`,
-  vitesse:`<b>Vitesse au tour</b><br>Vitesse pure (percentile de 0 à 100 face au plateau) basée sur le meilleur tour réalisé en course.<br>100 = meilleur tour de la course.`,
-  resultats:`<b>Résultats</b><br>Performance au classement final de chaque course exprimée en percentile de 0 à 100 face au plateau.<br>100 = vainqueur de la course.`,
-  progression:`<b>Progression</b><br>Pente de régression linéaire de la position en fonction du temps, toutes compétitions confondues.<br>100 = plus forte amélioration ; 0 = plus forte régression.<br>Moins de 3 courses → 50 (neutre).`,
-  scoreEvent:`<b>Score &amp; Niveau événement</b><br>Moyenne sur 100 des quatre critères (Régularité, Propreté, Vitesse au tour, Résultats) sur cet événement.<br>Répartition en 4 niveaux par quartiles (Niveau 4 = top 25 % sur l'événement). Minimum 2 courses exploitables.`,
-  niveauGlobal:`<b>Niveau GLOBAL Discord</b><br>Niveau GDSP de 1 (Élite, top 25 %) à 4 (Débutant), établi sur la moyenne des 5 critères sur tous les championnats et opens.<br>Pondération récente (demi-vie 90 jours) · minimum 5 courses.`,
+  regularite:`<b>Régularité (Race Consistency)</b><br>Écart moyen entre chaque tour et le <b>meilleur tour</b> du pilote sur la course (en secondes).<br>Le 1<sup>er</sup> tour et les tours aux stands / lents (&gt; 21 s plus lent que le meilleur tour) sont exclus.<br>Plus l'écart moyen est petit, plus le score est élevé.<br><i>Méthode iRacing — best minus average non-best.</i>`,
+  regulariteGlobal:`<b>Régularité inter-événements (Race Consistency)</b><br>Écart moyen entre chaque tour et le <b>meilleur tour</b> du pilote sur chaque course (1<sup>er</sup> tour et tours &gt; +21 s exclus), moyenné par week-end et comparé au plateau.<br>Plus l'écart moyen est petit, plus le score est élevé.<br>Pondération récente : demi-vie 90 jours.`,
+  proprete:`<b>Propreté</b><br>Pénalités attribuées selon les contacts en course qui font <b>perdre du temps</b> à l'adversaire :<br>• Touchette sans conséquence (&lt; 1,5 s de perte pour l'autre) → 0<br>• Choc latéral / côte à côte (|Z| ≥ 1,0 m, bagarre) → 0 pour les deux<br>• Choc arrière clair (|X| ≥ 0,4 m, |Z| &lt; 1,0 m) → secondes perdues par la victime / 2, au pilote responsable<br>• Cuts de piste : +1 point par cut<br>100 = aucun contact responsable ni cut.`,
+  vitesse:`<b>Vitesse au tour</b><br>Basé sur le <b>meilleur tour du week-end</b> (meilleur temps entre <b>Q</b>ualification et toutes les courses <b>R</b> de la manche).<br>Le badge <b>Q</b> ou <b>R</b> dans l'encadré Analyse du rythme indique où ce meilleur temps a été réalisé.<br>100 = pilote le plus rapide du plateau sur le week-end.`,
+  resultats:`<b>Résultats</b><br>Basé sur la position finale après pénalités Commission :<br>• 1 pilote → 50 · 2 pilotes : 55 / 45<br>• Entre 2 et 28 pilotes : l'écart entre le 1<sup>er</sup> et le dernier augmente linéairement de 10 à 100 pts (milieu = 50)<br>• 28+ pilotes : 100 au vainqueur, 0 au dernier (linéaire)<br>• DNF / DNS / DQ → <b>0</b>.<br>Arrondi à 1 décimale.`,
+  progression:`<b>Progression</b><br>Pente de régression linéaire du classement par week-end en fonction du temps, toutes compétitions confondues.<br>100 = plus forte amélioration ; 0 = plus forte régression.<br>Moins de 3 week-ends → 50 (neutre).`,
+  scoreEvent:`<b>Score &amp; Niveau événement</b><br>Moyenne sur 100 des quatre critères (Régularité, Propreté, Vitesse au tour, Résultats) calculés par week-end sur cet événement.<br>Répartition en 4 niveaux par quartiles (Niveau 4 = top 25 % sur l'événement). Minimum 2 manches exploitables.`,
+  niveauGlobal:`<b>Niveau GLOBAL Discord</b><br>Niveau GDSP de 1 (Élite, top 25 %) à 4 (Débutant), établi sur la moyenne des 5 critères par week-end sur tous les championnats et opens.<br>Pondération récente (demi-vie 90 jours) · minimum 5 courses.`,
   courses:`<b>Courses disputées</b><br>Nombre de sessions de course (RACE) enregistrées pour ce pilote.`,
-  bestPos:`<b>Meilleur résultat</b><br>Meilleure position obtenue à l'arrivée d'une course.`,
+  bestPos:`<b>Meilleur résultat</b><br>Meilleure position obtenue à l'arrivée d'une course (après pénalités Commission).`,
   avgPos:`<b>Position moyenne</b><br>Moyenne des positions d'arrivée sur l'ensemble des courses disputées.`,
-  delta:`<b>Places gagnées / course (Δ)</b><br>Écart entre la position sur la grille de départ et la position à l'arrivée (Grille − Arrivée).<br>Positif = places gagnées en course ; négatif = places perdues.`,
-  collisions:`<b>Collisions</b><br>Contacts voiture-contre-voiture enregistrés par le serveur Assetto Corsa durant la course (donnée brute, sans attribution de responsabilité).`,
-  sigma:`<b>Écart-type des tours</b><br>Dispersion des temps au tour sur la course (en secondes).<br>Plus cette valeur est faible, plus le rythme du pilote a été régulier.`,
+  delta:`<b>Places gagnées / course (Δ)</b><br>Écart entre la position sur la grille de départ et la position finale à l'arrivée (Grille − Arrivée).<br>Positif = places gagnées en course ; négatif = places perdues.`,
+  collisions:`<b>Collisions</b><br>Contacts voiture-contre-voiture enregistrés par le serveur Assetto Corsa durant la course (donnée brute serveur).`,
+  sigma:`<b>Δ rythme (Race Consistency)</b><br>Écart moyen au meilleur tour du pilote sur la course (en secondes), en excluant le 1<sup>er</sup> tour et les tours aux stands / lents (&gt; +21 s).<br>Plus cette valeur est petite, plus le rythme du pilote a été régulier.`,
+  meilleurWE:`<b>Meilleur tour du week-end</b><br>Meilleur chrono absolu signé par le pilote sur la manche, entre la Qualification (badge vert <b>Q</b>) et les Courses (badge rouge <b>R</b>).`,
+  pitExclu:`<b>Tours exclus (Pit / lents)</b><br>Nombre de tours écartés du calcul de régularité au-delà du 1<sup>er</sup> tour : passages aux stands ou grosses sorties (&gt; 21 s plus lent que le meilleur tour).`,
   cinqCriteres:`<b>5 critères (0–100)</b><br>De gauche à droite : <b>Régularité</b>, <b>Propreté</b>, <b>Vitesse</b>, <b>Résultats</b> et <b>Progression</b>.<br>Survole chaque mini-barre pour voir le détail du critère.`
 };
 function gdspTip(html,mod=''){return `<span class="gdsp-tip${mod?' '+mod:''}"><i class="gdsp-i">?</i><span class="gdsp-bubble">${html}</span></span>`}
@@ -645,53 +647,375 @@ function globalRankingSync(){
   });
   const detailHtml=detailRows.join('');
   return `${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
-    <p class="note" style="margin-bottom:16px">Le niveau est établi sur <b>cinq critères</b> : position moyenne en course, régularité des tours, propreté (collisions & cuts), vitesse au tour et progression dans le temps. Les courses récentes comptent davantage (poids doublé par rapport à celles de trois mois). Il faut au moins <b>${GLOBAL_MIN_RACES} courses</b> pour être classé. Un administrateur peut exclure des pilotes du classement.</p>
+    <p class="note" style="margin-bottom:16px">Le niveau est établi par week-end sur <b>cinq critères</b> : position finale en course, <b>régularité de course</b> (écart moyen au meilleur tour, 1<sup>er</sup> tour et stands exclus), <b>propreté</b> (contacts responsables causant ≥ 1,5 s de perte &amp; cuts), <b>vitesse au tour</b> sur le week-end (Q + R) et <b>progression</b>. Survolez les <b>?</b> dorés pour la définition complète de chaque critère. Les manches récentes comptent davantage (demi-vie 90 jours). Il faut au moins <b>${GLOBAL_MIN_RACES} courses</b> pour être classé.</p>
     <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">${tierCards}</div>
     <div class="panel global-rank-wrap"><h2>Détail des pilotes classés</h2><p class="note">Trié par score global. Les 5 mini-barres représentent Régularité / Propreté / Vitesse / Résultats / Progression (0-100) — survolez une mini-barre ou l'icône ? pour le détail. Les séparateurs bleu foncé marquent les changements de niveau.</p>${table(['#','','Pilote','Courses','Score / 100',`5 critères (0-100) ${gdspTip(PROFILE_TIPS.cinqCriteres,'gdsp-tip-right')}`],detailRows)}</div>`;
 }
 
-// Calcule un score 0-100 par pilote, tous événements confondus, pondération récente (demi-vie 90 jours).
+// ---------- Méthodes de calcul de performance (Régularité iRacing, Vitesse Q+R, Propreté Option 3, Résultats v45) ----------
+const FAULT_SIDE_Z=1.0;      // |Z| >= 1.0 m → choc latéral / côte à côte → 0-0
+const FAULT_REAR_X=0.4;      // |X| >= 0.4 m → choc avant/arrière franc
+const FAULT_LOSS_MIN=1.5;    // perte minimale de la victime (en s) pour compter la faute
+const FAULT_DIVISOR=2;       // points de faute = secondes perdues / 2
+const FAULT_CUT_WEIGHT=1;    // +1 point par cut de piste
+const PIT_SLOW_MS=21000;     // tour > meilleur tour + 21 s considéré comme tour stand / sortie
+
+function groupSessionsByDate(sessList){
+  const m={};
+  (sessList||[]).filter(s=>s&&s.date).forEach(s=>(m[String(s.date).slice(0,10)]??=[]).push(s));
+  return Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0])).map(([dt,ss],idx)=>({
+    date:dt,sessions:ss,ts:new Date(ss[0].date||dt).getTime(),roundIndex:idx
+  }));
+}
+
+// Régularité (Race Consistency type iRacing) : moyenne(tour - best) en ms, 1er tour et tours > best+21s exclus.
+function raceConsistencyMs(lapsRaw){
+  const all=(lapsRaw||[]).map(l=>Number(l&&(Number.isFinite(l.LapTime)?l.LapTime:l.time))).filter(t=>Number.isFinite(t)&&t>0&&t<600000);
+  if(all.length<3)return null;
+  const rest=all.slice(1);
+  const best1=Math.min(...rest);
+  if(!Number.isFinite(best1)||best1<=0)return null;
+  const nonPit=rest.filter(t=>t-best1<=PIT_SLOW_MS);
+  if(nonPit.length<2)return null;
+  const best2=Math.min(...nonPit);
+  const nonBest=nonPit.filter(t=>t>best2);
+  if(nonBest.length===0)return 0;
+  return nonBest.reduce((a,t)=>a+(t-best2),0)/nonBest.length;
+}
+
+// Barème v45 du critère Résultats (variable selon la taille de grille N ; DNF/DNS/DQ = 0).
+function scoreResultsV45(N,P,isOut){
+  if(isOut)return 0.0;
+  if(N<=1)return 50.0;
+  const pos=Math.max(1,Math.min(N,P));
+  const amplitude=N>=28?100:10+(90*(N-2)/26);
+  const s=Math.max(0,Math.min(100,50+amplitude*(N+1-2*pos)/(2*(N-1))));
+  return Math.round(s*10)/10;
+}
+
+// Tri d'une session en appliquant les décisions Commission de son événement (sans muter la source).
+function sortSessionForPerf(sess,rIdx,sIdx,evPenMap,minPct=0.75){
+  if(!sess||!Array.isArray(sess.results))return [];
+  const arr=sess.results.map(r=>({...r,comTimeAdd:0,comDQ:false,comDNF:false,comDNS:false,comWarning:false}));
+  if(evPenMap&&typeof evPenMap==='object'&&rIdx>=0&&sIdx>=0){
+    const prefix=`${rIdx}:${sIdx}:`;
+    for(const k in evPenMap){
+      if(!k.startsWith(prefix))continue;
+      const did=k.slice(prefix.length);
+      const y=arr.find(x=>x.id===did);if(!y)continue;
+      const adj=evPenMap[k];if(!adj)continue;
+      if(adj.dq)y.comDQ=true;
+      if(adj.dns)y.comDNS=true;
+      if(adj.dnf)y.comDNF=true;
+      if(adj.warning)y.comWarning=true;
+      if(typeof adj.timeAdd==='number'&&adj.timeAdd!==0)y.comTimeAdd+=(adj.timeAdd*1000);
+    }
+  }
+  if(sess.type==='QUALIFY'){
+    arr.forEach(x=>{
+      x._dq=!!(x.disqualified||x.comDQ||x.comDNS);
+      const b=Number.isFinite(x.best)&&x.best>0?x.best:1e18;
+      x._adjustedBest=b<1e17?Math.max(1,b+(x.comTimeAdd||0)):1e18;
+    });
+    arr.sort((a,b)=>{
+      const aOk=!a._dq&&(a.laps||0)>=2&&a._adjustedBest<1e17;
+      const bOk=!b._dq&&(b.laps||0)>=2&&b._adjustedBest<1e17;
+      if(aOk!==bOk)return aOk?-1:1;
+      return a._adjustedBest-b._adjustedBest||(b.laps||0)-(a.laps||0);
+    });
+    return arr;
+  }
+  arr.forEach(x=>{
+    const base=Number.isFinite(x.time)&&x.time>0?x.time:1e18;
+    x._eff=base;
+    x._t=base<1e17?base+(x.comTimeAdd||0):1e18;
+    x._dq=!!(x.disqualified||x.comDQ||x.comDNS);
+    if(x._dq||x.comDNF||(x.laps||0)<=0)x._t=1e18;
+  });
+  const maxLaps=Math.max(0,...arr.filter(x=>!x._dq&&!x.comDNS).map(x=>x.laps||0));
+  const minLaps=Math.ceil(maxLaps*(Number.isFinite(minPct)?minPct:0.75));
+  arr.forEach(x=>{
+    if(!x._dq&&!x.comDNS&&(x.laps||0)<minLaps){x.comDNF=true;x._t=1e18;}
+  });
+  let wl=0,wt=1e18;
+  for(const x of arr){
+    if(x._dq||x.comDNS||x.comDNF||x._t>=1e17)continue;
+    const L=x.laps||0;
+    if(L>wl||(L===wl&&x._t<wt)){wl=L;wt=x._t;}
+  }
+  const fin=[],cls=[],nc=[],dq=[];
+  for(const x of arr){
+    if(x._dq||x.comDNS){dq.push(x);continue;}
+    if(x.comDNF||x._t>=1e17||(x.laps||0)<minLaps){x.comDNF=true;nc.push(x);continue;}
+    if(wl>0&&wt<1e17&&x._t>=wt)fin.push(x);
+    else if(wl>0&&(x.laps||0)>=minLaps)cls.push(x);
+    else{x.comDNF=true;nc.push(x);}
+  }
+  fin.sort((a,b)=>(b.laps||0)-(a.laps||0)||a._t-b._t);
+  cls.sort((a,b)=>(b.laps||0)-(a.laps||0)||b._t-a._t);
+  nc.sort((a,b)=>(b.laps||0)-(a.laps||0)||a._t-b._t);
+  dq.sort((a,b)=>(b.laps||0)-(a.laps||0));
+  return [...fin,...cls,...nc,...dq];
+}
+
+// Option 3 : score de fautes sur une course (cuts + chocs arrière causant >= 1,5 s de perte à la victime).
+function raceFoulScores(race){
+  const lapsById={};
+  const byCarId={},byName={};
+  (race.results||[]).forEach(r=>{
+    if(!r)return;
+    if(r.CarId!=null&&r.id)byCarId[r.CarId]=r.id;
+    if(r.DriverName&&r.id)byName[String(r.DriverName).trim().toLowerCase()]=r.id;
+    if(r.name&&r.id)byName[String(r.name).trim().toLowerCase()]=r.id;
+  });
+  (race.laps||[]).forEach(l=>{
+    if(!l)return;
+    const lid=l.id||(l.CarId!=null?byCarId[l.CarId]:null);
+    if(!lid)return;
+    if(!lapsById[lid])lapsById[lid]=[];
+    lapsById[lid].push(l);
+  });
+  function driverPaceMs(id){
+    const ls=(lapsById[id]||[]).map(l=>Number(Number.isFinite(l.LapTime)?l.LapTime:l.time)).filter(t=>Number.isFinite(t)&&t>0&&t<600000);
+    if(ls.length<3)return null;
+    const rest=ls.slice(1);
+    const best=Math.min(...rest);
+    const nonPit=rest.filter(t=>t-best<=PIT_SLOW_MS);
+    return nonPit.length>=2?Math.min(...nonPit):best;
+  }
+  function resolveId(ev,which){
+    const cid=ev[which==='a'?'CarId':'OtherCarId'];
+    if(cid!=null&&byCarId[cid])return byCarId[cid];
+    const idKey=which==='a'?'aid':'bid',nKey=which==='a'?'a':'b';
+    if(ev[idKey])return ev[idKey];
+    const nm=ev[nKey];
+    if(nm){const k=String(nm).trim().toLowerCase();if(byName[k])return byName[k];}
+    return null;
+  }
+  function evTsSec(ev){
+    const raw=Number.isFinite(ev.Timestamp)?ev.Timestamp:ev.timestamp;
+    if(!Number.isFinite(raw))return null;
+    return raw>1e11?raw/1000:raw;
+  }
+  function lapTsSec(l){
+    const raw=Number.isFinite(l.Timestamp)?l.Timestamp:l.timestamp;
+    if(!Number.isFinite(raw))return null;
+    return raw>1e11?raw/1000:raw;
+  }
+  const scores=new Map();
+  const add=(id,pts)=>{if(!id||!Number.isFinite(pts))return;scores.set(id,(scores.get(id)||0)+pts);};
+
+  // 1) Cuts de piste (+1 pt / cut)
+  (race.results||[]).forEach(r=>{
+    if(!r||!r.id)return;
+    let c=0;
+    (lapsById[r.id]||[]).forEach(l=>{
+      const v=Number.isFinite(l.cuts)?l.cuts:(Number.isFinite(l.Cuts)?l.Cuts:0);
+      c+=Math.max(0,v);
+    });
+    add(r.id,FAULT_CUT_WEIGHT*c);
+  });
+
+  // 2) Collisions voiture-contre-voiture (Option 3)
+  const evs=(race.events||[]).filter(e=>e&&(e.type==='COLLISION_WITH_CAR'||e.Type==='COLLISION_WITH_CAR'||(!e.type&&!e.Type&&(e.a||e.aid||e.CarId!=null))));
+  const seenPairs=new Set();
+  for(let i=0;i<evs.length;i++){
+    const a=evs[i];
+    const aid=resolveId(a,'a'),bid=resolveId(a,'b');
+    if(!aid||!bid||aid===bid)continue;
+    const tsA=evTsSec(a);
+    let b=null;
+    for(let j=i+1;j<evs.length;j++){
+      const o=evs[j];
+      const oid=resolveId(o,'a'),ooid=resolveId(o,'b');
+      if(!oid||!ooid)continue;
+      const tsO=evTsSec(o);
+      const closeEnough=(tsA==null||tsO==null)?true:Math.abs(tsO-tsA)<=2.5;
+      if(((oid===aid&&ooid===bid)||(oid===bid&&ooid===aid))&&closeEnough){b=o;break;}
+    }
+    const pairKey=[aid,bid].sort().join('-')+':'+(tsA!=null?Math.round(tsA):i);
+    if(seenPairs.has(pairKey))continue;
+    seenPairs.add(pairKey);
+
+    let rp=a.RelPosition||a.relPos||null;
+    let refAid=aid,refBid=bid;
+    if((!rp||rp.X==null||rp.Z==null)&&b&&(b.RelPosition||b.relPos)){
+      rp=b.RelPosition||b.relPos;
+      refAid=resolveId(b,'a');refBid=resolveId(b,'b');
+    }
+    if(!rp||rp.X==null||rp.Z==null)continue;
+    const rx=Number(rp.X),rz=Number(rp.Z);
+    if(!Number.isFinite(rx)||!Number.isFinite(rz))continue;
+    if(Math.abs(rz)>=FAULT_SIDE_Z)continue; // côte à côte → 0-0
+
+    let culpritId=null,victimId=null;
+    if(rx>=FAULT_REAR_X){culpritId=refAid;victimId=refBid;}
+    else if(rx<=-FAULT_REAR_X){culpritId=refBid;victimId=refAid;}
+    if(!culpritId||!victimId)continue;
+
+    const vLaps=lapsById[victimId]||[];
+    if(!vLaps.length)continue;
+    let victimLap=null;
+    if(tsA!=null){
+      for(const L of vLaps){
+        const lts=lapTsSec(L);
+        if(lts!=null&&lts>=tsA-5){victimLap=L;break;}
+      }
+    }
+    if(!victimLap)victimLap=vLaps[vLaps.length-1];
+    const vPaceMs=driverPaceMs(victimId);
+    const lapRaw=victimLap&&(Number.isFinite(victimLap.LapTime)?victimLap.LapTime:victimLap.time);
+    if(!Number.isFinite(lapRaw)||lapRaw<=0||!Number.isFinite(vPaceMs)||vPaceMs<=0)continue;
+    const lapSec=lapRaw>1000?lapRaw/1000:lapRaw;
+    const paceSec=vPaceMs>1000?vPaceMs/1000:vPaceMs;
+    const lossSec=lapSec-paceSec;
+    if(lossSec>=FAULT_LOSS_MIN)add(culpritId,lossSec/FAULT_DIVISOR);
+  }
+  return scores;
+}
+
+// Meilleur tour du week-end (Q + R) : Map<id, {best, bestSession:'Q'|'R'}>
+function weekendBestLaps(rd,rIdx=-1,evPenMap=null){
+  const best=new Map();
+  (rd.sessions||[]).forEach((s,sIdx)=>{
+    if(!s||(s.type!=='RACE'&&s.type!=='QUALIFY'))return;
+    const sorted=sortSessionForPerf(s,rIdx,sIdx,evPenMap);
+    const tag=s.type==='QUALIFY'?'Q':'R';
+    for(const r of sorted){
+      if(!r||!r.id||r._dq||r.comDNS)continue;
+      const rawBest=(s.type==='QUALIFY'&&Number.isFinite(r._adjustedBest)&&r._adjustedBest<1e17)?r._adjustedBest:r.best;
+      const b=Number.isFinite(rawBest)&&rawBest>0&&rawBest<600000?rawBest:null;
+      if(b==null)continue;
+      const cur=best.get(r.id);
+      if(!cur||b<cur.best)best.set(r.id,{best:b,bestSession:tag});
+    }
+  });
+  return best;
+}
+
+// Encadré « Analyse du rythme — Race consistency & meilleur tour week-end » (utilisé dans Pilotes et Global)
+function buildRythmeCard(targetDriverId,roundsList,opts={}){
+  if(!targetDriverId||!Array.isArray(roundsList)||!roundsList.length)return '';
+  const list=[];
+  roundsList.forEach(rd=>{
+    const raceSessions=(rd.sessions||[]).filter(s=>s&&s.type==='RACE');
+    if(!raceSessions.length)return;
+    const rIdx=typeof rd.roundIndex==='number'?rd.roundIndex:-1;
+    const evPen=rd.penMap||null;
+    const bestMap=weekendBestLaps(rd,rIdx,evPen);
+    const b=bestMap.get(targetDriverId);
+    const participated=b||raceSessions.some(s=>(s.results||[]).some(r=>r&&r.id===targetDriverId));
+    if(!participated)return;
+
+    let totalLaps=0,totalPits=0,gapSum=0,gapCount=0,cleanSumMs=0,cleanCount=0,bestPos=null;
+    (rd.sessions||[]).forEach((s,sIdx)=>{
+      if(!s||s.type!=='RACE')return;
+      const sorted=sortSessionForPerf(s,rIdx,sIdx,evPen);
+      const pos=sorted.findIndex(r=>r&&r.id===targetDriverId)+1;
+      if(pos>0&&(bestPos==null||pos<bestPos))bestPos=pos;
+
+      const myLaps=(s.laps||[]).filter(l=>l&&l.id===targetDriverId&&Number.isFinite(l.time)&&l.time>0&&l.time<600000).map(l=>l.time);
+      totalLaps+=myLaps.length;
+      if(myLaps.length<3)return;
+      const rest=myLaps.slice(1);
+      const best1=Math.min(...rest);
+      const nonPit=rest.filter(t=>t-best1<=PIT_SLOW_MS);
+      totalPits+=(rest.length-nonPit.length);
+      if(nonPit.length<2)return;
+      const consMs=raceConsistencyMs(myLaps.map(t=>({time:t})));
+      if(consMs!=null){gapSum+=consMs/1000;gapCount++;}
+      nonPit.forEach(t=>{cleanSumMs+=t;cleanCount++;});
+    });
+
+    const label=(opts.showEvent&&rd.eventName?esc(rd.eventName)+' · ':'')+esc(track(rd.track||(rd.sessions[0]&&rd.sessions[0].track)||''));
+    const weekendBestMs=b?b.best:null;
+    const weekendTag=b?b.bestSession:null;
+    const gapSec=gapCount?gapSum/gapCount:null;
+    const avgRaceMs=cleanCount?cleanSumMs/cleanCount:(weekendBestMs!=null&&gapSec!=null?weekendBestMs+gapSec*1000:null);
+    if(weekendBestMs==null&&gapSec==null){
+      list.push({label,valid:false,laps:totalLaps});
+      return;
+    }
+    list.push({label,valid:true,laps:totalLaps,bestMs:weekendBestMs,tag:weekendTag,avgMs:avgRaceMs,gapSec,pits:totalPits,pos:bestPos});
+  });
+  if(!list.some(x=>x.valid))return '';
+  const tagStyle='display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;vertical-align:middle;font-family:Arial,sans-serif;line-height:1.3';
+  const qStyle=tagStyle+';background:#3b6341;color:#f7ecd5';
+  const rStyle=tagStyle+';background:#9c3021;color:#f7ecd5';
+  const rows=list.map(x=>{
+    if(!x.valid)return `<tr><td>${x.label}</td><td colspan="5" class="muted" style="text-align:center">tours insuffisants (${x.laps})</td></tr>`;
+    const tagHtml=x.tag?`<span style="${x.tag==='Q'?qStyle:rStyle}">${x.tag}</span>`:'';
+    return `<tr><td>${x.label}${x.pos?` <span class="muted">· P${x.pos}</span>`:''}</td><td>${x.bestMs!=null?fmt(x.bestMs)+tagHtml:'—'}</td><td>${x.avgMs!=null?fmt(x.avgMs):'—'}</td><td><b>${x.gapSec!=null?'+'+x.gapSec.toFixed(2)+' s':'—'}</b></td><td>${x.laps} t.</td><td>${x.pits}</td></tr>`;
+  }).join('');
+  return `<div class="panel rythme-wrap" style="margin-top:16px"><div class="eyebrow">Analyse du rythme</div><h2>Race consistency &amp; meilleur tour week-end</h2>`
+    +`<p class="note">Meilleur tour du week-end (qualification <span style="${qStyle}">Q</span> ou course <span style="${rStyle}">R</span>). Δ rythme = écart moyen au meilleur tour en course (1<sup>er</sup> tour et tours aux stands &gt; +21 s exclus).</p>`
+    +`<table class="rythme-table"><thead><tr><th>Manche</th><th>Meilleur WE ${gdspTip(PROFILE_TIPS.meilleurWE)}</th><th>Moy. course</th><th>Δ rythme ${gdspTip(PROFILE_TIPS.sigma)}</th><th>Tours</th><th>Pit/exclu ${gdspTip(PROFILE_TIPS.pitExclu,'gdsp-tip-right')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// Calcule un score 0-100 par pilote, tous événements confondus, par week-end avec pondération récente (demi-vie 90 jours).
 // Retourne un tableau trié par score décroissant, avec level (1=élite..4=débutant) par quartiles.
 function globalPerformanceRatings(){
-  // Collecte de toutes les courses RACE de tous les events.
-  // raceEntries = [{date (ts), entries:[{id,name,driverResultPosition,sdLap,collisions,cuts,bestLap,gridPos}]}]
-  const allRaces=[];
+  const allWeekends=[];
   const idName=new Map(),idTeam=new Map();
   for(const ev of events){
     const d=ev.data||{};
-    const sessions=Array.isArray(d.sessions)?d.sessions:[];
-    const races=sessions.filter(s=>s&&s.type==='RACE');
-    for(const s of races){
-      const ts=new Date(s.date).getTime();
-      if(!isFinite(ts))continue;
-      // Regrouper les laps/results
-      const lapsById={};
-      (s.laps||[]).forEach(l=>{if(!l||!l.id)return;if(!lapsById[l.id])lapsById[l.id]=[];lapsById[l.id].push(l)});
-      const collById={};
-      (s.events||[]).forEach(e=>{if(!e||e.type!=='COLLISION_WITH_CAR')return;if(e.aid){collById[e.aid]=(collById[e.aid]||0)+1}if(e.bid){collById[e.bid]=(collById[e.bid]||0)+1}});
+    const evSessions=Array.isArray(d.sessions)?d.sessions:[];
+    const evPenMap=d.penMap||{};
+    const minPct=(ev.points_config&&typeof ev.points_config.minPercentDistance==='number')?ev.points_config.minPercentDistance:0.75;
+    const evRounds=groupSessionsByDate(evSessions);
+    evRounds.forEach((rd,rIdx)=>{
+      const raceSessions=[];
+      rd.sessions.forEach((s,sIdx)=>{if(s&&s.type==='RACE')raceSessions.push({s,sIdx});});
+      if(!raceSessions.length)return;
+      const bestMap=weekendBestLaps(rd,rIdx,evPenMap);
+      const pilotAgg=new Map();
+      let firstRaceTs=rd.ts;
+      for(const {s,sIdx} of raceSessions){
+        const ts=new Date(s.date).getTime();
+        if(isFinite(ts))firstRaceTs=isFinite(firstRaceTs)?Math.min(firstRaceTs,ts):ts;
+        const lapsById={};
+        (s.laps||[]).forEach(l=>{if(!l||!l.id)return;if(!lapsById[l.id])lapsById[l.id]=[];lapsById[l.id].push(l);});
+        const sorted=sortSessionForPerf(s,rIdx,sIdx,evPenMap,minPct);
+        const N=sorted.length;
+        const foulScores=raceFoulScores({...s,results:sorted});
+        sorted.forEach((r,i)=>{
+          if(!r||!r.id)return;
+          if(r.name)idName.set(r.id,r.name);
+          if(r.team!=null)idTeam.set(r.id,r.team||'');
+          const myLaps=(lapsById[r.id]||[]).filter(l=>Number.isFinite(l.time)&&l.time>0&&l.time<600000);
+          const consistency=raceConsistencyMs(myLaps);
+          const isOut=!!(r._dq||r.comDQ||r.comDNS||r.disqualified||r.comDNF);
+          const resScore=scoreResultsV45(N,i+1,isOut);
+          const fouls=foulScores.get(r.id)??0;
+          if(!pilotAgg.has(r.id))pilotAgg.set(r.id,{id:r.id,n:0,consS:0,consN:0,foulS:0,foulN:0,resS:0,resN:0});
+          const p=pilotAgg.get(r.id);
+          p.n++;
+          if(consistency!=null){p.consS+=consistency;p.consN++;}
+          p.foulS+=fouls;p.foulN++;
+          p.resS+=resScore;p.resN++;
+        });
+      }
       const entries=[];
-      (s.results||[]).forEach((r,i)=>{
-        if(!r||!r.id)return;
-        idName.set(r.id,r.name);
-        idTeam.set(r.id,r.team||'');
-        const myLaps=(lapsById[r.id]||[]).filter(l=>Number.isFinite(l.time)&&l.time>0&&l.time<600000);
-        const clean=myLaps.filter(l=>!(l.cuts>0));
-        const avg=clean.length?clean.reduce((a,l)=>a+l.time,0)/clean.length:null;
-        const sd=avg&&clean.length>=3?Math.sqrt(clean.reduce((a,l)=>a+(l.time-avg)**2,0)/clean.length)/avg:null;
-        const cuts=myLaps.reduce((n,l)=>n+(Number.isFinite(l.cuts)?Math.max(0,l.cuts):0),0);
-        entries.push({id:r.id,name:r.name,pos:i+1,grid:(typeof r.grid==='number'&&r.grid>0)?r.grid:null,sd,collisions:collById[r.id]||0,cuts,best:Number.isFinite(r.best)&&r.best>0?r.best:null});
-      });
-      if(entries.length>=3)allRaces.push({ts,entries});
-    }
+      for(const [id,p] of pilotAgg){
+        const b=bestMap.get(id);
+        entries.push({
+          id,
+          raceCount:p.n,
+          consistency:p.consN?p.consS/p.consN:null,
+          foul:p.foulN?p.foulS/p.foulN:0,
+          best:b?b.best:null,
+          bestSession:b?b.bestSession:null,
+          resScore:p.resN?p.resS/p.resN:0
+        });
+      }
+      if(entries.length>=2&&isFinite(firstRaceTs))allWeekends.push({ts:firstRaceTs,entries});
+    });
   }
-  if(allRaces.length===0)return [];
+  if(allWeekends.length===0)return [];
   const now=Date.now();
-  const HALF_LIFE=90*24*3600*1000; // 90 jours
-  // Pour chaque course, convertir chaque métrique en percentile (0-100), pondérer.
-  // On pondère aussi chaque course par 1 (pas de coef open/champ ? L'utilisateur a choisi "recent" uniquement).
-  const pilot=new Map(); // id -> {weights:{}, cum:{regularite,proprete,vitesse,resultats}, races:[{ts,pos}]}
+  const HALF_LIFE=90*24*3600*1000;
+  const pilot=new Map();
   function pct(arr,key,lower){
-    // Percentile de la valeur de clé pour chaque entrée. lower=true = petite valeur = meilleur.
     const valid=arr.filter(x=>Number.isFinite(x[key]));
     if(valid.length<2)return arr.map(()=>null);
     return arr.map(it=>{
@@ -701,62 +1025,78 @@ function globalPerformanceRatings(){
       return 100*(1-(better+(equal-1)/2)/(valid.length-1));
     });
   }
-  for(const rc of allRaces){
-    const weight=Math.exp(-(now-rc.ts)/HALF_LIFE); // 1 aujourd'hui, 0.5 il y a 90j, 0.25 il y a 180j…
-    const psd=pct(rc.entries,'sd',true); // +petit = mieux
-    const pcln=pct(rc.entries.map(e=>({...e,clean:(e.collisions*3)+e.cuts})),'clean',true);
-    const pspd=pct(rc.entries,'best',true); // meilleur tour
-    const pres=pct(rc.entries,'pos',true); // position
-    rc.entries.forEach((e,i)=>{
-      if(!pilot.has(e.id))pilot.set(e.id,{id:e.id,sumW:0,ax:{regularite:0,proprete:0,vitesse:0,resultats:0},positions:[],ts:[]});
-      const p=pilot.get(e.id);
-      const vals={regularite:psd[i],proprete:pcln[i],vitesse:pspd[i],resultats:pres[i]};
-      for(const k in vals){const v=vals[k]; if(Number.isFinite(v)){p.ax[k]+=v*weight;}}
-      p.sumW+=weight;
-      p.positions.push(e.pos); p.ts.push(rc.ts);
+  function pctFoul(arr,key){
+    const valid=arr.filter(x=>Number.isFinite(x[key]));
+    if(valid.length<2)return arr.map(it=>(Number.isFinite(it[key])&&it[key]<=0)?100:null);
+    return arr.map(it=>{
+      if(!Number.isFinite(it[key]))return null;
+      if(it[key]<=0)return 100;
+      const better=valid.filter(x=>x[key]<it[key]).length;
+      const equal=valid.filter(x=>x[key]===it[key]).length;
+      return 100*(1-(better+(equal-1)/2)/(valid.length-1));
     });
   }
-  // Calculer la progression: différence de position moyenne entre le premier et le dernier tiers des courses (par pilote),
-  // pondérée aussi. Une valeur positive = s'améliore (régression de position vers le haut → chiffres plus petits → -Δ).
+  for(const rc of allWeekends){
+    const weight=Math.exp(-(now-rc.ts)/HALF_LIFE);
+    const pcons=pct(rc.entries,'consistency',true);
+    const pcln=pctFoul(rc.entries,'foul');
+    const pspd=pct(rc.entries,'best',true);
+    const rankedByRes=rc.entries.slice().sort((a,b)=>b.resScore-a.resScore);
+    rc.entries.forEach((e,i)=>{
+      if(!pilot.has(e.id)){
+        pilot.set(e.id,{
+          id:e.id,sumW:0,raceCount:0,
+          ax:{regularite:0,proprete:0,vitesse:0,resultats:0},
+          wAx:{regularite:0,proprete:0,vitesse:0,resultats:0},
+          positions:[],ts:[]
+        });
+      }
+      const p=pilot.get(e.id);
+      const weekendRank=rankedByRes.findIndex(x=>x.id===e.id)+1;
+      const vals={regularite:pcons[i],proprete:pcln[i],vitesse:pspd[i],resultats:e.resScore};
+      for(const k in vals){
+        const v=vals[k];
+        if(Number.isFinite(v)){p.ax[k]+=v*weight;p.wAx[k]+=weight;}
+      }
+      p.sumW+=weight;
+      p.raceCount+=(e.raceCount||1);
+      p.positions.push(weekendRank);
+      p.ts.push(rc.ts);
+    });
+  }
   const out=[];
-  for(const [id,p]of pilot){
+  for(const [id,p] of pilot){
     if(p.sumW<=0)continue;
     const det={};
-    for(const k in p.ax)det[k]=p.ax[k]/p.sumW;
-    // Progression: régression linéaire simple de la position en fonction du temps (normalisé en mois).
-    // On convertit en percentile par rapport à tous les pilotes plus bas.
+    for(const k in p.ax)det[k]=p.wAx[k]>0?p.ax[k]/p.wAx[k]:50;
     let prog=null;
     if(p.ts.length>=3){
-      // Tri par ts
       const idx=p.ts.map((t,i)=>({t,pos:p.positions[i]})).sort((a,b)=>a.t-b.t);
       const n=idx.length;
       const meanT=idx.reduce((a,x)=>a+x.t,0)/n;
       const meanP=idx.reduce((a,x)=>a+x.pos,0)/n;
       let num=0,den=0;
-      idx.forEach(x=>{num+=(x.t-meanT)*(x.pos-meanP);den+=(x.t-meanT)**2});
+      idx.forEach(x=>{num+=(x.t-meanT)*(x.pos-meanP);den+=(x.t-meanT)**2;});
       if(den>0){
-        const slope=num/den; // delta pos / ms; si négatif = la position diminue (s'améliore) avec le temps
-        // Convertir en "points de progression par mois" (positif = s'améliore)
-        prog=-slope*30*24*3600*1000; // places gagnées par mois
+        const slope=num/den;
+        prog=-slope*30*24*3600*1000;
       }
     }
     p.prog=prog;
-    p.races=p.ts.length;
+    p.races=p.raceCount;
     p.det=det;
     out.push(p);
   }
-  // Percentiliser la progression (plus prog élevé = mieux, prog négatif = régression)
   const progVals=out.filter(x=>Number.isFinite(x.prog)).map(x=>x.prog);
   if(progVals.length>=2){
     out.forEach(p=>{
-      if(!Number.isFinite(p.prog)){p.det.progression=50;return}
+      if(!Number.isFinite(p.prog)){p.det.progression=50;return;}
       const better=progVals.filter(v=>v>p.prog).length;
       const equal=progVals.filter(v=>v===p.prog).length;
       p.det.progression=100*(1-(better+(equal-1)/2)/(progVals.length-1));
     });
-  }else{out.forEach(p=>p.det.progression=50)}
-  // Score final = moyenne 5 axes. Minimum GLOBAL_MIN_RACES courses + exclusion admin.
-  const final=out.filter(p=>p.races>=GLOBAL_MIN_RACES && !globalHidden[p.id]).map(p=>{
+  }else{out.forEach(p=>{p.det.progression=50;});}
+  const final=out.filter(p=>p.races>=GLOBAL_MIN_RACES&&!globalHidden[p.id]).map(p=>{
     const ax=p.det;
     const score=(ax.regularite+ax.proprete+ax.vitesse+ax.resultats+ax.progression)/5;
     return {id:p.id,name:idName.get(p.id)||'?',team:idTeam.get(p.id)||'',score,details:ax,count:p.races,trend:p.prog||0};
@@ -1085,8 +1425,96 @@ function manche(){
   return `${head('résultats','Les manches','Toutes les sessions importées, regroupées par date.')}<div class="controls"><select onchange="round=+this.value;sessionIndex=0;eventtab='resultats';render()">${rs.map((x,i)=>`<option value="${i}" ${i===round?'selected':''}>Manche ${i+1} · ${esc(x.track)}</option>`).join('')}</select><select onchange="sessionIndex=+this.value;eventtab='resultats';render()">${r.sessions.map((x,i)=>`<option value="${i}" ${i===sessionIndex?'selected':''}>${x.type==='QUALIFY'?'Qualification':'Course '+r.sessions.slice(0,i+1).filter(y=>y.type==='RACE').length}</option>`).join('')}</select><span class="tag">${date(r.date)}</span></div>${tabs([['resultats','Résultats'],...(s.type==='RACE'?[['collisions','Collisions entre pilotes']]:[])],eventtab,'showevent')}<div class="panel">${eventtab==='collisions'?`<h2>Incidents enregistrés</h2><p class="note">Événements bruts entre voitures en course, sans attribution de responsabilité.</p>${table(['#','Pilote','Autre pilote','Vitesse','Temps de course'],eventrows)}`:`<h2>${esc(r.track)} · ${s.type==='QUALIFY'?'Qualification':'Course'}</h2><p class="note">Classement officiel : meilleur tour pour les qualifications, ordre d'arrivée (avec pénalités Commission) pour les courses.</p>${table(headers,resultrows)}`}</div>`;
 }
 
-// Performance ratings (kept simple, unchanged logic)
-function performanceRatings(){let pilots=new Map;const pct=(arr,id,key,lower=true)=>{let eligible=arr.filter(x=>Number.isFinite(x[key])),item=eligible.find(x=>x.id===id);if(!item||eligible.length<2)return null;let better=eligible.filter(x=>lower?x[key]<item[key]:x[key]>item[key]).length,equal=eligible.filter(x=>x[key]===item[key]).length;return 100*(1-(better+(equal-1)/2)/(eligible.length-1))};for(let race of sessions.filter(s=>s.type==='RACE')){let entries=race.results.map((r,i)=>{let laps=race.laps.filter(l=>l.id===r.id&&Number.isFinite(l.time)&&l.time>0&&l.time<600000),clean=laps.filter(l=>!(l.cuts>0)),avg=clean.reduce((a,l)=>a+l.time,0)/(clean.length||1),sd=clean.length>=3?Math.sqrt(clean.reduce((a,l)=>a+(l.time-avg)**2,0)/clean.length)/avg:null,name=(r.name||'').trim().toLowerCase(),collisions=(race.events||[]).filter(e=>[e.a,e.b].some(v=>String(v||'').trim().toLowerCase()===name)).length,cuts=laps.reduce((n,l)=>n+(Number.isFinite(l.cuts)?Math.max(0,l.cuts):0),0);return {id:r.id,regularity:sd,cleanliness:collisions+cuts,speed:Number.isFinite(r.best)&&r.best>0&&r.best<600000?r.best:null,result:i+1}});for(let e of entries){let v={regularite:pct(entries,e.id,'regularity'),proprete:pct(entries,e.id,'cleanliness'),vitesse:pct(entries,e.id,'speed'),resultats:pct(entries,e.id,'result')};if(Object.values(v).some(x=>x===null))continue;if(!pilots.has(e.id))pilots.set(e.id,[]);pilots.get(e.id).push(v)}}let out=[];for(let [id,items] of pilots){if(items.length<2)continue;let average=key=>items.reduce((a,x)=>a+x[key],0)/items.length,details={regularite:average('regularite'),proprete:average('proprete'),vitesse:average('vitesse'),resultats:average('resultats')},score=Object.values(details).reduce((a,b)=>a+b,0)/4;out.push({id,score,details,count:items.length})}out.sort((a,b)=>b.score-a.score);for(let i=0;i<out.length;i++){let rank=out.findIndex(x=>Math.abs(x.score-out[i].score)<1e-9);out[i].level=4-Math.min(3,Math.floor(rank*4/out.length))}return out}
+// Performance ratings (par week-end : Régularité iRacing, Propreté Option 3, Vitesse Q+R, Résultats v45)
+function performanceRatings(){
+  const pilots=new Map();
+  const pct=(arr,id,key,lower=true)=>{
+    const eligible=arr.filter(x=>Number.isFinite(x[key])),item=eligible.find(x=>x.id===id);
+    if(!item||eligible.length<2)return null;
+    const better=eligible.filter(x=>lower?x[key]<item[key]:x[key]>item[key]).length,
+          equal=eligible.filter(x=>x[key]===item[key]).length;
+    return 100*(1-(better+(equal-1)/2)/(eligible.length-1));
+  };
+  const pctFoul=(arr,id,key)=>{
+    const eligible=arr.filter(x=>Number.isFinite(x[key])),item=eligible.find(x=>x.id===id);
+    if(!item)return null;
+    if(item[key]<=0)return 100;
+    if(eligible.length<2)return null;
+    const better=eligible.filter(x=>x[key]<item[key]).length,
+          equal=eligible.filter(x=>x[key]===item[key]).length;
+    return 100*(1-(better+(equal-1)/2)/(eligible.length-1));
+  };
+  const cfg=pointsConfig();
+  const minPct=typeof cfg.minPercentDistance==='number'?cfg.minPercentDistance:0.75;
+  const evRounds=groupSessionsByDate(sessions);
+  evRounds.forEach((rd,rIdx)=>{
+    const raceSessions=[];
+    rd.sessions.forEach((s,sIdx)=>{if(s&&s.type==='RACE')raceSessions.push({s,sIdx});});
+    if(!raceSessions.length)return;
+    const bestMap=weekendBestLaps(rd,rIdx,penMap);
+    const pilotAgg=new Map();
+    for(const {s,sIdx} of raceSessions){
+      const sorted=sortSessionForPerf(s,rIdx,sIdx,penMap,minPct);
+      const N=sorted.length;
+      const lapsById={};
+      (s.laps||[]).forEach(l=>{if(!l||!l.id)return;if(!lapsById[l.id])lapsById[l.id]=[];lapsById[l.id].push(l);});
+      const foulScores=raceFoulScores({...s,results:sorted});
+      sorted.forEach((r,idx)=>{
+        if(!r||!r.id)return;
+        const myLaps=(lapsById[r.id]||[]).filter(l=>Number.isFinite(l.time)&&l.time>0&&l.time<600000);
+        const consistency=raceConsistencyMs(myLaps);
+        const isOut=!!(r._dq||r.comDQ||r.comDNS||r.disqualified||r.comDNF);
+        const resScore=scoreResultsV45(N,idx+1,isOut);
+        const fouls=foulScores.get(r.id)??0;
+        if(!pilotAgg.has(r.id))pilotAgg.set(r.id,{id:r.id,n:0,consS:0,consN:0,foulS:0,foulN:0,resS:0,resN:0});
+        const p=pilotAgg.get(r.id);
+        p.n++;
+        if(consistency!=null){p.consS+=consistency;p.consN++;}
+        p.foulS+=fouls;p.foulN++;
+        p.resS+=resScore;p.resN++;
+      });
+    }
+    const entries=[];
+    for(const [id,p] of pilotAgg){
+      const b=bestMap.get(id);
+      entries.push({
+        id,
+        raceCount:p.n,
+        regularity:p.consN?p.consS/p.consN:null,
+        foul:p.foulN?p.foulS/p.foulN:0,
+        best:b?b.best:null,
+        bestSession:b?b.bestSession:null,
+        resScore:p.resN?p.resS/p.resN:0
+      });
+    }
+    for(const e of entries){
+      const v={
+        regularite:pct(entries,e.id,'regularity',true),
+        proprete:pctFoul(entries,e.id,'foul'),
+        vitesse:pct(entries,e.id,'best',true),
+        resultats:e.resScore
+      };
+      if(v.regularite===null&&v.vitesse===null&&v.proprete===null)continue;
+      for(const k in v)if(v[k]===null)v[k]=50;
+      if(!pilots.has(e.id))pilots.set(e.id,{items:[],races:0});
+      const rec=pilots.get(e.id);
+      rec.items.push(v);
+      rec.races+=(e.raceCount||1);
+    }
+  });
+  const out=[];
+  for(const [id,rec] of pilots){
+    const items=rec.items;
+    if(rec.races<2&&items.length<2)continue;
+    const average=key=>items.reduce((a,x)=>a+x[key],0)/items.length;
+    const details={regularite:average('regularite'),proprete:average('proprete'),vitesse:average('vitesse'),resultats:average('resultats')};
+    const score=Object.values(details).reduce((a,b)=>a+b,0)/4;
+    out.push({id,score,details,count:rec.races});
+  }
+  out.sort((a,b)=>b.score-a.score);
+  for(let i=0;i<out.length;i++){const rank=out.findIndex(x=>Math.abs(x.score-out[i].score)<1e-9);out[i].level=4-Math.min(3,Math.floor(rank*4/out.length));}
+  return out;
+}
 function ratingCard(id){let ratings=performanceRatings(),r=ratings.find(x=>x.id===id);if(!r)return `<div class="panel"><div class="eyebrow">Évaluation de performance ${gdspTip(PROFILE_TIPS.scoreEvent,'gdsp-tip-left')}</div><h2>Niveau à déterminer</h2><p class="note">Au moins deux courses exploitables sont nécessaires.</p></div>`;let labels={regularite:'Régularité',proprete:'Propreté',vitesse:'Vitesse au tour',resultats:'Résultats'},tips={regularite:PROFILE_TIPS.regularite,proprete:PROFILE_TIPS.proprete,vitesse:PROFILE_TIPS.vitesse,resultats:PROFILE_TIPS.resultats},bars=Object.entries(r.details).map(([k,v])=>`<div style="margin:14px 0"><div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span><b>${labels[k]}</b>${tips[k]?gdspTip(tips[k],'gdsp-tip-left'):''}</span><span>${v.toFixed(0)} / 100</span></div><div class="bar" style="margin-top:7px"><i style="width:${v.toFixed(1)}%"></i></div></div>`).join('');return `<div class="panel"><div class="eyebrow">Évaluation de performance · provisoire</div><h2>Niveau ${r.level} <span style="font-family:Arial;font-size:13px;color:#6d726c">/ 4</span> ${gdspTip(PROFILE_TIPS.scoreEvent,'gdsp-tip-left')}</h2><p class="note">Score relatif : <b>${r.score.toFixed(1)} / 100</b> · ${r.count} course(s) exploitables · ${ratings.length} pilotes évalués</p>${bars}</div>`}
 function plotHistory(metrics,mode){if(!metrics.length)return '<p class="note">Aucune course disponible.</p>';let w=700,h=190,left=42,right=20,top=16,bottom=42,vals=metrics.map(m=>mode==='position'?m.position:m.collisions),max=Math.max(mode==='position'?5:1,...vals),x=i=>left+(metrics.length===1?(w-left-right)/2:i*(w-left-right)/(metrics.length-1)),y=v=>mode==='position'?top+(v-1)*(h-top-bottom)/Math.max(max-1,1):top+(max-v)*(h-top-bottom)/max;let line=vals.map((v,i)=>`${x(i)},${y(v)}`).join(' '),ticks=[1,Math.ceil(max/2),max].filter((v,i,a)=>a.indexOf(v)===i);let grid=ticks.map(t=>`<line x1="${left}" y1="${y(t)}" x2="${w-right}" y2="${y(t)}" stroke="#d8cdbb"/><text x="${left-8}" y="${y(t)+4}" text-anchor="end" font-size="11" fill="#69756e">${t}</text>`).join('');let points=vals.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="5" fill="#9c3021"><title>${esc(track(metrics[i].race.track))} — ${date(metrics[i].race.date)} : ${v}</title></circle><text x="${x(i)}" y="${h-17}" text-anchor="middle" font-size="10" fill="#69756e">C${i+1}</text>`).join('');return `<svg viewBox="0 0 ${w} ${h}" role="img" style="width:100%;height:auto;display:block">${grid}<polyline fill="none" stroke="#a83729" stroke-width="2.5" points="${line}"/>${points}</svg><p class="note">${metrics.map((m,i)=>`C${i+1} : ${esc(track(m.race.track))} · ${date(m.race.date)}`).join(' &nbsp; / &nbsp; ')}</p>`}
 function drivers(){
@@ -1094,8 +1522,17 @@ function drivers(){
   let ds=allDrivers();
   if(driverId){
     let d=ds.find(x=>x.id===driverId);if(!d){driverId='';return drivers()}
+    const evRounds=groupSessionsByDate(sessions).map(rd=>({...rd,penMap}));
     let races=sessions.filter(s=>s.type==='RACE'&&s.results.some(x=>x.id===driverId));
-    let metrics=races.map(s=>{let index=s.results.findIndex(x=>x.id===driverId),r=s.results[index],name=(r.name||'').trim().toLowerCase();let collisions=(s.events||[]).filter(e=>[e.a,e.b].some(x=>String(x||'').trim().toLowerCase()===name)).length;return {race:s,result:r,position:index+1,delta:typeof r.grid==='number'&&r.grid>0?r.grid-(index+1):null,collisions}});
+    let metrics=races.map(s=>{
+      const [rIdx,sIdx]=findSessionIdx(s);
+      const sorted=sortSessionForPerf(s,rIdx,sIdx,penMap);
+      let index=sorted.findIndex(x=>x.id===driverId),r=sorted[index]||s.results.find(x=>x.id===driverId);
+      if(index<0)index=s.results.findIndex(x=>x.id===driverId);
+      let name=(r.name||'').trim().toLowerCase();
+      let collisions=(s.events||[]).filter(e=>[e.a,e.b].some(x=>String(x||'').trim().toLowerCase()===name)).length;
+      return {race:s,result:r,position:index+1,delta:typeof r.grid==='number'&&r.grid>0?r.grid-(index+1):null,collisions};
+    });
     let known=metrics.filter(x=>x.delta!==null),avgDelta=known.length?known.reduce((n,x)=>n+x.delta,0)/known.length:null,avgColl=metrics.length?metrics.reduce((n,x)=>n+x.collisions,0)/metrics.length:null,avgPos=metrics.length?metrics.reduce((n,x)=>n+x.position,0)/metrics.length:null;
     let positives=[],weaknesses=[];
     if(known.length>=2){if(avgDelta>0.5)positives.push(`Progression moyenne de ${signed(avgDelta)} place(s) entre le départ et l'arrivée.`);else if(avgDelta<-.5)weaknesses.push(`Recul moyen de ${Math.abs(avgDelta).toFixed(1)} place(s) entre le départ et l'arrivée.`);else positives.push('Positions de départ globalement conservées en course.')}
@@ -1109,8 +1546,14 @@ function drivers(){
     }else{
       let l=livery(d.name);largeCar=l?`<img class="driver-car" src="/assets/${l[1]}.jpg?v=6" alt="Voiture numéro ${l[2]} de ${esc(d.name)}">`:'<p class="note">Visuel de voiture à ajouter.</p>';
     }
-    let rows=races.map(s=>{let i=s.results.findIndex(x=>x.id===driverId),r=s.results[i];let times=s.laps.filter(x=>x.id===driverId&&x.time>0&&x.time<99999999);let mean=times.reduce((a,b)=>a+b.time,0)/(times.length||1),sd=Math.sqrt(times.reduce((a,b)=>a+(b.time-mean)**2,0)/(times.length||1));let m=metrics.find(x=>x.race===s);return `<tr><td>${date(s.date)}</td><td>${esc(track(s.track))}</td><td>${r.grid??'—'}</td><td class="pos">${i+1}</td><td>${m.delta===null?'—':(m.delta>0?'+':'')+m.delta}</td><td>${m.collisions}</td><td>${fmt(r.best)}</td><td>${times.length>1?(sd/1000).toFixed(2)+' s':'—'}</td></tr>`});
-    return `${head('pilote',esc(d.name),esc(d.team)||'Pilote')}<button class="btn secondary" onclick="driverId='';render()">← Tous les pilotes</button><div class="profile-car" style="margin-top:15px"><span class="label">Voiture engagée</span> &nbsp; ${number(d.name)} ${largeCar}</div><div class="stats"><div class="stat"><span class="label">Courses enregistrées ${gdspTip(PROFILE_TIPS.courses,'gdsp-tip-left')}</span><strong>${races.length}</strong></div><div class="stat"><span class="label">Meilleur résultat brut ${gdspTip(PROFILE_TIPS.bestPos)}</span><strong>${races.length?Math.min(...metrics.map(m=>m.position)):'—'}</strong></div><div class="stat"><span class="label">Places gagnées / course ${gdspTip(PROFILE_TIPS.delta)}</span><strong>${signed(avgDelta)}</strong></div><div class="stat"><span class="label">Collisions / course ${gdspTip(PROFILE_TIPS.collisions,'gdsp-tip-right')}</span><strong>${avgColl===null?'—':avgColl.toFixed(1)}</strong></div></div><p class="note">Delta : position de départ brute moins position d'arrivée ; positif = progression.</p><div class="section-head"><div><div class="eyebrow">Quatre critères · un niveau</div><h2>Profil de performance</h2></div></div>${ratingCard(driverId)}<div class="section-head"><div><div class="eyebrow">Analyse</div><h2>Portrait du pilote</h2></div></div><div class="grid"><div class="panel"><div class="eyebrow">Points forts</div><ul class="note">${desc(positives)}</ul></div><div class="panel"><div class="eyebrow">Axes de progression</div><ul class="note">${desc(weaknesses)}</ul></div></div><div class="section-head"><h2>Historique en course</h2></div><div class="panel driver-hist-wrap">${table(['Date','Circuit','Départ','Arrivée',`Delta ${gdspTip(PROFILE_TIPS.delta)}`,`Collisions brutes ${gdspTip(PROFILE_TIPS.collisions)}`,'Meilleur tour',`Écart-type ${gdspTip(PROFILE_TIPS.sigma,'gdsp-tip-right')}`],rows)}</div>`;
+    let rows=metrics.map(m=>{
+      const s=m.race,r=m.result;
+      let times=(s.laps||[]).filter(x=>x.id===driverId&&x.time>0&&x.time<600000);
+      const consMs=raceConsistencyMs(times);
+      return `<tr><td>${date(s.date)}</td><td>${esc(track(s.track))}</td><td>${r.grid??'—'}</td><td class="pos">${m.position}</td><td>${m.delta===null?'—':(m.delta>0?'+':'')+m.delta}</td><td>${m.collisions}</td><td>${fmt(r.best)}</td><td>${consMs!=null?'+'+(consMs/1000).toFixed(2)+' s':'—'}</td></tr>`;
+    });
+    const rythmeHtml=buildRythmeCard(driverId,evRounds,{showEvent:false});
+    return `${head('pilote',esc(d.name),esc(d.team)||'Pilote')}<button class="btn secondary" onclick="driverId='';render()">← Tous les pilotes</button><div class="profile-car" style="margin-top:15px"><span class="label">Voiture engagée</span> &nbsp; ${number(d.name)} ${largeCar}</div><div class="stats"><div class="stat"><span class="label">Courses enregistrées ${gdspTip(PROFILE_TIPS.courses,'gdsp-tip-left')}</span><strong>${races.length}</strong></div><div class="stat"><span class="label">Meilleur résultat brut ${gdspTip(PROFILE_TIPS.bestPos)}</span><strong>${races.length?Math.min(...metrics.map(m=>m.position)):'—'}</strong></div><div class="stat"><span class="label">Places gagnées / course ${gdspTip(PROFILE_TIPS.delta)}</span><strong>${signed(avgDelta)}</strong></div><div class="stat"><span class="label">Collisions / course ${gdspTip(PROFILE_TIPS.collisions,'gdsp-tip-right')}</span><strong>${avgColl===null?'—':avgColl.toFixed(1)}</strong></div></div><p class="note">Delta : position de départ brute moins position d'arrivée ; positif = progression.</p><div class="section-head"><div><div class="eyebrow">Quatre critères · un niveau</div><h2>Profil de performance</h2></div></div>${ratingCard(driverId)}${rythmeHtml}<div class="section-head"><div><div class="eyebrow">Analyse</div><h2>Portrait du pilote</h2></div></div><div class="grid"><div class="panel"><div class="eyebrow">Points forts</div><ul class="note">${desc(positives)}</ul></div><div class="panel"><div class="eyebrow">Axes de progression</div><ul class="note">${desc(weaknesses)}</ul></div></div><div class="section-head"><h2>Historique en course</h2></div><div class="panel driver-hist-wrap">${table(['Date','Circuit','Départ','Arrivée',`Delta ${gdspTip(PROFILE_TIPS.delta)}`,`Collisions brutes ${gdspTip(PROFILE_TIPS.collisions)}`,'Meilleur tour',`Δ rythme ${gdspTip(PROFILE_TIPS.sigma,'gdsp-tip-right')}`],rows)}</div>`;
   }
   return `${head('pilotes','Les engagés','Pilotes présents dans cet événement.')}<div class="panel"><div class="eyebrow">Face à face</div><h2>Comparer deux pilotes</h2><div class="controls"><select onchange="compareA=this.value;render()"><option value="">Choisir un pilote</option>${ds.map(d=>`<option value="${d.id}" ${compareA===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select><select onchange="compareB=this.value;render()"><option value="">Choisir un autre pilote</option>${ds.map(d=>`<option value="${d.id}" ${compareB===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div>${comparison()}</div><div class="controls"><input id="search" placeholder="Rechercher un pilote..." oninput="filterDrivers(this.value)"></div><div class="cardlist" id="drivers">${ds.map(d=>`<div class="driver" data-name="${esc(d.name.toLowerCase())}" onclick="driverId='${d.id}';render()"><div class="eyebrow">Pilote engagé</div><strong>${esc(d.name)}</strong> &nbsp; ${number(d.name)}<div>${car(d.name)}</div><p class="muted">${esc(d.team)||'Équipe non renseignée'}</p><span class="label">Voir la fiche &nbsp; →</span></div>`).join('')}</div>`;
 }
@@ -1166,10 +1609,19 @@ async function saveRemote(){
   const minSessions=sessions.map(ss=>{
     const o={...ss};
     if(Array.isArray(o.laps)){
-      o.laps=o.laps.map(l=>({id:l.id,time:l.time,cuts:l.cuts||0}));
+      o.laps=o.laps.map(l=>{
+        const lp={id:l.id,time:l.time,cuts:l.cuts||0};
+        if(l.timestamp!=null)lp.timestamp=l.timestamp;
+        else if(l.Timestamp!=null)lp.timestamp=l.Timestamp;
+        return lp;
+      });
     }
     if(Array.isArray(o.events)){
-      o.events=o.events.map(e=>({type:e.type||'COLLISION_WITH_CAR',aid:e.aid,bid:e.bid,speed:e.speed,a:e.a,b:e.b,timestamp:e.timestamp}));
+      o.events=o.events.map(e=>{
+        const ev={type:e.type||'COLLISION_WITH_CAR',aid:e.aid,bid:e.bid,speed:e.speed,a:e.a,b:e.b,timestamp:e.timestamp};
+        if(e.RelPosition||e.relPos)ev.RelPosition=e.RelPosition||e.relPos;
+        return ev;
+      });
     }
     if(Array.isArray(o.results)){
       o.results=o.results.map(r=>{
@@ -1201,7 +1653,7 @@ function importSessionJson(text,fileName){
     const cars={};(j.Cars||[]).forEach(c=>cars[c.CarId]=driverFrom(c));
     const results=(j.Result||[]).map(r=>{const meta=cars[r.CarId]||driverFrom(r);return {id:meta.id,name:meta.name,team:meta.team||'',skin:meta.skin||'',grid:r.GridPosition,laps:r.NumLaps||0,best:r.BestLap,time:r.TotalTime,disqualified:!!r.Disqualified,hasPenalty:!!r.HasPenalty,penaltyTime:r.PenaltyTime||0,lapPenalty:r.LapPenalty||0}}).filter(r=>!(r.model==='dodge_monaco_police'||/broadcast/i.test(r.name)));
     const laps=(j.Laps||[]).map(l=>{const meta=cars[l.CarId];if(!meta)return null;return {id:meta.id,time:l.LapTime,cuts:l.Cuts||0,timestamp:l.Timestamp}}).filter(Boolean);
-    const events=(j.Events||[]).filter(e=>e.Type==='COLLISION_WITH_CAR'&&j.Type==='RACE').map(e=>{const a=cars[e.CarId],b=cars[e.OtherCarId];if(!a||!b)return null;return {a:a.name,b:b.name,aid:a.id,bid:b.id,speed:e.ImpactSpeed,timestamp:e.Timestamp}}).filter(Boolean);
+    const events=(j.Events||[]).filter(e=>e.Type==='COLLISION_WITH_CAR'&&j.Type==='RACE').map(e=>{const a=cars[e.CarId],b=cars[e.OtherCarId];if(!a||!b)return null;const ev={type:'COLLISION_WITH_CAR',a:a.name,b:b.name,aid:a.id,bid:b.id,speed:e.ImpactSpeed,timestamp:e.Timestamp};if(e.RelPosition)ev.RelPosition=e.RelPosition;return ev}).filter(Boolean);
     let raceStart=null;
     if(j.Type==='RACE'){const c=[];laps.forEach(l=>{if(typeof l.timestamp==='number'&&typeof l.time==='number'&&40000<l.time<600000)c.push(l.timestamp-l.time/1000)});if(c.length)raceStart=Math.min(...c)}
     const sess={date:j.Date,track:j.TrackName,type:j.Type,results,laps,events,raceStart};
@@ -1776,7 +2228,9 @@ importSessionJson=function(text,fileName,opts){
     }).filter(Boolean);
     const events=toArr(j.Events).filter(e=>e&&e.Type==='COLLISION_WITH_CAR'&&j.Type==='RACE').map(e=>{
       const a=cars[e.CarId],b=cars[e.OtherCarId];if(!a||!b)return null;
-      return {a:a.name,b:b.name,aid:a.id,bid:b.id,speed:e.ImpactSpeed,timestamp:e.Timestamp}
+      const ev={type:'COLLISION_WITH_CAR',a:a.name,b:b.name,aid:a.id,bid:b.id,speed:e.ImpactSpeed,timestamp:e.Timestamp};
+      if(e.RelPosition)ev.RelPosition=e.RelPosition;
+      return ev;
     }).filter(Boolean);
     let raceStart=null;
     if(j.Type==='RACE'){const c=[];laps.forEach(l=>{if(typeof l.timestamp==='number'&&typeof l.time==='number'&&l.time>40000&&l.time<600000)c.push(l.timestamp-l.time/1000)});if(c.length)raceStart=Math.min(...c)}
@@ -1797,10 +2251,21 @@ function collectAllRaces(){
   const out=[];
   for(const ev of events){
     const d=ev.data||{};
-    const sessions=Array.isArray(d.sessions)?d.sessions:[];
-    const m={};
-    sessions.filter(s=>s&&s.date).forEach(s=>(m[s.date.slice(0,10)]??=[]).push(s));
-    Object.entries(m).sort().forEach(([dt,sess])=>{out.push({date:dt,sessions:sess,track:track(sess[0].track),eventName:ev.name,eventKind:ev.kind,eventSlug:ev.slug})});
+    const evSessions=Array.isArray(d.sessions)?d.sessions:[];
+    const evPenMap=d.penMap||{};
+    const evRounds=groupSessionsByDate(evSessions);
+    evRounds.forEach((rd,rIdx)=>{
+      out.push({
+        date:rd.date,
+        sessions:rd.sessions,
+        roundIndex:rIdx,
+        penMap:evPenMap,
+        track:track(rd.sessions[0]&&rd.sessions[0].track),
+        eventName:ev.name,
+        eventKind:ev.kind,
+        eventSlug:ev.slug
+      });
+    });
   }
   out.sort((a,b)=>a.date.localeCompare(b.date));
   out.forEach((r,i)=>r.number=i+1);
@@ -1815,15 +2280,17 @@ function globalDriverProfile(){
   const allRounds=collectAllRaces();
   const races=[];
   for(const rd of allRounds){
-    for(const s of rd.sessions.filter(x=>x.type==='RACE')){
-      const idx=s.results.findIndex(x=>x.id===id);if(idx<0)continue;
-      const res=s.results[idx];
+    rd.sessions.forEach((s,sIdx)=>{
+      if(!s||s.type!=='RACE')return;
+      const sorted=sortSessionForPerf(s,rd.roundIndex,sIdx,rd.penMap);
+      const idx=sorted.findIndex(x=>x.id===id);if(idx<0)return;
+      const res=sorted[idx];
       const name=(res.name||'').trim().toLowerCase();
       const collisions=(s.events||[]).filter(e=>[e.a,e.b].some(v=>String(v||'').trim().toLowerCase()===name)).length;
-      const laps=s.laps.filter(l=>l.id===id&&Number.isFinite(l.time)&&l.time>0&&l.time<600000);
+      const laps=(s.laps||[]).filter(l=>l.id===id&&Number.isFinite(l.time)&&l.time>0&&l.time<600000);
       races.push({round:rd,session:s,result:res,position:idx+1,
         delta:(typeof res.grid==='number'&&res.grid>0)?res.grid-(idx+1):null,collisions,laps,eventName:rd.eventName});
-    }
+    });
   }
   if(!r||!races.length)return `${head('global','Profil pilote','Classement GLOBAL Discord.')}<button class="btn secondary" onclick="go('global')">← Retour au classement</button><div class="panel"><p class="note">Pilote introuvable ou pas assez de courses.</p></div>`;
   const validD=races.filter(x=>x.delta!==null);
@@ -1838,8 +2305,8 @@ function globalDriverProfile(){
   else if(avgColl>=3)weaknesses.push("Plusieurs incidents de collision par course en moyenne.");
   if(r.details.progression>=60)positives.push("Tendance à la progression dans le temps.");
   else if(r.details.progression<=40)weaknesses.push("Tendance à la régression récente.");
-  if(r.details.proprete>=65)positives.push("Bonne propreté de course (peu de cuts et de contacts).");
-  if(r.details.regularite>=65)positives.push("Régularité de rythme solide.");
+  if(r.details.proprete>=65)positives.push("Bonne propreté de course (peu de cuts et de contacts responsables).");
+  if(r.details.regularite>=65)positives.push("Régularité de rythme solide (faible écart moyen au meilleur tour).");
   if(r.details.vitesse>=65)positives.push("Vitesse au tour parmi les plus rapides du plateau.");
   if(r.details.regularite<=40)weaknesses.push("Rythme irrégulier entre les tours.");
   if(!positives.length)positives.push("En cours d'évaluation.");
@@ -1847,10 +2314,10 @@ function globalDriverProfile(){
   const lbl={regularite:'Régularité inter-événements',proprete:'Propreté',vitesse:'Vitesse au tour',resultats:'Résultats',progression:'Progression'};
   const gTips={regularite:PROFILE_TIPS.regulariteGlobal,proprete:PROFILE_TIPS.proprete,vitesse:PROFILE_TIPS.vitesse,resultats:PROFILE_TIPS.resultats,progression:PROFILE_TIPS.progression};
   const bars=Object.entries(r.details).map(([k,v])=>`<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span><b>${lbl[k]||k}</b>${gTips[k]?gdspTip(gTips[k],'gdsp-tip-left'):''}</span><span>${v.toFixed(0)} / 100</span></div><div class="bar" style="margin-top:6px"><i style="width:${v.toFixed(1)}%"></i></div></div>`).join('');
+  const rythmeHtml=buildRythmeCard(id,allRounds,{showEvent:true});
   const raceRows=races.map(x=>{
-    const times=x.laps;const mean=times.length?times.reduce((a,b)=>a+b.time,0)/times.length:0;
-    const sd=(times.length>1&&mean>0)?Math.sqrt(times.reduce((a,b)=>a+(b.time-mean)**2,0)/times.length)/mean*1000:null;
-    return `<tr><td>${date(x.session.date)}</td><td>${esc(x.eventName)}</td><td>${esc(track(x.session.track))}</td><td>${x.result.grid??'—'}</td><td class="pos">${x.position}</td><td>${x.delta===null?'—':(x.delta>0?'+':'')+x.delta.toFixed(1)}</td><td>${x.collisions}</td><td>${fmt(x.result.best)}</td><td>${sd?sd.toFixed(2)+' s':'—'}</td></tr>`;
+    const consMs=raceConsistencyMs(x.laps);
+    return `<tr><td>${date(x.session.date)}</td><td>${esc(x.eventName)}</td><td>${esc(track(x.session.track))}</td><td>${x.result.grid??'—'}</td><td class="pos">${x.position}</td><td>${x.delta===null?'—':(x.delta>0?'+':'')+x.delta.toFixed(1)}</td><td>${x.collisions}</td><td>${fmt(x.result.best)}</td><td>${consMs!=null?'+'+(consMs/1000).toFixed(2)+' s':'—'}</td></tr>`;
   }).join('');
   const levelLabels={1:'Élite',2:'Confirmé',3:'Intermédiaire',4:'Débutant'};
   return `${head('global','Profil de '+r.name,'Classement GLOBAL Discord — profil tous événements confondus.')}
@@ -1859,10 +2326,11 @@ function globalDriverProfile(){
     <div class="stats"><div class="stat"><span class="label">Courses ${gdspTip(PROFILE_TIPS.courses,'gdsp-tip-left')}</span><strong>${races.length}</strong></div><div class="stat"><span class="label">Meilleur ${gdspTip(PROFILE_TIPS.bestPos)}</span><strong>${Math.min(...races.map(x=>x.position))}</strong></div><div class="stat"><span class="label">Pos. moy. ${gdspTip(PROFILE_TIPS.avgPos)}</span><strong>${avgPos!==null?avgPos.toFixed(1):'—'}</strong></div><div class="stat"><span class="label">Δ départ ${gdspTip(PROFILE_TIPS.delta)}</span><strong>${signed(avgDelta!==null?avgDelta.toFixed(1):null)}</strong></div><div class="stat"><span class="label">Coll./course ${gdspTip(PROFILE_TIPS.collisions,'gdsp-tip-right')}</span><strong>${avgColl!==null?avgColl.toFixed(1):'—'}</strong></div></div>
     <div class="section-head"><div><div class="eyebrow">Évaluation GLOBALE</div><h2>Niveau et profil</h2></div></div>
     <div class="panel">${bars}</div>
+    ${rythmeHtml}
     <div class="section-head"><div><div class="eyebrow">Analyse</div><h2>Portrait inter-événements</h2></div></div>
     <div class="grid"><div class="panel"><div class="eyebrow">Points forts</div><ul class="note">${positives.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul></div><div class="panel"><div class="eyebrow">Axes de progression</div><ul class="note">${weaknesses.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul></div></div>
     <div class="section-head"><h2>Historique toutes compétitions</h2></div>
-    <div class="panel driver-hist-wrap">${table(['Date','Événement','Circuit','Grille','Arr.',`Δ ${gdspTip(PROFILE_TIPS.delta)}`,`Coll. ${gdspTip(PROFILE_TIPS.collisions)}`,'Meilleur',`É-T ${gdspTip(PROFILE_TIPS.sigma,'gdsp-tip-right')}`],raceRows)}</div>`;
+    <div class="panel driver-hist-wrap">${table(['Date','Événement','Circuit','Grille','Arr.',`Δ ${gdspTip(PROFILE_TIPS.delta)}`,`Coll. ${gdspTip(PROFILE_TIPS.collisions)}`,'Meilleur',`Δ rythme ${gdspTip(PROFILE_TIPS.sigma,'gdsp-tip-right')}`],raceRows)}</div>`;
 }
 
 // ---------- RENDER ----------
