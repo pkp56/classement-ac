@@ -357,3 +357,82 @@ test('restored formulas compute iRacing consistency, weekend Q/R best lap, Optio
   assert.equal(fouls.b, 0);
   assert.equal(fouls.c, 2);
 });
+
+test('Administration / Événements lets admin insert, persist across saves, and remove an event poster on Classements', async () => {
+  const upcomingEv = {
+    slug: 'alfa-romeo-cup-2026',
+    name: 'Alfa Romeo Cup',
+    kind: 'championship',
+    points_config: { expectedRounds: 3 },
+    updated_at: '2026-11-08T12:00:00Z',
+    data: { sessions: [], penMap: {} }
+  };
+  let savedUpcomingData = { ...upcomingEv.data };
+  let savedUpcomingCfg = { ...upcomingEv.points_config };
+
+  const { sandbox, getElementById, calls } = makeBrowser(
+    [upcomingEv],
+    (url, opts = {}) => {
+      if (url === '/api/events/alfa-romeo-cup-2026' && (!opts.method || opts.method === 'GET')) {
+        return response({ ...upcomingEv, points_config: savedUpcomingCfg, data: savedUpcomingData });
+      }
+      if (url === '/api/events/alfa-romeo-cup-2026/data' && opts.method === 'POST') {
+        savedUpcomingData = JSON.parse(opts.body);
+        return response({ ok: true });
+      }
+      if (url === '/api/events/alfa-romeo-cup-2026' && opts.method === 'PUT') {
+        const b = JSON.parse(opts.body);
+        if (b.pointsConfig) savedUpcomingCfg = b.pointsConfig;
+        return response({ ok: true });
+      }
+      return null;
+    }
+  );
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setImmediate(resolve));
+
+  // 1) Open Administration -> Événements and verify the poster upload button is rendered
+  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin';adminTab='events';page='admin';render()", sandbox);
+  const eventsAdminHtml = getElementById('app').innerHTML;
+  assert.match(eventsAdminHtml, /Insérer une affiche/);
+  assert.match(eventsAdminHtml, /Alfa Romeo Cup/);
+
+  // 2) Upload a poster on the current Lola championship AND on the upcoming Alfa Romeo Cup
+  const lolaSlug = fixture.event.slug;
+  const sampleDataUrl = 'data:image/jpeg;base64,dGVzdHBvc3Rlcg==';
+  sandbox.__posterFileEvent = { target: { files: [{ dataUrl: sampleDataUrl }] } };
+  vm.runInContext(`triggerEventPosterUpload('${lolaSlug}')`, sandbox);
+  await vm.runInContext('handleEventPosterFile(__posterFileEvent)', sandbox);
+
+  // Verify Lola's existing sessions were preserved when saving posterImage
+  const lolaDataPost = calls.find(c => c.url === `/api/events/${lolaSlug}/data` && c.method === 'POST');
+  assert.ok(lolaDataPost, 'POST /data should be called for Lola');
+  assert.equal(lolaDataPost.body.posterImage, sampleDataUrl);
+  assert.ok(Array.isArray(lolaDataPost.body.sessions) && lolaDataPost.body.sessions.length >= 2, 'existing sessions must be preserved');
+
+  // Verify subsequent saveRemote() keeps posterImage intact
+  await vm.runInContext('saveRemote()', sandbox);
+  const lastLolaPost = calls.filter(c => c.url === `/api/events/${lolaSlug}/data` && c.method === 'POST').at(-1);
+  assert.equal(lastLolaPost.body.posterImage, sampleDataUrl);
+
+  // Verify Classements page renders the poster on both Pilotes and Trophée du mérite tabs
+  await vm.runInContext("go('classement')", sandbox);
+  assert.match(getElementById('app').innerHTML, /class="event-poster-img"/);
+  assert.ok(getElementById('app').innerHTML.includes(sampleDataUrl));
+  vm.runInContext("showrank('merite')", sandbox);
+  assert.match(getElementById('app').innerHTML, /class="event-poster-img"/);
+
+  // 3) Upload poster for upcoming Alfa Romeo Cup (0 sessions) and switch to it
+  vm.runInContext("triggerEventPosterUpload('alfa-romeo-cup-2026')", sandbox);
+  await vm.runInContext('handleEventPosterFile(__posterFileEvent)', sandbox);
+  assert.equal(savedUpcomingCfg.hasPoster, true);
+  await vm.runInContext("switchEvent('alfa-romeo-cup-2026')", sandbox);
+  assert.match(getElementById('app').innerHTML, /class="event-poster-img"/);
+  assert.match(getElementById('app').innerHTML, /Affiche — Alfa Romeo Cup/);
+
+  // 4) Removing the poster clears it from Classements and server state
+  sandbox.confirm = () => true;
+  await vm.runInContext("removeEventPoster('alfa-romeo-cup-2026')", sandbox);
+  assert.doesNotMatch(getElementById('app').innerHTML, /class="event-poster-img"/);
+  assert.equal(savedUpcomingData.posterImage, undefined);
+});
