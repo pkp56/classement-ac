@@ -585,3 +585,21 @@ test('Unified Event tab displays active event name in header nav, groups Accueil
 });
 
 
+
+
+test('Commission round selector retains the displayed selection after switching and rerendering', async () => {
+  const { sandbox } = makeBrowser();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(vm.runInContext('rounds().length >= 2', sandbox));
+  // Each call to rounds() returns fresh objects, as in the administration render.
+  for (const index of [0, 1, 0, 1]) {
+    vm.runInContext(`selectedRaceAdj=${index}`, sandbox);
+    const html = vm.runInContext('renderAdjPanel(rounds()[selectedRaceAdj])', sandbox);
+    const select = html.match(/<select[^>]*>([\s\S]*?)<\/select>/)[1];
+    assert.match(select, new RegExp(`<option value="${index}" selected>`));
+    assert.equal((select.match(/ selected/g) || []).length, 1);
+    const expectedTrack = vm.runInContext('esc(track(rounds()[selectedRaceAdj].track))', sandbox);
+    assert.ok(select.includes(`selected>Manche ${index + 1} · ${expectedTrack}</option>`));
+  }
+});

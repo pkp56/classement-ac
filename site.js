@@ -2612,7 +2612,8 @@ function admin(){
 }
 function renderAdjPanel(r){
   const rs=rounds();
-  const curIdx=rs.indexOf(r);
+  // rounds() recrée ses objets : retrouver la manche par sa date, pas sa référence.
+  const curIdx=rs.findIndex(x=>x.date===r.date);
   const switcher=(i)=>`selectedRaceAdj=${i};render()`;
   // Compter correctement les courses (RACE) — pas juste length-1 (certaines manches n'ont pas de qualif).
   const racesCount=r.sessions.filter(s=>s.type==='RACE').length;
