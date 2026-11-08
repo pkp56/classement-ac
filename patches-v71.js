@@ -7,11 +7,12 @@
  *   en millisecondes ; DQ, DNS, DNF et avertissements restent distincts).
  * - En course, classement officiel avec seuil de 75 % des tours.
  * - En qualification, le temps ajusté sert au tri sans modifier le temps source.
+ * - Le point de pole revient au meilleur qualifié, jamais au pilote placé P1 sur une grille.
  * - Le championnat Lola T290 garde le double barème de sa manche à course unique.
  */
 (function(){
 'use strict';
-if(window.__gdspResultsV78)return; window.__gdspResultsV78=true;
+if(window.__gdspResultsV79)return; window.__gdspResultsV79=true;
 
 const DEFAULT_MIN_PCT = 0.75;
 const TARGET_CHAMP_SLUG = 'lola-t290-gdsp-championnat-2026';
@@ -185,7 +186,7 @@ function mySortSession(sess){
 window.sortSession=mySortSession;
 
 /* ---------- calculate(): classement et attribution des points ---------- */
-function v78_calculate(){
+function v79_calculate(){
   stripServerPens();
   const rs=rounds();
   const all=allDrivers();
@@ -212,6 +213,8 @@ function v78_calculate(){
     const r=rs[j];
     const races=(r.sessions||[]).filter(s=>s.type==='RACE');
     const mult=races.length===1&&dbl?2:1;
+    const qual=(r.sessions||[]).find(s=>s.type==='QUALIFY');
+    const qualPole=qual?(qual.results||[]).find(x=>!isDQ(x)&&!x.comDNF&&Number.isFinite(x._adjustedBest)&&x._adjustedBest>0&&x._adjustedBest<1e17&&(x.laps||0)>=2):null;
     races.forEach((race,ri)=>{
       const rm=ri===0?mult:1;
       const arr=race.results;
@@ -219,10 +222,6 @@ function v78_calculate(){
       for(const x of arr){if(isDQ(x)||x._t>=1e18)continue;const L=x.laps||0;if(L>wl||(L===wl&&x._t<wt)){wl=L;wt=x._t;}}
       if(wl===0)return;
       const ml=Math.max(1,Math.ceil(wl*minPct));
-      // Trouver poleId : P1 grille ET ≥ml ET non-DQ
-      let poleId=null;
-      for(const x of arr){if(x.grid===1&&!isDQ(x)&&(x.laps||0)>=ml){poleId=x.id;break;}}
-      let poleGiven=false;
       // Meilleur tour en course (parmi classés)
       let best=Infinity,bestId=null;
       for(const x of arr){if(!isClassed(x,wl,wt,ml))continue;if(Number.isFinite(x.best)&&x.best>0&&x.best<best){best=x.best;bestId=x.id;}}
@@ -233,8 +232,6 @@ function v78_calculate(){
         if(isClassed(p,wl,wt,ml)){
           clsIdx++;
           pts=(sc[clsIdx-1]||0)*rm;
-          // Pole au P1 grille classé (y.c. classé-DNF si ≥ml)
-          if(!poleGiven&&p.id===poleId){pts+=polePts*rm;poleGiven=true;}
         }
         d.rounds[j]+=pts;
         // Mérite
@@ -259,6 +256,12 @@ function v78_calculate(){
         }
       });
     });
+    // Le bonus est attribué une seule fois par manche au meilleur qualifié,
+    // indépendamment des grilles de départ des courses.
+    if(qualPole&&polePts){
+      const d=map.get(qualPole.id);
+      if(d)d.rounds[j]+=polePts*mult;
+    }
   }
 
   // Joker
@@ -267,15 +270,15 @@ function v78_calculate(){
     return{...d,total:d.rounds.reduce((a,b)=>a+b,0),joker:jokerRounds.reduce((a,b)=>a+b,0),meritTotal:d.merit.reduce((a,b)=>a+b,0)};
   });
 }
-window.calculate=v78_calculate;
+window.calculate=v79_calculate;
 
 /* ---------- Configuration et chargement ---------- */
 // Le championnat Lola T290 conserve le double barème de sa manche à course
 // unique. Les autres événements gardent leur propre configuration.
-const _pointsConfigV78=window.pointsConfig;
-if(typeof _pointsConfigV78==='function'){
+const _pointsConfigV79=window.pointsConfig;
+if(typeof _pointsConfigV79==='function'){
   window.pointsConfig=function(){
-    const cfg=_pointsConfigV78.apply(this,arguments);
+    const cfg=_pointsConfigV79.apply(this,arguments);
     if(eventContext&&eventContext.slug===TARGET_CHAMP_SLUG)cfg.doubleLongRaces=true;
     return cfg;
   };
@@ -283,18 +286,18 @@ if(typeof _pointsConfigV78==='function'){
 
 // Nettoyer les métadonnées AC dès qu'un événement est chargé. La navigation
 // reste gérée par site.js : les visiteurs arrivent sur l'accueil, pas aux résultats.
-const _loadEventV78=window.loadEvent;
-if(typeof _loadEventV78==='function'){
+const _loadEventV79=window.loadEvent;
+if(typeof _loadEventV79==='function'){
   window.loadEvent=async function(){
-    const ev=await _loadEventV78.apply(this,arguments);
+    const ev=await _loadEventV79.apply(this,arguments);
     if(ev)stripServerPens();
     return ev;
   };
 }
-const _loadLegacyV78=window.loadRemoteLegacy;
-if(typeof _loadLegacyV78==='function'){
+const _loadLegacyV79=window.loadRemoteLegacy;
+if(typeof _loadLegacyV79==='function'){
   window.loadRemoteLegacy=async function(){
-    const result=await _loadLegacyV78.apply(this,arguments);
+    const result=await _loadLegacyV79.apply(this,arguments);
     if(result)stripServerPens();
     return result;
   };

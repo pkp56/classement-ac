@@ -135,3 +135,33 @@ test('qualification time penalties are displayed/sorted without compounding on r
   assert.equal(result.first, result.original + 5000);
   assert.equal(result.second, result.first);
 });
+
+test('the pole point is awarded once to qualifying P1, not to a race grid leader', () => {
+  const ctx = makeContext();
+  vm.runInContext(`
+    sessions = [
+      {date:'2026-11-11T20:00:00Z',track:'test_track',type:'QUALIFY',results:[
+        {id:'qual-pole',name:'Qualifying pole',team:'',laps:4,best:90000,time:400000,grid:20},
+        {id:'race1-grid',name:'Race one grid P1',team:'',laps:4,best:91000,time:401000,grid:1},
+        {id:'race2-grid',name:'Race two grid P1',team:'',laps:4,best:92000,time:402000,grid:2}
+      ]},
+      {date:'2026-11-11T21:00:00Z',track:'test_track',type:'RACE',results:[
+        {id:'race1-grid',name:'Race one grid P1',team:'',laps:10,best:100000,time:1000000,grid:1},
+        {id:'qual-pole',name:'Qualifying pole',team:'',laps:10,best:101000,time:1010000,grid:2},
+        {id:'race2-grid',name:'Race two grid P1',team:'',laps:10,best:102000,time:1020000,grid:3}
+      ]},
+      {date:'2026-11-11T22:00:00Z',track:'test_track',type:'RACE',results:[
+        {id:'race2-grid',name:'Race two grid P1',team:'',laps:10,best:100000,time:1000000,grid:1},
+        {id:'race1-grid',name:'Race one grid P1',team:'',laps:10,best:101000,time:1010000,grid:2},
+        {id:'qual-pole',name:'Qualifying pole',team:'',laps:10,best:102000,time:1020000,grid:3}
+      ]}
+    ];
+    penMap = {};
+  `, ctx);
+
+  const scores = vm.runInContext('calculate().map(d=>({id:d.id,points:d.rounds[0]}))', ctx);
+  const pointsFor = id => scores.find(d => d.id === id).points;
+  assert.equal(pointsFor('qual-pole'), 74, 'qualifying P1 receives one pole point');
+  assert.equal(pointsFor('race1-grid'), 79, 'race-one grid P1 receives no pole point');
+  assert.equal(pointsFor('race2-grid'), 76, 'race-two grid P1 receives no pole point');
+});

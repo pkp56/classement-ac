@@ -724,9 +724,15 @@ function computeEventStandings(sArr,penMapArg,cfg){
     // Heuristic: 1 race = endurance/double points
     const isLong=races.length===1&&doubleLong;
     const mult=isLong?2:1;
+    let poleId=null;
     for(let si=0;si<r.sessions.length;si++){
       const s=r.sessions[si];
       applyPens(s,j,si);
+      if(s.type==='QUALIFY'){
+        const qPole=s.results.filter(p=>!p.disqualified&&!p.comDQ&&(p.laps||0)>=2&&Number.isFinite(p.best)&&p.best>0)
+          .sort((a,b)=>(a.best+(a.comTimeAdd||0))-(b.best+(b.comTimeAdd||0)))[0];
+        poleId=qPole?qPole.id:null;
+      }
       if(s.type==='RACE'){
         // Sort
         const arr=s.results.map(x=>{
@@ -738,7 +744,7 @@ function computeEventStandings(sArr,penMapArg,cfg){
         arr.forEach(x=>{x._t=x._eff+(x.comTimeAdd||0);x._dq=x.disqualified||x.comDQ});
         arr.sort((a,b)=>(a._dq?1:0)-(b._dq?1:0)||b.laps-a.laps||a._t-b._t);
         const win=arr.find(p=>!p._dq&&Number.isFinite(p._t));
-        let cls=0;let poleGiven=false;
+        let cls=0;
         arr.forEach((p,i)=>{
           const d=map.get(p.id);if(!d)return;
           let pts=0;
@@ -749,12 +755,15 @@ function computeEventStandings(sArr,penMapArg,cfg){
             if(cls===1)d.wins++;
             if(cls<=3)d.podiums++;
           }
-          if(!poleGiven&&p.grid===1&&pts>0){pts+=pole*mult;poleGiven=true}
           d.eventTotal+=pts;
           if(d.rounds.length<=j)d.rounds.push(0);
           d.rounds[j]+=pts;
         });
       }
+    }
+    if(poleId&&pole){
+      const d=map.get(poleId);
+      if(d){d.eventTotal+=pole*mult;if(d.rounds.length<=j)d.rounds.push(0);d.rounds[j]+=pole*mult;}
     }
   }
   return [...map.values()];
@@ -840,7 +849,11 @@ function calculate(){
   }
   for(let r of rs)for(let sess of r.sessions){if(sess.type==='RACE'||sess.type==='QUALIFY')sess.results=sortSession(sess)}
   for(let j=0;j<rs.length;j++){
-    let r=rs[j],races=r.sessions.filter(s=>s.type==='RACE'),qual=r.sessions.find(s=>s.type==='QUALIFY'),multiplier=races.length===1&&doubleLong?2:1,poleGiven=false;
+    let r=rs[j],races=r.sessions.filter(s=>s.type==='RACE'),qual=r.sessions.find(s=>s.type==='QUALIFY'),multiplier=races.length===1&&doubleLong?2:1;
+    const qPole=qual&&qual.results.find(p=>{
+      const best=Number.isFinite(p._adjustedBest)?p._adjustedBest:p.best;
+      return !p.disqualified&&!p.comDQ&&!p.comDNS&&!p.comDNF&&!p._dq&&(p.laps||0)>=2&&Number.isFinite(best)&&best>0&&best<1e17;
+    });
     for(let race of races){
       let clsIdx=0;
       race.results.forEach((p,i)=>{
@@ -848,7 +861,6 @@ function calculate(){
         let s=finishStatus(race,p),pts=0,place=i+1;
         if(s.full){clsIdx++;pts=(sc[clsIdx-1]||0)*multiplier}
         if(effDQ(p))pts=0;
-        if(!poleGiven&&p.grid===1&&pts>0){pts+=polePts*multiplier;poleGiven=true}
         d.rounds[j]+=pts;
         if(pts>0){
           let mm=2*multiplier;
@@ -856,6 +868,10 @@ function calculate(){
           d.merit[j]+=mm;
         }
       });
+    }
+    if(qPole&&polePts){
+      const d=map.get(qPole.id);
+      if(d)d.rounds[j]+=polePts*multiplier;
     }
   }
   let before=new Map;map.forEach(d=>before.set(d.id,0));
