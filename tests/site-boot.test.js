@@ -271,6 +271,12 @@ test('event driver profile and global driver profile render ? tooltip icons, Δ 
 
   await vm.runInContext("globalDriverId='d1';go('gpilote')", sandbox);
   const globalProfileHtml = getElementById('app').innerHTML;
+  for (const cls of ['drv-hero', 'drv-roundel', 'drv-global-level', 'drv-kpis', 'drv-perf-grid', 'drv-portrait-grid']) {
+    assert.ok(globalProfileHtml.includes(cls), `Global profile includes ${cls}`);
+  }
+  assert.match(globalProfileHtml, /class="lvl-badge"[^>]*width="180"/);
+  assert.doesNotMatch(globalProfileHtml, /Voiture engagée/);
+  assert.match(globalProfileHtml, /Choisir un pilote Global/);
   for (const label of [
     'Niveau GLOBAL',
     'Régularité inter-événements',
