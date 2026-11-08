@@ -133,14 +133,14 @@ async function apiPost(path,body){
   const headers={'Content-Type':'application/json'};
   if(adminToken)headers['Authorization']='Bearer '+adminToken;
   const r=await fetch(path,{method:'POST',headers,body:body?JSON.stringify(body):undefined});
-  if(r.status===401){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');render()}
+  if(r.status===401){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');sessionStorage.removeItem('gdsp_admin_token');render()}
   return r;
 }
 async function apiPut(path,body){
   const headers={'Content-Type':'application/json'};
   if(adminToken)headers['Authorization']='Bearer '+adminToken;
   const r=await fetch(path,{method:'PUT',headers,body:body?JSON.stringify(body):undefined});
-  if(r.status===401){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');render()}
+  if(r.status===401){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');sessionStorage.removeItem('gdsp_admin_token');render()}
   return r;
 }
 
@@ -179,6 +179,10 @@ async function loadEvent(slug){
     penMap=(d.penMap&&typeof d.penMap==='object')?d.penMap:{};
     manualDrivers=d.manualDrivers||null;
     customCalendar=d.customCalendar||null;
+    if(manualDrivers)sessions.forEach(s=>(s.results||[]).forEach(r=>{
+      const edit=manualDrivers[r.id];
+      if(edit){r.name=edit.name;r.team=edit.team||'';}
+    }));
     return ev;
   }catch(e){console.warn('loadEvent failed',e);return null}
 }
@@ -205,7 +209,19 @@ async function loadRemoteLegacy(){
 }
 
 // ---------- Navigation / rounds / drivers ----------
-function rounds(){let m={};sessions.filter(s=>s&&s.date).forEach(s=>(m[s.date.slice(0,10)]??=[]).push(s));return Object.entries(m).sort().map(([d,s],i)=>({date:d,sessions:s,track:track(s[0].track),number:i+1}))}
+function rounds(){
+  const byDate=new Map();
+  sessions.filter(s=>s&&s.date).forEach(s=>{
+    const key=String(s.date).slice(0,10);
+    if(!byDate.has(key))byDate.set(key,[]);
+    byDate.get(key).push(s);
+  });
+  const typeOrder={QUALIFY:0,RACE:1,PRACTICE:2};
+  return [...byDate.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([d,list],i)=>{
+    list.sort((a,b)=>(typeOrder[a.type]??9)-(typeOrder[b.type]??9)||String(a.date||'').localeCompare(String(b.date||'')));
+    return{date:d,sessions:list,track:track(list[0].track),number:i+1};
+  });
+}
 function allDrivers(){let map=new Map;for(const s of sessions)for(const r of s.results){if(!map.has(r.id))map.set(r.id,{...r});}return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name))}
 function info(){return ''}
 function head(k,t,desc=''){
@@ -888,19 +904,55 @@ function ranking(){
 // ---------- Pages Manches / Pilotes ----------
 function manche(){
   if(backendMulti&&!eventContext)return hub();
-  let rs=rounds();if(round>=rs.length)round=0;let r=rs[round];if(!r)return `${head('résultats','Les manches','')}<p class="note">Aucune manche importée.</p>`;
-  if(sessionIndex>=r.sessions.length)sessionIndex=0;let s=r.sessions[sessionIndex];let rows=sortSession(s);let winner=s.type==='RACE'?rows[0]:null;
-  function eff(x){let t=x._t;if(Number.isFinite(t))return t;let base=x.finalTime!=null?x.finalTime:(x.efftime!=null?x.efftime:x.time);return Number.isFinite(base)?base+(x.comTimeAdd||0):null}
-  function gapTo(a,b){let ta=eff(a),tb=eff(b);if(!ta||!tb||a.laps!==b.laps||a._dq||b._dq)return a.laps!==b.laps?(a.laps<b.laps?'+'+(b.laps-a.laps)+' t':'—'):'—';let d=(ta-tb)/1000;return d>0?'+'+d.toFixed(3)+' s':'—'}
-  let resultrows;
-  if(s.type==='QUALIFY'){
-    resultrows=rows.map((x,i)=>`<tr><td class="pos">${String(i+1).padStart(2,'0')}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.team)||'—'}</td><td>${x.laps??'—'}</td><td>${fmt(x.best)}</td></tr>`);
-  }else{
-    resultrows=rows.map((x,i)=>{const prev=i>0?rows[i-1]:null;return `<tr><td class="pos">${String(i+1).padStart(2,'0')}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.team)||'—'}</td><td>${x.grid??'—'}</td><td>${x.laps??'—'}</td><td>${fmt(x.best)}</td><td>${i===0?'Tête':gapTo(x,winner)}</td><td>${i===0?'—':gapTo(x,prev)}</td></tr>`});
+  const rs=rounds();
+  if(round>=rs.length)round=0;
+  const r=rs[round];
+  if(!r)return `${head('résultats','Les manches','')}<p class="note">Aucune manche importée.</p>`;
+  if(sessionIndex<0||sessionIndex>=r.sessions.length)sessionIndex=0;
+  const s=r.sessions[sessionIndex];
+  if(!s)return `${head('résultats','Les manches','')}<p class="note">Aucune session disponible pour cette manche.</p>`;
+
+  const rows=sortSession(s);
+  const winner=s.type==='RACE'?rows.find(x=>!x._dq&&!x.comDNF&&!x.comDNS&&Number.isFinite(x._t)&&x._t<1e17):null;
+  function penaltyLabel(x){
+    const tags=[];
+    if(x.comDQ||x.disqualified)tags.push('DQ');
+    else if(x.comDNS)tags.push('DNS');
+    else if(x.comDNF)tags.push('DNF');
+    if(Number.isFinite(x.comTimeAdd)&&x.comTimeAdd!==0){
+      const sec=x.comTimeAdd/1000;
+      const value=Number.isInteger(sec)?Math.abs(sec).toFixed(0):Math.abs(sec).toFixed(1);
+      tags.push((sec>0?'+':sec<0?'-':'')+value+'s');
+    }
+    if(x.comWarning)tags.push('Aver.');
+    return tags.join(', ');
   }
-  function raceClock(ts,start){if(typeof ts!=='number'||typeof start!=='number')return '—';let sec=Math.max(0,ts-start),h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=Math.floor(sec%60),ms=Math.floor((sec%1)*10);return (h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')}
-  let eventrows=(s.events||[]).filter(e=>e.a&&e.b).map((e,i)=>`<tr><td>${i+1}</td><td><b>${esc(e.a)}</b></td><td>${esc(e.b)}</td><td>${typeof e.speed==='number'?e.speed.toFixed(1)+' km/h':'—'}</td><td>${raceClock(e.timestamp,s.raceStart)}</td></tr>`);
-  return `${head('résultats','Les manches','Toutes les sessions importées, regroupées par date.')}<div class="controls"><select onchange="round=+this.value;sessionIndex=0;eventtab='resultats';render()">${rs.map((x,i)=>`<option value="${i}" ${i===round?'selected':''}>Manche ${i+1} · ${esc(x.track)}</option>`).join('')}</select><select onchange="sessionIndex=+this.value;eventtab='resultats';render()">${r.sessions.map((x,i)=>`<option value="${i}" ${i===sessionIndex?'selected':''}>${x.type==='QUALIFY'?'Qualification':'Course '+r.sessions.slice(0,i+1).filter(y=>y.type==='RACE').length}</option>`).join('')}</select><span class="tag">${date(r.date)}</span></div>${tabs([['resultats','Résultats'],...(s.type==='RACE'?[['collisions','Collisions entre pilotes']]:[])],eventtab,'showevent')}<div class="panel">${eventtab==='collisions'?`<h2>Incidents enregistrés</h2><p class="note">Événements bruts entre voitures en course, sans attribution de responsabilité.</p>${table(['#','Pilote','Autre pilote','Vitesse','Temps de course'],eventrows)}`:`<h2>${esc(r.track)} · ${s.type==='QUALIFY'?'Qualification':'Course'}</h2><p class="note">Classement officiel : meilleur tour pour les qualifications, ordre d'arrivée (avec pénalités commission) pour les courses.</p>${s.type==='QUALIFY'?table(['Pos.','Pilote','Équipe','Tours','Meilleur tour'],resultrows):table(['Pos.','Pilote','Équipe','Grille','Tours','Meilleur tour','Écart / tête','Écart / préc.'],resultrows)}`}</div>`;
+  function penaltyCell(x){
+    const label=penaltyLabel(x);
+    return `<td class="${label?'penalty':'muted'}">${label?esc(label):'—'}</td>`;
+  }
+  function gapTo(a,b){
+    if(!a||!b||a._dq||b._dq||a.comDNF||a.comDNS||b.comDNF||b.comDNS)return '—';
+    if(!Number.isFinite(a._t)||!Number.isFinite(b._t)||a._t>=1e17||b._t>=1e17)return '—';
+    if(a.laps!==b.laps)return a.laps<b.laps?`+${b.laps-a.laps} t`:'—';
+    const delta=(a._t-b._t)/1000;
+    return delta>0?'+'+delta.toFixed(3)+' s':'—';
+  }
+
+  const resultrows=s.type==='QUALIFY'
+    ?rows.map((x,i)=>`<tr><td class="pos">${String(i+1).padStart(2,'0')}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.team)||'—'}</td><td>${x.laps??'—'}</td><td>${fmt(x._adjustedBest??x.best)}</td>${penaltyCell(x)}</tr>`)
+    :rows.map((x,i)=>`<tr><td class="pos">${String(i+1).padStart(2,'0')}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.team)||'—'}</td><td>${x.grid??'—'}</td><td>${x.laps??'—'}</td><td>${fmt(x.best)}</td>${penaltyCell(x)}<td>${i===0&&winner?'Tête':gapTo(x,winner)}</td><td>${i===0?'—':gapTo(x,rows[i-1])}</td></tr>`);
+
+  function raceClock(ts,start){
+    if(typeof ts!=='number'||typeof start!=='number')return '—';
+    const sec=Math.max(0,ts-start),h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=Math.floor(sec%60),ms=Math.floor((sec%1)*10);
+    return (h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  }
+  const eventrows=(s.events||[]).filter(e=>e.a&&e.b).map((e,i)=>`<tr><td>${i+1}</td><td><b>${esc(e.a)}</b></td><td>${esc(e.b)}</td><td>${typeof e.speed==='number'?e.speed.toFixed(1)+' km/h':'—'}</td><td>${raceClock(e.timestamp,s.raceStart)}</td></tr>`);
+  const headers=s.type==='QUALIFY'
+    ?['Pos.','Pilote','Équipe','Tours','Meilleur tour','Pénal.']
+    :['Pos.','Pilote','Équipe','Grille','Tours','Meilleur tour','Pénal.','Écart / tête','Écart / préc.'];
+  return `${head('résultats','Les manches','Toutes les sessions importées, regroupées par date.')}<div class="controls"><select onchange="round=+this.value;sessionIndex=0;eventtab='resultats';render()">${rs.map((x,i)=>`<option value="${i}" ${i===round?'selected':''}>Manche ${i+1} · ${esc(x.track)}</option>`).join('')}</select><select onchange="sessionIndex=+this.value;eventtab='resultats';render()">${r.sessions.map((x,i)=>`<option value="${i}" ${i===sessionIndex?'selected':''}>${x.type==='QUALIFY'?'Qualification':'Course '+r.sessions.slice(0,i+1).filter(y=>y.type==='RACE').length}</option>`).join('')}</select><span class="tag">${date(r.date)}</span></div>${tabs([['resultats','Résultats'],...(s.type==='RACE'?[['collisions','Collisions entre pilotes']]:[])],eventtab,'showevent')}<div class="panel">${eventtab==='collisions'?`<h2>Incidents enregistrés</h2><p class="note">Événements bruts entre voitures en course, sans attribution de responsabilité.</p>${table(['#','Pilote','Autre pilote','Vitesse','Temps de course'],eventrows)}`:`<h2>${esc(r.track)} · ${s.type==='QUALIFY'?'Qualification':'Course'}</h2><p class="note">Classement officiel : meilleur tour pour les qualifications, ordre d'arrivée (avec pénalités Commission) pour les courses.</p>${table(headers,resultrows)}`}</div>`;
 }
 
 // Performance ratings (kept simple, unchanged logic)
@@ -963,7 +1015,7 @@ async function adminLogin(){
     render()
   }catch(e){alert('Erreur de connexion : '+e.message)}
 }
-async function adminLogout(){adminToken=null;adminAuth=false;adminUser='';localStorage.removeItem('gdsp_admin_token');render()}
+async function adminLogout(){adminToken=null;adminAuth=false;adminUser='';localStorage.removeItem('gdsp_admin_token');sessionStorage.removeItem('gdsp_admin_token');render()}
 async function doSaveRemote(){
   const el=document.getElementById('save-status');
   function say(txt,c){if(el){el.textContent=txt;el.style.color=c||'#586260'}console.log('[save]',txt)}
@@ -1054,7 +1106,16 @@ async function bulkImport(ev){
   if(out)out.innerHTML=`<p class="note"><b>Import terminé :</b> ${ok} fichier(s) importé(s), ${errs.length} erreur(s).</p>${errs.length?`<ul class="note" style="font-family:monospace;font-size:11px">${errs.map(x=>'<li>✗ '+esc(x)+'</li>').join('')}</ul>`:''}`;
   ev.target.value='';
 }
-function addAdjustment(roundKey,sessionIdx,drvId,timeAdd,dq,warning,note){penMap[`${roundKey}:${sessionIdx}:${drvId}`]={timeAdd:+timeAdd||0,dq:!!dq,warning:!!warning,note:note||''};saveState();render()}
+function addAdjustment(roundKey,sessionIdx,drvId,timeAdd,dq,warning,note,opts){
+  const adj={timeAdd:+timeAdd||0,dq:!!dq,warning:!!warning,note:note||''};
+  if(opts&&(opts.dnf||opts.dns)){
+    adj.timeAdd=0;adj.dq=false;adj.warning=false;
+    if(opts.dnf)adj.dnf=true;
+    if(opts.dns)adj.dns=true;
+  }
+  penMap[`${roundKey}:${sessionIdx}:${drvId}`]=adj;
+  saveState();render();
+}
 function removeAdjustment(key){delete penMap[key];saveState();render()}
 function addRound(){const d=prompt('Date (AAAA-MM-JJ) ?','2026-11-18');if(!d)return;const t=prompt('Circuit (ex: spa_1970) ?','spa_1970');if(!t)return;customCalendar=customCalendar||{};customCalendar[d]={track:t};saveState();render()}
 
@@ -1216,7 +1277,7 @@ function admin(){
   // (où l'on peut créer/choisir un event) plutôt que sur "Imports" qui nécessite un event chargé.
   if(backendMulti&&!eventContext&&adminTab==='import')adminTab='events';
   const rs=rounds();
-  const adjList=Object.entries(penMap).map(([k,v])=>{const [rj,sj,did]=k.split(':');const ri=+rj,si=+sj,r=rs[ri],s=r&&r.sessions[si];const drv=s&&s.results.find(x=>x.id===did);const raceCount=r?r.sessions.slice(0,si+1).filter(x=>x.type==='RACE').length:0;let label='';if(v.dq)label='DQ';else if(typeof v.timeAdd==='number'&&v.timeAdd!==0)label=(v.timeAdd>0?'+':'')+v.timeAdd+' s';else if(v.warning)label='Avertissement';return `<tr><td>${r?'M'+r.number:'—'}</td><td>${s?(s.type==='QUALIFY'?'Qualif':'Course '+raceCount):'—'}</td><td>${esc(drv?drv.name:'(pilote)')}</td><td>${label}</td><td>${esc(v.note||'')}</td><td><button class="btn secondary small" onclick="removeAdjustment('${k}')">Retirer</button></td></tr>`});
+  const adjList=Object.entries(penMap).map(([k,v])=>{const [rj,sj,did]=k.split(':');const ri=+rj,si=+sj,r=rs[ri],s=r&&r.sessions[si];const drv=s&&s.results.find(x=>x.id===did);const raceCount=r?r.sessions.slice(0,si+1).filter(x=>x.type==='RACE').length:0;let label='';if(v.dq)label='DQ';else if(v.dns)label='DNS';else if(v.dnf)label='DNF';else if(typeof v.timeAdd==='number'&&v.timeAdd!==0)label=(v.timeAdd>0?'+':'')+v.timeAdd+' s';else if(v.warning)label='Avertissement';return `<tr><td>${r?'M'+r.number:'—'}</td><td>${s?(s.type==='QUALIFY'?'Qualif':'Course '+raceCount):'—'}</td><td>${esc(drv?drv.name:'(pilote)')}</td><td>${label}</td><td>${esc(v.note||'')}</td><td><button class="btn secondary small" onclick="removeAdjustment('${k}')">Retirer</button></td></tr>`});
   const roundCards=rs.map((r,i)=>{
     const races=r.sessions.filter(s=>s.type==='RACE').length;
     const quals=r.sessions.filter(s=>s.type==='QUALIFY').length;
@@ -1249,7 +1310,29 @@ function renderAdjPanel(r){
   return html+'</div>';
 }
 function openAdj(roundIdx){selectedRaceAdj=roundIdx;adminTab='adjust';render()}
-function openAdjForm(rj,sj,did){const ta=prompt('Ajustement temps en secondes (+10 / -10 pour annuler une pénalité serveur) ?','0');if(ta===null)return;const timeAdd=+ta||0;const dq=confirm('DQ (drapeau noir) ?');const warning=!dq&&confirm('Avertissement sans sanction ?');const note=prompt('Note / motif ?','')||'';addAdjustment(rj,sj,did,timeAdd,dq,warning,note)}
+function openAdjForm(rj,sj,did){
+  const choice=String(prompt('Ajustement :\n1=Pénalité temps\n2=DNF non-classé (<75%)\n3=DNS (absent)\n4=DQ\n5=Avertissement\n0=Annuler','1')||'').trim();
+  if(!choice||choice==='0')return;
+  if(choice==='2'){
+    if(!confirm('DNF non-classé (<75%) ?'))return;
+    addAdjustment(rj,sj,did,0,false,false,prompt('Note ?','Abandon')||'Abandon',{dnf:true});return;
+  }
+  if(choice==='3'){
+    if(!confirm('DNS (absent) ?'))return;
+    addAdjustment(rj,sj,did,0,false,false,prompt('Note ?','Absent')||'Absent',{dns:true});return;
+  }
+  if(choice==='4'){
+    if(!confirm('DQ (drapeau noir) ?'))return;
+    addAdjustment(rj,sj,did,0,true,false,prompt('Note ?','')||'');return;
+  }
+  if(choice==='5'){
+    if(!confirm('Avertissement sans sanction ?'))return;
+    addAdjustment(rj,sj,did,0,false,true,'');return;
+  }
+  const ta=prompt('Ajustement temps en secondes ?','0');
+  if(ta===null)return;
+  addAdjustment(rj,sj,did,+ta||0,false,false,prompt('Note / motif ?','')||'');
+}
 
 // ---------- AssettoHosting auto-import ----------
 // ---------- AH championship discovery ----------
@@ -1585,22 +1668,26 @@ function render(){
   await detectBackend();
 
   if(backendMulti){
-    // Multi mode : on démarre TOUJOURS sur la page d'accueil GDSP (hero 65/35).
-    // Les onglets Classements/Résultats/Pilotes chargeront l'événement au clic si besoin.
-    try{
-      const lr=await apiGet('/api/events');
-      if(lr.ok){const j=await lr.json();events=Array.isArray(j.events)?j.events:[]}
-    }catch(e){}
-    page='hub';
-    // Warmup ping : réveille le backend Render (free tier = cold start 30-60s) en arrière-plan
-    // pour que les premières actions (login, save, import) ne prennent pas 1 minute.
-    fetch('/health',{method:'GET',cache:'no-store'}).catch(()=>{});
-    // Pré-charger en arrière-plan le dernier événement visité pour que les onglets
-    // Classements/Résultats/Pilotes répondent vite au premier clic.
+    // Les visiteurs commencent toujours sur l'accueil GDSP. L'événement par
+    // défaut est préchargé en arrière-plan pour que Résultats réponde vite.
     const last=localStorage.getItem('gdsp_last_event');
     const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
-    if(target&&!eventContext){
-      loadEvent(target.slug).catch(e=>{});
+    if(adminToken){
+      try{
+        const auth=await apiGet('/api/admin/verify');
+        const info=await auth.json().catch(()=>({}));
+        if(!auth.ok||!info.ok)throw new Error('Session administrateur invalide');
+        adminAuth=true;adminUser=info.user||'Direction de course';page='admin';
+      }catch(e){
+        adminToken=null;adminAuth=false;adminUser='';
+        localStorage.removeItem('gdsp_admin_token');sessionStorage.removeItem('gdsp_admin_token');
+      }
+    }
+    if(adminAuth){
+      if(target&&!eventContext)await loadEvent(target.slug);
+    }else{
+      page='hub';
+      if(target&&!eventContext)loadEvent(target.slug).catch(()=>{});
     }
   }else{
     // Legacy mode: same behaviour as before
@@ -1624,7 +1711,7 @@ function render(){
         }catch(e){console.warn('serveur indisponible',e)}
         if(manualDrivers)sessions.forEach(s=>s.results.forEach(r=>{if(manualDrivers[r.id]){r.name=manualDrivers[r.id].name;r.team=manualDrivers[r.id].team||''}}));
       }
-      if(adminToken){try{const r=await apiGet('/health');if(!r.ok)throw new Error('bad health');adminAuth=true;adminUser='Direction de course'}catch(e){adminToken=null;localStorage.removeItem('gdsp_admin_token')}}
+      if(adminToken){try{const r=await apiGet('/api/admin/verify');const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw new Error('bad token');adminAuth=true;adminUser=j.user||'Direction de course';page='admin'}catch(e){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');sessionStorage.removeItem('gdsp_admin_token')}}
     }catch(e){app.innerHTML='Erreur de rendu : '+e.message}
   }
   render();

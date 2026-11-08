@@ -1,5 +1,5 @@
-// patches-v43.js — v50b : ajoute les « ? » dorés manquants sur les barres
-// « Régularité inter-événements » et « Progression » du profil GLOBAL.
+// patches-v43.js — ajoute les « ? » dorés sur les profils GLOBAL.
+// Le style des bulles est défini dans index.html pour que le script reste autonome.
 // L'observateur est DÉCONNECTÉ pendant les mutations pour éviter une boucle
 // infinie (insertAdjacentHTML → mutation → callback → insertAdjacentHTML → …)
 // qui faisait planter l'onglet.

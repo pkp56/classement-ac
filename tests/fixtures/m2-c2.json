@@ -1,0 +1,750 @@
+{
+  "event": {
+    "slug": "lola-t290-gdsp-championnat-2026",
+    "points_config": {
+      "doubleLongRaces": false
+    }
+  },
+  "sessions": [
+    {
+      "date": "2026-09-23T21:25:00+02:00",
+      "track": "riverside",
+      "type": "QUALIFY",
+      "results": [
+        {
+          "id": "66d78a547656",
+          "name": "Thomas PONGE",
+          "team": "Online Passion Competition",
+          "grid": 26,
+          "laps": 7,
+          "best": 105990,
+          "time": 1046709
+        },
+        {
+          "id": "b519b3677656",
+          "name": "51R Sherman",
+          "team": "51 Racing",
+          "grid": 5,
+          "laps": 8,
+          "best": 106332,
+          "time": 1052866
+        },
+        {
+          "id": "39d6bf3f7656",
+          "name": "Tofusan",
+          "team": "ECURIE GDSP #2",
+          "grid": 12,
+          "laps": 8,
+          "best": 106380,
+          "time": 949050
+        },
+        {
+          "id": "4ed5274c7656",
+          "name": "Kimy Hoyer",
+          "team": "Ecurie GDSP #1",
+          "grid": 25,
+          "laps": 9,
+          "best": 106986,
+          "time": 1179655
+        },
+        {
+          "id": "7b2ef8377656",
+          "name": "aSSaSSins_strEEt",
+          "team": "Ecurie GDSP #2",
+          "grid": 2,
+          "laps": 9,
+          "best": 107016,
+          "time": 1126820
+        },
+        {
+          "id": "39aeac7a7656",
+          "name": "Karl74",
+          "team": "Fk Racing",
+          "grid": 8,
+          "laps": 8,
+          "best": 107108,
+          "time": 1054573
+        },
+        {
+          "id": "d90d9c6d7656",
+          "name": "Neutraliz",
+          "team": "Erminig Gwenn",
+          "grid": 1,
+          "laps": 7,
+          "best": 107168,
+          "time": 859973
+        },
+        {
+          "id": "d85fa73c7656",
+          "name": "[APR] Alexou33",
+          "team": "Alpha Performance Racing",
+          "grid": 4,
+          "laps": 6,
+          "best": 107172,
+          "time": 742094
+        },
+        {
+          "id": "5d9d447f7656",
+          "name": "Harrythmetique",
+          "team": "Les Brasseurs de la Mine",
+          "grid": 28,
+          "laps": 9,
+          "best": 107286,
+          "time": 1226110
+        },
+        {
+          "id": "a2f163057656",
+          "name": "Jim ZPLOUCH",
+          "team": "Gitane Maïs",
+          "grid": 18,
+          "laps": 10,
+          "best": 107346,
+          "time": 1215190
+        },
+        {
+          "id": "72dad6c87656",
+          "name": "Elouan",
+          "team": "Erminig Gwenn",
+          "grid": 7,
+          "laps": 6,
+          "best": 107516,
+          "time": 818449
+        },
+        {
+          "id": "79a5d7317656",
+          "name": "[APR] Pierre",
+          "team": "Alpha Performance Racing",
+          "grid": 24,
+          "laps": 9,
+          "best": 107629,
+          "time": 1201941
+        },
+        {
+          "id": "3f217d9e7656",
+          "name": "kant-1",
+          "team": "Ecurie GDSP #1",
+          "grid": 13,
+          "laps": 7,
+          "best": 107739,
+          "time": 1100650
+        },
+        {
+          "id": "872ec8b17656",
+          "name": "Yohana.L",
+          "team": "Vroom Racing Team",
+          "grid": 14,
+          "laps": 7,
+          "best": 107866,
+          "time": 1163559
+        },
+        {
+          "id": "9b7234567656",
+          "name": "[APR] Christophe",
+          "team": "Absolute Loosers",
+          "grid": 21,
+          "laps": 8,
+          "best": 107906,
+          "time": 1195378
+        },
+        {
+          "id": "e35e3b637656",
+          "name": "LeNainPosteur",
+          "team": "Gitane Maïs",
+          "grid": 30,
+          "laps": 6,
+          "best": 107994,
+          "time": 1112218
+        },
+        {
+          "id": "8f80281c7656",
+          "name": "SuperSlipos",
+          "team": "Les Bananes Flambées",
+          "grid": 27,
+          "laps": 8,
+          "best": 108152,
+          "time": 987770
+        },
+        {
+          "id": "01b320987656",
+          "name": "Orthopedux",
+          "team": "",
+          "grid": 19,
+          "laps": 4,
+          "best": 108202,
+          "time": 526081
+        },
+        {
+          "id": "13bc1e097656",
+          "name": "51R Gilles",
+          "team": "51 Racing",
+          "grid": 22,
+          "laps": 6,
+          "best": 108485,
+          "time": 1047534
+        },
+        {
+          "id": "8afeda5e7656",
+          "name": "cheucheu91",
+          "team": "Les Bananes Flambées",
+          "grid": 20,
+          "laps": 6,
+          "best": 109353,
+          "time": 848288
+        },
+        {
+          "id": "a816f94d7656",
+          "name": "Alan Mc Wrecker",
+          "team": "Absolute Loosers",
+          "grid": 9,
+          "laps": 9,
+          "best": 109445,
+          "time": 1215795
+        },
+        {
+          "id": "6842a9f87656",
+          "name": "Pikoupok",
+          "team": "Réserviste",
+          "grid": 10,
+          "laps": 8,
+          "best": 110091,
+          "time": 1125157
+        },
+        {
+          "id": "def9142c7656",
+          "name": "pistol",
+          "team": "",
+          "grid": 6,
+          "laps": 7,
+          "best": 110400,
+          "time": 1189304
+        }
+      ],
+      "events": [],
+      "laps": []
+    },
+    {
+      "date": "2026-09-23T22:01:00+02:00",
+      "track": "riverside",
+      "type": "RACE",
+      "results": [
+        {
+          "id": "66d78a547656",
+          "name": "Thomas PONGE",
+          "team": "Online Passion Competition",
+          "grid": 1,
+          "laps": 15,
+          "best": 106190,
+          "time": 1606364
+        },
+        {
+          "id": "39d6bf3f7656",
+          "name": "Tofusan",
+          "team": "ECURIE GDSP #2",
+          "grid": 3,
+          "laps": 15,
+          "best": 106139,
+          "time": 1608748
+        },
+        {
+          "id": "b519b3677656",
+          "name": "51R Sherman",
+          "team": "51 Racing",
+          "grid": 2,
+          "laps": 15,
+          "best": 106171,
+          "time": 1608962
+        },
+        {
+          "id": "d85fa73c7656",
+          "name": "[APR] Alexou33",
+          "team": "Alpha Performance Racing",
+          "grid": 8,
+          "laps": 15,
+          "best": 107164,
+          "time": 1624979
+        },
+        {
+          "id": "3f217d9e7656",
+          "name": "kant-1",
+          "team": "Ecurie GDSP #1",
+          "grid": 13,
+          "laps": 15,
+          "best": 107192,
+          "time": 1627178
+        },
+        {
+          "id": "39aeac7a7656",
+          "name": "Karl74",
+          "team": "Fk Racing",
+          "grid": 6,
+          "laps": 15,
+          "best": 107136,
+          "time": 1627217
+        },
+        {
+          "id": "5d9d447f7656",
+          "name": "Harrythmetique",
+          "team": "Les Brasseurs de la Mine",
+          "grid": 9,
+          "laps": 15,
+          "best": 107110,
+          "time": 1629817
+        },
+        {
+          "id": "4ed5274c7656",
+          "name": "Kimy Hoyer",
+          "team": "Ecurie GDSP #1",
+          "grid": 4,
+          "laps": 15,
+          "best": 107087,
+          "time": 1639940
+        },
+        {
+          "id": "e35e3b637656",
+          "name": "LeNainPosteur",
+          "team": "Gitane Maïs",
+          "grid": 16,
+          "laps": 15,
+          "best": 107114,
+          "time": 1643118
+        },
+        {
+          "id": "a2f163057656",
+          "name": "Jim ZPLOUCH",
+          "team": "Gitane Maïs",
+          "grid": 10,
+          "laps": 15,
+          "best": 107504,
+          "time": 1645877
+        },
+        {
+          "id": "d90d9c6d7656",
+          "name": "Neutraliz",
+          "team": "Erminig Gwenn",
+          "grid": 7,
+          "laps": 15,
+          "best": 106625,
+          "time": 1646034
+        },
+        {
+          "id": "5c84b50e7656",
+          "name": "Richard Rossier",
+          "team": "Les Brasseurs de la Mine",
+          "grid": 27,
+          "laps": 15,
+          "best": 107516,
+          "time": 1646549
+        },
+        {
+          "id": "79a5d7317656",
+          "name": "[APR] Pierre",
+          "team": "Alpha Performance Racing",
+          "grid": 12,
+          "laps": 15,
+          "best": 107933,
+          "time": 1653735
+        },
+        {
+          "id": "872ec8b17656",
+          "name": "Yohana.L",
+          "team": "Vroom Racing Team",
+          "grid": 14,
+          "laps": 15,
+          "best": 107717,
+          "time": 1654296
+        },
+        {
+          "id": "9b7234567656",
+          "name": "[APR] Christophe",
+          "team": "Absolute Loosers",
+          "grid": 15,
+          "laps": 15,
+          "best": 107611,
+          "time": 1663541
+        },
+        {
+          "id": "ae8e96687656",
+          "name": "fmherrou",
+          "team": "FK Racing",
+          "grid": 26,
+          "laps": 15,
+          "best": 106683,
+          "time": 1663868
+        },
+        {
+          "id": "6842a9f87656",
+          "name": "Pikoupok",
+          "team": "Réserviste",
+          "grid": 22,
+          "laps": 15,
+          "best": 108935,
+          "time": 1675837
+        },
+        {
+          "id": "8afeda5e7656",
+          "name": "cheucheu91",
+          "team": "Les Bananes Flambées",
+          "grid": 20,
+          "laps": 15,
+          "best": 109287,
+          "time": 1683257
+        },
+        {
+          "id": "8f80281c7656",
+          "name": "SuperSlipos",
+          "team": "Les Bananes Flambées",
+          "grid": 17,
+          "laps": 15,
+          "best": 108204,
+          "time": 1673548,
+          "penaltyTime": 5000000000,
+          "hasPenalty": true
+        },
+        {
+          "id": "a816f94d7656",
+          "name": "Alan Mc Wrecker",
+          "team": "Absolute Loosers",
+          "grid": 21,
+          "laps": 15,
+          "best": 109085,
+          "time": 1686386
+        },
+        {
+          "id": "72dad6c87656",
+          "name": "Elouan",
+          "team": "Erminig Gwenn",
+          "grid": 11,
+          "laps": 14,
+          "best": 108089,
+          "time": 1690962
+        },
+        {
+          "id": "7b2ef8377656",
+          "name": "aSSaSSins_strEEt",
+          "team": "Ecurie GDSP #2",
+          "grid": 5,
+          "laps": 7,
+          "best": 107507,
+          "time": 773019
+        },
+        {
+          "id": "01b320987656",
+          "name": "Orthopedux",
+          "team": "",
+          "grid": 18,
+          "laps": 2,
+          "best": 121544,
+          "time": 271568
+        },
+        {
+          "id": "13bc1e097656",
+          "name": "51R Gilles",
+          "team": "51 Racing",
+          "grid": 19,
+          "laps": 1,
+          "best": 122731,
+          "time": 122720
+        },
+        {
+          "id": "def9142c7656",
+          "name": "pistol",
+          "team": "",
+          "grid": 23,
+          "laps": 1,
+          "best": 140640,
+          "time": 140635
+        }
+      ],
+      "events": [],
+      "laps": []
+    },
+    {
+      "date": "2026-09-23T22:51:00+02:00",
+      "track": "riverside",
+      "type": "RACE",
+      "results": [
+        {
+          "id": "7b2ef8377656",
+          "name": "aSSaSSins_strEEt",
+          "team": "Ecurie GDSP #2",
+          "grid": 4,
+          "laps": 14,
+          "best": 107154,
+          "time": 1514555
+        },
+        {
+          "id": "4ed5274c7656",
+          "name": "Kimy Hoyer",
+          "team": "Ecurie GDSP #1",
+          "grid": 18,
+          "laps": 14,
+          "best": 107061,
+          "time": 1519069
+        },
+        {
+          "id": "39d6bf3f7656",
+          "name": "Tofusan",
+          "team": "ECURIE GDSP #2",
+          "grid": 24,
+          "laps": 14,
+          "best": 106787,
+          "time": 1522910
+        },
+        {
+          "id": "13bc1e097656",
+          "name": "51R Gilles",
+          "team": "51 Racing",
+          "grid": 2,
+          "laps": 14,
+          "best": 107921,
+          "time": 1530118
+        },
+        {
+          "id": "d85fa73c7656",
+          "name": "[APR] Alexou33",
+          "team": "Alpha Performance Racing",
+          "grid": 22,
+          "laps": 14,
+          "best": 107222,
+          "time": 1530889
+        },
+        {
+          "id": "e35e3b637656",
+          "name": "LeNainPosteur",
+          "team": "Gitane Maïs",
+          "grid": 17,
+          "laps": 14,
+          "best": 107235,
+          "time": 1532238
+        },
+        {
+          "id": "3f217d9e7656",
+          "name": "kant-1",
+          "team": "Ecurie GDSP #1",
+          "grid": 21,
+          "laps": 14,
+          "best": 107159,
+          "time": 1533960
+        },
+        {
+          "id": "d90d9c6d7656",
+          "name": "Neutraliz",
+          "team": "Erminig Gwenn",
+          "grid": 15,
+          "laps": 14,
+          "best": 106704,
+          "time": 1536225
+        },
+        {
+          "id": "5c84b50e7656",
+          "name": "Richard Rossier",
+          "team": "Les Brasseurs de la Mine",
+          "grid": 14,
+          "laps": 14,
+          "best": 107655,
+          "time": 1536251
+        },
+        {
+          "id": "b519b3677656",
+          "name": "51R Sherman",
+          "team": "51 Racing",
+          "grid": 23,
+          "laps": 14,
+          "best": 106185,
+          "time": 1541033
+        },
+        {
+          "id": "39aeac7a7656",
+          "name": "Karl74",
+          "team": "Fk Racing",
+          "grid": 20,
+          "laps": 14,
+          "best": 106933,
+          "time": 1531653,
+          "penaltyTime": 5000000000,
+          "hasPenalty": true
+        },
+        {
+          "id": "ae8e96687656",
+          "name": "fmherrou",
+          "team": "FK Racing",
+          "grid": 10,
+          "laps": 14,
+          "best": 106508,
+          "time": 1544528
+        },
+        {
+          "id": "66d78a547656",
+          "name": "Thomas PONGE",
+          "team": "Online Passion Competition",
+          "grid": 25,
+          "laps": 14,
+          "best": 105801,
+          "time": 1538968,
+          "penaltyTime": 5000000000,
+          "hasPenalty": true
+        },
+        {
+          "id": "5d9d447f7656",
+          "name": "Harrythmetique",
+          "team": "Les Brasseurs de la Mine",
+          "grid": 19,
+          "laps": 14,
+          "best": 107053,
+          "time": 1550727
+        },
+        {
+          "id": "a2f163057656",
+          "name": "Jim ZPLOUCH",
+          "team": "Gitane Maïs",
+          "grid": 16,
+          "laps": 14,
+          "best": 107179,
+          "time": 1550825
+        },
+        {
+          "id": "79a5d7317656",
+          "name": "[APR] Pierre",
+          "team": "Alpha Performance Racing",
+          "grid": 13,
+          "laps": 14,
+          "best": 108227,
+          "time": 1554149
+        },
+        {
+          "id": "a816f94d7656",
+          "name": "Alan Mc Wrecker",
+          "team": "Absolute Loosers",
+          "grid": 6,
+          "laps": 14,
+          "best": 108149,
+          "time": 1561162
+        },
+        {
+          "id": "b12dc70e7656",
+          "name": "Streetbike",
+          "team": "Scuderia Tolosa",
+          "grid": 26,
+          "laps": 14,
+          "best": 106719,
+          "time": 1562363
+        },
+        {
+          "id": "72dad6c87656",
+          "name": "Elouan",
+          "team": "Erminig Gwenn",
+          "grid": 5,
+          "laps": 14,
+          "best": 107483,
+          "time": 1565783
+        },
+        {
+          "id": "8f80281c7656",
+          "name": "SuperSlipos",
+          "team": "Les Bananes Flambées",
+          "grid": 9,
+          "laps": 14,
+          "best": 107646,
+          "time": 1569823
+        },
+        {
+          "id": "8afeda5e7656",
+          "name": "cheucheu91",
+          "team": "Les Bananes Flambées",
+          "grid": 7,
+          "laps": 14,
+          "best": 109783,
+          "time": 1579974
+        },
+        {
+          "id": "872ec8b17656",
+          "name": "Yohana.L",
+          "team": "Vroom Racing Team",
+          "grid": 12,
+          "laps": 14,
+          "best": 107642,
+          "time": 1540825,
+          "penaltyTime": 30000000000,
+          "hasPenalty": true
+        },
+        {
+          "id": "6842a9f87656",
+          "name": "Pikoupok",
+          "team": "Réserviste",
+          "grid": 8,
+          "laps": 14,
+          "best": 110529,
+          "time": 1604420,
+          "penaltyTime": 10000000000,
+          "hasPenalty": true
+        },
+        {
+          "id": "9b7234567656",
+          "name": "[APR] Christophe",
+          "team": "Absolute Loosers",
+          "grid": 11,
+          "laps": 13,
+          "best": 107867,
+          "time": 1585140
+        },
+        {
+          "id": "def9142c7656",
+          "name": "pistol",
+          "team": "",
+          "grid": 1,
+          "laps": 2,
+          "best": 110191,
+          "time": 230259
+        },
+        {
+          "id": "01b320987656",
+          "name": "Orthopedux",
+          "team": "",
+          "grid": 3,
+          "laps": 1,
+          "best": 125382,
+          "time": 125382
+        }
+      ],
+      "events": [],
+      "laps": []
+    }
+  ],
+  "penMap": {
+    "1:2:39aeac7a7656": {
+      "timeAdd": 5,
+      "dq": false,
+      "warning": false
+    },
+    "1:2:5d9d447f7656": {
+      "timeAdd": 0,
+      "dq": false,
+      "warning": true
+    },
+    "1:2:66d78a547656": {
+      "timeAdd": 5,
+      "dq": false,
+      "warning": false
+    },
+    "1:2:6842a9f87656": {
+      "timeAdd": 10,
+      "dq": false,
+      "warning": false
+    },
+    "1:2:872ec8b17656": {
+      "timeAdd": 30,
+      "dq": false,
+      "warning": false
+    },
+    "1:2:d85fa73c7656": {
+      "timeAdd": 0,
+      "dq": false,
+      "warning": true
+    },
+    "1:2:e35e3b637656": {
+      "timeAdd": 0,
+      "dq": false,
+      "warning": true
+    }
+  }
+}

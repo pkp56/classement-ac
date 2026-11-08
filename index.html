@@ -110,6 +110,15 @@ code{background:#e6dcc3;padding:2px 5px}
   .stats{grid-template-columns:repeat(2,1fr)}.grid,.cardlist{grid-template-columns:1fr}
   .stat{border-bottom:1px solid var(--line)}
 }
+.penalty{color:#a9482e;font-weight:700}
+.gdsp-tip{position:relative;display:inline-flex;align-items:center;gap:3px;cursor:help}
+.gdsp-tip .gdsp-i{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#d7a347;color:#132d35;font-size:10px;font-weight:700;font-style:normal;line-height:1;flex-shrink:0}
+.gdsp-tip .gdsp-bubble{visibility:hidden;opacity:0;position:absolute;z-index:999;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);min-width:230px;max-width:320px;padding:8px 10px;background:#1d2d22;color:#f7ecd5;font-size:11px;line-height:1.45;border:1px solid #d7a347;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.35);pointer-events:none;white-space:normal;text-align:left;transition:opacity .15s}
+.gdsp-tip .gdsp-bubble::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#d7a347}
+.gdsp-tip:hover .gdsp-bubble{visibility:visible;opacity:1}
+.gdsp-tip.gdsp-bar{position:relative}
+.gdsp-tip.gdsp-bar .gdsp-i{position:absolute;top:-2px;right:-2px;z-index:2}
+.gdsp-tip.gdsp-bar .gdsp-bubble{left:auto;right:-60px;transform:none}
 </style>
 </head>
 <body>
@@ -128,14 +137,9 @@ code{background:#e6dcc3;padding:2px 5px}
 </header>
 <div class="page" id="app"></div>
 <footer class="footer">GDSP — Gentleman Drivers Project · Classements et résultats communautaires.</footer>
-<!-- Anciens patches (v40/v41/v42/v44) désactivés : la logique de classement
-     est entièrement reprise dans patches-v71.js chargé APRÈS site.js. -->
-<!-- <script src="/patches-v40.js?v=77"></script>
-<script src="/patches-v41.js?v=77"></script>
-<script src="/patches-v42.js?v=77"></script>
-<script src="/patches-v44.js?v=77"></script> -->
-<script src="/patches-v43.js?v=77"></script><!-- bulles "?" des profils (UI pure) -->
-<script src="/site.js?v=77"></script>
-<script src="/patches-v71.js?v=77"></script>
+<!-- Scripts principaux : infobulles de profil, application, calculs et pénalités. -->
+<script src="/patches-v43.js?v=78"></script>
+<script src="/site.js?v=78"></script>
+<script src="/patches-v71.js?v=78"></script>
 </body>
 </html>

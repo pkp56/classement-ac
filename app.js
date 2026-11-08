@@ -506,10 +506,12 @@ function fallbackLocal(req,res,warn){
   return true;
 }
 
-// Vérification rapide qu'un token admin est valide (utilisé au boot du frontend)
-app.get('/api/admin/verify', (req,res)=>{
-  if(!checkAdminAuth(req)) return res.status(401).json({ok:false});
-  res.json({ok:true, user: process.env.ADMIN_USERNAME||'admin'});
+// Vérification du token admin au démarrage : accepte le secret local de secours
+// ou relaie la vérification vers le backend (tokens de production).
+app.get('/api/admin/verify', async (req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({ok:false});
+  res.json({ok:true,user:process.env.ADMIN_USERNAME||'Direction de course'});
 });
 
 // Lecture publique (utilisée par la page Classement GLOBAL pour tout visiteur)
