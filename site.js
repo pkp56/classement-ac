@@ -81,7 +81,7 @@ const PROFILE_TIPS={
   resultats:`<b>Résultats</b><br>Basé sur la position finale après pénalités Commission :<br>• 1 pilote → 50 · 2 pilotes : 55 / 45<br>• Entre 2 et 28 pilotes : l'écart entre le 1<sup>er</sup> et le dernier augmente linéairement de 10 à 100 pts (milieu = 50)<br>• 28+ pilotes : 100 au vainqueur, 0 au dernier (linéaire)<br>• DNF / DNS / DQ → <b>0</b>.<br>Arrondi à 1 décimale.`,
   progression:`<b>Progression</b><br>Pente de régression linéaire du classement par week-end en fonction du temps, toutes compétitions confondues.<br>100 = plus forte amélioration ; 0 = plus forte régression.<br>Moins de 3 week-ends → 50 (neutre).`,
   scoreEvent:`<b>Score &amp; Niveau événement</b><br>Moyenne sur 100 des quatre critères (Régularité, Propreté, Vitesse au tour, Résultats) calculés par week-end sur cet événement.<br>Répartition en 4 niveaux par quartiles (Niveau 4 = top 25 % sur l'événement). Minimum 2 manches exploitables.`,
-  niveauGlobal:`<b>Niveau GLOBAL Discord</b><br>Niveau GDSP de 1 (Élite, top 25 %) à 4 (Débutant), établi sur la moyenne des 5 critères par week-end sur tous les championnats et opens.<br>Pondération récente (demi-vie 90 jours) · minimum 5 courses.`,
+  niveauGlobal:`<b>Niveau GLOBAL Discord</b><br>Niveau selon le score GLOBAL arrondi : 0–40 Débutant · 41–60 Intermédiaire · 61–80 Confirmé · 81–100 Élite. Score établi sur la moyenne des 5 critères par week-end sur tous les championnats et opens.<br>Pondération récente (demi-vie 90 jours) · minimum 5 courses.`,
   courses:`<b>Courses disputées</b><br>Nombre de sessions de course (RACE) enregistrées pour ce pilote.`,
   bestPos:`<b>Meilleur résultat</b><br>Meilleure position obtenue à l'arrivée d'une course (après pénalités Commission).`,
   avgPos:`<b>Position moyenne</b><br>Moyenne des positions d'arrivée sur l'ensemble des courses disputées.`,
@@ -640,7 +640,7 @@ function globalRankingSync(){
   // Regrouper par niveau (1=élite … 4=débutant)
   const tiers={1:[],2:[],3:[],4:[]};
   ratings.forEach(r=>tiers[r.level].push(r));
-  const tierLabel={1:'Niveau 1 · Élite',2:'Niveau 2 · Confirmé',3:'Niveau 3 · Intermédiaire',4:'Niveau 4 · Débutant'};
+  const tierLabel={1:'Niveau 1 · Élite · 81–100',2:'Niveau 2 · Confirmé · 61–80',3:'Niveau 3 · Intermédiaire · 41–60',4:'Niveau 4 · Débutant · 0–40'};
   const tierDesc={
     1:'Pilotes les plus complets et constants sur la durée : résultats, propreté, vitesse et régularité au rendez-vous dans tous les championnats.',
     2:'Pilotes solides, capables de belles performances et d\'une bonne finition en course. Quelques axes à travailler pour rejoindre l\'élite.',
@@ -983,7 +983,12 @@ function buildRythmeCard(targetDriverId,roundsList,opts={}){
 }
 
 // Calcule un score 0-100 par pilote, tous événements confondus, par week-end avec pondération récente (demi-vie 90 jours).
-// Retourne un tableau trié par score décroissant, avec level (1=élite..4=débutant) par quartiles.
+// Le niveau suit le score entier affiché, indépendamment du nombre de pilotes.
+function globalLevelForScore(score){
+  const displayedScore=Math.round(score);
+  return displayedScore>=81?1:displayedScore>=61?2:displayedScore>=41?3:4;
+}
+// Retourne un tableau trié par score décroissant, avec level (1=élite..4=débutant).
 function globalPerformanceRatings(){
   const allWeekends=[];
   const idName=new Map(),idTeam=new Map();
@@ -1131,12 +1136,7 @@ function globalPerformanceRatings(){
     const score=(ax.regularite+ax.proprete+ax.vitesse+ax.resultats+ax.progression)/5;
     return {id:p.id,name:idName.get(p.id)||'?',team:idTeam.get(p.id)||'',score,details:ax,count:p.races,trend:p.prog||0};
   }).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name));
-  // Assigner niveau par quartile (1=top 25% … 4=bottom 25%). Utiliser la distribution naturelle.
-  const n=final.length;
-  final.forEach((p,i)=>{
-    const q=i/n;
-    p.level=q<0.25?1:q<0.5?2:q<0.75?3:4;
-  });
+  final.forEach(p=>{p.level=globalLevelForScore(p.score);});
   return final;
 }
 

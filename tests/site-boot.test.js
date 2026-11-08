@@ -609,3 +609,17 @@ test('Commission round selector retains the displayed selection after switching 
     assert.ok(select.includes(`selected>Manche ${index + 1} · ${expectedTrack}</option>`));
   }
 });
+
+
+test('Global levels follow fixed displayed-score bands rather than population quartiles', async () => {
+  const { sandbox } = makeBrowser();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  for (const [score, level] of [[0,4],[40,4],[40.49,4],[40.5,3],[41,3],[60,3],[60.5,2],[61,2],[80,2],[80.5,1],[81,1],[100,1]]) {
+    assert.equal(vm.runInContext(`globalLevelForScore(${score})`, sandbox), level, `score ${score}`);
+  }
+  const ratings = vm.runInContext('globalPerformanceRatings()', sandbox);
+  for (const driver of ratings) {
+    const score = Math.round(driver.score);
+    assert.equal(driver.level, score >= 81 ? 1 : score >= 61 ? 2 : score >= 41 ? 3 : 4);
+  }
+});
