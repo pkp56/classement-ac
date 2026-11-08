@@ -436,3 +436,37 @@ test('Administration / Événements lets admin insert, persist across saves, and
   assert.doesNotMatch(getElementById('app').innerHTML, /class="event-poster-img"/);
   assert.equal(savedUpcomingData.posterImage, undefined);
 });
+
+test('Pilotes redesigned driver sheet renders 70s racing roundel, Lola livery, KPI cards, 2-col performance & rythme, signed portrait, and podium/delta pills', async () => {
+  const { sandbox, getElementById } = makeBrowser();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setImmediate(resolve));
+
+  // 1) Pilotes list on active Lola championship displays Lola T290 livery thumbnails
+  await vm.runInContext("go('pilotes')", sandbox);
+  const listHtml = getElementById('app').innerHTML;
+  assert.match(listHtml, /\/assets\/tofusan\.jpg\?v=6/);
+  assert.match(listHtml, /\/assets\/karl\.jpg\?v=6/);
+
+  // 2) Open Tofusan (#21) driver profile sheet
+  const tofuId = vm.runInContext("allDrivers().find(d=>d.name==='Tofusan').id", sandbox);
+  vm.runInContext(`driverId=${JSON.stringify(tofuId)};render()`, sandbox);
+  const sheetHtml = getElementById('app').innerHTML;
+
+  assert.match(sheetHtml, /class="drv-topbar"/);
+  assert.match(sheetHtml, /← Tous les pilotes/);
+  assert.match(sheetHtml, /#21 · Tofusan/);
+  assert.match(sheetHtml, /<div class="drv-roundel">21<\/div>/);
+  assert.match(sheetHtml, /N° 21/);
+  assert.match(sheetHtml, /\/assets\/tofusan\.jpg\?v=6/);
+  assert.match(sheetHtml, /Arrivée moy\./);
+  assert.match(sheetHtml, /class="drv-kpis"/);
+  assert.match(sheetHtml, /class="drv-perf-grid"/);
+  assert.match(sheetHtml, /class="drv-score-badge"/);
+  assert.match(sheetHtml, /class="drv-bar-mid"/);
+  assert.match(sheetHtml, /class="panel drv-portrait-card drv-portrait-pos"/);
+  assert.match(sheetHtml, /class="panel drv-portrait-card drv-portrait-axe"/);
+  assert.match(sheetHtml, /podium-pill p[123]/);
+  assert.match(sheetHtml, /delta-pill (up|down|eq)/);
+});
+
