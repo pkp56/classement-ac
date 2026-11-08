@@ -75,13 +75,13 @@ const LVL_BADGES={1:'/assets/lvl1-elite.png',2:'/assets/lvl2-confirme.png',3:'/a
 function levelBadge(level,size){const src=LVL_BADGES[level];return src?`<img class="lvl-badge" src="${src}?v=26" alt="Niveau ${level}" width="${size}" height="${size}" loading="lazy" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-block;vertical-align:middle">`:`<span class="tag lvl lvl-${level}">${level}</span>`}
 const PROFILE_TIPS={
   regularite:`<b>Régularité (Race Consistency)</b><br>Écart moyen entre chaque tour et le <b>meilleur tour</b> du pilote sur la course (en secondes).<br>Le 1<sup>er</sup> tour et les tours aux stands / lents (&gt; 21 s plus lent que le meilleur tour) sont exclus.<br>Plus l'écart moyen est petit, plus le score est élevé.<br><i>Méthode iRacing — best minus average non-best.</i>`,
-  regulariteGlobal:`<b>Régularité inter-événements (Race Consistency)</b><br>Écart moyen entre chaque tour et le <b>meilleur tour</b> du pilote sur chaque course (1<sup>er</sup> tour et tours &gt; +21 s exclus), moyenné par week-end et comparé au plateau.<br>Plus l'écart moyen est petit, plus le score est élevé.<br>Pondération récente : demi-vie 90 jours.`,
+  regulariteGlobal:`<b>Rythme (Race Consistency)</b><br>Écart moyen entre chaque tour et le <b>meilleur tour</b> du pilote sur chaque course (1<sup>er</sup> tour et tours &gt; +21 s exclus), moyenné par week-end et comparé au plateau.<br>Plus l'écart moyen est petit, plus le score est élevé.<br>Pondération récente : demi-vie 90 jours.`,
   proprete:`<b>Propreté</b><br>Pénalités attribuées selon les contacts en course qui font <b>perdre du temps</b> à l'adversaire :<br>• Touchette sans conséquence (&lt; 1,5 s de perte pour l'autre) → 0<br>• Choc latéral / côte à côte (|Z| ≥ 1,0 m, bagarre) → 0 pour les deux<br>• Choc arrière clair (|X| ≥ 0,4 m, |Z| &lt; 1,0 m) → secondes perdues par la victime / 2, au pilote responsable<br>• Cuts de piste : +1 point par cut<br>100 = aucun contact responsable ni cut.`,
   vitesse:`<b>Vitesse au tour</b><br>Basé sur le <b>meilleur tour du week-end</b> (meilleur temps entre <b>Q</b>ualification et toutes les courses <b>R</b> de la manche).<br>Le badge <b>Q</b> ou <b>R</b> dans l'encadré Analyse du rythme indique où ce meilleur temps a été réalisé.<br>100 = pilote le plus rapide du plateau sur le week-end.`,
   resultats:`<b>Résultats</b><br>Basé sur la position finale après pénalités Commission :<br>• 1 pilote → 50 · 2 pilotes : 55 / 45<br>• Entre 2 et 28 pilotes : l'écart entre le 1<sup>er</sup> et le dernier augmente linéairement de 10 à 100 pts (milieu = 50)<br>• 28+ pilotes : 100 au vainqueur, 0 au dernier (linéaire)<br>• DNF / DNS / DQ → <b>0</b>.<br>Arrondi à 1 décimale.`,
   progression:`<b>Progression</b><br>Pente de régression linéaire du classement par week-end en fonction du temps, toutes compétitions confondues.<br>100 = plus forte amélioration ; 0 = plus forte régression.<br>Moins de 3 week-ends → 50 (neutre).`,
   scoreEvent:`<b>Score &amp; Niveau événement</b><br>Moyenne sur 100 des quatre critères (Régularité, Propreté, Vitesse au tour, Résultats) calculés par week-end sur cet événement.<br>Répartition en 4 niveaux par quartiles (Niveau 4 = top 25 % sur l'événement). Minimum 2 manches exploitables.`,
-  niveauGlobal:`<b>Niveau GLOBAL Discord</b><br>Niveau selon le score GLOBAL arrondi : 0–40 Débutant · 41–60 Intermédiaire · 61–80 Confirmé · 81–100 Élite. Score établi sur la moyenne des 5 critères par week-end sur tous les championnats et opens.<br>Pondération récente (demi-vie 90 jours) · minimum 5 courses.`,
+  niveauGlobal:`<b>Niveau GLOBAL Discord</b><br>Niveau selon le score GLOBAL arrondi : 0–40 Débutant · 41–60 Intermédiaire · 61–80 Confirmé · 81–100 Élite. Score établi sur la moyenne des 4 critères par week-end sur tous les championnats et opens.<br>Pondération récente (demi-vie 90 jours) · minimum 5 courses.`,
   courses:`<b>Courses disputées</b><br>Nombre de sessions de course (RACE) enregistrées pour ce pilote.`,
   bestPos:`<b>Meilleur résultat</b><br>Meilleure position obtenue à l'arrivée d'une course (après pénalités Commission).`,
   avgPos:`<b>Position moyenne</b><br>Moyenne des positions d'arrivée sur l'ensemble des courses disputées.`,
@@ -90,7 +90,7 @@ const PROFILE_TIPS={
   sigma:`<b>Δ rythme (Race Consistency)</b><br>Écart moyen au meilleur tour du pilote sur la course (en secondes), en excluant le 1<sup>er</sup> tour et les tours aux stands / lents (&gt; +21 s).<br>Plus cette valeur est petite, plus le rythme du pilote a été régulier.`,
   meilleurWE:`<b>Meilleur tour du week-end</b><br>Meilleur chrono absolu signé par le pilote sur la manche, entre la Qualification (badge vert <b>Q</b>) et les Courses (badge rouge <b>R</b>).`,
   pitExclu:`<b>Tours exclus (Pit / lents)</b><br>Nombre de tours écartés du calcul de régularité au-delà du 1<sup>er</sup> tour : passages aux stands ou grosses sorties (&gt; 21 s plus lent que le meilleur tour).`,
-  cinqCriteres:`<b>5 critères (0–100)</b><br>De gauche à droite : <b>Régularité</b>, <b>Propreté</b>, <b>Vitesse</b>, <b>Résultats</b> et <b>Progression</b>.<br>Survole chaque mini-barre pour voir le détail du critère.`
+  quatreCriteres:`<b>4 critères (0–100)</b><br>De gauche à droite : <b>Rythme</b>, <b>Propreté</b>, <b>Vitesse</b> et <b>Résultats</b>.<br>Survole chaque mini-barre pour voir le détail du critère.`
 };
 function gdspTip(html,mod=''){return `<span class="gdsp-tip${mod?' '+mod:''}"><i class="gdsp-i">?</i><span class="gdsp-bubble">${html}</span></span>`}
 
@@ -654,7 +654,7 @@ function globalRankingSync(){
     const list=tiers[l].slice(0,18).map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #dbd0ba;cursor:pointer" data-pid="${esc(d.id)}" onclick="globalDriverId=this.dataset.pid;go('gpilote')"><span><b>${esc(d.name)}</b></span><span class="muted" style="font-size:12px">${d.count}c · ${d.score.toFixed(0)}</span></div>`).join('');
     return `<div class="lvl-block"><div style="margin-bottom:8px">${levelBadge(l,72)}</div><h2 style="margin-top:10px">${tierLabel[l]}</h2><p class="note">${tierDesc[l]}</p><p class="note" style="margin:10px 0"><b>${tiers[l].length}</b> pilote${tiers[l].length>1?'s':''} · top ${tiers[l][0]?tiers[l][0].score.toFixed(0):'—'} → ${tiers[l].length?tiers[l][tiers[l].length-1].score.toFixed(0):'—'}/100</p><div style="margin-top:8px">${list||'<p class="note" style="font-size:12px">—</p>'}</div></div>`;
   }).join('');
-  const labels={regularite:'Régularité',proprete:'Propreté',vitesse:'Vitesse',resultats:'Résultats',progression:'Progression'};
+  const labels={regularite:'Rythme',proprete:'Propreté',vitesse:'Vitesse',resultats:'Résultats'};
   // Couleurs associées à chaque niveau (barre latérale + teinte de fond)
   const LVL_COLORS={1:{bar:'#d7a347',bg:'rgba(215,163,71,0.10)'},2:{bar:'#9c3021',bg:'rgba(156,48,33,0.07)'},3:{bar:'#3b6341',bg:'rgba(59,99,65,0.07)'},4:{bar:'#6d726c',bg:'rgba(109,114,108,0.08)'}};
   const LVL_NAMES={1:'Élite',2:'Confirmé',3:'Intermédiaire',4:'Débutant'};
@@ -677,9 +677,9 @@ function globalRankingSync(){
   });
   const detailHtml=detailRows.join('');
   return `${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
-    <p class="note" style="margin-bottom:16px">Le niveau est établi par week-end sur <b>cinq critères</b> : position finale en course, <b>régularité de course</b> (écart moyen au meilleur tour, 1<sup>er</sup> tour et stands exclus), <b>propreté</b> (contacts responsables causant ≥ 1,5 s de perte &amp; cuts), <b>vitesse au tour</b> sur le week-end (Q + R) et <b>progression</b>. Survolez les <b>?</b> dorés pour la définition complète de chaque critère. Les manches récentes comptent davantage (demi-vie 90 jours). Il faut au moins <b>${GLOBAL_MIN_RACES} courses</b> pour être classé.</p>
+    <p class="note" style="margin-bottom:16px">Le niveau est établi par week-end sur <b>quatre critères</b> : position finale en course, <b>rythme</b> (écart moyen au meilleur tour, 1<sup>er</sup> tour et stands exclus), <b>propreté</b> (contacts responsables causant ≥ 1,5 s de perte &amp; cuts), <b>vitesse au tour</b> sur le week-end (Q + R). Survolez les <b>?</b> dorés pour la définition complète de chaque critère. Les manches récentes comptent davantage (demi-vie 90 jours). Il faut au moins <b>${GLOBAL_MIN_RACES} courses</b> pour être classé.</p>
     <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">${tierCards}</div>
-    <div class="panel global-rank-wrap"><h2>Détail des pilotes classés</h2><p class="note">Trié par score global. Les 5 mini-barres représentent Régularité / Propreté / Vitesse / Résultats / Progression (0-100) — survolez une mini-barre ou l'icône ? pour le détail. Les séparateurs bleu foncé marquent les changements de niveau.</p>${table(['#','','Pilote','Courses','Score / 100',`5 critères (0-100) ${gdspTip(PROFILE_TIPS.cinqCriteres,'gdsp-tip-right')}`],detailRows)}</div>`;
+    <div class="panel global-rank-wrap"><h2>Détail des pilotes classés</h2><p class="note">Trié par score global. Les 4 mini-barres représentent Rythme / Propreté / Vitesse / Résultats (0-100) — survolez une mini-barre ou l'icône ? pour le détail. Les séparateurs bleu foncé marquent les changements de niveau.</p>${table(['#','','Pilote','Courses','Score / 100',`4 critères (0-100) ${gdspTip(PROFILE_TIPS.quatreCriteres,'gdsp-tip-right')}`],detailRows)}</div>`;
 }
 
 // ---------- Méthodes de calcul de performance (Régularité iRacing, Vitesse Q+R, Propreté Option 3, Résultats v45) ----------
@@ -1133,7 +1133,7 @@ function globalPerformanceRatings(){
   }else{out.forEach(p=>{p.det.progression=50;});}
   const final=out.filter(p=>p.races>=GLOBAL_MIN_RACES&&!globalHidden[p.id]).map(p=>{
     const ax=p.det;
-    const score=(ax.regularite+ax.proprete+ax.vitesse+ax.resultats+ax.progression)/5;
+    const score=(ax.regularite+ax.proprete+ax.vitesse+ax.resultats)/4;
     return {id:p.id,name:idName.get(p.id)||'?',team:idTeam.get(p.id)||'',score,details:ax,count:p.races,trend:p.prog||0};
   }).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name));
   final.forEach(p=>{p.level=globalLevelForScore(p.score);});
@@ -2951,9 +2951,9 @@ function globalDriverProfile(){
   if(r.details.regularite<=40)weaknesses.push("Rythme irrégulier entre les tours.");
   if(!positives.length)positives.push("En cours d'évaluation.");
   if(!weaknesses.length)weaknesses.push("Continue sur cette lancée.");
-  const lbl={regularite:'Régularité inter-événements',proprete:'Propreté',vitesse:'Vitesse au tour',resultats:'Résultats',progression:'Progression'};
+  const lbl={regularite:'Rythme',proprete:'Propreté',vitesse:'Vitesse au tour',resultats:'Résultats'};
   const gTips={regularite:PROFILE_TIPS.regulariteGlobal,proprete:PROFILE_TIPS.proprete,vitesse:PROFILE_TIPS.vitesse,resultats:PROFILE_TIPS.resultats,progression:PROFILE_TIPS.progression};
-  const bars=Object.entries(r.details).map(([k,v])=>`<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span><b>${lbl[k]||k}</b>${gTips[k]?gdspTip(gTips[k],'gdsp-tip-left'):''}</span><span>${v.toFixed(0)} / 100</span></div><div class="bar" style="margin-top:6px"><i style="width:${v.toFixed(1)}%"></i></div></div>`).join('');
+  const bars=Object.keys(lbl).map(k=>{const v=r.details[k];return `<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span><b>${lbl[k]||k}</b>${gTips[k]?gdspTip(gTips[k],'gdsp-tip-left'):''}</span><span>${v.toFixed(0)} / 100</span></div><div class="bar" style="margin-top:6px"><i style="width:${v.toFixed(1)}%"></i></div></div>`;}).join('');
   const rythmeHtml=buildRythmeCard(id,allRounds,{showEvent:true});
   const raceRows=races.map(x=>{
     const consMs=raceConsistencyMs(x.laps);
@@ -2971,7 +2971,7 @@ function globalDriverProfile(){
     <div class="drv-hero-car drv-global-level"><div class="drv-car-head"><span class="label">Niveau GLOBAL ${gdspTip(PROFILE_TIPS.niveauGlobal,'gdsp-tip-left')}</span><span class="drv-car-num">${esc(levelLabels[r.level]||'')}</span></div><div class="drv-car-stage">${levelBadge(r.level,180)}</div><div class="drv-car-foot"><span>Score <b>${r.score.toFixed(0)} / 100</b></span><span>Arrivée moy. ${gdspTip(PROFILE_TIPS.avgPos,'gdsp-tip-right')} <b>P${avgPos.toFixed(1)}</b></span></div></div></div>
     <div class="drv-kpis">${kpi('Courses '+gdspTip(PROFILE_TIPS.courses,'gdsp-tip-left'),races.length,'Tous événements confondus')}${kpi('Meilleur '+gdspTip(PROFILE_TIPS.bestPos),'P'+bestPos,`${wins} victoire(s) · ${podiums} podium(s)`,'kpi-gold')}${kpi('Pos. moy. '+gdspTip(PROFILE_TIPS.avgPos),'P'+avgPos.toFixed(1),'Position moyenne en course')}${kpi('Δ départ '+gdspTip(PROFILE_TIPS.delta),signed(avgDelta!==null?avgDelta.toFixed(1):null),'Grille départ − position d’arrivée','kpi-green')}${kpi('Coll./course '+gdspTip(PROFILE_TIPS.collisions,'gdsp-tip-right'),avgColl.toFixed(1),'Contacts serveur enregistrés','kpi-red')}</div>
     <div class="section-head"><div><div class="eyebrow">Évaluation GLOBALE</div><h2>Profil de performance &amp; rythme</h2></div></div>
-    <div class="drv-perf-grid"><div class="panel"><div class="eyebrow">Cinq critères · un niveau</div><h2>Niveau et profil</h2>${bars}</div>${rythmeHtml}</div>
+    <div class="drv-perf-grid"><div class="panel"><div class="eyebrow">Quatre critères · un niveau</div><h2>Niveau et profil</h2>${bars}</div>${rythmeHtml}</div>
     <div class="section-head"><div><div class="eyebrow">Analyse</div><h2>Portrait inter-événements</h2></div></div>
     <div class="drv-portrait-grid">${portrait(positives,true)}${portrait(weaknesses,false)}</div>
     <div class="section-head"><div><div class="eyebrow">Carnet de route</div><h2>Historique toutes compétitions</h2></div><span class="muted">${races.length} départ(s)</span></div>
