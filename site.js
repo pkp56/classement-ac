@@ -1549,18 +1549,12 @@ function renderEventShell(){
     ?'<span class="tag archive">SAISON ARCHIVÉE</span>'
     :(rs.length===0?'<span class="tag" style="background:#d7a347;color:#102a32">CHAMPIONNAT À VENIR</span>':'<span class="tag live">CHAMPIONNAT EN COURS</span>');
 
-  const champOpts=events.filter(e=>e.kind==='championship');
-  const openOpts=events.filter(e=>e.kind==='open');
-  const archOpts=events.filter(e=>e.kind==='archive');
-  const grp=(lbl,arr)=>arr.length?`<optgroup label="${lbl}">${arr.map(e=>`<option value="${esc(e.slug)}" ${e.slug===currentSlug?'selected':''}>${esc(e.name)}</option>`).join('')}</optgroup>`:'';
-  const hasMultiSelect=backendMulti&&(champOpts.length+openOpts.length+archOpts.length)>=2;
-
   const activeSub=page==='classement'?'classement':page==='manches'?'manches':page==='pilotes'?'pilotes':'event';
   const subBody=activeSub==='classement'?ranking():activeSub==='manches'?manche():activeSub==='pilotes'?drivers():eventHome();
 
   return `<div class="ev-shell">`
     +`<div class="ev-banner"><div><div class="ev-banner-kicker">${badgeHtml}<span style="font-size:11px;letter-spacing:1.8px;color:#d7a347;font-weight:700;text-transform:uppercase">Espace événement GDSP</span></div><h1>${esc(ev.name)}</h1><div class="ev-banner-meta">${rs.length?`${rs.length} manche(s) importée(s) · ${ds.length} pilote(s) engagé(s)`:'Saison en préparation · Inscriptions sur Discord'} · Coefficient Global ×${Number(cfg.globalCoef??1).toFixed(1)}</div></div>`
-    +`<div class="ev-banner-right">${backendMulti?`<button type="button" class="ev-back-hub" onclick="goHome()">← Tous les événements sur l'Accueil GDSP</button>`:''}${hasMultiSelect?`<select aria-label="Changer d'événement" onchange="switchEvent(this.value)">${grp('Championnats',champOpts)}${grp('Opens',openOpts)}${grp('Archives',archOpts)}</select>`:''}</div></div>`
+    +`</div>`
     +`<div class="ev-subtabs">`
     +`<button type="button" class="ev-subtab ${activeSub==='event'?'active':''}" onclick="setEventSubTab('event')">Accueil <span class="ev-subtab-badge">Affiche &amp; Infos</span></button>`
     +`<button type="button" class="ev-subtab ${activeSub==='classement'?'active':''}" onclick="setEventSubTab('classement')">Classements <span class="ev-subtab-badge">${ds.length||0}</span></button>`
