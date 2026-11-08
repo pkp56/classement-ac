@@ -949,6 +949,7 @@ function manche(){
   if(!s)return `${head('résultats','Les manches','')}<p class="note">Aucune session disponible pour cette manche.</p>`;
 
   const rows=sortSession(s);
+  const ptsMap=typeof sessionPoints==='function'?sessionPoints(s):new Map();
   const winner=s.type==='RACE'?rows.find(x=>!x._dq&&!x.comDNF&&!x.comDNS&&Number.isFinite(x._t)&&x._t<1e17):null;
   function penaltyLabel(x){
     const tags=[];
@@ -967,6 +968,10 @@ function manche(){
     const label=penaltyLabel(x);
     return `<td class="${label?'penalty':'muted'}">${label?esc(label):'—'}</td>`;
   }
+  function pointsCell(x){
+    const pts=ptsMap.get(x.id)||0;
+    return pts>0?`<td><b>${pts}</b></td>`:'<td class="muted">0</td>';
+  }
   function gapTo(a,b){
     if(!a||!b||a._dq||b._dq||a.comDNF||a.comDNS||b.comDNF||b.comDNS)return '—';
     if(!Number.isFinite(a._t)||!Number.isFinite(b._t)||a._t>=1e17||b._t>=1e17)return '—';
@@ -976,8 +981,8 @@ function manche(){
   }
 
   const resultrows=s.type==='QUALIFY'
-    ?rows.map((x,i)=>`<tr><td class="pos">${String(i+1).padStart(2,'0')}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.team)||'—'}</td><td>${x.laps??'—'}</td><td>${fmt(x._adjustedBest??x.best)}</td>${penaltyCell(x)}</tr>`)
-    :rows.map((x,i)=>`<tr><td class="pos">${String(i+1).padStart(2,'0')}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.team)||'—'}</td><td>${x.grid??'—'}</td><td>${x.laps??'—'}</td><td>${fmt(x.best)}</td>${penaltyCell(x)}<td>${i===0&&winner?'Tête':gapTo(x,winner)}</td><td>${i===0?'—':gapTo(x,rows[i-1])}</td></tr>`);
+    ?rows.map((x,i)=>`<tr><td class="pos">${String(i+1).padStart(2,'0')}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.team)||'—'}</td><td>${x.laps??'—'}</td><td>${fmt(x._adjustedBest??x.best)}</td>${penaltyCell(x)}${pointsCell(x)}</tr>`)
+    :rows.map((x,i)=>`<tr><td class="pos">${String(i+1).padStart(2,'0')}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.team)||'—'}</td><td>${x.grid??'—'}</td><td>${x.laps??'—'}</td><td>${fmt(x.best)}</td>${penaltyCell(x)}<td>${i===0&&winner?'Tête':gapTo(x,winner)}</td><td>${i===0?'—':gapTo(x,rows[i-1])}</td>${pointsCell(x)}</tr>`);
 
   function raceClock(ts,start){
     if(typeof ts!=='number'||typeof start!=='number')return '—';
@@ -986,8 +991,8 @@ function manche(){
   }
   const eventrows=(s.events||[]).filter(e=>e.a&&e.b).map((e,i)=>`<tr><td>${i+1}</td><td><b>${esc(e.a)}</b></td><td>${esc(e.b)}</td><td>${typeof e.speed==='number'?e.speed.toFixed(1)+' km/h':'—'}</td><td>${raceClock(e.timestamp,s.raceStart)}</td></tr>`);
   const headers=s.type==='QUALIFY'
-    ?['Pos.','Pilote','Équipe','Tours','Meilleur tour','Pénal.']
-    :['Pos.','Pilote','Équipe','Grille','Tours','Meilleur tour','Pénal.','Écart / tête','Écart / préc.'];
+    ?['Pos.','Pilote','Équipe','Tours','Meilleur tour','Pénal.','Pts']
+    :['Pos.','Pilote','Équipe','Grille','Tours','Meilleur tour','Pénal.','Écart / tête','Écart / préc.','Pts'];
   return `${head('résultats','Les manches','Toutes les sessions importées, regroupées par date.')}<div class="controls"><select onchange="round=+this.value;sessionIndex=0;eventtab='resultats';render()">${rs.map((x,i)=>`<option value="${i}" ${i===round?'selected':''}>Manche ${i+1} · ${esc(x.track)}</option>`).join('')}</select><select onchange="sessionIndex=+this.value;eventtab='resultats';render()">${r.sessions.map((x,i)=>`<option value="${i}" ${i===sessionIndex?'selected':''}>${x.type==='QUALIFY'?'Qualification':'Course '+r.sessions.slice(0,i+1).filter(y=>y.type==='RACE').length}</option>`).join('')}</select><span class="tag">${date(r.date)}</span></div>${tabs([['resultats','Résultats'],...(s.type==='RACE'?[['collisions','Collisions entre pilotes']]:[])],eventtab,'showevent')}<div class="panel">${eventtab==='collisions'?`<h2>Incidents enregistrés</h2><p class="note">Événements bruts entre voitures en course, sans attribution de responsabilité.</p>${table(['#','Pilote','Autre pilote','Vitesse','Temps de course'],eventrows)}`:`<h2>${esc(r.track)} · ${s.type==='QUALIFY'?'Qualification':'Course'}</h2><p class="note">Classement officiel : meilleur tour pour les qualifications, ordre d'arrivée (avec pénalités Commission) pour les courses.</p>${table(headers,resultrows)}`}</div>`;
 }
 

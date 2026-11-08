@@ -74,8 +74,16 @@ test('site opens at the GDSP home, then Results renders the loaded championship 
   assert.equal(vm.runInContext('page', sandbox), 'manches');
   assert.doesNotMatch(resultHtml, /Aucune manche importée/);
   assert.match(resultHtml, /<th>Pénal\.<\/th>/);
+  assert.match(resultHtml, /<th>Pts<\/th>/);
+  assert.match(resultHtml, /<td><b>41<\/b><\/td>/);
   assert.match(resultHtml, /Karl74/);
   assert.match(resultHtml, /\+22\.098 s/);
+
+  vm.runInContext('sessionIndex=0;render()', sandbox);
+  const qualHtml = getElementById('app').innerHTML;
+  assert.match(qualHtml, /<th>Pts<\/th>/);
+  assert.match(qualHtml, /<td><b>1<\/b><\/td>/);
+  assert.match(qualHtml, /<td class="muted">0<\/td>/);
 
   vm.runInContext("addAdjustment(1,2,'fixture-dnf',0,false,false,'Abandon',{dnf:true})", sandbox);
   assert.equal(vm.runInContext("penMap['1:2:fixture-dnf'].dnf", sandbox), true);

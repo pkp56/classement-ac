@@ -12,7 +12,7 @@
  */
 (function(){
 'use strict';
-if(window.__gdspResultsV80)return; window.__gdspResultsV80=true;
+if(window.__gdspResultsV81)return; window.__gdspResultsV81=true;
 
 const DEFAULT_MIN_PCT = 0.75;
 const TARGET_CHAMP_SLUG = 'lola-t290-gdsp-championnat-2026';
@@ -186,7 +186,7 @@ function mySortSession(sess){
 window.sortSession=mySortSession;
 
 /* ---------- calculate(): classement et attribution des points ---------- */
-function v80_calculate(){
+function v81_calculate(){
   stripServerPens();
   const rs=rounds();
   const all=allDrivers();
@@ -271,15 +271,65 @@ function v80_calculate(){
     meritTotal:d.merit.reduce((a,b)=>a+b,0)
   }));
 }
-window.calculate=v80_calculate;
+window.calculate=v81_calculate;
+
+// Points affichés par session : la pole est portée par la qualification,
+// les courses reçoivent uniquement leurs points de classement.
+function v81_sessionPoints(sess){
+  const out=new Map();
+  if(!sess)return out;
+  const cfg=pointsConfig();
+  const scale=cfg.pointsScale||DEFAULT_POINTS.pointsScale;
+  const polePts=cfg.polePoints||0;
+  const dbl=cfg.doubleLongRaces!==false;
+  const minPct=cfg.minPercentDistance||DEFAULT_MIN_PCT;
+  const rs=rounds();
+  const [rIdx]=findSessionIdx(sess);
+  const r=rs[rIdx];
+  if(!r)return out;
+  const races=(r.sessions||[]).filter(s=>s.type==='RACE');
+  const mult=races.length===1&&dbl?2:1;
+  const isDQ=p=>p._dq||p.comDNS||p.comDQ||p.disqualified;
+
+  if(sess.type==='QUALIFY'){
+    const pole=mySortSession(sess).find(p=>!isDQ(p)&&!p.comDNF&&(p.laps||0)>=2&&Number.isFinite(p._adjustedBest)&&p._adjustedBest>0&&p._adjustedBest<1e17);
+    if(pole&&polePts)out.set(pole.id,polePts*mult);
+    (sess.results||[]).forEach(p=>{if(!out.has(p.id))out.set(p.id,0);});
+    return out;
+  }
+  if(sess.type!=='RACE')return out;
+
+  const ri=races.indexOf(sess);
+  if(ri<0)return out;
+  const rm=ri===0?mult:1;
+  const arr=mySortSession(sess);
+  let wl=0,wt=1e18;
+  for(const p of arr){
+    if(isDQ(p)||p._t>=1e18)continue;
+    const laps=p.laps||0;
+    if(laps>wl||(laps===wl&&p._t<wt)){wl=laps;wt=p._t;}
+  }
+  const minLaps=Math.max(1,Math.ceil(wl*minPct));
+  let classifiedPosition=0;
+  for(const p of arr){
+    let pts=0;
+    if(wl>0&&!isDQ(p)&&Number.isFinite(p._t)&&p._t<1e18&&(p.laps||0)>=minLaps){
+      classifiedPosition++;
+      pts=(scale[classifiedPosition-1]||0)*rm;
+    }
+    out.set(p.id,pts);
+  }
+  return out;
+}
+window.sessionPoints=v81_sessionPoints;
 
 /* ---------- Configuration et chargement ---------- */
 // Le championnat Lola T290 conserve le double barème de sa manche à course
 // unique. Les autres événements gardent leur propre configuration.
-const _pointsConfigV80=window.pointsConfig;
-if(typeof _pointsConfigV80==='function'){
+const _pointsConfigV81=window.pointsConfig;
+if(typeof _pointsConfigV81==='function'){
   window.pointsConfig=function(){
-    const cfg=_pointsConfigV80.apply(this,arguments);
+    const cfg=_pointsConfigV81.apply(this,arguments);
     if(eventContext&&eventContext.slug===TARGET_CHAMP_SLUG)cfg.doubleLongRaces=true;
     return cfg;
   };
@@ -287,18 +337,18 @@ if(typeof _pointsConfigV80==='function'){
 
 // Nettoyer les métadonnées AC dès qu'un événement est chargé. La navigation
 // reste gérée par site.js : les visiteurs arrivent sur l'accueil, pas aux résultats.
-const _loadEventV80=window.loadEvent;
-if(typeof _loadEventV80==='function'){
+const _loadEventV81=window.loadEvent;
+if(typeof _loadEventV81==='function'){
   window.loadEvent=async function(){
-    const ev=await _loadEventV80.apply(this,arguments);
+    const ev=await _loadEventV81.apply(this,arguments);
     if(ev)stripServerPens();
     return ev;
   };
 }
-const _loadLegacyV80=window.loadRemoteLegacy;
-if(typeof _loadLegacyV80==='function'){
+const _loadLegacyV81=window.loadRemoteLegacy;
+if(typeof _loadLegacyV81==='function'){
   window.loadRemoteLegacy=async function(){
-    const result=await _loadLegacyV80.apply(this,arguments);
+    const result=await _loadLegacyV81.apply(this,arguments);
     if(result)stripServerPens();
     return result;
   };
