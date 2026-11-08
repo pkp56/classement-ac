@@ -90,22 +90,24 @@ test('M2 C2 results show commission penalties and the expected adjusted gaps', a
   await vm.runInContext('loadEvent()', ctx);
   const html = vm.runInContext('manche()', ctx);
   assert.match(html, /<th>Pénal\.<\/th>/);
+  assert.match(html, /<th>Pts<\/th>/);
 
   const rows = [...html.matchAll(/<tr>(.*?)<\/tr>/g)].map(match => match[1]);
   const rowOf = name => rows.find(row => row.includes(`<b>${name}</b>`));
   const expected = [
-    ['Karl74', 10, '+5s', '+22.098 s'],
-    ['Thomas PONGE', 12, '+5s', '+29.413 s'],
-    ['Yohana.L', 21, '+30s', '+56.270 s'],
-    ['Pikoupok', 23, '+10s', '+99.865 s'],
-    ['51R Sherman', 11, '—', '+26.478 s']
+    ['Karl74', 10, '+5s', '+22.098 s', 20],
+    ['Thomas PONGE', 12, '+5s', '+29.413 s', 17],
+    ['Yohana.L', 21, '+30s', '+56.270 s', 8],
+    ['Pikoupok', 23, '+10s', '+99.865 s', 6],
+    ['51R Sherman', 11, '—', '+26.478 s', 18]
   ];
-  for (const [name, position, penalty, gap] of expected) {
+  for (const [name, position, penalty, gap, pts] of expected) {
     const row = rowOf(name);
     assert.ok(row, `missing results row for ${name}`);
     if (position !== null) assert.match(row, new RegExp(`class="pos">0*${position}<\\/td>`));
     assert.ok(row.includes(`class="${penalty === '—' ? 'muted' : 'penalty'}">${penalty}</td>`), `${name}: missing ${penalty}`);
     assert.ok(row.includes(`<td>${gap}</td>`), `${name}: missing expected gap ${gap}`);
+    assert.ok(row.includes(`<td><b>${pts}</b></td>`), `${name}: missing expected points ${pts}`);
   }
 });
 
@@ -184,4 +186,27 @@ test('the pole point is awarded once to qualifying P1, not to a race grid leader
   assert.equal(pointsFor('qual-pole'), 74, 'qualifying P1 receives one pole point');
   assert.equal(pointsFor('race1-grid'), 79, 'race-one grid P1 receives no pole point');
   assert.equal(pointsFor('race2-grid'), 76, 'race-two grid P1 receives no pole point');
+
+  const [qual, race1, race2] = Array.from(vm.runInContext('rounds()[0].sessions.map(s=>Array.from(sessionPoints(s)))', ctx))
+    .map(entries => Object.fromEntries(entries));
+  assert.deepEqual(qual, { 'qual-pole': 1, 'race1-grid': 0, 'race2-grid': 0 });
+  assert.deepEqual(race1, { 'race1-grid': 41, 'qual-pole': 38, 'race2-grid': 35 });
+  assert.deepEqual(race2, { 'race2-grid': 41, 'race1-grid': 38, 'qual-pole': 35 });
+
+  vm.runInContext(`
+    sessions = [
+      {date:'2026-10-07T21:37:00Z',track:'endurance_track',type:'QUALIFY',results:[
+        {id:'pole',name:'Pole driver',team:'',laps:4,best:90000,time:400000,grid:1},
+        {id:'short',name:'Short runner',team:'',laps:4,best:91000,time:401000,grid:2}
+      ]},
+      {date:'2026-10-07T22:52:00Z',track:'endurance_track',type:'RACE',results:[
+        {id:'pole',name:'Pole driver',team:'',laps:20,best:95000,time:2000000,grid:1},
+        {id:'short',name:'Short runner',team:'',laps:10,best:96000,time:1000000,grid:2}
+      ]}
+    ];
+  `, ctx);
+  const [endQual, endRace] = Array.from(vm.runInContext('rounds()[0].sessions.map(s=>Array.from(sessionPoints(s)))', ctx))
+    .map(entries => Object.fromEntries(entries));
+  assert.deepEqual(endQual, { pole: 2, short: 0 });
+  assert.deepEqual(endRace, { pole: 82, short: 0 });
 });

@@ -13,6 +13,7 @@ Site de championnat de la GDSP, servi statiquement par un petit serveur Express 
 ## Développement et vérification
 
 - L’accueil GDSP est la page d’entrée ; les résultats s’ouvrent depuis l’onglet **Résultats**.
+- La colonne « Pts » des résultats affiche le point de pole en qualification et les points de classement en course.
 - Lancer les tests de calcul ciblés avec `npm test`.
 - Le cœur du site est dans `site.js` ; `patches-v71.js` contient les règles de calcul/pénalités conservées pour compatibilité. Les anciennes versions de patches non chargées ont été retirées.
 
