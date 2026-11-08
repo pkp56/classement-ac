@@ -12,7 +12,7 @@
  */
 (function(){
 'use strict';
-if(window.__gdspResultsV81)return; window.__gdspResultsV81=true;
+if(window.__gdspResultsV82)return; window.__gdspResultsV82=true;
 
 const DEFAULT_MIN_PCT = 0.75;
 const TARGET_CHAMP_SLUG = 'lola-t290-gdsp-championnat-2026';
@@ -185,8 +185,25 @@ function mySortSession(sess){
 }
 window.sortSession=mySortSession;
 
+// Somme par pilote des bonus / retraits de points au championnat saisis en Commission.
+function championshipPointsAdjustments(pm){
+  const out=new Map();
+  if(!pm||typeof pm!=='object')return out;
+  for(const k in pm){
+    const a=pm[k];
+    if(!a||typeof a!=='object')continue;
+    const delta=Number(a.pointsDelta);
+    if(!Number.isFinite(delta)||delta===0)continue;
+    const did=a.driverId||(k.startsWith('champ:')?k.split(':')[1]:k.split(':')[2]);
+    if(!did)continue;
+    out.set(did,(out.get(did)||0)+delta);
+  }
+  return out;
+}
+window.championshipPointsAdjustments=championshipPointsAdjustments;
+
 /* ---------- calculate(): classement et attribution des points ---------- */
-function v81_calculate(){
+function v82_calculate(){
   stripServerPens();
   const rs=rounds();
   const all=allDrivers();
@@ -263,19 +280,24 @@ function v81_calculate(){
     }
   }
 
-  // Joker
-  return [...map.values()].map(d=>({
-    ...d,
-    total:d.rounds.reduce((a,b)=>a+b,0),
-    joker:jokerTotal(d.rounds),
-    meritTotal:d.merit.reduce((a,b)=>a+b,0)
-  }));
+  // Joker & ajustements de points au championnat (Commission)
+  const ptsAdjMap=championshipPointsAdjustments(penMap);
+  return [...map.values()].map(d=>{
+    const pointsAdj=ptsAdjMap.get(d.id)||0;
+    return{
+      ...d,
+      pointsAdj,
+      total:d.rounds.reduce((a,b)=>a+b,0)+pointsAdj,
+      joker:jokerTotal(d.rounds)+pointsAdj,
+      meritTotal:d.merit.reduce((a,b)=>a+b,0)
+    };
+  });
 }
-window.calculate=v81_calculate;
+window.calculate=v82_calculate;
 
 // Points affichés par session : la pole est portée par la qualification,
 // les courses reçoivent uniquement leurs points de classement.
-function v81_sessionPoints(sess){
+function v82_sessionPoints(sess){
   const out=new Map();
   if(!sess)return out;
   const cfg=pointsConfig();
@@ -321,15 +343,15 @@ function v81_sessionPoints(sess){
   }
   return out;
 }
-window.sessionPoints=v81_sessionPoints;
+window.sessionPoints=v82_sessionPoints;
 
 /* ---------- Configuration et chargement ---------- */
 // Le championnat Lola T290 conserve le double barème de sa manche à course
 // unique. Les autres événements gardent leur propre configuration.
-const _pointsConfigV81=window.pointsConfig;
-if(typeof _pointsConfigV81==='function'){
+const _pointsConfigV82=window.pointsConfig;
+if(typeof _pointsConfigV82==='function'){
   window.pointsConfig=function(){
-    const cfg=_pointsConfigV81.apply(this,arguments);
+    const cfg=_pointsConfigV82.apply(this,arguments);
     if(eventContext&&eventContext.slug===TARGET_CHAMP_SLUG)cfg.doubleLongRaces=true;
     return cfg;
   };
@@ -337,18 +359,18 @@ if(typeof _pointsConfigV81==='function'){
 
 // Nettoyer les métadonnées AC dès qu'un événement est chargé. La navigation
 // reste gérée par site.js : les visiteurs arrivent sur l'accueil, pas aux résultats.
-const _loadEventV81=window.loadEvent;
-if(typeof _loadEventV81==='function'){
+const _loadEventV82=window.loadEvent;
+if(typeof _loadEventV82==='function'){
   window.loadEvent=async function(){
-    const ev=await _loadEventV81.apply(this,arguments);
+    const ev=await _loadEventV82.apply(this,arguments);
     if(ev)stripServerPens();
     return ev;
   };
 }
-const _loadLegacyV81=window.loadRemoteLegacy;
-if(typeof _loadLegacyV81==='function'){
+const _loadLegacyV82=window.loadRemoteLegacy;
+if(typeof _loadLegacyV82==='function'){
   window.loadRemoteLegacy=async function(){
-    const result=await _loadLegacyV81.apply(this,arguments);
+    const result=await _loadLegacyV82.apply(this,arguments);
     if(result)stripServerPens();
     return result;
   };

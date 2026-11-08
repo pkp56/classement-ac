@@ -4,11 +4,13 @@
 
 // ---------- Global state ----------
 const LEGACY_DEFAULT_SLUG = 'lola-t290-2026';
+const ACTIVE_LOLA_SLUG = 'lola-t290-gdsp-championnat-2026';
 const GLOBAL_MIN_RACES = 5;           // nombre minimum de courses pour être classé au Global
 let globalHidden = {};                // id -> true : pilote exclu du classement global par l'admin
+let deletedEventSlugs = {};           // slug -> true : événements supprimés par l'admin
 let backendMulti = null;          // null=pending, true=multi, false=legacy
 let events = [];                  // liste des événements (multi seulement)
-let currentSlug = LEGACY_DEFAULT_SLUG;
+let currentSlug = null;
 let eventContext = null;          // {slug,name,kind,pointsConfig,data}
 let ahConfig = null;              // {server, uuid} when event is bound to an AH championship
 let page='accueil', ranktab='pilotes', eventtab='resultats', round=0, sessionIndex=1, driverId='', globalDriverId='', compareA='', compareB='';
@@ -166,12 +168,43 @@ async function apiPut(path,body){
   return r;
 }
 
+function isEventMarkedDeleted(ev){
+  if(!ev||!ev.slug)return true;
+  if(ev._deleted||ev.name==='[DELETED]')return true;
+  if(ev.points_config&&ev.points_config._deleted)return true;
+  if(ev.pointsConfig&&ev.pointsConfig._deleted)return true;
+  if(ev.data&&ev.data._deleted)return true;
+  if(deletedEventSlugs&&deletedEventSlugs[ev.slug])return true;
+  return false;
+}
+function filterEventsList(rawList){
+  const list=Array.isArray(rawList)?rawList:[];
+  const hasActiveLola=list.some(e=>e&&e.slug===ACTIVE_LOLA_SLUG&&!isEventMarkedDeleted(e));
+  return list.filter(e=>{
+    if(isEventMarkedDeleted(e))return false;
+    // Masquer le doublon historique auto-recréé par le backend ("International Series Lola T290 — 2026")
+    // dès que le vrai championnat Lola T290 existe.
+    if(hasActiveLola&&e.slug===LEGACY_DEFAULT_SLUG)return false;
+    return true;
+  });
+}
+function loadDeletedEventSlugs(){
+  try{deletedEventSlugs=JSON.parse(localStorage.getItem('gdsp_deleted_events')||'{}')||{};}
+  catch(e){deletedEventSlugs={};}
+}
+function markEventSlugDeleted(slug,deleted){
+  if(!slug)return;
+  if(deleted)deletedEventSlugs[slug]=true;
+  else delete deletedEventSlugs[slug];
+  try{localStorage.setItem('gdsp_deleted_events',JSON.stringify(deletedEventSlugs));}catch(e){}
+}
+
 async function detectBackend(){
   try{
     const r=await fetch('/api/events',{cache:'no-store'});
     if(r.ok){
       const j=await r.json();
-      events=Array.isArray(j.events)?j.events:[];
+      events=filterEventsList(j.events);
       backendMulti=true;
       return;
     }
@@ -184,11 +217,14 @@ async function loadEvent(slug){
     // Legacy: charge /api/championship dans sessions+penMap (comme avant)
     return loadRemoteLegacy();
   }
+  if(!slug)return null;
+  if(deletedEventSlugs&&deletedEventSlugs[slug])return null;
+  if(slug===LEGACY_DEFAULT_SLUG&&events.some(e=>e.slug===ACTIVE_LOLA_SLUG))return null;
   try{
     const r=await apiGet('/api/events/'+encodeURIComponent(slug));
     if(!r.ok)return null;
     const ev=await r.json();
-    if(!ev||!ev.slug||!ev.name){console.warn('loadEvent: event invalide',ev);return null}
+    if(!ev||!ev.slug||!ev.name||isEventMarkedDeleted(ev)){console.warn('loadEvent: event invalide ou supprimé',ev);return null}
     eventContext={slug:ev.slug,name:ev.name,kind:ev.kind||'championship',pointsConfig:ev.points_config||{},data:ev.data||{}};
     currentSlug=ev.slug;
     const d=ev.data||{};
@@ -788,6 +824,11 @@ function computeEventStandings(sArr,penMapArg,cfg){
       if(d){d.eventTotal+=pole*mult;if(d.rounds.length<=j)d.rounds.push(0);d.rounds[j]+=pole*mult;}
     }
   }
+  const ptsAdj=championshipPointsMap(penMapArg);
+  ptsAdj.forEach((delta,did)=>{
+    const d=map.get(did);
+    if(d)d.eventTotal+=delta;
+  });
   return [...map.values()];
 }
 
@@ -828,6 +869,30 @@ function number(name){let l=livery(name);return l?`<span class="race-number">${l
 function baseFull(place,multiplier){
   const sc=pointsConfig().pointsScale||DEFAULT_POINTS.pointsScale;
   return (sc[place-1]||0)*multiplier;
+}
+
+function championshipPointsMap(pm){
+  if(typeof window!=='undefined'&&typeof window.championshipPointsAdjustments==='function'){
+    return window.championshipPointsAdjustments(pm);
+  }
+  const out=new Map();
+  if(!pm||typeof pm!=='object')return out;
+  for(const k in pm){
+    const a=pm[k];
+    if(!a||typeof a!=='object')continue;
+    const delta=Number(a.pointsDelta);
+    if(!Number.isFinite(delta)||delta===0)continue;
+    const did=a.driverId||(k.startsWith('champ:')?k.split(':')[1]:k.split(':')[2]);
+    if(!did)continue;
+    out.set(did,(out.get(did)||0)+delta);
+  }
+  return out;
+}
+function pointsAdjCell(val){
+  const n=Number(val)||0;
+  if(!n)return '<td class="muted">—</td>';
+  if(n<0)return `<td class="penalty">${n}</td>`;
+  return `<td style="color:#3b6341;font-weight:700">+${n}</td>`;
 }
 
 // ---------- Classements (adapté au barème courant) ----------
@@ -913,8 +978,10 @@ function calculate(){
     }
     map.forEach(d=>before.set(d.id,(before.get(d.id)||0)+d.rounds[j]));
   }
+  const ptsAdj=championshipPointsMap(penMap);
   return [...map.values()].map(d=>{
-    return {...d,total:d.rounds.reduce((a,b)=>a+b,0),joker:jokerTotal(d.rounds),meritTotal:d.merit.reduce((a,b)=>a+b,0)};
+    const pointsAdj=ptsAdj.get(d.id)||0;
+    return {...d,pointsAdj,total:d.rounds.reduce((a,b)=>a+b,0)+pointsAdj,joker:jokerTotal(d.rounds)+pointsAdj,meritTotal:d.merit.reduce((a,b)=>a+b,0)};
   });
 }
 function meritRows(){let rs=rounds(),ds=calculate();ds.sort((a,b)=>b.meritTotal-a.meritTotal||a.name.localeCompare(b.name));const isL=!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG;const carCol=isL?'Voiture':'Modèle';return table(['Pos.','N°','Pilote',carCol,...rs.map(x=>'M'+x.number),'Total mérite'],ds.map((d,i)=>`<tr><td class="pos">${i+1}</td><td>${number(d.name)}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${car(d.name)}</td>${d.merit.map(p=>`<td>${p}</td>`).join('')}<td><b>${d.meritTotal}</b></td></tr>`))}
@@ -926,13 +993,15 @@ function ranking(){
   let rows;
   if(ranktab==='equipes'){
     let teams=new Map;
-    ds.forEach(d=>{let t=(d.team||'').trim();if(!t||/indépendant/i.test(t))return;let key=t.toLocaleLowerCase('fr');if(!teams.has(key))teams.set(key,{name:t,rounds:Array(r.length).fill(0),count:0});let team=teams.get(key);team.count++;for(let j=0;j<r.length;j++)team.rounds[j]+=d.rounds[j]});
-    let arr=[...teams.values()].map(t=>({...t,total:t.rounds.reduce((a,b)=>a+b,0),joker:jokerTotal(t.rounds)})).sort((a,b)=>b.joker-a.joker);
-    rows=table(['Pos.','Équipe issue des fichiers','Pilotes',...r.map(x=>'M'+x.number),'Total Joker'],arr.map((t,i)=>`<tr><td class="pos">${i+1}</td><td><b>${esc(t.name)}</b></td><td>${t.count}</td>${t.rounds.map(p=>`<td>${p}</td>`).join('')}<td><b>${t.joker}</b></td></tr>`));
+    ds.forEach(d=>{let t=(d.team||'').trim();if(!t||/indépendant/i.test(t))return;let key=t.toLocaleLowerCase('fr');if(!teams.has(key))teams.set(key,{name:t,rounds:Array(r.length).fill(0),pointsAdj:0,count:0});let team=teams.get(key);team.count++;team.pointsAdj+=(d.pointsAdj||0);for(let j=0;j<r.length;j++)team.rounds[j]+=d.rounds[j]});
+    const hasTeamAdj=[...teams.values()].some(t=>t.pointsAdj);
+    let arr=[...teams.values()].map(t=>({...t,total:t.rounds.reduce((a,b)=>a+b,0)+t.pointsAdj,joker:jokerTotal(t.rounds)+t.pointsAdj})).sort((a,b)=>b.joker-a.joker);
+    rows=table(['Pos.','Équipe issue des fichiers','Pilotes',...r.map(x=>'M'+x.number),...(hasTeamAdj?['Ajust.']:[]),'Total Joker'],arr.map((t,i)=>`<tr><td class="pos">${i+1}</td><td><b>${esc(t.name)}</b></td><td>${t.count}</td>${t.rounds.map(p=>`<td>${p}</td>`).join('')}${hasTeamAdj?pointsAdjCell(t.pointsAdj):''}<td><b>${t.joker}</b></td></tr>`));
   }else{
     ds.sort((a,b)=>b[value]-a[value]||a.name.localeCompare(b.name));
     const carHead=(!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG)?'Voiture':'Modèle';
-    rows=table(['Pos.','N°','Pilote',carHead,...r.map(x=>'M'+x.number),ranktab==='joker'?'Total Joker':'Total'],ds.map((d,i)=>`<tr><td class="pos">${i+1}</td><td>${number(d.name)}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${car(d.name)}</td>${d.rounds.map(p=>`<td>${p}</td>`).join('')}<td><b>${d[value]}</b></td></tr>`));
+    const hasAdj=ds.some(d=>d.pointsAdj);
+    rows=table(['Pos.','N°','Pilote',carHead,...r.map(x=>'M'+x.number),...(hasAdj?['Ajust.']:[]),ranktab==='joker'?'Total Joker':'Total'],ds.map((d,i)=>`<tr><td class="pos">${i+1}</td><td>${number(d.name)}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${car(d.name)}</td>${d.rounds.map(p=>`<td>${p}</td>`).join('')}${hasAdj?pointsAdjCell(d.pointsAdj):''}<td><b>${d[value]}</b></td></tr>`));
   }
   return `${head('classements','La course aux points','Pilotes et équipes selon le barème de cet événement.')}${tabshtml}<div class="panel"><h2>${({pilotes:'Classement général',joker:'Classement Joker',equipes:'Classement équipes'})[ranktab]}</h2><p class="note">${ranktab==='equipes'?`Points des pilotes cumulés par équipe ; ${jokerDescription()}`:ranktab==='joker'?jokerDescription():'Tous les résultats sont cumulés.'}</p>${rows}</div>`;
 }
@@ -1052,7 +1121,12 @@ async function adminLogin(){
     adminAuth=true;
     adminUser=j.user||'Direction de course';
     if(j.warning)alert('⚠ Connexion en mode secours :\n\n'+j.warning);
-    try{if(backendMulti){if(currentSlug)await loadEvent(currentSlug)}else await loadRemoteLegacy()}catch(e){}
+    try{
+      if(backendMulti){
+        const slugToLoad=currentSlug||(events.find(e=>e.kind==='championship')||events[0]||{}).slug;
+        if(slugToLoad)await loadEvent(slugToLoad);
+      }else await loadRemoteLegacy();
+    }catch(e){}
     render()
   }catch(e){alert('Erreur de connexion : '+e.message)}
 }
@@ -1157,6 +1231,32 @@ function addAdjustment(roundKey,sessionIdx,drvId,timeAdd,dq,warning,note,opts){
   penMap[`${roundKey}:${sessionIdx}:${drvId}`]=adj;
   saveState();render();
 }
+function addChampionshipPoints(drvId,pointsDelta,note){
+  const delta=Number(pointsDelta);
+  if(!drvId||!Number.isFinite(delta)||delta===0)return false;
+  const drv=allDrivers().find(x=>x.id===drvId);
+  const uid=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  penMap[`champ:${drvId}:${uid}`]={
+    driverId:drvId,
+    driverName:drv?drv.name:'',
+    pointsDelta:delta,
+    note:(note||'').trim()
+  };
+  saveState();render();
+  return true;
+}
+function submitChampPointsAdj(sign){
+  const drvEl=document.getElementById('champ-pts-driver');
+  const ptsEl=document.getElementById('champ-pts-delta');
+  const noteEl=document.getElementById('champ-pts-note');
+  const drvId=drvEl?drvEl.value:'';
+  if(!drvId){alert('Sélectionne d\'abord un pilote.');return;}
+  const raw=ptsEl?Number(String(ptsEl.value||'').replace(',','.')):NaN;
+  if(!Number.isFinite(raw)||raw===0){alert('Saisis un nombre de points non nul (ex : 5).');return;}
+  const delta=(sign===1)?Math.abs(raw):(sign===-1)?-Math.abs(raw):raw;
+  const note=noteEl?noteEl.value:'';
+  addChampionshipPoints(drvId,delta,note);
+}
 function removeAdjustment(key){delete penMap[key];saveState();render()}
 function addRound(){const d=prompt('Date (AAAA-MM-JJ) ?','2026-11-18');if(!d)return;const t=prompt('Circuit (ex: spa_1970) ?','spa_1970');if(!t)return;customCalendar=customCalendar||{};customCalendar[d]={track:t};saveState();render()}
 
@@ -1194,29 +1294,62 @@ async function createEventPrompt(){
   const long2=confirm('Les courses d\'1 heure (une seule course par manche) donnent-elles le double de points ? OK=oui');
   const joker=+prompt('Nombre de meilleures manches retenues pour le Joker (0 = toutes les manches) ?','5')||0;
   const cfg={pointsScale:scale,polePoints:1,doubleLongRaces:long2,longRaceMinutes:60,minPercentDistance:0.75,jokerCount:joker,globalCoef:+coefS||1};
+  markEventSlugDeleted(slugIn,false);
   const r=await apiPost('/api/events',{slug:slugIn,name,kind,pointsConfig:cfg});
   const j=await r.json().catch(()=>({}));
   if(!r.ok)return alert('Erreur : '+(j.error||r.status));
   // Reload events list
-  const lst=await apiGet('/api/events');const lj=await lst.json().catch(()=>({}));events=Array.isArray(lj.events)?lj.events:events;
+  const lst=await apiGet('/api/events');const lj=await lst.json().catch(()=>({}));if(Array.isArray(lj.events))events=filterEventsList(lj.events);
   await switchEvent(slugIn);
   alert('Événement créé. Tu peux maintenant importer ses JSON.');
 }
+async function deleteEvent(slug){
+  if(!backendMulti||!slug)return;
+  const evObj=events.find(e=>e.slug===slug)||(eventContext&&eventContext.slug===slug?eventContext:{slug,name:slug});
+  if(!confirm(`Supprimer DÉFINITIVEMENT "${evObj.name||slug}" du serveur ? Cette action est irréversible.`))return;
+  const hdrs=adminToken?{Authorization:'Bearer '+adminToken,'Content-Type':'application/json'}:{'Content-Type':'application/json'};
+  if(slug===LEGACY_DEFAULT_SLUG){
+    // L'événement legacy ("International Series Lola T290 — 2026") est recréé au démarrage du backend
+    // si sa ligne est absente de PostgreSQL (ON CONFLICT DO NOTHING). On conserve donc une tombe
+    // (_deleted:true) en base et on vide l'ancienne table championship pour qu'il ne revienne jamais.
+    const tombCfg=Object.assign({},DEFAULT_POINTS,{_deleted:true});
+    const putRes=await fetch('/api/events/'+encodeURIComponent(slug),{
+      method:'PUT',headers:hdrs,body:JSON.stringify({kind:'archive',pointsConfig:tombCfg})
+    }).catch(()=>null);
+    await apiPost('/api/events/'+encodeURIComponent(slug)+'/data',{_deleted:true,sessions:[],penMap:{},manualDrivers:null,customCalendar:null}).catch(()=>null);
+    await apiPost('/api/save-championship',{_reset:true,_deleted:true,sessions:[],penMap:{},manualDrivers:null,customCalendar:null}).catch(()=>null);
+    if(!putRes||putRes.status===404){
+      const delRes=await fetch('/api/events/'+encodeURIComponent(slug),{method:'DELETE',headers:adminToken?{Authorization:'Bearer '+adminToken}:{}});
+      if(!delRes.ok&&delRes.status!==404){
+        const dj=await delRes.json().catch(()=>({}));
+        return alert('Erreur : '+(dj.error||delRes.status));
+      }
+    }else if(!putRes.ok){
+      const pj=await putRes.json().catch(()=>({}));
+      return alert('Erreur : '+(pj.error||putRes.status));
+    }
+  }else{
+    const r=await fetch('/api/events/'+encodeURIComponent(slug),{method:'DELETE',headers:adminToken?{Authorization:'Bearer '+adminToken}:{}});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)return alert('Erreur : '+(j.error||r.status));
+  }
+  markEventSlugDeleted(slug,true);
+  if(localStorage.getItem('gdsp_last_event')===slug)localStorage.removeItem('gdsp_last_event');
+  events=events.filter(e=>e.slug!==slug);
+  if(currentSlug===slug){
+    const next=events.find(e=>e.kind==='championship')||events[0];
+    if(next){
+      try{await loadEvent(next.slug)}catch(e){currentSlug=null;eventContext=null;sessions.length=0;penMap={};}
+    }else{
+      currentSlug=null;eventContext=null;sessions.length=0;penMap={};
+    }
+  }
+  if(page!=='admin')page='accueil';
+  render();
+}
 async function deleteCurrentEvent(){
   if(!backendMulti||!currentSlug)return;
-  if(!confirm(`Supprimer DÉFINITIVEMENT "${eventContext.name}" du serveur ? Cette action est irréversible.`))return;
-  const r=await fetch('/api/events/'+encodeURIComponent(currentSlug),{method:'DELETE',headers:adminToken?{Authorization:'Bearer '+adminToken}:{}});
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok)return alert('Erreur : '+(j.error||r.status));
-  events=events.filter(e=>e.slug!==currentSlug);
-  // Charger un autre événement (ou portail si aucun ne reste)
-  const next=events.find(e=>e.kind==='championship')||events[0];
-  if(next){
-    try{await loadEvent(next.slug)}catch(e){}
-  }else{
-    currentSlug=null;eventContext=null;sessions.length=0;
-  }
-  page='accueil';render();
+  await deleteEvent(currentSlug);
 }
 
 function saveGlobalHidden(){
@@ -1275,7 +1408,7 @@ async function setEventKind(slug,kind){
     const ev=events.find(e=>e.slug===slug);if(ev){ev.kind=kind;ev.updated_at=new Date().toISOString()}
     // Recharger le listing
     const lr=await apiGet('/api/events');const lj=await lr.json().catch(()=>({}));
-    if(Array.isArray(lj.events))events=lj.events;
+    if(Array.isArray(lj.events))events=filterEventsList(lj.events);
     if(currentSlug===slug){
       // Mettre à jour eventContext
       const ec=events.find(e=>e.slug===slug);
@@ -1286,15 +1419,16 @@ async function setEventKind(slug,kind){
 }
 function renderEventsAdmin(){
   if(!events.length)return '<p class="note">Aucun événement.</p>';
-  const topBar=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><button class="btn" onclick="createEventPrompt()">+ Créer un événement</button>${currentSlug?`<button class="btn secondary" onclick="deleteCurrentEvent()">Supprimer l'événement courant (${esc(eventContext.name)})</button>`:''}</div>`;
+  const topBar=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><button class="btn" onclick="createEventPrompt()">+ Créer un événement</button>${currentSlug&&eventContext?`<button class="btn secondary" onclick="deleteCurrentEvent()">Supprimer l'événement courant (${esc(eventContext.name)})</button>`:''}</div>`;
   const row=(e)=>{
+    const safe=e.slug.replace(/'/g,"\\'");
     const tag = e.kind==='championship'?'<span class="tag live">CHAMPIONNAT</span>':e.kind==='open'?'<span class="tag open">OPEN</span>':'<span class="tag archive">ARCHIVÉ</span>';
     let actions;
     if(e.kind==='archive'){
-      actions=`<button class="btn secondary small" onclick="setEventKind('${e.slug.replace(/'/g,"\\'")}','championship')">Réactiver en championnat</button>
-               <button class="btn secondary small" onclick="setEventKind('${e.slug.replace(/'/g,"\\'")}','open')">Réactiver en open</button>`;
+      actions=`<button class="btn secondary small" onclick="setEventKind('${safe}','championship')">Réactiver en championnat</button>
+               <button class="btn secondary small" onclick="setEventKind('${safe}','open')">Réactiver en open</button>`;
     }else{
-      actions=`<button class="btn secondary small" onclick="setEventKind('${e.slug.replace(/'/g,"\\'")}','archive')">🏁 Clôturer (archiver)</button>`;
+      actions=`<button class="btn secondary small" onclick="setEventKind('${safe}','archive')">🏁 Clôturer (archiver)</button>`;
     }
     return `<tr>
       <td>${tag}</td>
@@ -1303,13 +1437,31 @@ function renderEventsAdmin(){
       <td>${new Date(e.updated_at).toLocaleDateString('fr-FR')}</td>
       <td style="white-space:nowrap;text-align:right">
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-          <button class="btn secondary small" onclick="switchEvent('${e.slug.replace(/'/g,"\\'")}')">Ouvrir</button>
+          <button class="btn secondary small" onclick="switchEvent('${safe}')">Ouvrir</button>
           ${actions}
+          <button class="btn secondary small" style="border-color:#9c3021;color:#9c3021" onclick="deleteEvent('${safe}')">Supprimer</button>
         </div>
       </td>
     </tr>`;
   };
   return topBar+table(['','Événement','Courant','Coeff','Mis à jour',''],events.map(row));
+}
+
+function renderChampPointsPanel(){
+  const ds=allDrivers();
+  if(!ds.length)return `<div class="panel" style="margin:14px 0;background:#f4ecd8"><div class="eyebrow">Points au championnat</div><p class="note" style="margin:6px 0 0">Importe au moins une session pour pouvoir attribuer ou retirer des points à un pilote.</p></div>`;
+  return `<div class="panel" style="margin:14px 0;background:#f4ecd8">
+    <div class="eyebrow">Classement général &amp; Joker</div>
+    <h3 style="margin:4px 0 8px">Points au championnat (bonus / pénalité)</h3>
+    <p class="note" style="margin:0 0 12px">Choisis un pilote, indique le nombre de points puis clique sur <b>+ Ajouter des points</b> ou <b>− Enlever des points</b>. L'ajustement s'applique directement au cumul du championnat (général et Joker).</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <select id="champ-pts-driver" style="min-width:220px"><option value="">— Choisir un pilote —</option>${ds.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select>
+      <input id="champ-pts-delta" type="number" step="any" min="0.5" placeholder="Nb de points (ex : 5)" class="admin-input" style="min-width:165px;max-width:185px">
+      <input id="champ-pts-note" type="text" placeholder="Motif / note (ex : sanction Commission, bonus…)" class="admin-input" style="flex:1;min-width:220px">
+      <button class="btn" style="background:#3b6341" onclick="submitChampPointsAdj(1)">+ Ajouter des points</button>
+      <button class="btn" onclick="submitChampPointsAdj(-1)">− Enlever des points</button>
+    </div>
+  </div>`;
 }
 
 function admin(){
@@ -1318,7 +1470,20 @@ function admin(){
   // (où l'on peut créer/choisir un event) plutôt que sur "Imports" qui nécessite un event chargé.
   if(backendMulti&&!eventContext&&adminTab==='import')adminTab='events';
   const rs=rounds();
-  const adjList=Object.entries(penMap).map(([k,v])=>{const [rj,sj,did]=k.split(':');const ri=+rj,si=+sj,r=rs[ri],s=r&&r.sessions[si];const drv=s&&s.results.find(x=>x.id===did);const raceCount=r?r.sessions.slice(0,si+1).filter(x=>x.type==='RACE').length:0;let label='';if(v.dq)label='DQ';else if(v.dns)label='DNS';else if(v.dnf)label='DNF';else if(typeof v.timeAdd==='number'&&v.timeAdd!==0)label=(v.timeAdd>0?'+':'')+v.timeAdd+' s';else if(v.warning)label='Avertissement';return `<tr><td>${r?'M'+r.number:'—'}</td><td>${s?(s.type==='QUALIFY'?'Qualif':'Course '+raceCount):'—'}</td><td>${esc(drv?drv.name:'(pilote)')}</td><td>${label}</td><td>${esc(v.note||'')}</td><td><button class="btn secondary small" onclick="removeAdjustment('${k}')">Retirer</button></td></tr>`});
+  const allDrv=allDrivers();
+  const adjList=Object.entries(penMap).map(([k,v])=>{
+    const safeKey=esc(String(k).replace(/'/g,"\\'"));
+    if(v&&Number.isFinite(Number(v.pointsDelta))&&Number(v.pointsDelta)!==0){
+      const pts=Number(v.pointsDelta);
+      const did=v.driverId||(k.startsWith('champ:')?k.split(':')[1]:k.split(':')[2]);
+      const drv=allDrv.find(x=>x.id===did);
+      const drvName=(drv&&drv.name)||v.driverName||'(pilote)';
+      const txt=(pts>0?'+':'')+pts+' pt'+(Math.abs(pts)>1?'s':'');
+      const badge=pts<0?`<span class="penalty">${esc(txt)}</span>`:`<span style="color:#3b6341;font-weight:700">${esc(txt)}</span>`;
+      return `<tr><td><span class="tag live">Championnat</span></td><td>Classement général</td><td><b>${esc(drvName)}</b></td><td>${badge}</td><td>${esc(v.note||'')}</td><td><button class="btn secondary small" onclick="removeAdjustment('${safeKey}')">Retirer</button></td></tr>`;
+    }
+    const [rj,sj,did]=k.split(':');const ri=+rj,si=+sj,r=rs[ri],s=r&&r.sessions[si];const drv=s&&s.results.find(x=>x.id===did);const raceCount=r?r.sessions.slice(0,si+1).filter(x=>x.type==='RACE').length:0;let label='';if(v.dq)label='DQ';else if(v.dns)label='DNS';else if(v.dnf)label='DNF';else if(typeof v.timeAdd==='number'&&v.timeAdd!==0)label=(v.timeAdd>0?'+':'')+v.timeAdd+' s';else if(v.warning)label='Avertissement';return `<tr><td>${r?'M'+r.number:'—'}</td><td>${s?(s.type==='QUALIFY'?'Qualif':'Course '+raceCount):'—'}</td><td>${esc(drv?drv.name:'(pilote)')}</td><td>${label}</td><td>${esc(v.note||'')}</td><td><button class="btn secondary small" onclick="removeAdjustment('${safeKey}')">Retirer</button></td></tr>`;
+  });
   const roundCards=rs.map((r,i)=>{
     const races=r.sessions.filter(s=>s.type==='RACE').length;
     const quals=r.sessions.filter(s=>s.type==='QUALIFY').length;
@@ -1331,7 +1496,7 @@ function admin(){
   if(backendMulti&&!eventContext&&eventTabs.has(adminTab)){
     return `${head('administration','Direction de course','')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel"><h2>Sélectionne d'abord un événement</h2><p class="note">Choisis un championnat/open dans le menu en haut à droite, ou crée-en un depuis l'onglet <b>« Serveurs AH »</b> ou <b>« Événements »</b>, avant d'importer des résultats.</p><button class="btn secondary" onclick="goHome()">← Retour à l'accueil</button></div>`;
   }
-  return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Pénalités temps (positives ou négatives pour annuler une pénalité serveur abusive), DQ ou avertissements. Les pénalités temps reclashent automatiquement.</p>${selectedRaceAdj!==null?renderAdjPanel(rs[selectedRaceAdj]):`<p class="note">Choisis une manche depuis « Manches ».</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='globalexc'?renderGlobalExclusions()
+  return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Ajustements de points au championnat (+ / −), pénalités temps en course (reclassement automatique), DNF/DNS/DQ ou avertissements.</p>${renderChampPointsPanel()}${selectedRaceAdj!==null&&rs[selectedRaceAdj]?renderAdjPanel(rs[selectedRaceAdj]):rs.length?`<div class="controls"><select onchange="selectedRaceAdj=this.value===''?null:+this.value;render()"><option value="">— Choisir une manche pour ajuster un résultat de course —</option>${rs.map((x,i)=>`<option value="${i}">Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div>`:`<p class="note">Aucune manche importée pour les pénalités de course.</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='globalexc'?renderGlobalExclusions()
 :`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>`;
 }
 function renderAdjPanel(r){
@@ -1463,6 +1628,7 @@ async function ahCreateEvent(server,uuid,slug){
     if(!/^[a-z0-9][a-z0-9-]{1,60}$/.test(safeSlug)){
       throw new Error('Slug généré invalide ("'+c.slug+'"). Renomme le championnat sur AH puis rescane.');
     }
+    markEventSlugDeleted(safeSlug,false);
     const r=await apiPost('/api/events',{slug:safeSlug,name:c.name,kind:c.kind,pointsConfig:cfg,data:{ahServer:c.server,ahUuid:c.uuid}});
     let j={};
     try{j=await r.json()}catch(e){
@@ -1475,7 +1641,7 @@ async function ahCreateEvent(server,uuid,slug){
     // Recharger events
     const lr=await apiGet('/api/events');
     let lj={};try{lj=await lr.json()}catch(e){}
-    if(Array.isArray(lj.events))events=lj.events;
+    if(Array.isArray(lj.events))events=filterEventsList(lj.events);
     alert('✅ Événement créé : '+c.name+' (slug: '+safeSlug+').\n\nTu peux maintenant le sélectionner dans le menu et y importer ses résultats.');
     await switchEvent(safeSlug);
     render();
@@ -1697,6 +1863,7 @@ function render(){
 // ---------- BOOTSTRAP ----------
 (async()=>{
   // Migrate legacy penMap local storage
+  loadDeletedEventSlugs();
   let penMapRaw=JSON.parse(localStorage.getItem('gdsp_penalties')||'{}');
   await loadGlobalHidden();
   for(const k in penMapRaw){if('pts' in penMapRaw[k]&&!('timeAdd' in penMapRaw[k])&&!('warning' in penMapRaw[k]))delete penMapRaw[k]}
@@ -1712,6 +1879,7 @@ function render(){
     // Les visiteurs commencent toujours sur l'accueil GDSP. L'événement par
     // défaut est préchargé en arrière-plan pour que Résultats réponde vite.
     const last=localStorage.getItem('gdsp_last_event');
+    if(last&&!events.some(e=>e.slug===last))localStorage.removeItem('gdsp_last_event');
     const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
     if(adminToken){
       try{

@@ -210,3 +210,22 @@ test('the pole point is awarded once to qualifying P1, not to a race grid leader
   assert.deepEqual(endQual, { pole: 2, short: 0 });
   assert.deepEqual(endRace, { pole: 82, short: 0 });
 });
+
+test('championship point bonuses and deductions apply to both total and Joker without being dropped as a round', async () => {
+  const ctx = makeContext();
+  await vm.runInContext('loadEvent()', ctx);
+
+  const baseline = vm.runInContext("calculate().find(d=>d.name==='Karl74')", ctx);
+  assert.ok(baseline, 'Karl74 must be present in standings');
+
+  vm.runInContext(`
+    const karl = allDrivers().find(d => d.name === 'Karl74');
+    penMap['champ:' + karl.id + ':1'] = { driverId: karl.id, pointsDelta: -10, note: 'Sanction Commission' };
+    penMap['champ:' + karl.id + ':2'] = { driverId: karl.id, pointsDelta: 3, note: 'Bonus fair-play' };
+  `, ctx);
+
+  const adjusted = vm.runInContext("calculate().find(d=>d.name==='Karl74')", ctx);
+  assert.equal(adjusted.pointsAdj, -7);
+  assert.equal(adjusted.total, baseline.total - 7);
+  assert.equal(adjusted.joker, baseline.joker - 7);
+});
