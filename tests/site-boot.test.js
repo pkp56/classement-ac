@@ -523,6 +523,7 @@ test('Unified Event tab displays active event name in header nav, groups Accueil
   await vm.runInContext("go('event')", sandbox);
   const evHomeHtml = getElementById('app').innerHTML;
   assert.match(evHomeHtml, /class="ev-shell"/);
+  assert.doesNotMatch(evHomeHtml, /ev-banner-right|ev-back-hub|Changer d’événement|Changer d'événement/);
   assert.match(evHomeHtml, /Accueil <span class="ev-subtab-badge">Affiche &amp; Infos<\/span>/);
   assert.match(evHomeHtml, /Classements <span class="ev-subtab-badge">/);
   assert.match(evHomeHtml, /Résultats <span class="ev-subtab-badge">/);
