@@ -1347,9 +1347,10 @@ function calculate(){
 function meritRows(){let rs=rounds(),ds=calculate();ds.sort((a,b)=>b.meritTotal-a.meritTotal||a.name.localeCompare(b.name));const isL=!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG;const carCol=isL?'Voiture':'Modèle';return table(['Pos.','N°','Pilote',carCol,...rs.map(x=>'M'+x.number),'Total mérite'],ds.map((d,i)=>`<tr><td class="pos">${i+1}</td><td>${number(d.name)}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${car(d.name)}</td>${d.merit.map(p=>`<td>${p}</td>`).join('')}<td><b>${d.meritTotal}</b></td></tr>`))}
 function ranking(){
   if(backendMulti&&!eventContext)return hub();
+  const posterHtml=renderEventPosterBlock();
   let ds=calculate(),r=rounds(),value=ranktab==='joker'?'joker':'total';
   let tabshtml=tabs([['pilotes','Pilotes'],['joker',jokerTabLabel()],['equipes','Équipes'],['merite','Trophée du mérite']],ranktab,'showrank');
-  if(ranktab==='merite')return `${head('classements','La course aux points','Pilotes, équipes et Trophée du mérite.')}${tabshtml}<div class="panel"><h2>Trophée du mérite</h2><p class="note">Course terminée, meilleur tour en course, meilleur temps en course qu'en qualification, progression depuis la grille, résultat meilleur que son classement général à partir de la manche 2, et absence de pénalité post-course. Les manches d'une heure rapportent le double.</p>${meritRows()}</div>`;
+  if(ranktab==='merite')return `${head('classements','La course aux points','Pilotes, équipes et Trophée du mérite.')}${posterHtml}${tabshtml}<div class="panel"><h2>Trophée du mérite</h2><p class="note">Course terminée, meilleur tour en course, meilleur temps en course qu'en qualification, progression depuis la grille, résultat meilleur que son classement général à partir de la manche 2, et absence de pénalité post-course. Les manches d'une heure rapportent le double.</p>${meritRows()}</div>`;
   let rows;
   if(ranktab==='equipes'){
     let teams=new Map;
@@ -1363,7 +1364,7 @@ function ranking(){
     const hasAdj=ds.some(d=>d.pointsAdj);
     rows=table(['Pos.','N°','Pilote',carHead,...r.map(x=>'M'+x.number),...(hasAdj?['Ajust.']:[]),ranktab==='joker'?'Total Joker':'Total'],ds.map((d,i)=>`<tr><td class="pos">${i+1}</td><td>${number(d.name)}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${car(d.name)}</td>${d.rounds.map(p=>`<td>${p}</td>`).join('')}${hasAdj?pointsAdjCell(d.pointsAdj):''}<td><b>${d[value]}</b></td></tr>`));
   }
-  return `${head('classements','La course aux points','Pilotes et équipes selon le barème de cet événement.')}${tabshtml}<div class="panel"><h2>${({pilotes:'Classement général',joker:'Classement Joker',equipes:'Classement équipes'})[ranktab]}</h2><p class="note">${ranktab==='equipes'?`Points des pilotes cumulés par équipe ; ${jokerDescription()}`:ranktab==='joker'?jokerDescription():'Tous les résultats sont cumulés.'}</p>${rows}</div>`;
+  return `${head('classements','La course aux points','Pilotes et équipes selon le barème de cet événement.')}${posterHtml}${tabshtml}<div class="panel"><h2>${({pilotes:'Classement général',joker:'Classement Joker',equipes:'Classement équipes'})[ranktab]}</h2><p class="note">${ranktab==='equipes'?`Points des pilotes cumulés par équipe ; ${jokerDescription()}`:ranktab==='joker'?jokerDescription():'Tous les résultats sont cumulés.'}</p>${rows}</div>`;
 }
 
 // ---------- Pages Manches / Pilotes ----------
@@ -1635,7 +1636,13 @@ async function saveRemote(){
     }
     return o;
   });
-  const payload={sessions:minSessions,penMap,manualDrivers,customCalendar};
+  const baseData=(eventContext&&eventContext.data&&typeof eventContext.data==='object')?eventContext.data:{};
+  const payload={};
+  if(baseData.ahServer)payload.ahServer=baseData.ahServer;
+  if(baseData.ahUuid)payload.ahUuid=baseData.ahUuid;
+  if(baseData.posterImage)payload.posterImage=baseData.posterImage;
+  Object.assign(payload,{sessions:minSessions,penMap,manualDrivers,customCalendar});
+  if(eventContext)eventContext.data=Object.assign({},baseData,payload);
   let path;
   if(backendMulti&&currentSlug)path='/api/events/'+encodeURIComponent(currentSlug)+'/data';
   else path='/api/save-championship';
@@ -1882,19 +1889,230 @@ async function setEventKind(slug,kind){
     const lr=await apiGet('/api/events');const lj=await lr.json().catch(()=>({}));
     if(Array.isArray(lj.events))events=filterEventsList(lj.events);
     if(currentSlug===slug){
-      // Mettre à jour eventContext
+      // Mettre à jour eventContext sans perdre eventContext.data
       const ec=events.find(e=>e.slug===slug);
-      if(ec){eventContext={slug:ec.slug,name:ec.name,kind:ec.kind,pointsConfig:ec.points_config||{},data:ec.data||{}}}
+      const prevData=(eventContext&&eventContext.slug===slug&&eventContext.data)?eventContext.data:{};
+      if(ec){eventContext={slug:ec.slug,name:ec.name,kind:ec.kind,pointsConfig:ec.points_config||{},data:ec.data||prevData}}
     }
     render();
   }catch(e){alert('Erreur : '+e.message)}
 }
+
+// ---------- Affiche d'événement (page Classements) ----------
+let pendingPosterSlug=null;
+
+function isSafePosterSrc(src){
+  if(typeof src!=='string')return false;
+  const s=src.trim();
+  if(!s)return false;
+  if(/^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(s))return true;
+  if(/^(\/[a-z0-9_\-./?=&]+|https?:\/\/[^\s"'<>]+)$/i.test(s))return true;
+  return false;
+}
+function loadLocalPosterMap(){
+  try{return JSON.parse(localStorage.getItem('gdsp_event_posters')||'{}')||{};}
+  catch(e){return {};}
+}
+function saveLocalPosterEntry(slug,dataUrl){
+  if(!slug)return;
+  try{
+    const m=loadLocalPosterMap();
+    if(dataUrl)m[slug]=dataUrl;else delete m[slug];
+    localStorage.setItem('gdsp_event_posters',JSON.stringify(m));
+  }catch(e){}
+}
+function getEventPoster(evOrCtx){
+  const target=evOrCtx||eventContext;
+  if(!target)return '';
+  const fromData=target.data&&target.data.posterImage;
+  if(isSafePosterSrc(fromData))return fromData.trim();
+  const cfg=target.pointsConfig||target.points_config||{};
+  if(isSafePosterSrc(cfg.posterImage))return cfg.posterImage.trim();
+  const slug=target.slug||currentSlug;
+  if(slug){
+    const local=loadLocalPosterMap()[slug];
+    if(isSafePosterSrc(local))return local.trim();
+  }
+  return '';
+}
+function hasEventPoster(ev){
+  if(!ev)return false;
+  if(getEventPoster(ev))return true;
+  if(currentSlug&&ev.slug===currentSlug&&getEventPoster(eventContext))return true;
+  const cfg=ev.points_config||ev.pointsConfig||{};
+  return !!cfg.hasPoster;
+}
+function renderEventPosterBlock(){
+  const src=getEventPoster(eventContext);
+  if(!src)return '';
+  const alt=eventContext&&eventContext.name?`Affiche — ${eventContext.name}`:"Affiche de l'événement";
+  return `<div class="event-poster-wrap"><img class="event-poster-img" src="${esc(src)}" alt="${esc(alt)}" onclick="openPosterLightbox(this.src,this.alt)"><span class="event-poster-hint">🔍 Cliquer pour agrandir</span></div>`;
+}
+function openPosterLightbox(src,alt){
+  if(!isSafePosterSrc(src))return;
+  const box=document.getElementById('poster-lightbox');
+  const img=document.getElementById('poster-lightbox-img');
+  if(!box||!img)return;
+  img.src=src;
+  img.alt=alt||"Affiche de l'événement";
+  if(box.classList&&box.classList.add)box.classList.add('open');
+  else box.className='poster-lightbox open';
+}
+function closePosterLightbox(){
+  const box=document.getElementById('poster-lightbox');
+  const img=document.getElementById('poster-lightbox-img');
+  if(!box)return;
+  if(box.classList&&box.classList.remove)box.classList.remove('open');
+  else box.className='poster-lightbox';
+  if(img)img.src='';
+}
+if(typeof document!=='undefined'&&document.addEventListener){
+  document.addEventListener('keydown',ev=>{if(ev&&ev.key==='Escape')closePosterLightbox();});
+}
+function compressPosterImage(file){
+  return new Promise((resolve,reject)=>{
+    if(!file)return reject(new Error('Aucun fichier sélectionné.'));
+    if(typeof file.dataUrl==='string'&&isSafePosterSrc(file.dataUrl))return resolve(file.dataUrl);
+    if(typeof FileReader==='undefined')return reject(new Error('Lecture de fichier non supportée.'));
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('Impossible de lire le fichier image.'));
+    reader.onload=()=>{
+      const rawDataUrl=String(reader.result||'');
+      if(!isSafePosterSrc(rawDataUrl))return reject(new Error("Format d'image non reconnu (utilise PNG, JPG ou WEBP)."));
+      if(typeof Image==='undefined'||typeof document==='undefined'||!document.createElement){
+        return resolve(rawDataUrl);
+      }
+      const probeCanvas=document.createElement('canvas');
+      if(!probeCanvas||typeof probeCanvas.getContext!=='function')return resolve(rawDataUrl);
+      const img=new Image();
+      img.onerror=()=>resolve(rawDataUrl);
+      img.onload=()=>{
+        try{
+          const origW=img.naturalWidth||img.width||1400;
+          const origH=img.naturalHeight||img.height||950;
+          const encodeAt=(maxSide,quality)=>{
+            let w=origW,h=origH;
+            if(w>maxSide||h>maxSide){
+              const ratio=Math.min(maxSide/w,maxSide/h);
+              w=Math.max(1,Math.round(w*ratio));
+              h=Math.max(1,Math.round(h*ratio));
+            }
+            const c=document.createElement('canvas');
+            c.width=w;c.height=h;
+            const ctx=c.getContext('2d');
+            if(!ctx)return rawDataUrl;
+            ctx.fillStyle='#f4ecd8';
+            ctx.fillRect(0,0,w,h);
+            ctx.drawImage(img,0,0,w,h);
+            return c.toDataURL('image/jpeg',quality);
+          };
+          let out=encodeAt(1600,0.86);
+          if(out.length>750000)out=encodeAt(1400,0.78);
+          if(out.length>750000)out=encodeAt(1200,0.72);
+          resolve(isSafePosterSrc(out)?out:rawDataUrl);
+        }catch(err){resolve(rawDataUrl);}
+      };
+      img.src=rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function triggerEventPosterUpload(slug){
+  pendingPosterSlug=slug||currentSlug;
+  const inp=document.getElementById('event-poster-input');
+  if(!inp){alert("Champ d'import d'affiche introuvable.");return;}
+  inp.value='';
+  if(typeof inp.click==='function')inp.click();
+}
+async function handleEventPosterFile(ev){
+  const file=ev&&ev.target&&ev.target.files&&ev.target.files[0];
+  const slug=pendingPosterSlug||currentSlug;
+  if(!file||!slug)return;
+  const statusEl=document.getElementById('event-poster-status');
+  if(statusEl){statusEl.style.color='#132d35';statusEl.textContent="⏳ Optimisation et envoi de l'affiche sur le serveur…";}
+  try{
+    const dataUrl=await compressPosterImage(file);
+    await saveEventPoster(slug,dataUrl);
+  }catch(e){
+    if(statusEl){statusEl.style.color='#9c3021';statusEl.textContent='✗ '+(e.message||e);}
+    else alert('Erreur : '+(e.message||e));
+  }
+}
+async function saveEventPoster(slug,dataUrl){
+  if(!slug)throw new Error('Événement non spécifié.');
+  if(dataUrl&&!isSafePosterSrc(dataUrl))throw new Error('Image invalide.');
+  let evName=slug;
+  const listed=events.find(x=>x.slug===slug);
+  if(listed&&listed.name)evName=listed.name;
+  else if(eventContext&&eventContext.slug===slug&&eventContext.name)evName=eventContext.name;
+
+  if(backendMulti){
+    const getRes=await apiGet('/api/events/'+encodeURIComponent(slug));
+    if(!getRes.ok)throw new Error("Impossible de charger l'événement ("+getRes.status+').');
+    const remoteEv=await getRes.json();
+    const nextData=Object.assign({},remoteEv.data||{});
+    if(!Array.isArray(nextData.sessions))nextData.sessions=[];
+    if(!nextData.penMap||typeof nextData.penMap!=='object')nextData.penMap={};
+    if(dataUrl)nextData.posterImage=dataUrl;
+    else delete nextData.posterImage;
+
+    const postRes=await apiPost('/api/events/'+encodeURIComponent(slug)+'/data',nextData);
+    if(!postRes.ok){
+      const pj=await postRes.json().catch(()=>({}));
+      throw new Error(pj.error||pj.message||('HTTP '+postRes.status));
+    }
+    const nextCfg=Object.assign({},remoteEv.points_config||(listed&&listed.points_config)||{});
+    if(dataUrl)nextCfg.hasPoster=true;
+    else delete nextCfg.hasPoster;
+    delete nextCfg.posterImage;
+    await apiPut('/api/events/'+encodeURIComponent(slug),{pointsConfig:nextCfg}).catch(()=>null);
+
+    if(listed){
+      listed.points_config=nextCfg;
+      listed.updated_at=new Date().toISOString();
+      if(listed.data)listed.data=nextData;
+    }
+    if(currentSlug===slug&&eventContext){
+      eventContext.pointsConfig=nextCfg;
+      eventContext.data=Object.assign({},eventContext.data||{},nextData);
+      if(!dataUrl&&eventContext.data)delete eventContext.data.posterImage;
+    }
+  }else{
+    if(!eventContext)eventContext={slug:LEGACY_DEFAULT_SLUG,name:evName,kind:'championship',pointsConfig:DEFAULT_POINTS,data:{}};
+    if(!eventContext.data)eventContext.data={};
+    if(dataUrl)eventContext.data.posterImage=dataUrl;
+    else delete eventContext.data.posterImage;
+    if(adminToken)await saveRemote();
+  }
+  saveLocalPosterEntry(slug,dataUrl||'');
+  render();
+  const statusEl=document.getElementById('event-poster-status');
+  if(statusEl){
+    statusEl.style.color='#3b6341';
+    statusEl.textContent=dataUrl
+      ?`✓ Affiche enregistrée pour « ${evName} » (affichée en haut de sa page Classements).`
+      :`✓ Affiche retirée pour « ${evName} ».`;
+  }
+}
+async function removeEventPoster(slug){
+  const listed=events.find(x=>x.slug===slug);
+  const label=(listed&&listed.name)||(eventContext&&eventContext.slug===slug&&eventContext.name)||slug;
+  if(!confirm(`Retirer l'affiche de la page Classements pour « ${label} » ?`))return;
+  try{
+    await saveEventPoster(slug,'');
+  }catch(e){
+    alert('Erreur : '+(e.message||e));
+  }
+}
+
 function renderEventsAdmin(){
   if(!events.length)return '<p class="note">Aucun événement.</p>';
-  const topBar=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><button class="btn" onclick="createEventPrompt()">+ Créer un événement</button>${currentSlug&&eventContext?`<button class="btn secondary" onclick="deleteCurrentEvent()">Supprimer l'événement courant (${esc(eventContext.name)})</button>`:''}</div>`;
+  const fileInput=`<input type="file" id="event-poster-input" accept="image/*" style="display:none" onchange="handleEventPosterFile(event)">`;
+  const topBar=`${fileInput}<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px"><button class="btn" onclick="createEventPrompt()">+ Créer un événement</button>${currentSlug&&eventContext?`<button class="btn secondary" onclick="triggerEventPosterUpload('${currentSlug.replace(/'/g,"\\'")}')">🖼️ ${hasEventPoster(eventContext)?'Changer':'Insérer'} l'affiche de l'événement courant (${esc(eventContext.name)})</button><button class="btn secondary" onclick="deleteCurrentEvent()">Supprimer l'événement courant</button>`:''}</div><div id="event-poster-status" class="note" style="margin-bottom:12px"></div>`;
   const row=(e)=>{
     const safe=e.slug.replace(/'/g,"\\'");
     const tag = e.kind==='championship'?'<span class="tag live">CHAMPIONNAT</span>':e.kind==='open'?'<span class="tag open">OPEN</span>':'<span class="tag archive">ARCHIVÉ</span>';
+    const posterOn=hasEventPoster(e);
     let actions;
     if(e.kind==='archive'){
       actions=`<button class="btn secondary small" onclick="setEventKind('${safe}','championship')">Réactiver en championnat</button>
@@ -1902,21 +2120,28 @@ function renderEventsAdmin(){
     }else{
       actions=`<button class="btn secondary small" onclick="setEventKind('${safe}','archive')">🏁 Clôturer (archiver)</button>`;
     }
+    const posterBtns=posterOn
+      ?`<button class="btn secondary small" onclick="triggerEventPosterUpload('${safe}')">🖼️ Changer l'affiche</button><button class="btn secondary small" onclick="removeEventPoster('${safe}')" title="Retirer l'affiche">✕ Affiche</button>`
+      :`<button class="btn secondary small" onclick="triggerEventPosterUpload('${safe}')">🖼️ Insérer une affiche</button>`;
     return `<tr>
       <td>${tag}</td>
       <td><b>${esc(e.name)}</b><br><span class="muted" style="font-size:12px">${esc(e.slug)}</span></td>
       <td>${currentSlug===e.slug?'<span class="tag live">▶</span>':''}</td><td>${e.points_config&&e.points_config.globalCoef?'×'+e.points_config.globalCoef:'—'}</td>
+      <td>${posterOn?'<span class="tag live">✓ Active</span>':'<span class="muted">—</span>'}</td>
       <td>${new Date(e.updated_at).toLocaleDateString('fr-FR')}</td>
       <td style="white-space:nowrap;text-align:right">
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           <button class="btn secondary small" onclick="switchEvent('${safe}')">Ouvrir</button>
+          ${posterBtns}
           ${actions}
           <button class="btn secondary small" style="border-color:#9c3021;color:#9c3021" onclick="deleteEvent('${safe}')">Supprimer</button>
         </div>
       </td>
     </tr>`;
   };
-  return topBar+table(['','Événement','Courant','Coeff','Mis à jour',''],events.map(row));
+  const currentPoster=getEventPoster(eventContext);
+  const previewCard=currentPoster&&eventContext?`<div class="panel" style="margin-top:16px;background:#f4ecd8"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px"><div><div class="eyebrow">Aperçu affiche · Classements</div><h3 style="margin:2px 0 0">${esc(eventContext.name)}</h3></div><div style="display:flex;gap:8px"><button class="btn secondary small" onclick="go('classement')">Voir sur Classements →</button><button class="btn secondary small" onclick="removeEventPoster('${currentSlug.replace(/'/g,"\\'")}')">Retirer l'affiche</button></div></div><img src="${esc(currentPoster)}" alt="Aperçu affiche" style="display:block;max-width:460px;width:100%;height:auto;border:1px solid #c9bba1"></div>`:'';
+  return topBar+table(['','Événement','Courant','Coeff','Affiche','Mis à jour',''],events.map(row))+previewCard;
 }
 
 function renderChampPointsPanel(){
