@@ -266,11 +266,19 @@ test('event driver profile and global driver profile render ? tooltip icons, Δ 
   // 2) Global ranking & Global driver profile (Global -> Karl74)
   await vm.runInContext("go('global')", sandbox);
   const globalRankHtml = getElementById('app').innerHTML;
-  assert.match(globalRankHtml, /5 critères \(0-100\) <span class="gdsp-tip/);
+  assert.match(globalRankHtml, /4 critères \(0-100\) <span class="gdsp-tip/);
   assert.match(globalRankHtml, /class="gdsp-tip gdsp-bar"/);
 
   await vm.runInContext("globalDriverId='d1';go('gpilote')", sandbox);
   const globalProfileHtml = getElementById('app').innerHTML;
+  const globalRatings = vm.runInContext('globalPerformanceRatings()', sandbox);
+  assert.ok(globalRatings.length > 0);
+  for (const rating of globalRatings) {
+    const d = rating.details;
+    assert.ok(Math.abs(rating.score - (d.regularite + d.proprete + d.vitesse + d.resultats) / 4) < 1e-9);
+  }
+  assert.doesNotMatch(globalProfileHtml, /Régularité inter-événements|<b>Progression<\/b>/);
+  assert.match(globalProfileHtml, /Quatre critères · un niveau/);
   for (const cls of ['drv-hero', 'drv-roundel', 'drv-global-level', 'drv-kpis', 'drv-perf-grid', 'drv-portrait-grid']) {
     assert.ok(globalProfileHtml.includes(cls), `Global profile includes ${cls}`);
   }
@@ -279,11 +287,10 @@ test('event driver profile and global driver profile render ? tooltip icons, Δ 
   assert.match(globalProfileHtml, /Choisir un pilote Global/);
   for (const label of [
     'Niveau GLOBAL',
-    'Régularité inter-événements',
+    'Rythme',
     'Propreté',
     'Vitesse au tour',
     'Résultats',
-    'Progression',
     'Analyse du rythme',
     'Race consistency &amp; meilleur tour week-end',
     'GT Open 2026 · Riverside',
