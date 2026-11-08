@@ -608,7 +608,7 @@ app.get('/healthz', (_req, res) => {
   res.status(200).json({ ok:true, service:'gdsp-frontend', backend:BACKEND_URL });
 });
 app.use(express.static(ROOT,{dotfiles:'deny',etag:true,maxAge:'1h',setHeaders(res,filePath){
-  if(/data\.json$/i.test(filePath)||/\.html$/i.test(filePath))res.set('Cache-Control','no-cache');
+  if(/data\.json$/i.test(filePath)||/\.(?:html|js)$/i.test(filePath))res.set('Cache-Control','no-cache');
 }}));
 app.get('*',(req,res,next)=>{if(path.extname(req.path))return next();res.sendFile(INDEX_PATH)});
 app.listen(PORT,'0.0.0.0',()=>console.log(`GDSP frontend démarré sur le port ${PORT}. API proxifiée vers : ${BACKEND_URL}`));
