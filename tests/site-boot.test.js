@@ -184,29 +184,43 @@ test('Commission tab lets admin add and remove championship points for a driver'
   assert.doesNotMatch(getElementById('app').innerHTML, /<th>Ajust\.<\/th>/);
 });
 
-test('event driver profile and global driver profile render ? tooltip icons on criteria, stats, and headers', async () => {
-  const makeRace = (idx) => ({
-    type: 'RACE',
-    date: `2026-06-0${idx}T20:00:00Z`,
-    track: 'riverside',
-    results: [
-      { id: 'd1', name: 'Karl74', team: 'GDSP', grid: 2, laps: 10, best: 90100, time: 905000 },
-      { id: 'd2', name: 'Pistol', team: 'GDSP', grid: 1, laps: 10, best: 90400, time: 908000 },
-      { id: 'd3', name: 'Sherman', team: 'GDSP', grid: 3, laps: 10, best: 90800, time: 912000 }
-    ],
-    laps: [
-      { id: 'd1', time: 90100, cuts: 0 }, { id: 'd1', time: 90300, cuts: 0 }, { id: 'd1', time: 90500, cuts: 0 },
-      { id: 'd2', time: 90400, cuts: 0 }, { id: 'd2', time: 90700, cuts: 0 }, { id: 'd2', time: 91000, cuts: 0 },
-      { id: 'd3', time: 90800, cuts: 0 }, { id: 'd3', time: 91100, cuts: 0 }, { id: 'd3', time: 91500, cuts: 0 }
-    ],
-    events: []
-  });
+test('event driver profile and global driver profile render ? tooltip icons, Δ rythme, and Analyse du rythme card', async () => {
+  const makeWeekend = (idx) => ([
+    {
+      type: 'QUALIFY',
+      date: `2026-06-0${idx}T19:30:00Z`,
+      track: 'riverside',
+      results: [
+        { id: 'd1', name: 'Karl74', team: 'GDSP', laps: 4, best: 89800 },
+        { id: 'd2', name: 'Pistol', team: 'GDSP', laps: 4, best: 90600 },
+        { id: 'd3', name: 'Sherman', team: 'GDSP', laps: 4, best: 91000 }
+      ],
+      laps: [],
+      events: []
+    },
+    {
+      type: 'RACE',
+      date: `2026-06-0${idx}T20:00:00Z`,
+      track: 'riverside',
+      results: [
+        { id: 'd1', name: 'Karl74', team: 'GDSP', grid: 2, laps: 10, best: 90100, time: 905000 },
+        { id: 'd2', name: 'Pistol', team: 'GDSP', grid: 1, laps: 10, best: 90400, time: 908000 },
+        { id: 'd3', name: 'Sherman', team: 'GDSP', grid: 3, laps: 10, best: 90800, time: 912000 }
+      ],
+      laps: [
+        { id: 'd1', time: 96000, cuts: 0 }, { id: 'd1', time: 90100, cuts: 0 }, { id: 'd1', time: 90300, cuts: 0 }, { id: 'd1', time: 90500, cuts: 0 },
+        { id: 'd2', time: 97000, cuts: 0 }, { id: 'd2', time: 90400, cuts: 0 }, { id: 'd2', time: 90700, cuts: 0 }, { id: 'd2', time: 91000, cuts: 0 },
+        { id: 'd3', time: 98000, cuts: 0 }, { id: 'd3', time: 90800, cuts: 0 }, { id: 'd3', time: 91100, cuts: 0 }, { id: 'd3', time: 91500, cuts: 0 }
+      ],
+      events: []
+    }
+  ]);
   const multiRaceEv = {
     slug: 'gt-open-2026',
     name: 'GT Open 2026',
     kind: 'championship',
     points_config: { expectedRounds: 5 },
-    data: { sessions: [1, 2, 3, 4, 5].map(makeRace) }
+    data: { sessions: [1, 2, 3, 4, 5].flatMap(makeWeekend) }
   };
 
   const { sandbox, getElementById } = makeBrowser(
@@ -225,21 +239,29 @@ test('event driver profile and global driver profile render ? tooltip icons on c
     'Propreté',
     'Vitesse au tour',
     'Résultats',
+    'Analyse du rythme',
+    'Race consistency &amp; meilleur tour week-end',
+    'Meilleur WE',
+    'Moy. course',
+    'Pit/exclu',
     'Courses enregistrées',
     'Meilleur résultat brut',
     'Places gagnées / course',
     'Collisions / course',
     'Delta',
     'Collisions brutes',
-    'Écart-type'
+    'Δ rythme',
+    'Méthode iRacing',
+    'Choc arrière clair'
   ]) {
     assert.ok(
       eventProfileHtml.includes(label) && eventProfileHtml.includes('class="gdsp-i">?</i>'),
-      `Event driver profile should render tooltip for ${label}`
+      `Event driver profile should render ${label}`
     );
   }
+  assert.match(eventProfileHtml, /1:29\.800<span style="[^"]*">Q<\/span>/);
   const eventTipCount = (eventProfileHtml.match(/class="gdsp-i">\?<\/i>/g) || []).length;
-  assert.ok(eventTipCount >= 12, `Expected at least 12 ? icons on event driver profile, got ${eventTipCount}`);
+  assert.ok(eventTipCount >= 15, `Expected at least 15 ? icons on event driver profile, got ${eventTipCount}`);
 
   // 2) Global ranking & Global driver profile (Global -> Karl74)
   await vm.runInContext("go('global')", sandbox);
@@ -256,18 +278,82 @@ test('event driver profile and global driver profile render ? tooltip icons on c
     'Vitesse au tour',
     'Résultats',
     'Progression',
+    'Analyse du rythme',
+    'Race consistency &amp; meilleur tour week-end',
+    'GT Open 2026 · Riverside',
     'Courses',
     'Meilleur',
     'Pos. moy.',
     'Δ départ',
     'Coll./course',
-    'É-T'
+    'Δ rythme'
   ]) {
     assert.ok(
       globalProfileHtml.includes(label),
       `Global driver profile should include ${label}`
     );
   }
+  assert.match(globalProfileHtml, /1:29\.800<span style="[^"]*">Q<\/span>/);
   const globalTipCount = (globalProfileHtml.match(/class="gdsp-i">\?<\/i>/g) || []).length;
-  assert.ok(globalTipCount >= 14, `Expected at least 14 ? icons on global driver profile, got ${globalTipCount}`);
+  assert.ok(globalTipCount >= 17, `Expected at least 17 ? icons on global driver profile, got ${globalTipCount}`);
+});
+
+test('restored formulas compute iRacing consistency, weekend Q/R best lap, Option 3 fouls, and v45 results accurately', async () => {
+  const { sandbox } = makeBrowser();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setImmediate(resolve));
+
+  // 1) raceConsistencyMs: ignores Lap 1 (110s) and pit lap (125s > 90s + 21s), best=90000, non-best=[90400, 90800] -> avg gap = 600 ms
+  const cons = vm.runInContext(
+    'raceConsistencyMs([{time:110000},{time:90000},{time:125000},{time:90400},{time:90800}])',
+    sandbox
+  );
+  assert.equal(cons, 600);
+
+  // 2) scoreResultsV45: 2 drivers -> 55 / 45, 28 drivers -> 100 / 0, DNF/DQ -> 0
+  assert.equal(vm.runInContext('scoreResultsV45(2, 1, false)', sandbox), 55);
+  assert.equal(vm.runInContext('scoreResultsV45(2, 2, false)', sandbox), 45);
+  assert.equal(vm.runInContext('scoreResultsV45(28, 1, false)', sandbox), 100);
+  assert.equal(vm.runInContext('scoreResultsV45(28, 28, false)', sandbox), 0);
+  assert.equal(vm.runInContext('scoreResultsV45(20, 3, true)', sandbox), 0);
+
+  // 3) weekendBestLaps: picks Q if faster, R if faster
+  const bestEntries = Array.from(vm.runInContext(`
+    Array.from(weekendBestLaps({
+      sessions: [
+        { type: 'QUALIFY', results: [{ id: 'a', best: 89500, laps: 3 }, { id: 'b', best: 91000, laps: 3 }] },
+        { type: 'RACE', results: [{ id: 'a', best: 90100, laps: 10, time: 910000 }, { id: 'b', best: 90200, laps: 10, time: 912000 }] }
+      ]
+    }).entries())
+  `, sandbox));
+  const bestObj = Object.fromEntries(bestEntries.map(([k, v]) => [k, { best: v.best, bestSession: v.bestSession }]));
+  assert.deepEqual(bestObj, {
+    a: { best: 89500, bestSession: 'Q' },
+    b: { best: 90200, bestSession: 'R' }
+  });
+
+  // 4) raceFoulScores (Option 3):
+  // - Driver A rear-ends Driver B (X=0.8, Z=0.2) at ts=200; B loses 4.0s on lap (94.0s vs 90.0s pace) => A gets +2.0 fault pts, B gets 0
+  // - Driver B & C touch side-by-side (|Z|=1.3 >= 1.0) => 0-0 even if C loses 5s
+  // - Driver C has 2 cuts => +2.0 fault pts
+  const foulEntries = Array.from(vm.runInContext(`
+    Array.from(raceFoulScores({
+      results: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }],
+      laps: [
+        { id: 'a', time: 95000, cuts: 0, timestamp: 100 }, { id: 'a', time: 90000, cuts: 0, timestamp: 190 }, { id: 'a', time: 90500, cuts: 0, timestamp: 280 },
+        { id: 'b', time: 95000, cuts: 0, timestamp: 100 }, { id: 'b', time: 90000, cuts: 0, timestamp: 190 }, { id: 'b', time: 94000, cuts: 0, timestamp: 284 },
+        { id: 'c', time: 95000, cuts: 1, timestamp: 100 }, { id: 'c', time: 90000, cuts: 1, timestamp: 190 }, { id: 'c', time: 95000, cuts: 0, timestamp: 285 }
+      ],
+      events: [
+        { type: 'COLLISION_WITH_CAR', aid: 'a', bid: 'b', timestamp: 200, RelPosition: { X: 0.8, Y: 0, Z: 0.2 } },
+        { type: 'COLLISION_WITH_CAR', aid: 'b', bid: 'a', timestamp: 200, RelPosition: { X: -0.8, Y: 0, Z: -0.2 } },
+        { type: 'COLLISION_WITH_CAR', aid: 'b', bid: 'c', timestamp: 210, RelPosition: { X: 0.6, Y: 0, Z: 1.3 } },
+        { type: 'COLLISION_WITH_CAR', aid: 'c', bid: 'b', timestamp: 210, RelPosition: { X: -0.6, Y: 0, Z: -1.3 } }
+      ]
+    }).entries())
+  `, sandbox));
+  const fouls = Object.fromEntries(foulEntries);
+  assert.equal(fouls.a, 2);
+  assert.equal(fouls.b, 0);
+  assert.equal(fouls.c, 2);
 });
