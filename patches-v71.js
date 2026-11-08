@@ -1,5 +1,5 @@
 /* =========================================================================
- * patches-v76.js — CLASSEMENT REPARTI DE ZÉRO
+ * patches-v77.js — CLASSEMENT REPARTI DE ZÉRO
  * =========================================================================
  * Règles implémentées (source de vérité unique) :
  *
@@ -50,7 +50,7 @@
 (function(){
 'use strict';
 if(window.__gdspV71)return; window.__gdspV71=true;
-console.log('[v76] classement reparti de zero');
+console.log('[v77] classement reparti de zero');
 
 const DEFAULT_MIN_PCT = 0.75;
 
@@ -288,9 +288,9 @@ window.sortSession=mySortSession;
  */
 /* =========================================================================
  * calculate() COMPLÈTEMENT REMPLACÉE — plus aucun recours à site.js pour
- * le calcul des points. Source de vérité unique : mySortSession + v76_calculate.
+ * le calcul des points. Source de vérité unique : mySortSession + v77_calculate.
  * ========================================================================= */
-function v76_calculate(){
+function v77_calculate(){
   stripServerPens();
   const rs=rounds();
   const all=allDrivers();
@@ -373,7 +373,7 @@ function v76_calculate(){
     return{...d,total:d.rounds.reduce((a,b)=>a+b,0),joker:jokerRounds.reduce((a,b)=>a+b,0),meritTotal:d.merit.reduce((a,b)=>a+b,0)};
   });
 }
-window.calculate=v76_calculate;
+window.calculate=v77_calculate;
 
 /* ---------- manche() : wrapper pour corriger les écarts et ajouter Pénal. ----------
  * Problème : site.js eff()/gapTo() utilise x._t si fini, sinon recalcul en ajoutant
@@ -462,7 +462,7 @@ window.manche=function(){
       return newRow;
     });
     return out;
-  }catch(e){console.warn('[v76] manche wrap',e);return html;}
+  }catch(e){console.warn('[v77] manche wrap',e);return html;}
 };
 
 /* ---------- addAdjustment étendu (dnf/dns/warning) - remplace v41 ---------- */
@@ -503,45 +503,50 @@ if(_pc0){window.pointsConfig=function(){const c=_pc0();c.doubleLongRaces=true;re
  * Comme on n'utilise qu'un seul championnat (International Series Lola T290),
  * on force son chargement direct et on affiche la page classement. */
 const V71_CHAMP_SLUG='lola-t290-gdsp-championnat-2026';
-async function v76_boot(){
+let v77_done=false;
+async function v77_loadAndGo(){
+  if(v77_done)return true;
   try{
     window.backendMulti=true;
     if(!Array.isArray(window.events)||!window.events.length){
-      try{
-        const r=await fetch('/api/events',{cache:'no-store'});
-        if(r.ok){const j=await r.json();window.events=Array.isArray(j.events)?j.events:[];}
-      }catch(e){}
+      try{const r=await fetch('/api/events',{cache:'no-store'});if(r.ok){const j=await r.json();window.events=Array.isArray(j.events)?j.events:[];}}catch(e){}
     }
-    if(!window.eventContext&&typeof window.loadEvent==='function'){
-      try{await window.loadEvent(V71_CHAMP_SLUG);}catch(e){console.warn('[v76] loadEvent',e);}
-      localStorage.setItem('gdsp_last_event',V71_CHAMP_SLUG);
-    }
-    if(!window.eventContext)return false;
+    let ev=null;
+    try{const r=await fetch('/api/events/'+encodeURIComponent(V71_CHAMP_SLUG),{cache:'no-store'});if(r.ok)ev=await r.json();}catch(e){console.warn('[v77] fetch event failed',e);}
+    if(!ev||!ev.data)return false;
+    window.currentSlug=ev.slug;
+    window.eventContext={slug:ev.slug,name:ev.name,kind:ev.kind||'championship',pointsConfig:ev.points_config||{},data:ev.data||{}};
+    window.sessions.length=0;
+    const d=ev.data||{};
+    if(Array.isArray(d.sessions))window.sessions.push(...d.sessions);
+    window.penMap=(d.penMap&&typeof d.penMap==='object')?d.penMap:{};
+    window.manualDrivers=d.manualDrivers||null;
+    window.customCalendar=d.customCalendar||null;
+    localStorage.setItem('gdsp_last_event',ev.slug);
+    if(window.manualDrivers)window.sessions.forEach(s=>s.results.forEach(r=>{if(window.manualDrivers[r.id]){r.name=window.manualDrivers[r.id].name;r.team=window.manualDrivers[r.id].team||'';}}));
+    stripServerPens();
     if(window.page!=='admin'){
-      window.round=0;window.sessionIndex=1;window.eventtab='resultats';
-      if(typeof window.go==='function'){window.go('manches');}
-      else{window.page='manches';if(window.render)window.render();}
+      v77_done=true;
+      window.page='manches';window.eventtab='resultats';window.round=0;window.sessionIndex=1;
+      if(window.render)window.render();
+      window.scrollTo(0,0);
+      console.log('[v77] navigated to manches, sessions=',window.sessions.length);
       return true;
     }
-    stripServerPens();
     if(window.render)window.render();
-  }catch(e){console.warn('[v76] boot',e);}
+  }catch(e){console.warn('[v77] loadAndGo',e);}
   return false;
 }
-async function v76_loop(){
-  // Polling : vérifie toutes les 500ms que le championnat est chargé, puis
-  // navigue vers "manches" UNE SEULE FOIS.
-  let n=0;
-  while(n<60){ // max 30s
-    n++;
-    const ok=await v76_boot();
-    if(ok)return;
-    await new Promise(r=>setTimeout(r,500));
-  }
-}
-v76_loop();
-setTimeout(v76_boot,300);
-setTimeout(v76_boot,1500);
-setTimeout(v76_boot,5000);
+let v77_tries=0;
+const v77_iv=setInterval(async()=>{
+  v77_tries++;
+  if(['manches','classement','pilotes'].includes(window.page)&&window.eventContext){clearInterval(v77_iv);v77_done=true;return;}
+  const ok=await v77_loadAndGo();
+  if(ok)clearInterval(v77_iv);
+  if(v77_tries>130)clearInterval(v77_iv);
+},300);
+setTimeout(v77_loadAndGo,100);
+setTimeout(v77_loadAndGo,1000);
+setTimeout(v77_loadAndGo,4000);
 
 })();
