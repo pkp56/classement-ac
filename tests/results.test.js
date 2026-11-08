@@ -12,6 +12,10 @@ const mancheStart = siteSource.indexOf('function manche(){');
 const mancheEnd = siteSource.indexOf('// Performance ratings', mancheStart);
 assert.ok(mancheStart >= 0 && mancheEnd > mancheStart, 'manche() renderer must be present in site.js');
 const mancheSource = siteSource.slice(mancheStart, mancheEnd);
+const jokerHelpersStart = siteSource.indexOf('function shouldDropWorstJoker()');
+const jokerHelpersEnd = siteSource.indexOf('// ---------- Helpers génériques ----------', jokerHelpersStart);
+assert.ok(jokerHelpersStart >= 0 && jokerHelpersEnd > jokerHelpersStart, 'joker helpers must be present in site.js');
+const jokerHelpersSource = siteSource.slice(jokerHelpersStart, jokerHelpersEnd);
 
 function makeContext() {
   const priorRound = {
@@ -58,6 +62,7 @@ function makeContext() {
     function table(headers,rows){return '<table><thead><tr>'+headers.map(x=>'<th>'+x+'</th>').join('')+'</tr></thead><tbody>'+(rows||[]).join('')+'</tbody></table>';}
   `;
   vm.runInContext(prelude, sandbox);
+  vm.runInContext(jokerHelpersSource, sandbox);
   vm.runInContext(patchSource, sandbox);
   vm.runInContext(mancheSource, sandbox);
   return sandbox;
@@ -134,6 +139,21 @@ test('qualification time penalties are displayed/sorted without compounding on r
   assert.equal(result.stored, result.original);
   assert.equal(result.first, result.original + 5000);
   assert.equal(result.second, result.first);
+});
+
+test('the Lola Joker excludes exactly the weakest round while other events keep their configured count', () => {
+  const ctx = makeContext();
+  assert.equal(vm.runInContext('jokerTotal([10,20,30,40,50])', ctx), 140);
+  assert.equal(vm.runInContext('jokerTotal([56,41,70,61,50])', ctx), 237, 'the lowest of the five displayed rounds is excluded');
+  assert.equal(vm.runInContext('jokerTabLabel()', ctx), 'Pilotes · Joker');
+  assert.match(vm.runInContext('jokerDescription()', ctx), /plus faible total de manche est écarté/);
+
+  const other = vm.runInContext(`
+    eventContext={slug:'open-test',pointsConfig:{jokerCount:2}};
+    ({total:jokerTotal([10,20,30,40,50]),label:jokerTabLabel()})
+  `, ctx);
+  assert.equal(other.total, 90);
+  assert.equal(other.label, 'Pilotes · 2 meilleures manches');
 });
 
 test('the pole point is awarded once to qualifying P1, not to a race grid leader', () => {

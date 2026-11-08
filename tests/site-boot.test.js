@@ -80,4 +80,12 @@ test('site opens at the GDSP home, then Results renders the loaded championship 
   vm.runInContext("addAdjustment(1,2,'fixture-dnf',0,false,false,'Abandon',{dnf:true})", sandbox);
   assert.equal(vm.runInContext("penMap['1:2:fixture-dnf'].dnf", sandbox), true);
   assert.equal(vm.runInContext("penMap['1:2:fixture-dnf'].timeAdd", sandbox), 0);
+
+  await vm.runInContext("go('classement')", sandbox);
+  vm.runInContext("showrank('joker')", sandbox);
+  const jokerHtml = getElementById('app').innerHTML;
+  assert.match(jokerHtml, /Pilotes · Joker/);
+  assert.doesNotMatch(jokerHtml, /8 meilleures manches/);
+  assert.match(jokerHtml, /plus faible total de manche est écarté/);
+  assert.match(jokerHtml, /Total Joker/);
 });

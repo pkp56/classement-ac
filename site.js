@@ -31,6 +31,28 @@ function pointsConfig(){
   if(eventContext&&eventContext.pointsConfig)return Object.assign({},DEFAULT_POINTS,eventContext.pointsConfig);
   return Object.assign({},DEFAULT_POINTS);
 }
+function shouldDropWorstJoker(){
+  const slug=eventContext&&eventContext.slug;
+  return slug==='lola-t290-gdsp-championnat-2026'||slug==='lola-t290-2026';
+}
+function jokerTotal(roundScores){
+  const scores=Array.isArray(roundScores)?roundScores.filter(Number.isFinite):[];
+  const configured=Number(pointsConfig().jokerCount)||0;
+  const keep=shouldDropWorstJoker()
+    ?(scores.length>1?scores.length-1:scores.length)
+    :(configured>0?Math.min(configured,scores.length):scores.length);
+  return [...scores].sort((a,b)=>b-a).slice(0,keep).reduce((sum,n)=>sum+n,0);
+}
+function jokerTabLabel(){
+  if(shouldDropWorstJoker())return 'Pilotes · Joker';
+  const count=Number(pointsConfig().jokerCount)||0;
+  return `Pilotes · ${count||'toutes'} meilleures manches`;
+}
+function jokerDescription(){
+  if(shouldDropWorstJoker())return 'Le plus faible total de manche est écarté du cumul Joker dès que deux manches sont disponibles ; toutes les manches restent affichées.';
+  const count=Number(pointsConfig().jokerCount)||0;
+  return count?`Les ${count} meilleurs totaux de manche sont conservés.`:'Toutes les manches sont conservées.';
+}
 
 // ---------- Helpers génériques ----------
 const labelsLegacy={accueil:'Accueil',classement:'Classements',manches:'Résultats',pilotes:'Pilotes',admin:'Administration'};
@@ -831,7 +853,6 @@ function calculate(){
   const doubleLong=cfg.doubleLongRaces!==false;
   const longMin=cfg.longRaceMinutes||60;
   const minPct=cfg.minPercentDistance||0.75;
-  const jokerCount=cfg.jokerCount||0;
   function effDQ(p){return p.finalDQ||p.disqualified||p.comDQ}
   function raceTime(p){return p.finalTime!=null?p.finalTime:p.time}
   function raceWin(race){return race.results.find(r=>!effDQ(r)&&Number.isFinite(raceTime(r)))}
@@ -893,28 +914,27 @@ function calculate(){
     map.forEach(d=>before.set(d.id,(before.get(d.id)||0)+d.rounds[j]));
   }
   return [...map.values()].map(d=>{
-    const jokerRounds=jokerCount>0?[...d.rounds].sort((a,b)=>b-a).slice(0,jokerCount):d.rounds;
-    return {...d,total:d.rounds.reduce((a,b)=>a+b,0),joker:jokerRounds.reduce((a,b)=>a+b,0),meritTotal:d.merit.reduce((a,b)=>a+b,0)};
+    return {...d,total:d.rounds.reduce((a,b)=>a+b,0),joker:jokerTotal(d.rounds),meritTotal:d.merit.reduce((a,b)=>a+b,0)};
   });
 }
 function meritRows(){let rs=rounds(),ds=calculate();ds.sort((a,b)=>b.meritTotal-a.meritTotal||a.name.localeCompare(b.name));const isL=!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG;const carCol=isL?'Voiture':'Modèle';return table(['Pos.','N°','Pilote',carCol,...rs.map(x=>'M'+x.number),'Total mérite'],ds.map((d,i)=>`<tr><td class="pos">${i+1}</td><td>${number(d.name)}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${car(d.name)}</td>${d.merit.map(p=>`<td>${p}</td>`).join('')}<td><b>${d.meritTotal}</b></td></tr>`))}
 function ranking(){
   if(backendMulti&&!eventContext)return hub();
   let ds=calculate(),r=rounds(),value=ranktab==='joker'?'joker':'total';
-  let tabshtml=tabs([['pilotes','Pilotes'],['joker',`Pilotes · ${pointsConfig().jokerCount||'toutes'} meilleures manches`],['equipes','Équipes'],['merite','Trophée du mérite']],ranktab,'showrank');
+  let tabshtml=tabs([['pilotes','Pilotes'],['joker',jokerTabLabel()],['equipes','Équipes'],['merite','Trophée du mérite']],ranktab,'showrank');
   if(ranktab==='merite')return `${head('classements','La course aux points','Pilotes, équipes et Trophée du mérite.')}${tabshtml}<div class="panel"><h2>Trophée du mérite</h2><p class="note">Course terminée, meilleur tour en course, meilleur temps en course qu'en qualification, progression depuis la grille, résultat meilleur que son classement général à partir de la manche 2, et absence de pénalité post-course. Les manches d'une heure rapportent le double.</p>${meritRows()}</div>`;
   let rows;
   if(ranktab==='equipes'){
     let teams=new Map;
     ds.forEach(d=>{let t=(d.team||'').trim();if(!t||/indépendant/i.test(t))return;let key=t.toLocaleLowerCase('fr');if(!teams.has(key))teams.set(key,{name:t,rounds:Array(r.length).fill(0),count:0});let team=teams.get(key);team.count++;for(let j=0;j<r.length;j++)team.rounds[j]+=d.rounds[j]});
-    let arr=[...teams.values()].map(t=>({...t,total:t.rounds.reduce((a,b)=>a+b,0),joker:[...t.rounds].sort((a,b)=>b-a).slice(0,pointsConfig().jokerCount||0).reduce((a,b)=>a+b,0)})).sort((a,b)=>b.joker-a.joker);
-    rows=table(['Pos.','Équipe issue des fichiers','Pilotes',...r.map(x=>'M'+x.number),'Total'],arr.map((t,i)=>`<tr><td class="pos">${i+1}</td><td><b>${esc(t.name)}</b></td><td>${t.count}</td>${t.rounds.map(p=>`<td>${p}</td>`).join('')}<td><b>${t.joker}</b></td></tr>`));
+    let arr=[...teams.values()].map(t=>({...t,total:t.rounds.reduce((a,b)=>a+b,0),joker:jokerTotal(t.rounds)})).sort((a,b)=>b.joker-a.joker);
+    rows=table(['Pos.','Équipe issue des fichiers','Pilotes',...r.map(x=>'M'+x.number),'Total Joker'],arr.map((t,i)=>`<tr><td class="pos">${i+1}</td><td><b>${esc(t.name)}</b></td><td>${t.count}</td>${t.rounds.map(p=>`<td>${p}</td>`).join('')}<td><b>${t.joker}</b></td></tr>`));
   }else{
     ds.sort((a,b)=>b[value]-a[value]||a.name.localeCompare(b.name));
     const carHead=(!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG)?'Voiture':'Modèle';
-    rows=table(['Pos.','N°','Pilote',carHead,...r.map(x=>'M'+x.number),'Total'],ds.map((d,i)=>`<tr><td class="pos">${i+1}</td><td>${number(d.name)}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${car(d.name)}</td>${d.rounds.map(p=>`<td>${p}</td>`).join('')}<td><b>${d[value]}</b></td></tr>`));
+    rows=table(['Pos.','N°','Pilote',carHead,...r.map(x=>'M'+x.number),ranktab==='joker'?'Total Joker':'Total'],ds.map((d,i)=>`<tr><td class="pos">${i+1}</td><td>${number(d.name)}</td><td><b>${esc(d.name)}</b><br><span class="muted">${esc(d.team)}</span></td><td>${car(d.name)}</td>${d.rounds.map(p=>`<td>${p}</td>`).join('')}<td><b>${d[value]}</b></td></tr>`));
   }
-  return `${head('classements','La course aux points','Pilotes et équipes selon le barème de cet événement.')}${tabshtml}<div class="panel"><h2>${({pilotes:'Classement général',joker:'Meilleures manches',equipes:'Classement équipes'})[ranktab]}</h2><p class="note">${ranktab==='equipes'?'Cumul des points des pilotes par manche.':ranktab==='joker'?`Les ${pointsConfig().jokerCount||'—'} meilleurs totaux de manche sont conservés.`:'Tous les résultats sont cumulés.'}</p>${rows}</div>`;
+  return `${head('classements','La course aux points','Pilotes et équipes selon le barème de cet événement.')}${tabshtml}<div class="panel"><h2>${({pilotes:'Classement général',joker:'Classement Joker',equipes:'Classement équipes'})[ranktab]}</h2><p class="note">${ranktab==='equipes'?`Points des pilotes cumulés par équipe ; ${jokerDescription()}`:ranktab==='joker'?jokerDescription():'Tous les résultats sont cumulés.'}</p>${rows}</div>`;
 }
 
 // ---------- Pages Manches / Pilotes ----------

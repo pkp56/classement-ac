@@ -12,7 +12,7 @@
  */
 (function(){
 'use strict';
-if(window.__gdspResultsV79)return; window.__gdspResultsV79=true;
+if(window.__gdspResultsV80)return; window.__gdspResultsV80=true;
 
 const DEFAULT_MIN_PCT = 0.75;
 const TARGET_CHAMP_SLUG = 'lola-t290-gdsp-championnat-2026';
@@ -186,7 +186,7 @@ function mySortSession(sess){
 window.sortSession=mySortSession;
 
 /* ---------- calculate(): classement et attribution des points ---------- */
-function v79_calculate(){
+function v80_calculate(){
   stripServerPens();
   const rs=rounds();
   const all=allDrivers();
@@ -199,7 +199,6 @@ function v79_calculate(){
   const polePts=cfg.polePoints||0;
   const dbl=cfg.doubleLongRaces!==false;
   const minPct=cfg.minPercentDistance||DEFAULT_MIN_PCT;
-  const jokerCount=cfg.jokerCount||0;
 
   function isDQ(p){return p._dq||p.comDNS||p.comDQ||p.disqualified;}
   function isClassed(p,wl,wt,ml){
@@ -265,20 +264,22 @@ function v79_calculate(){
   }
 
   // Joker
-  return [...map.values()].map(d=>{
-    const jokerRounds=jokerCount>0?[...d.rounds].sort((a,b)=>b-a).slice(0,jokerCount):d.rounds;
-    return{...d,total:d.rounds.reduce((a,b)=>a+b,0),joker:jokerRounds.reduce((a,b)=>a+b,0),meritTotal:d.merit.reduce((a,b)=>a+b,0)};
-  });
+  return [...map.values()].map(d=>({
+    ...d,
+    total:d.rounds.reduce((a,b)=>a+b,0),
+    joker:jokerTotal(d.rounds),
+    meritTotal:d.merit.reduce((a,b)=>a+b,0)
+  }));
 }
-window.calculate=v79_calculate;
+window.calculate=v80_calculate;
 
 /* ---------- Configuration et chargement ---------- */
 // Le championnat Lola T290 conserve le double barème de sa manche à course
 // unique. Les autres événements gardent leur propre configuration.
-const _pointsConfigV79=window.pointsConfig;
-if(typeof _pointsConfigV79==='function'){
+const _pointsConfigV80=window.pointsConfig;
+if(typeof _pointsConfigV80==='function'){
   window.pointsConfig=function(){
-    const cfg=_pointsConfigV79.apply(this,arguments);
+    const cfg=_pointsConfigV80.apply(this,arguments);
     if(eventContext&&eventContext.slug===TARGET_CHAMP_SLUG)cfg.doubleLongRaces=true;
     return cfg;
   };
@@ -286,18 +287,18 @@ if(typeof _pointsConfigV79==='function'){
 
 // Nettoyer les métadonnées AC dès qu'un événement est chargé. La navigation
 // reste gérée par site.js : les visiteurs arrivent sur l'accueil, pas aux résultats.
-const _loadEventV79=window.loadEvent;
-if(typeof _loadEventV79==='function'){
+const _loadEventV80=window.loadEvent;
+if(typeof _loadEventV80==='function'){
   window.loadEvent=async function(){
-    const ev=await _loadEventV79.apply(this,arguments);
+    const ev=await _loadEventV80.apply(this,arguments);
     if(ev)stripServerPens();
     return ev;
   };
 }
-const _loadLegacyV79=window.loadRemoteLegacy;
-if(typeof _loadLegacyV79==='function'){
+const _loadLegacyV80=window.loadRemoteLegacy;
+if(typeof _loadLegacyV80==='function'){
   window.loadRemoteLegacy=async function(){
-    const result=await _loadLegacyV79.apply(this,arguments);
+    const result=await _loadLegacyV80.apply(this,arguments);
     if(result)stripServerPens();
     return result;
   };
