@@ -1214,7 +1214,7 @@ function home(){
 const liveries=[['pistol','pistol','01'],['kimy','kimy','07'],['zplouch','jim','08'],['streetbike','streetbike','09'],['fmherrou','fmherrou','10'],['lenain','lenain','11'],['ponge','thomas','13'],['yohana','yohana','14'],['tofusan','tofusan','21'],['holden','holden','23'],['assassin','assassins','25'],['elouan','elouan','27'],['harryth','harry','28'],['jenkweed','jenkweed','29'],['erwann','erwann','30'],['arthur maus','arthur','31'],['alexou','alexou','33'],['orthopedux','victor','35'],['superslipos','superslipos','42'],['51r gilles','gilles','55'],['51r sherman','sherman','56'],['richard','richard','66'],['cheucheu','cheucheu','69'],['karl74','karl','74'],['neutraliz','neutraliz','77'],['alan mc','alan','84'],['pierre','pierre','86'],['kant-1','kant','88']];
 function livery(name){return liveries.find(x=>(name||'').toLocaleLowerCase('fr').includes(x[0]))}
 function car(name){
-  const isLola=!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG;
+  const isLola=!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG||eventContext.slug===ACTIVE_LOLA_SLUG;
   if(!isLola)return `<span class="muted">${esc(carModel(name)||'—')}</span>`;
   let l=livery(name);return l?`<img class="car-thumb" src="/assets/${l[1]}.jpg?v=6" alt="Voiture n° ${l[2]} de ${esc(name)}">`:'<span class="muted">Visuel à ajouter</span>'
 }
@@ -1516,7 +1516,18 @@ function performanceRatings(){
   for(let i=0;i<out.length;i++){const rank=out.findIndex(x=>Math.abs(x.score-out[i].score)<1e-9);out[i].level=4-Math.min(3,Math.floor(rank*4/out.length));}
   return out;
 }
-function ratingCard(id){let ratings=performanceRatings(),r=ratings.find(x=>x.id===id);if(!r)return `<div class="panel"><div class="eyebrow">Évaluation de performance ${gdspTip(PROFILE_TIPS.scoreEvent,'gdsp-tip-left')}</div><h2>Niveau à déterminer</h2><p class="note">Au moins deux courses exploitables sont nécessaires.</p></div>`;let labels={regularite:'Régularité',proprete:'Propreté',vitesse:'Vitesse au tour',resultats:'Résultats'},tips={regularite:PROFILE_TIPS.regularite,proprete:PROFILE_TIPS.proprete,vitesse:PROFILE_TIPS.vitesse,resultats:PROFILE_TIPS.resultats},bars=Object.entries(r.details).map(([k,v])=>`<div style="margin:14px 0"><div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span><b>${labels[k]}</b>${tips[k]?gdspTip(tips[k],'gdsp-tip-left'):''}</span><span>${v.toFixed(0)} / 100</span></div><div class="bar" style="margin-top:7px"><i style="width:${v.toFixed(1)}%"></i></div></div>`).join('');return `<div class="panel"><div class="eyebrow">Évaluation de performance · provisoire</div><h2>Niveau ${r.level} <span style="font-family:Arial;font-size:13px;color:#6d726c">/ 4</span> ${gdspTip(PROFILE_TIPS.scoreEvent,'gdsp-tip-left')}</h2><p class="note">Score relatif : <b>${r.score.toFixed(1)} / 100</b> · ${r.count} course(s) exploitables · ${ratings.length} pilotes évalués</p>${bars}</div>`}
+function ratingCard(id){
+  let ratings=performanceRatings(),r=ratings.find(x=>x.id===id);
+  if(!r)return `<div class="panel drv-rating-card"><div class="eyebrow">Évaluation de performance ${gdspTip(PROFILE_TIPS.scoreEvent,'gdsp-tip-left')}</div><h2>Niveau à déterminer</h2><p class="note">Au moins deux courses exploitables sont nécessaires pour établir les quatre jauges de performance.</p></div>`;
+  let labels={regularite:'Régularité',proprete:'Propreté',vitesse:'Vitesse au tour',resultats:'Résultats'},
+      tips={regularite:PROFILE_TIPS.regularite,proprete:PROFILE_TIPS.proprete,vitesse:PROFILE_TIPS.vitesse,resultats:PROFILE_TIPS.resultats},
+      bars=Object.entries(r.details).map(([k,v])=>{
+        const cls=v>=70?'g-hi':v>=45?'g-mid':'g-lo';
+        const w=Math.max(2,Math.min(100,v)).toFixed(1);
+        return `<div class="drv-gauge"><div class="drv-gauge-top"><span><b>${labels[k]}</b>${tips[k]?gdspTip(tips[k],'gdsp-tip-left'):''}</span><span class="drv-gauge-val">${v.toFixed(0)} <small>/ 100</small></span></div><div class="drv-bar"><span class="drv-bar-mid" title="Repère 50 / 100"></span><i class="${cls}" style="width:${w}%"></i></div></div>`;
+      }).join('');
+  return `<div class="panel drv-rating-card"><div class="drv-rating-head"><div><div class="eyebrow">Évaluation de performance · provisoire</div><h2>Niveau ${r.level} <span style="font-family:Arial;font-size:13px;color:#6d726c">/ 4</span> ${gdspTip(PROFILE_TIPS.scoreEvent,'gdsp-tip-left')}</h2><p class="note" style="margin:4px 0 0">${r.count} course(s) exploitables · ${ratings.length} pilotes évalués</p></div><div class="drv-score-badge"><strong>${r.score.toFixed(1)}</strong><span>Score / 100</span></div></div>${bars}<div class="drv-gauge-legend"><span><i class="dot dot-hi"></i>≥ 70 Point fort</span><span><i class="dot dot-mid"></i>45–69 Solide</span><span><i class="dot dot-lo"></i>&lt; 45 À travailler</span><span>┆ Repère 50</span></div></div>`;
+}
 function plotHistory(metrics,mode){if(!metrics.length)return '<p class="note">Aucune course disponible.</p>';let w=700,h=190,left=42,right=20,top=16,bottom=42,vals=metrics.map(m=>mode==='position'?m.position:m.collisions),max=Math.max(mode==='position'?5:1,...vals),x=i=>left+(metrics.length===1?(w-left-right)/2:i*(w-left-right)/(metrics.length-1)),y=v=>mode==='position'?top+(v-1)*(h-top-bottom)/Math.max(max-1,1):top+(max-v)*(h-top-bottom)/max;let line=vals.map((v,i)=>`${x(i)},${y(v)}`).join(' '),ticks=[1,Math.ceil(max/2),max].filter((v,i,a)=>a.indexOf(v)===i);let grid=ticks.map(t=>`<line x1="${left}" y1="${y(t)}" x2="${w-right}" y2="${y(t)}" stroke="#d8cdbb"/><text x="${left-8}" y="${y(t)+4}" text-anchor="end" font-size="11" fill="#69756e">${t}</text>`).join('');let points=vals.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="5" fill="#9c3021"><title>${esc(track(metrics[i].race.track))} — ${date(metrics[i].race.date)} : ${v}</title></circle><text x="${x(i)}" y="${h-17}" text-anchor="middle" font-size="10" fill="#69756e">C${i+1}</text>`).join('');return `<svg viewBox="0 0 ${w} ${h}" role="img" style="width:100%;height:auto;display:block">${grid}<polyline fill="none" stroke="#a83729" stroke-width="2.5" points="${line}"/>${points}</svg><p class="note">${metrics.map((m,i)=>`C${i+1} : ${esc(track(m.race.track))} · ${date(m.race.date)}`).join(' &nbsp; / &nbsp; ')}</p>`}
 function drivers(){
   if(backendMulti&&!eventContext)return hub();
@@ -1539,22 +1550,61 @@ function drivers(){
     if(known.length>=2){if(avgDelta>0.5)positives.push(`Progression moyenne de ${signed(avgDelta)} place(s) entre le départ et l'arrivée.`);else if(avgDelta<-.5)weaknesses.push(`Recul moyen de ${Math.abs(avgDelta).toFixed(1)} place(s) entre le départ et l'arrivée.`);else positives.push('Positions de départ globalement conservées en course.')}
     if(metrics.length>=2){if(avgColl<1)positives.push("Moins d'un événement de collision enregistré par course en moyenne.");else if(avgColl>=3)weaknesses.push("Plusieurs événements de collision enregistrés par course en moyenne.");if(avgPos<=5)positives.push('Position moyenne à l’arrivée dans les cinq premiers.')}
     let desc=arr=>arr.length?arr.map(x=>`<li>${esc(x)}</li>`).join(''):'<li>Pas assez de données.</li>';
-    const isLolaProf=!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG;
-    let largeCar;
+    const isLolaProf=!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG||eventContext.slug===ACTIVE_LOLA_SLUG;
+    const l=isLolaProf?livery(d.name):null;
+    const initials=(d.name||'').trim().split(/[\s._-]+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('')||'—';
+    const roundelHtml=l?`<div class="drv-roundel">${esc(l[2])}</div>`:`<div class="drv-roundel drv-roundel-txt">${esc(initials)}</div>`;
+    let carVisual,carNumLabel,carFootLeft;
     if(!isLolaProf){
       const md=races[0]&&races[0].results.find(r=>r.id===driverId);
-      largeCar=`<span class="muted">${md&&md.model?esc(md.model):'—'}</span>`;
+      const modelName=md&&md.model?md.model:(eventContext&&eventContext.name?eventContext.name:'Modèle engagé');
+      carVisual=`<div class="drv-car-placeholder">${esc(modelName)}</div>`;
+      carNumLabel=md&&md.model?esc(md.model):'Engagé';
+      carFootLeft=esc((eventContext&&eventContext.name)||'GDSP');
     }else{
-      let l=livery(d.name);largeCar=l?`<img class="driver-car" src="/assets/${l[1]}.jpg?v=6" alt="Voiture numéro ${l[2]} de ${esc(d.name)}">`:'<p class="note">Visuel de voiture à ajouter.</p>';
+      carVisual=l?`<img class="driver-car" src="/assets/${l[1]}.jpg?v=6" alt="Voiture numéro ${l[2]} de ${esc(d.name)}">`:'<div class="drv-car-placeholder">Visuel de voiture à ajouter</div>';
+      carNumLabel=l?`N° ${esc(l[2])}`:'N° —';
+      carFootLeft='Lola T290 · International Series';
     }
+    const rPerf=performanceRatings().find(x=>x.id===driverId);
+    const lvlStamp=rPerf?`<span class="drv-lvl-stamp"><b>Niveau ${rPerf.level} / 4</b> · ${rPerf.score.toFixed(1)} / 100</span>`:`<span class="drv-lvl-stamp">Niveau à déterminer · ${races.length} course(s)</span>`;
+    const heroEye=backendMulti&&eventContext&&eventContext.name?`${(eventContext.kind||'').toUpperCase()} · ${eventContext.name}`:'GDSP · Fiche pilote engagé';
+    const bestPosVal=races.length?Math.min(...metrics.map(m=>m.position)):null;
+    const winsCount=metrics.filter(m=>m.position===1).length;
+    const podiumsCount=metrics.filter(m=>m.position<=3).length;
+    const roundsDisputed=evRounds.filter(rd=>(rd.sessions||[]).some(s=>s&&s.type==='RACE'&&(s.results||[]).some(r=>r&&r.id===driverId))).length;
+    const totalColl=metrics.reduce((n,m)=>n+m.collisions,0);
+    const deltaDisplay=avgDelta===null?'—':(avgDelta>0.05?'▲ '+signed(avgDelta):avgDelta<-0.05?'▼ '+signed(avgDelta):'= '+signed(avgDelta));
+    const deltaCls=avgDelta===null?'':(avgDelta>0.05?'kpi-val-pos':avgDelta<-0.05?'kpi-val-neg':'');
+    const quickOpts=ds.map(x=>{
+      const xl=isLolaProf?livery(x.name):null;
+      return `<option value="${esc(x.id)}" ${x.id===driverId?'selected':''}>${xl?'#'+esc(xl[2])+' · ':''}${esc(x.name)}</option>`;
+    }).join('');
     let rows=metrics.map(m=>{
       const s=m.race,r=m.result;
       let times=(s.laps||[]).filter(x=>x.id===driverId&&x.time>0&&x.time<600000);
       const consMs=raceConsistencyMs(times);
-      return `<tr><td>${date(s.date)}</td><td>${esc(track(s.track))}</td><td>${r.grid??'—'}</td><td class="pos">${m.position}</td><td>${m.delta===null?'—':(m.delta>0?'+':'')+m.delta}</td><td>${m.collisions}</td><td>${fmt(r.best)}</td><td>${consMs!=null?'+'+(consMs/1000).toFixed(2)+' s':'—'}</td></tr>`;
+      const posHtml=m.position<=3?`<span class="podium-pill p${m.position}">P${m.position}</span>`:`<span class="pos">P${m.position}</span>`;
+      const deltaHtml=m.delta===null?'<span class="muted">—</span>':(m.delta>0?`<span class="delta-pill up">▲ +${m.delta}</span>`:m.delta<0?`<span class="delta-pill down">▼ ${m.delta}</span>`:'<span class="delta-pill eq">= 0</span>');
+      const collHtml=m.collisions===0?'<span class="coll-zero">0</span>':(m.collisions>=3?`<span class="penalty">${m.collisions}</span>`:String(m.collisions));
+      return `<tr><td class="hist-mono">${date(s.date)}</td><td><b>${esc(track(s.track))}</b></td><td class="hist-mono">${r.grid?'P'+r.grid:'—'}</td><td>${posHtml}</td><td>${deltaHtml}</td><td class="hist-mono">${collHtml}</td><td class="hist-mono">${fmt(r.best)}</td><td class="hist-mono"><b>${consMs!=null?'+'+(consMs/1000).toFixed(2)+' s':'—'}</b></td></tr>`;
     });
-    const rythmeHtml=buildRythmeCard(driverId,evRounds,{showEvent:false});
-    return `${head('pilote',esc(d.name),esc(d.team)||'Pilote')}<button class="btn secondary" onclick="driverId='';render()">← Tous les pilotes</button><div class="profile-car" style="margin-top:15px"><span class="label">Voiture engagée</span> &nbsp; ${number(d.name)} ${largeCar}</div><div class="stats"><div class="stat"><span class="label">Courses enregistrées ${gdspTip(PROFILE_TIPS.courses,'gdsp-tip-left')}</span><strong>${races.length}</strong></div><div class="stat"><span class="label">Meilleur résultat brut ${gdspTip(PROFILE_TIPS.bestPos)}</span><strong>${races.length?Math.min(...metrics.map(m=>m.position)):'—'}</strong></div><div class="stat"><span class="label">Places gagnées / course ${gdspTip(PROFILE_TIPS.delta)}</span><strong>${signed(avgDelta)}</strong></div><div class="stat"><span class="label">Collisions / course ${gdspTip(PROFILE_TIPS.collisions,'gdsp-tip-right')}</span><strong>${avgColl===null?'—':avgColl.toFixed(1)}</strong></div></div><p class="note">Delta : position de départ brute moins position d'arrivée ; positif = progression.</p><div class="section-head"><div><div class="eyebrow">Quatre critères · un niveau</div><h2>Profil de performance</h2></div></div>${ratingCard(driverId)}${rythmeHtml}<div class="section-head"><div><div class="eyebrow">Analyse</div><h2>Portrait du pilote</h2></div></div><div class="grid"><div class="panel"><div class="eyebrow">Points forts</div><ul class="note">${desc(positives)}</ul></div><div class="panel"><div class="eyebrow">Axes de progression</div><ul class="note">${desc(weaknesses)}</ul></div></div><div class="section-head"><h2>Historique en course</h2></div><div class="panel driver-hist-wrap">${table(['Date','Circuit','Départ','Arrivée',`Delta ${gdspTip(PROFILE_TIPS.delta)}`,`Collisions brutes ${gdspTip(PROFILE_TIPS.collisions)}`,'Meilleur tour',`Δ rythme ${gdspTip(PROFILE_TIPS.sigma,'gdsp-tip-right')}`],rows)}</div>`;
+    const rythmeHtml=buildRythmeCard(driverId,evRounds,{showEvent:false})||'<div class="panel rythme-wrap"><div class="eyebrow">Analyse du rythme</div><h2>Race consistency &amp; meilleur tour week-end</h2><p class="note">Pas encore assez de tours chronométrés pour analyser la régularité sur cet événement.</p></div>';
+    return `<div class="drv-topbar"><button class="btn secondary" onclick="driverId='';render()">← Tous les pilotes</button><div class="drv-quick-switch"><span class="label">Fiche pilote</span><select aria-label="Choisir un pilote" onchange="driverId=this.value;render()">${quickOpts}</select></div></div>`
+      +`<div class="drv-hero"><div class="drv-hero-id"><div class="drv-hero-eyebrow">${esc(heroEye)}</div><div class="drv-id-main">${roundelHtml}<div><h1>${esc(d.name)}</h1><div class="drv-team-line">${esc(d.team)||'Pilote indépendant'}</div></div></div><div class="drv-hero-stamps">${lvlStamp}</div></div>`
+      +`<div class="drv-hero-car"><div class="drv-car-head"><span class="label">Voiture engagée</span><span class="drv-car-num">${carNumLabel}</span></div><div class="drv-car-stage">${carVisual}</div><div class="drv-car-foot"><span>${carFootLeft}</span><span>Arrivée moy. ${gdspTip(PROFILE_TIPS.avgPos,'gdsp-tip-right')} <b>${avgPos!==null?'P'+avgPos.toFixed(1):'—'}</b></span></div></div></div>`
+      +`<div class="drv-kpis">`
+      +`<div class="drv-kpi"><span class="label">Courses enregistrées ${gdspTip(PROFILE_TIPS.courses,'gdsp-tip-left')}</span><strong>${races.length}</strong><span class="drv-kpi-sub">${roundsDisputed} manche(s) disputée(s)</span></div>`
+      +`<div class="drv-kpi kpi-gold"><span class="label">Meilleur résultat brut ${gdspTip(PROFILE_TIPS.bestPos)}</span><strong class="${bestPosVal===1?'kpi-val-gold':''}">${bestPosVal!==null?'P'+bestPosVal:'—'}</strong><span class="drv-kpi-sub">${races.length?`${winsCount} victoire(s) · ${podiumsCount} podium(s)`:'Aucune course enregistrée'}</span></div>`
+      +`<div class="drv-kpi kpi-green"><span class="label">Places gagnées / course ${gdspTip(PROFILE_TIPS.delta)}</span><strong class="${deltaCls}">${deltaDisplay}</strong><span class="drv-kpi-sub">Grille départ − position d’arrivée</span></div>`
+      +`<div class="drv-kpi kpi-red"><span class="label">Collisions / course ${gdspTip(PROFILE_TIPS.collisions,'gdsp-tip-right')}</span><strong>${avgColl===null?'—':avgColl.toFixed(1)}</strong><span class="drv-kpi-sub">${totalColl} contact(s) serveur au total</span></div>`
+      +`</div>`
+      +`<div class="section-head"><div><div class="eyebrow">Quatre critères · un niveau</div><h2>Profil de performance &amp; rythme</h2></div></div>`
+      +`<div class="drv-perf-grid">${ratingCard(driverId)}${rythmeHtml}</div>`
+      +`<div class="section-head"><div><div class="eyebrow">Analyse</div><h2>Portrait du pilote</h2></div></div>`
+      +`<div class="drv-portrait-grid"><div class="panel drv-portrait-card drv-portrait-pos"><div class="drv-portrait-head"><span class="drv-portrait-ico pos">✓</span><div><div class="eyebrow" style="color:#3b6341">Points forts</div><h3>Ce qui fonctionne en piste</h3></div></div><ul class="drv-portrait-list">${desc(positives)}</ul></div><div class="panel drv-portrait-card drv-portrait-axe"><div class="drv-portrait-head"><span class="drv-portrait-ico axe">↗</span><div><div class="eyebrow">Axes de progression</div><h3>Points de vigilance</h3></div></div><ul class="drv-portrait-list">${desc(weaknesses)}</ul></div></div>`
+      +`<div class="section-head"><div><div class="eyebrow">Carnet de route</div><h2>Historique en course</h2></div><span class="muted">${races.length} départ(s)</span></div>`
+      +`<div class="panel driver-hist-wrap">${table(['Date','Circuit','Départ','Arrivée',`Delta ${gdspTip(PROFILE_TIPS.delta)}`,`Collisions brutes ${gdspTip(PROFILE_TIPS.collisions)}`,'Meilleur tour',`Δ rythme ${gdspTip(PROFILE_TIPS.sigma,'gdsp-tip-right')}`],rows)}</div>`;
   }
   return `${head('pilotes','Les engagés','Pilotes présents dans cet événement.')}<div class="panel"><div class="eyebrow">Face à face</div><h2>Comparer deux pilotes</h2><div class="controls"><select onchange="compareA=this.value;render()"><option value="">Choisir un pilote</option>${ds.map(d=>`<option value="${d.id}" ${compareA===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select><select onchange="compareB=this.value;render()"><option value="">Choisir un autre pilote</option>${ds.map(d=>`<option value="${d.id}" ${compareB===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div>${comparison()}</div><div class="controls"><input id="search" placeholder="Rechercher un pilote..." oninput="filterDrivers(this.value)"></div><div class="cardlist" id="drivers">${ds.map(d=>`<div class="driver" data-name="${esc(d.name.toLowerCase())}" onclick="driverId='${d.id}';render()"><div class="eyebrow">Pilote engagé</div><strong>${esc(d.name)}</strong> &nbsp; ${number(d.name)}<div>${car(d.name)}</div><p class="muted">${esc(d.team)||'Équipe non renseignée'}</p><span class="label">Voir la fiche &nbsp; →</span></div>`).join('')}</div>`;
 }
