@@ -649,3 +649,44 @@ test('Permanent event landing URL restores the intended event and supports Back 
   await sandbox.switchEvent(fixture.event.slug);
   assert.equal(location.pathname,'/evenements/'+encodeURIComponent(fixture.event.slug));
 });
+
+test('Temporary events outage preserves GDSP hub, Global navigation and admin login; retry recovers', async () => {
+  let offline=true;
+  const {sandbox,getElementById,calls}=makeBrowser([],url=>{
+    if(url==='/api/events'&&offline)return response({error:'Unavailable'},503);
+  });
+  await new Promise(resolve=>setTimeout(resolve,0));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(vm.runInContext('backendMulti',sandbox),true);
+  assert.match(getElementById('nav').innerHTML,/GLOBAL/);
+  assert.match(getElementById('app').innerHTML,/Connexion au serveur interrompue/);
+  assert.match(getElementById('app').innerHTML,/La piste,<br>entre gentlemen/);
+  assert.equal(calls.filter(c=>c.url==='/api/events').length,2);
+  await sandbox.go('admin');
+  assert.match(getElementById('app').innerHTML,/id="adminuser"/);
+  assert.match(getElementById('app').innerHTML,/id="adminpass"/);
+  offline=false;await sandbox.retryBackend();
+  assert.equal(vm.runInContext('backendError',sandbox),'');
+  assert.ok(vm.runInContext('events.length',sandbox)>0);
+  assert.equal(calls.some(c=>c.url==='/api/championship'),false);
+});
+
+test('Cold-start events failure retries successfully without falling back to Lola legacy',async()=>{
+  let attempts=0;
+  const {sandbox,getElementById}=makeBrowser([],url=>{
+    if(url==='/api/events'&&attempts++===0)return response({},502);
+  });
+  await new Promise(resolve=>setTimeout(resolve,0));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(vm.runInContext('backendMulti',sandbox),true);
+  assert.equal(vm.runInContext('backendError',sandbox),'');
+  assert.match(getElementById('app').innerHTML,/La piste,<br>entre gentlemen/);
+});
+
+test('Malformed events response is an outage, not a successful empty catalog or legacy detection',async()=>{
+  const {sandbox}=makeBrowser([],url=>url==='/api/events'?response({unexpected:true}):null);
+  await new Promise(resolve=>setTimeout(resolve,0));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(vm.runInContext('backendMulti',sandbox),true);
+  assert.ok(vm.runInContext('backendError',sandbox));
+});

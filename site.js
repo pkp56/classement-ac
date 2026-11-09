@@ -8,6 +8,7 @@ const ACTIVE_LOLA_SLUG = 'lola-t290-gdsp-championnat-2026';
 const GLOBAL_MIN_RACES = 5;           // nombre minimum de courses pour être classé au Global
 let globalHidden = {};                // id -> true : pilote exclu du classement global par l'admin
 let deletedEventSlugs = {};           // slug -> true : événements supprimés par l'admin
+let backendError = '';
 let backendMulti = null;          // null=pending, true=multi, false=legacy
 let events = [];                  // liste des événements (multi seulement)
 let currentSlug = null;
@@ -251,16 +252,30 @@ function markEventSlugDeleted(slug,deleted){
 }
 
 async function detectBackend(){
-  try{
-    const r=await fetch('/api/events',{cache:'no-store'});
-    if(r.ok){
+  // Legacy mode must be explicitly requested; outages must never change the site.
+  if(window.GDSP_LEGACY_MODE===true){backendMulti=false;backendError='';return}
+  backendMulti=true;
+  backendError='';
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const r=await fetch('/api/events',{cache:'no-store'});
+      if(!r.ok)throw new Error('HTTP '+r.status);
       const j=await r.json();
+      if(!Array.isArray(j.events))throw new Error('Réponse événements invalide');
       events=filterEventsList(j.events);
-      backendMulti=true;
+      backendError='';
       return;
-    }
-  }catch(e){}
-  backendMulti=false;
+    }catch(error){backendError='Le serveur des événements est temporairement indisponible. Les données ne sont pas modifiées.'}
+  }
+}
+async function retryBackend(){
+  await detectBackend();
+  if(!backendError){
+    const match=window.location&&window.location.pathname.match(/^\/evenements\/([^/]+)\/?$/);
+    const target=match?decodeURIComponent(match[1]):currentSlug;
+    if(target){try{await loadEvent(target);if(match)page='event'}catch(error){backendError='Impossible de charger cet événement. Réessayez.'}}
+  }
+  render();
 }
 
 async function loadEvent(slug){
@@ -1823,6 +1838,7 @@ async function adminLogin(){
   const u=(document.getElementById('adminuser')||{}).value||'gdspadmin';const p=document.getElementById('adminpass').value;
   try{
     const r=await apiPost('/api/admin/login',{username:u,password:p});
+    if(r.status>=500){alert('Serveur de connexion temporairement indisponible. Réessayez dans quelques instants.');return}
     const j=await r.json();
     if(!r.ok||!j.token){alert(j.error||j.message||'Identifiant ou mot de passe incorrect.');return}
     adminToken=j.token;
@@ -1832,6 +1848,7 @@ async function adminLogin(){
     sessionStorage.setItem('gdsp_admin_token',adminToken);
     adminAuth=true;
     adminUser=j.user||'Direction de course';
+    if(backendError)await detectBackend();
     if(j.warning)alert('⚠ Connexion en mode secours :\n\n'+j.warning);
     try{
       if(backendMulti){
@@ -2994,6 +3011,11 @@ function render(){
     }
   }
   nav();
+  if(backendError){
+    const warning=`<div class="panel" role="alert"><h2>Connexion au serveur interrompue</h2><p>${esc(backendError)}</p><button class="btn secondary" onclick="retryBackend()">Réessayer</button><button class="btn secondary" onclick="go('admin')">Administration</button></div>`;
+    app.innerHTML=warning+(page==='admin'?admin():hub());
+    return;
+  }
   if(backendMulti&&page==='gpilote'){
     // Sécurité : si les données ne sont pas encore chargées, passer par go('gpilote')
     const anyLoaded=events.some(ev=>ev.__loaded);
@@ -3029,7 +3051,7 @@ function render(){
     const last=localStorage.getItem('gdsp_last_event');
     if(last&&!events.some(e=>e.slug===last))localStorage.removeItem('gdsp_last_event');
     const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
-    if(adminToken){
+    if(adminToken&&!backendError){
       try{
         const auth=await apiGet('/api/admin/verify');
         const info=await auth.json().catch(()=>({}));
