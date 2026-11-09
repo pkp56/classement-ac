@@ -650,13 +650,21 @@ app.get('/evenements/:slug',async(req,res)=>{
   }catch(error){publicFailure(res,error)}
 });
 app.get('/robots.txt',(_req,res)=>res.type('text').send('User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\n'+(PUBLIC_SITE_URL?'Sitemap: '+PUBLIC_SITE_URL+'/sitemap.xml\n':'')));
+let lastSitemapEventPaths=[];
 app.get('/sitemap.xml',async(_req,res)=>{
   if(!PUBLIC_SITE_URL)return res.status(503).type('text').send('PUBLIC_SITE_URL must be configured.');
   try {
     const result=await publicJson('/api/events');
-    const paths=['/',...(result.events||[]).map(ev=>seo.eventPath(ev.slug))];
-    res.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+paths.map(p=>'<url><loc>'+seo.escapeHtml(PUBLIC_SITE_URL+p)+'</loc></url>').join('')+'</urlset>');
-  }catch(error){res.status(503).send('Sitemap temporarily unavailable')}
+    if(!Array.isArray(result.events))throw new Error('Invalid event catalog');
+    lastSitemapEventPaths=[...new Set(result.events.filter(ev=>ev&&typeof ev.slug==='string'&&ev.slug).map(ev=>seo.eventPath(ev.slug)))];
+  }catch(error){
+    // A sleeping/unavailable backend must not prevent Google from reading the sitemap.
+    // Retain the last successful list, or the home URL alone on a fresh server.
+    console.warn('Sitemap: using fallback URL list because the event catalog is unavailable.');
+  }
+  const paths=['/',...lastSitemapEventPaths];
+  res.set('Cache-Control','no-cache');
+  res.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+paths.map(p=>'<url><loc>'+seo.escapeHtml(PUBLIC_SITE_URL+p)+'</loc></url>').join('')+'</urlset>');
 });
 app.get('/healthz', (_req, res) => {
   res.set('Cache-Control','no-store');
