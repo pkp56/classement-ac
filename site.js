@@ -128,7 +128,7 @@ async function go(x){
   if(x==='event'||x==='classement'||x==='manches')driverId='';
   page=x;window.scrollTo(0,0);
   // 'accueil' et 'hub' = la VRAIE page d'accueil GDSP (hero 65/35, Règlements, Stats, Discord) en mode multi
-  if((x==='accueil'||x==='hub')&&backendMulti){page='hub';render();return}
+  if((x==='accueil'||x==='hub')&&backendMulti){page='hub';if(window.history&&window.location)window.history.pushState({},'', '/');render();return}
   if((x==='global'||x==='gpilote')&&backendMulti){
     app.innerHTML=`<div class="panel"><p class="note">Chargement des données de tous les événements…</p></div>`;
     nav();
@@ -196,6 +196,7 @@ function renderEventSwitcher(){
 async function switchEvent(slug){
   if(!slug){goHome();return} // choix "— Changer…" vide → retour accueil GDSP
   await loadEvent(slug);
+  if(window.history&&window.location)window.history.pushState({},'', '/evenements/'+encodeURIComponent(slug));
   page='event'; // ouvrir sur l'onglet Accueil de l'événement sélectionné
   round=0;sessionIndex=1;driverId='';compareA='';compareB='';ranktab='pilotes';
   render();window.scrollTo(0,0);
@@ -406,7 +407,7 @@ function hub(){
   function card(e){
     const tag = e.kind==='championship'?'<span class="tag live">CHAMPIONNAT</span>':e.kind==='open'?'<span class="tag open">OPEN</span>':'<span class="tag archive">ARCHIVE</span>';
     const coef = (e.points_config&&e.points_config.globalCoef!=null)?`<span class="coef">coeff ${e.points_config.globalCoef}</span>`:'';
-    return `<div class="event-card" onclick="switchEvent('${esc(e.slug)}')">${coef}${tag}<h3>${esc(e.name)}</h3><p class="note">Mis à jour le ${new Date(e.updated_at).toLocaleDateString('fr-FR')}</p><span class="label">Ouvrir →</span></div>`;
+    return `<a class="event-card" style="display:block;text-decoration:none;color:inherit" href="/evenements/${encodeURIComponent(e.slug)}" onclick="if(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;event.preventDefault();switchEvent('${esc(e.slug)}')">${coef}${tag}<h3>${esc(e.name)}</h3><p class="note">Mis à jour le ${new Date(e.updated_at).toLocaleDateString('fr-FR')}</p><span class="label">Ouvrir →</span></a>`;
   }
   const section=(title,arr)=>arr.length?`<div class="section-head"><div><div class="eyebrow">${title}</div><h2>${arr.length} événement${arr.length>1?'s':''}</h2></div></div><div class="cardlist">${arr.map(card).join('')}</div>`:'';
 
@@ -457,7 +458,7 @@ function hub(){
       <div class="hero-masthead">GENTLEMAN &nbsp; DRIVERS &nbsp; PROJECT</div>
       <h1>La piste,<br>entre gentlemen.<br><em>Compétition le mercredi. Arsouille entre copains toujours.</em></h1>
       <div class="hero-lede">Ici, nous roulons entre passionnés et Gentlemen Drivers. Nous cherchons à partager des moments simples, amicaux et sérieux — il y a de la place à la fois pour la compétition et pour l'arsouille.</div>
-      <p>Notre organisation se concentre essentiellement sur <b>Assetto Corsa</b> à travers des championnats, opens et évènements spéciaux.</p>
+      <p>Notre organisation se concentre essentiellement sur <b>Assetto Corsa</b> à travers des championnats, opens et évènements spéciaux, avec une passion pour le simracing <b>historique et vintage</b>.</p>
       <p>Nous espérons que vous trouverez votre bonheur ici et que vous aurez l'occasion de rencontrer une communauté avec laquelle vous aurez plaisir à rouler et échanger.</p>
       <div class="hero-sign">— Au plaisir de vous croiser sur la route&nbsp;)</div>
     </div>
@@ -2980,6 +2981,18 @@ function globalDriverProfile(){
 
 // ---------- RENDER ----------
 function render(){
+  // Keep landing metadata consistent after in-app navigation as well as direct loads.
+  if(document.querySelector&&window.location){
+    const isLanding=isEventPage(page)&&eventContext;
+    const title=isLanding?eventContext.name+' | GDSP Assetto Corsa':'GDSP — Open et championnat Assetto Corsa historique & vintage';
+    if(isLanding||page==='hub'||page==='accueil'){
+      document.title=title;
+      const description=document.querySelector('meta[name="description"]');
+      if(description)description.content=isLanding?String(eventContext.data?.eventInfo?.briefing||'Calendrier et présentation de '+eventContext.name+' — Gentleman Drivers Project.').slice(0,180):'GDSP : open et championnat Assetto Corsa, simracing historique et vintage. Retrouvez les calendriers, résultats et classements.';
+      const canonical=document.querySelector('link[rel="canonical"]');
+      if(canonical)canonical.href=new URL(isLanding?'/evenements/'+encodeURIComponent(eventContext.slug):'/',canonical.href).href;
+    }
+  }
   nav();
   if(backendMulti&&page==='gpilote'){
     // Sécurité : si les données ne sont pas encore chargées, passer par go('gpilote')
@@ -3030,8 +3043,15 @@ function render(){
     if(adminAuth){
       if(target&&!eventContext)await loadEvent(target.slug);
     }else{
-      page='hub';
-      if(target&&!eventContext)loadEvent(target.slug).catch(()=>{});
+      const path=window.location?window.location.pathname:'/';
+      const match=path.match(/^\/evenements\/([^/]+)\/?$/);
+      if(match){
+        try{await loadEvent(decodeURIComponent(match[1]));page='event'}
+        catch(error){return} // Preserve the server's error page rather than showing another event.
+      }else{
+        page='hub';
+        if(target&&!eventContext)loadEvent(target.slug).catch(()=>{});
+      }
     }
   }else{
     // Legacy mode: same behaviour as before
@@ -3042,7 +3062,7 @@ function render(){
         sessions.length=0;
         try{const remote=await loadRemoteLegacy();const cs=remote&&remote.championship&&remote.championship.sessions;if(Array.isArray(cs)&&cs.length)localStorage.removeItem('gdsp_reset')}catch(e){}
       }else{
-        if(!sessions.length){try{const r=await fetch('data/data.json',{cache:'no-store'});if(r.ok){const base=await r.json();if(Array.isArray(base)&&base.length)sessions.push(...base)}}catch(e){}}
+        if(!sessions.length){try{const r=await fetch('/data/data.json',{cache:'no-store'});if(r.ok){const base=await r.json();if(Array.isArray(base)&&base.length)sessions.push(...base)}}catch(e){}}
         try{
           const remote=await loadRemoteLegacy();
           if(remote){
@@ -3060,3 +3080,12 @@ function render(){
   }
   render();
 })();
+
+// Permanent landing pages: Back/Forward restores the event without adding history entries.
+if(window.addEventListener)window.addEventListener('popstate',async()=>{
+  const match=window.location.pathname.match(/^\/evenements\/([^/]+)\/?$/);
+  if(match){
+    try{await loadEvent(decodeURIComponent(match[1]));page='event';driverId='';render()}
+    catch(error){window.location.reload()}
+  }else if(window.location.pathname==='/'){page='hub';render()}
+});
