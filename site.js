@@ -110,6 +110,7 @@ function nav(){
     `<button class="${activeTop==='accueil'?'active':''}" onclick="go('accueil')">ACCUEIL</button>`
     +(backendMulti?`<button class="${activeTop==='global'?'active':''}" onclick="go('global')">GLOBAL</button>`:'')
     +`<button class="nav-event-tab ${activeTop==='event'?'active':''}" onclick="go('event')"><span class="nav-ev-kicker">🏁 Événement</span><span class="nav-ev-title">${esc(evTabName)}</span></button>`
+    +`<button class="${activeTop==='circuits'?'active':''}" onclick="go('circuits')">CIRCUITS <span class="nav-badge">06</span></button>`
     +`<button class="${activeTop==='admin'?'active':''}" onclick="go('admin')">ADMINISTRATION</button>`;
   renderEventSwitcher();
 }
@@ -126,6 +127,7 @@ async function go(x){
       try{await loadEvent(target.slug)}catch(e){}
     }
   }
+  if(x==='circuits'){window.location.href='/circuits.html';return}
   if(x==='event'||x==='classement'||x==='manches')driverId='';
   page=x;window.scrollTo(0,0);
   // 'accueil' et 'hub' = la VRAIE page d'accueil GDSP (hero 65/35, Règlements, Stats, Discord) en mode multi
