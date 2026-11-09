@@ -649,6 +649,14 @@ tbody tr:hover{background:#eee4cf}
       <button type="button" class="round-pill" style="opacity:.65" onclick="toastOtherRound('Manche 6 (Finale à annoncer)')"><span class="rp-num">M6</span> À venir</button>
     </div>
     <div class="layout-switch">
+      <span>Circuit :</span>
+      <select id="circuit-select" onchange="setCircuit(this.value)" style="padding:8px 12px;background:#fbf7ec;border:1px solid #b7a68e;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px">
+        <option value="mont-tremblant-69">M1 · Mont-Tremblant 69 (Canada)</option>
+        <option value="riverside">M2 · Riverside (USA)</option>
+        <option value="sebring-90s">M3 · Sebring 90s (USA)</option>
+        <option value="mid-ohio">M4 · Mid-Ohio (USA)</option>
+        <option value="oesterreichring-1979" selected>M5 · Österreichring 1979 (Autriche)</option>
+      </select>
       <button type="button" id="btn-chicane" class="layout-btn active" onclick="setLayout('chicane')">Avec Chicane</button>
       <button type="button" id="btn-nochicane" class="layout-btn" onclick="setLayout('no_chicane')">Sans Chicane</button>
     </div>
@@ -1290,13 +1298,48 @@ function setLayout(id){
 }
 
 /* ============================================================
-   CIRCUIT FIXE (Österreichring 1979)
+   CHANGEMENT DE CIRCUIT
    ============================================================ */
-const FIXED_CIRCUIT = window.CIRCUITS_DATA['oesterreichring-1979'];
+let currentCircuitId = 'oesterreichring-1979';
+
+function setCircuit(circuitId){
+  currentCircuitId = circuitId;
+  const circ = window.CIRCUITS_DATA[circuitId];
+  if(!circ) return;
+
+  document.getElementById('circuit-select').value = circuitId;
+
+  document.getElementById('hero-circuit-manche').textContent =
+    circ.id === 'oesterreichring-1979'
+      ? 'Manche 05 · ' + circ.city + ', ' + circ.country + ' · Saison ' + circ.year
+      : 'Manche · ' + circ.city + ', ' + circ.country;
+  document.getElementById('hero-circuit-name').textContent = circ.name;
+  document.getElementById('hero-layout-label').textContent = circ.layoutLabel;
+  document.getElementById('hero-ac-id').textContent = circ.driveName + ' / ' + (circ.variants[0] || 'chicane');
+  document.getElementById('hero-gps').textContent = circ.gps;
+  document.getElementById('hero-author').textContent = (circ.author || '—') + (circ.version ? ' (v' + circ.version + ')' : '');
+  document.getElementById('hero-format').textContent = 'Endurance 1h (Points ×2)';
+
+  document.getElementById('kpi-length').textContent = circ.lengthStr;
+  document.getElementById('kpi-length-sub').textContent = circ.pitboxes + ' stands · ' + circ.direction;
+  document.getElementById('kpi-elev').textContent = circ.elevation.delta.toFixed(1) + ' m';
+  document.getElementById('kpi-elev-sub').textContent =
+    'Alt. ' + circ.elevation.min.toFixed(1) + ' m → ' + circ.elevation.max.toFixed(1) + ' m';
+  document.getElementById('kpi-pitboxes').textContent = circ.pitboxes + ' stands';
+  document.getElementById('kpi-record').textContent = circ.records.best;
+  document.getElementById('kpi-record-sub').textContent =
+    'Idéal théorique : ' + circ.records.ideal;
+
+  document.getElementById('footer-text').textContent =
+    'GDSP — Gentleman Drivers Project · Maquette d'onglet Circuits (' + circ.name + ').';
+
+  renderAll();
+}
 
 function openCircuitDrive(){
-  if(FIXED_CIRCUIT && FIXED_CIRCUIT.driveFolderId){
-    const url = 'https://drive.google.com/drive/folders/' + FIXED_CIRCUIT.driveFolderId;
+  const circ = window.CIRCUITS_DATA[currentCircuitId];
+  if(circ && circ.driveFolderId){
+    const url = 'https://drive.google.com/drive/folders/' + circ.driveFolderId;
     window.open(url, '_blank');
   }
 }
