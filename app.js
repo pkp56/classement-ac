@@ -17,7 +17,7 @@ const BACKEND_URL = (process.env.BACKEND_URL || process.env.GDSP_API_URL || 'htt
 const ROOT = __dirname;
 
 // Fichiers interdits au public
-const FORBIDDEN = /(^|\/)(?:\.env|node_modules|\.git|\.github|package\.json|package-lock\.json|README\.md|render\.yaml|\.gitignore|\.gitattributes|app\.js|tests?\/|backups?\/)/i;
+const FORBIDDEN = /(^|\/)(?:\.env|node_modules|\.git|\.github|package\.json|package-lock\.json|README\.md|render\.yaml|\.gitignore|\.gitattributes|app\.js|seo\.js|tests?\/|backups?\/)/i;
 app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
   if (FORBIDDEN.test(req.path)) return res.sendStatus(404);
@@ -591,17 +591,72 @@ function tryParse(s){try{return JSON.parse(s)}catch(e){return s}}
 
 // Point d'entrée HTML
 const INDEX_PATH = path.join(ROOT, 'index.html');
-let _indexCache = null;
 function getIndex() {
   return fs.readFileSync(INDEX_PATH, 'utf8')
     .replace(/window\.GDSP_API_URL\s*=\s*window\.GDSP_API_URL\s*\|\|\s*"[^"]*"/g,
              `window.GDSP_API_URL=window.GDSP_API_URL||""`);
 }
-app.get('/', (_req, res) => {
-  if (!_indexCache || process.env.NODE_ENV !== 'production') _indexCache = getIndex();
-  res.set('Content-Type', 'text/html; charset=utf-8');
-  res.set('Cache-Control', 'no-cache');
-  res.send(_indexCache);
+const seo = require('./seo');
+// Production origin; PUBLIC_SITE_URL can override it when migrating to a custom domain.
+const PUBLIC_SITE_URL = (process.env.PUBLIC_SITE_URL || 'https://classement-ac-1.onrender.com').replace(/\/$/, '');
+const publicJsonCache = new Map();
+async function publicJson(apiPath) {
+  const cached = publicJsonCache.get(apiPath);
+  if (cached && cached.until > Date.now()) return cached.value;
+  const url = new URL(apiPath, BACKEND_URL);
+  const value = await new Promise((resolve,reject) => {
+    const req = (url.protocol==='https:'?https:http).get(url,{timeout:10000},response=>{
+      const parts=[];
+      response.on('data',part=>parts.push(part));
+      response.on('error',reject);
+      response.on('end',()=>{
+        if(response.statusCode===404){const err=new Error('Not found');err.status=404;return reject(err)}
+        if(response.statusCode!==200)return reject(new Error('Backend unavailable'));
+        try{resolve(JSON.parse(Buffer.concat(parts).toString('utf8')))}catch(err){reject(err)}
+      });
+    });
+    req.on('timeout',()=>req.destroy(new Error('Backend timeout')));
+    req.on('error',reject);
+  });
+  publicJsonCache.set(apiPath,{value,until:Date.now()+60000});
+  return value;
+}
+function sendPublicPage(res, options) {
+  res.set('Cache-Control','no-cache');
+  res.type('html').send(seo.renderPage(getIndex(), options));
+}
+function publicFailure(res,error) {
+  const status=error.status===404?404:503;
+  res.set('Cache-Control','no-store');
+  if(status===503)res.set('Retry-After','60');
+  res.status(status).type('html').send(seo.renderPage(getIndex(),{
+    title:status===404?'Événement introuvable | GDSP':'GDSP — temporairement indisponible',
+    description:'Gentleman Drivers Project',
+    content:`<div class="panel"><h1>${status===404?'Événement introuvable':'Chargement temporairement indisponible'}</h1><p>Réessayez dans quelques instants.</p><a href="/">Accueil GDSP</a></div>`
+  }));
+}
+app.get('/', async (_req,res)=>{
+  try {
+    const result=await publicJson('/api/events');
+    const events=Array.isArray(result.events)?result.events:[];
+    sendPublicPage(res,{title:'GDSP — Open et championnat Assetto Corsa historique & vintage',description:'GDSP : open et championnat Assetto Corsa, simracing historique et vintage. Retrouvez les calendriers, résultats et classements.',content:seo.homeContent(events),canonical:PUBLIC_SITE_URL?PUBLIC_SITE_URL+'/':null});
+  }catch(error){publicFailure(res,error)}
+});
+app.get('/evenements/:slug',async(req,res)=>{
+  try {
+    const ev=await publicJson('/api/events/'+encodeURIComponent(req.params.slug));
+    if(!ev.slug||!ev.name)throw new Error('Invalid event data');
+    sendPublicPage(res,{title:ev.name+' | GDSP Assetto Corsa',description:String(ev.data?.eventInfo?.briefing||'Calendrier et présentation de '+ev.name+' — Gentleman Drivers Project.').slice(0,180),content:seo.eventContent(ev),canonical:PUBLIC_SITE_URL?PUBLIC_SITE_URL+seo.eventPath(ev.slug):null});
+  }catch(error){publicFailure(res,error)}
+});
+app.get('/robots.txt',(_req,res)=>res.type('text').send('User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\n'+(PUBLIC_SITE_URL?'Sitemap: '+PUBLIC_SITE_URL+'/sitemap.xml\n':'')));
+app.get('/sitemap.xml',async(_req,res)=>{
+  if(!PUBLIC_SITE_URL)return res.status(503).type('text').send('PUBLIC_SITE_URL must be configured.');
+  try {
+    const result=await publicJson('/api/events');
+    const paths=['/',...(result.events||[]).map(ev=>seo.eventPath(ev.slug))];
+    res.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+paths.map(p=>'<url><loc>'+seo.escapeHtml(PUBLIC_SITE_URL+p)+'</loc></url>').join('')+'</urlset>');
+  }catch(error){res.status(503).send('Sitemap temporarily unavailable')}
 });
 app.get('/healthz', (_req, res) => {
   res.set('Cache-Control','no-store');

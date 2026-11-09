@@ -13,7 +13,7 @@ function response(body, status = 200) {
   return { ok: status >= 200 && status < 300, status, async json() { return body; } };
 }
 
-function makeBrowser(extraEvents = [], extraFetch = null) {
+function makeBrowser(extraEvents = [], extraFetch = null, browserOptions = {}) {
   const elements = new Map();
   const storage = new Map();
   const getElementById = id => {
@@ -67,6 +67,7 @@ function makeBrowser(extraEvents = [], extraFetch = null) {
     setTimeout, clearTimeout, setInterval, clearInterval,
     AbortController, URL, Blob, Date, Math, Map, Set, Promise
   };
+  Object.assign(sandbox, browserOptions);
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(siteSource, sandbox);
@@ -629,4 +630,22 @@ test('Global levels follow fixed displayed-score bands rather than population qu
     const score = Math.round(driver.score);
     assert.equal(driver.level, score >= 81 ? 1 : score >= 61 ? 2 : score >= 41 ? 3 : 4);
   }
+});
+
+
+test('Permanent event landing URL restores the intended event and supports Back to home', async () => {
+  const handlers = {};
+  const location = {pathname:'/evenements/'+encodeURIComponent(fixture.event.slug)};
+  const history = {pushState(_state,_title,path){location.pathname=path}};
+  const {sandbox,getElementById}=makeBrowser([],null,{location,history,addEventListener(type,fn){handlers[type]=fn}});
+  await new Promise(resolve=>setTimeout(resolve,0));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(vm.runInContext('page',sandbox),'event');
+  assert.equal(vm.runInContext('currentSlug',sandbox),fixture.event.slug);
+  assert.match(getElementById('app').innerHTML,/ev-shell/);
+  location.pathname='/';await handlers.popstate();
+  assert.equal(vm.runInContext('page',sandbox),'hub');
+  assert.match(getElementById('app').innerHTML,/href="\/evenements\//);
+  await sandbox.switchEvent(fixture.event.slug);
+  assert.equal(location.pathname,'/evenements/'+encodeURIComponent(fixture.event.slug));
 });
