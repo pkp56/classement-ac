@@ -50,3 +50,7 @@ inexistant retourne 404. Les calculs sportifs ne sont pas dupliqués. Les textes
 Vérification : `npm test` comprend des tests HTTP avec un backend local simulé,
 le HTML sans JavaScript, les erreurs, le sitemap et la restauration d'une URL.
 L'accès au backend de production et l'indexation réelle se vérifient après déploiement.
+
+Le sitemap reste disponible si le backend des événements est indisponible : il
+réutilise la dernière liste valide connue par le processus, ou contient uniquement
+l’accueil après un redémarrage. Les pages HTML en panne conservent leur statut 503.
