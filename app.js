@@ -702,11 +702,18 @@ function resolveLiveSource(param){
   const wanted=normalizeLiveSource(raw);
   return list.find(src=>src.url===wanted)||null;
 }
+// Priorité : source explicitement demandée (?source=) > agent qui pousse >
+// source HTTP configurée > écoute UDP locale. L'agent a la priorité sur les
+// sources HTTP : c'est lui qui voit le serveur quand l'hébergeur est filtré.
 function liveSnapshot(sourceIndex){
-  const remote=resolveLiveSource(sourceIndex);
-  if(remote)return remote.snapshot();
+  if(sourceIndex!=null&&sourceIndex!==''){
+    const remote=resolveLiveSource(sourceIndex);
+    if(remote)return remote.snapshot();
+  }
   const pushed=getLivePush().current();
   if(pushed)return pushed;
+  const list=getLiveHttpSources();
+  if(list.length)return list[0].snapshot();
   try{return getLiveTiming().snapshot()}catch(e){
     return {status:{status:'offline',mode:'error',error:e.message},server:{},session:{},cars:[],events:[]};
   }

@@ -210,3 +210,72 @@ test('Un instantané HTTP relayé par l\'agent garde le mode lecture seule (pas 
   const broken = { ...httpSnapshot, cars: [{ carId: 'x', name: 'A' }] };
   assert.equal(validateSnapshot(broken).ok, false);
 });
+
+test('L\'agent relayeur a la priorité sur une source HTTP non joignable depuis le site', async t => {
+  const { spawn } = require('node:child_process');
+  const pathm = require('node:path');
+  const acServer = http.createServer((req, res) => {
+    if (req.url === '/INFO') {
+      res.setHeader('content-type', 'application/json');
+      return res.end(JSON.stringify({ name: '{GDSP_ Server test 1', track: 'ks_monza66-junior', clients: 1, maxclients: 8, timeleft: 900, session: 1, sessiontypes: [1] }));
+    }
+    if (req.url === '/ENTRY') return res.end(PRACTICE_HTML);
+    res.statusCode = 404; res.end('');
+  });
+  acServer.listen(0, '127.0.0.1');
+  await once(acServer, 'listening');
+  t.after(() => acServer.close());
+
+  const reservation = http.createServer();
+  reservation.listen(0, '127.0.0.1');
+  await once(reservation, 'listening');
+  const port = reservation.address().port;
+  await new Promise(r => reservation.close(r));
+
+  const child = spawn(process.execPath, ['app.js'], {
+    cwd: pathm.resolve(__dirname, '..'),
+    env: {
+      ...process.env,
+      PORT: String(port),
+      BACKEND_URL: 'http://127.0.0.1:1',
+      LIVE_PUSH_TOKEN: 'jeton-priorite',
+      // Source HTTP volontairement morte : comme depuis un datacenter filtré.
+      LIVE_HTTP_SOURCES: '127.0.0.1:1',
+      LIVE_HTTP_INTERVAL_MS: '200',
+      AC_LISTEN_PORT: '0'
+    }
+  });
+  t.after(() => child.kill());
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Server startup timeout')), 10000);
+    child.stdout.on('data', chunk => {
+      if (String(chunk).includes('démarré')) { clearTimeout(timeout); resolve(); }
+    });
+    child.on('exit', code => { clearTimeout(timeout); reject(new Error('Server exited ' + code)); });
+  });
+  const base = `http://127.0.0.1:${port}`;
+
+  const before = await (await fetch(`${base}/api/live/status`)).json();
+  assert.equal(before.status.mode, 'http-remote');
+  assert.equal(before.status.status, 'offline');
+
+  // L'agent (lancé sur un PC) relaie le même serveur : c'est lui qui gagne.
+  const relay = await fetch(`${base}/api/live/push`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-live-token': 'jeton-priorite' },
+    body: JSON.stringify({
+      status: { mode: 'http-remote', status: 'live', sourceUrl: 'http://exemple:16835', host: 'PC-SALON' },
+      server: { name: '{GDSP_ Server test 1', track: 'ks_monza66-junior' },
+      session: { type: 'practice' },
+      cars: [{ position: 1, name: "Assassin's Street", bestLap: '1:15.576' }],
+      bestLaps: [], events: []
+    })
+  });
+  assert.equal(relay.status, 200);
+
+  const after = await (await fetch(`${base}/api/live/status`)).json();
+  assert.equal(after.status.mode, 'http-remote');
+  assert.equal(after.status.pushed, true);
+  assert.equal(after.status.status, 'live');
+  assert.equal(after.cars[0].name, "Assassin's Street");
+});
