@@ -188,4 +188,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Aperçu GDSP en ligne sur 0.0.0.0:${PORT} (événement simulé : ${SLUG}, ${dedupedSessions.length} sessions)`);
+  console.log(`  → page de suivi en direct : http://localhost:${PORT}/live-timing (instantané de démonstration)`);
 });
