@@ -17,6 +17,7 @@
  */
 
 const https = require('https');
+const { buildRound } = require('./circuit-round');
 
 // ---------------------------------------------------------------- utilitaires
 
@@ -353,24 +354,49 @@ async function importFromDrive(folderInput, opts = {}) {
 
   const name = opts.name || (ui && (ui.name || ui.Name)) || lineFile.name.replace(/\.ai$/i, '');
 
-  const round = {
+  // Bornes de secteur : départs lus dans overlays.ini, complétés à 0 et 1.
+  const sectorBounds = sectors.length
+    ? [0, ...sectors.map(x => x.from).filter(f => f > 0 && f < 1), 1]
+    : [0, 1 / 3, 2 / 3, 1];
+
+  const base = {
     round: opts.round || null,
+    label: opts.round ? `M${opts.round}` : null,
     name,
+    shortName: name,
     layout: (ui && (ui.layout || ui.Layout)) || null,
+    layoutKey: '',
     driverFolder: (ui && (ui.trackId || ui.id)) || null,
-    lengthM: Math.round(track.lengthM),
-    points: track.points.length,
-    elevation: { min: +track.elevMin.toFixed(1), max: +track.elevMax.toFixed(1) },
-    corners: corners.map(c => c.norm),
-    cornerCount: corners.length,
-    surfaces,
-    sectorSplits: sectors,
-    sectorCount: sectors.length,
-    uiTrack: ui,
+    country: (ui && (ui.country || ui.Country)) || 'À confirmer',
+    countryCode: '',
+    city: (ui && (ui.city || ui.City)) || null,
+    gps: (ui && (ui.geographicLocation || ui.GeographicLocation)) || null,
+    year: null,
+    author: (ui && (ui.author || ui.Author)) || null,
+    version: (ui && (ui.version || ui.Version)) || null,
+    direction: (ui && /anticlock/i.test(String(ui.run || ui.Run || ''))) ? 'counterclockwise' : 'clockwise',
+    pitboxes: (ui && (ui.pitboxes || ui.Pitboxes)) || null,
+    width: null,
+    format: '2 courses',
+    status: 'upcoming',
+    date: null,
+    dateLabel: null,
+    winner: null,
+    stats: null,
     driveFolderId: folderId,
     driveName: (ui && (ui.trackId || ui.id)) || null,
+    source: `Google Drive · ${folderId}`,
+    hero: null,
     importedAt: new Date().toISOString()
   };
+
+  // Même fabrique que le build statique : tracé SVG, profil, secteurs.
+  const full = buildRound(track, base, {
+    sectors: sectorBounds,
+    cornerNorms: corners.map(c => c.norm)
+  });
+  full.surfaces = surfaces;
+  const round = full;
 
   if (!sectors.length) {
     warnings.push('aucun secteur officiel détecté : la chronométrie utilisera les 3 tiers du tour');

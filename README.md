@@ -113,8 +113,13 @@ Google n'est nécessaire.**
 1. Coller l'URL du dossier (ou son identifiant) dans le champ prévu.
 2. Renseigner éventuellement le nom du circuit et le numéro de manche.
 3. « Analyser le dossier Drive » lit les fichiers et affiche la fiche obtenue.
-4. « Télécharger le JSON » produit la manche prête à insérer dans
-   `data/circuits.json`.
+4. **« Ajouter à l'onglet Circuit »** enregistre la manche dans l'événement
+   courant. Elle est alors visible par tous les visiteurs, sans redéploiement.
+   L'ajout est idempotent : réimporter le même numéro de manche la met à jour
+   au lieu de la dupliquer.
+
+« Télécharger le JSON » reste disponible pour versionner la manche dans
+`data/circuits.json` si vous préférez la figer dans le dépôt.
 
 Fichiers lus dans le dossier :
 
@@ -130,6 +135,15 @@ Détails d'implémentation :
 - `tools/lib/drive-circuits.js` — extraction de l'ID, listing du dossier public
   (`embeddedfolderview`), téléchargement, décodage `fast_lane.ai`, détection des
   virages, parsing `surfaces.ini` / `overlays.ini`. Aucune dépendance externe.
+- `tools/lib/circuit-round.js` — fabrique commune de la fiche (tracé SVG, profil,
+  secteurs, virages). Utilisée à la fois par le build statique et par l'import,
+  pour qu'un circuit importé s'affiche exactement comme un circuit du dépôt.
+- **Stockage** : les manches importées vivent dans `data.circuitRounds` de
+  l'événement, donc en PostgreSQL côté backend. `data/circuits.json` reste un
+  fichier statique du dépôt et sert de socle ; `circuitsData()` fusionne les
+  deux (`mergeCircuitRounds`), une manche importée remplaçant la statique de
+  même numéro. `saveRemote` réexpédie `circuitRounds`, sinon une sauvegarde de
+  l'événement les effacerait.
 - `POST /api/admin/circuits/import` — route protégée par le mot de passe admin
   (même `Bearer` que le reste de l'administration).
 - `surfaces.ini` : le nom de surface vient de `KEY=` (la section s'appelle

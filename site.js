@@ -299,6 +299,8 @@ async function loadEvent(slug){
     if(!ev||!ev.slug||!ev.name||isEventMarkedDeleted(ev)){console.warn('loadEvent: event invalide ou supprimé',ev);return null}
     eventContext={slug:ev.slug,name:ev.name,kind:ev.kind||'championship',pointsConfig:ev.points_config||{},data:ev.data||{}};
     currentSlug=ev.slug;
+    // Les manches importées vivent dans l'événement : on recharge le calendrier.
+    circuitsCache=null;circuitsError='';
     const d=ev.data||{};
     let _ah=(d.ahServer&&d.ahUuid)?{server:d.ahServer,uuid:d.ahUuid}:null;
     if(!_ah){try{const m=JSON.parse(localStorage.getItem('gdsp_ah_map')||'{}');_ah=m[ev.slug]||null}catch(e){}}
@@ -1616,20 +1618,72 @@ function setCircuitAlt(key){
   localStorage.setItem(CIRCUIT_ALT_KEY, key === 'no_chicane' ? 'no_chicane' : 'chicane');
   render();
 }
+/**
+ * Manches ajoutées depuis l'administration (import Drive).
+ * Elles vivent dans l'événement (`data.circuitRounds`), donc elles sont
+ * persistées en PostgreSQL et partagées par tous les visiteurs, alors que
+ * `data/circuits.json` est un fichier statique du dépôt.
+ */
+function importedCircuitRounds(){
+  const d = (eventContext && eventContext.data) || {};
+  const list = d.circuitRounds;
+  return Array.isArray(list) ? list.filter(r => r && typeof r === 'object' && r.name) : [];
+}
+/**
+ * Fusionne les manches statiques et importées.
+ * Une manche importée portant le même numéro remplace la statique.
+ */
+function mergeCircuitRounds(base, extra){
+  const byRound = new Map();
+  const key = r => (Number.isFinite(Number(r && r.round)) && Number(r.round) > 0)
+    ? 'n' + Number(r.round)
+    : 'k' + String((r && (r.id || r.name)) || '');
+  for (const r of base) byRound.set(key(r), r);
+  for (const r of extra) byRound.set(key(r), { ...byRound.get(key(r)), ...r, imported: true });
+  const hasRound = r => Number.isFinite(Number(r && r.round)) && Number(r.round) > 0;
+  const sorted = [...byRound.values()].sort((a, b) => {
+    const ra = Number(a.round), rb = Number(b.round);
+    if (hasRound(a) && hasRound(b) && ra !== rb) return ra - rb;
+    // Les manches sans numéro passent après celles qui en ont un.
+    if (hasRound(a) !== hasRound(b)) return hasRound(a) ? -1 : 1;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+  // Numérotation finale : on garde le numéro fourni, sinon on prend le premier
+  // numéro libre (jamais M1 si M1 existe déjà).
+  const used = new Set(sorted.filter(hasRound).map(r => Number(r.round)));
+  let next = 1;
+  return sorted.map(r => {
+    let n = Number(r.round);
+    if (!hasRound(r)) { while (used.has(next)) next++; n = next; used.add(n); }
+    return { ...r, round: n, label: r.label || `M${n}` };
+  });
+}
 async function circuitsData(){
   if (circuitsCache) return circuitsCache;
   if (circuitsError) return null;
+  let base = null, err = '';
   try {
     const r = await fetch('/data/circuits.json', { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json();
-    if (!j || !Array.isArray(j.rounds) || !j.rounds.length) throw new Error('Données circuit incomplètes');
-    circuitsCache = j; circuitsError = '';
-    return j;
+    base = await r.json();
+    if (!base || !Array.isArray(base.rounds)) throw new Error('Données circuit incomplètes');
   } catch (e) {
-    circuitsError = e && e.message ? e.message : String(e);
-    return null;
+    err = e && e.message ? e.message : String(e);
   }
+  const extra = importedCircuitRounds();
+  // Les manches importées suffisent à afficher l'onglet même si le fichier
+  // statique est absent (ex. nouvel événement sans calendrier fourni).
+  if (!base && !extra.length) { circuitsError = err || 'Données circuit incomplètes'; return null; }
+  const merged = mergeCircuitRounds((base && base.rounds) || [], extra);
+  if (!merged.length) { circuitsError = err || 'Données circuit incomplètes'; return null; }
+  const j = {
+    ...(base || {}),
+    rounds: merged,
+    totalCount: merged.length,
+    completedCount: merged.filter(r => r.date || (r.stats && r.stats.races)).length
+  };
+  circuitsCache = j; circuitsError = '';
+  return j;
 }
 /** Ouvre les résultats importés de la manche circuit affichée (appariement par date). */
 function openCircuitRoundResult(idx){
@@ -2294,6 +2348,9 @@ async function saveRemote(){
   if(baseData.posterImage)payload.posterImage=baseData.posterImage;
   if(Array.isArray(baseData.galleryImages)&&baseData.galleryImages.length)payload.galleryImages=baseData.galleryImages;
   if(baseData.eventInfo&&typeof baseData.eventInfo==='object')payload.eventInfo=baseData.eventInfo;
+  // Manches circuit ajoutées par l'import Drive : sans cette ligne, chaque
+  // sauvegarde de l'événement les effacerait.
+  if(Array.isArray(baseData.circuitRounds)&&baseData.circuitRounds.length)payload.circuitRounds=baseData.circuitRounds;
   Object.assign(payload,{sessions:minSessions,penMap,manualDrivers,customCalendar});
   if(eventContext)eventContext.data=Object.assign({},baseData,payload);
   let path;
@@ -2555,9 +2612,11 @@ function renderCircuitsAdmin(){
       <h3>2 · Enregistrement</h3>
       <p class="note">L'analyse produit une fiche de manche complète. Enregistrez-la pour l'ajouter à <code>data/circuits.json</code>.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" onclick="circuitImportSave()">💾 Ajouter à l'onglet Circuit</button>
         <button class="btn secondary" onclick="circuitImportDownload()">⬇ Télécharger le JSON</button>
         <button class="btn secondary" onclick="circuitImportReset()">Réinitialiser</button>
       </div>
+      <p class="note" style="margin-top:10px">La manche est enregistrée dans l'événement courant (<b>${esc((eventContext&&eventContext.name)||'aucun événement sélectionné')}</b>) : elle est visible par tous les visiteurs, sans redéploiement.</p>
       <div id="cir-save-result" style="margin-top:10px"></div>
     </div>
     <div class="panel">
@@ -2626,6 +2685,53 @@ function circuitImportDownload(){
   document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
   if(box)box.innerHTML=`<p class="note" style="color:#3b6341">✓ Fichier téléchargé. Ajoutez-le à <code>data/circuits.json</code> (tableau <code>rounds</code>) puis committez.</p>`;
+}
+async function circuitImportSave(){
+  const box=document.getElementById('cir-save-result');
+  const say=(txt,color)=>{if(box)box.innerHTML=`<p class="note" style="color:${color||'#586260'}">${txt}</p>`};
+  let payload=null;
+  try{payload=JSON.parse(localStorage.getItem(CIR_IMPORT_KEY+'_result')||'null')}catch(e){}
+  if(!payload||!payload.round){say('Lancez d\'abord une analyse du dossier Drive.','#9c3021');return}
+  if(!adminToken){say('Connexion administrateur requise.','#9c3021');return}
+  if(!eventContext||!currentSlug){say('Sélectionnez d\'abord un événement (championnat) dans le menu.','#9c3021');return}
+  const incoming=payload.round;
+  say('Enregistrement en cours…');
+  try{
+    // On relit l'état serveur pour ne pas écraser une manche ajoutée entre-temps.
+    const r=await apiGet('/api/events/'+encodeURIComponent(currentSlug));
+    if(!r.ok)throw new Error('Impossible de relire l\'événement (HTTP '+r.status+')');
+    const ev=await r.json();
+    const data=Object.assign({},(ev&&ev.data)||eventContext.data||{});
+    const existing=Array.isArray(data.circuitRounds)?data.circuitRounds.slice():[];
+    // Remplacement par numéro de manche, sinon par nom.
+    const sameRound=r=>Number.isFinite(Number(incoming.round))&&Number.isFinite(Number(r.round))&&Number(r.round)===Number(incoming.round);
+    const sameName=r=>String(r.name||'').toLowerCase()===String(incoming.name||'').toLowerCase();
+    const idx=existing.findIndex(r=>sameRound(r)||sameName(r));
+    let added=true;
+    if(idx>=0){existing[idx]=Object.assign({},existing[idx],incoming);added=false}
+    else existing.push(incoming);
+    existing.sort((a,b)=>(Number(a.round)||999)-(Number(b.round)||999));
+    data.circuitRounds=existing;
+
+    const put=await fetch('/api/events/'+encodeURIComponent(currentSlug)+'/data',{
+      method:'POST',
+      headers:Object.assign({'Content-Type':'application/json'},adminToken?{Authorization:'Bearer '+adminToken}:{}),
+      body:JSON.stringify(data)
+    });
+    if(!put.ok){
+      let msg='HTTP '+put.status;
+      try{const j=await put.json();msg=j.error||j.message||msg}catch(e){}
+      throw new Error(msg);
+    }
+    // Mise à jour locale : la manche apparaît sans rechargement.
+    eventContext.data=data;
+    circuitsCache=null;circuitsError='';
+    try{localStorage.removeItem(CIR_IMPORT_KEY+'_result')}catch(e){}
+    say(added?'✓ Manche ajoutée à l\'onglet Circuit.':'✓ Manche mise à jour dans l\'onglet Circuit.','#3b6341');
+    setTimeout(()=>{circuitsData().then(()=>render())},600);
+  }catch(e){
+    say('✗ Échec : '+esc(e.message),'#9c3021');
+  }
 }
 function circuitImportReset(){
   try{localStorage.removeItem(CIR_IMPORT_KEY);localStorage.removeItem(CIR_IMPORT_KEY+'_result')}catch(e){}
