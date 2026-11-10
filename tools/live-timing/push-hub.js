@@ -30,8 +30,13 @@ function validateSnapshot(s) {
   if (!Array.isArray(s.cars)) return { ok: false, error: 'cars doit être un tableau' };
   if (s.cars.length > 200) return { ok: false, error: 'trop de voitures' };
   for (const c of s.cars) {
-    if (!isPlainObject(c) || typeof c.carId !== 'number' || typeof c.name !== 'string') {
+    // carId n'existe pas pour les sources HTTP (pas d'identifiant de voiture) :
+    // seule l'identité du pilote est obligatoire.
+    if (!isPlainObject(c) || typeof c.name !== 'string') {
       return { ok: false, error: 'voiture invalide' };
+    }
+    if (c.carId != null && typeof c.carId !== 'number') {
+      return { ok: false, error: 'carId invalide' };
     }
   }
   if (s.events != null && !Array.isArray(s.events)) return { ok: false, error: 'events doit être un tableau' };
@@ -44,11 +49,15 @@ function decorate(snapshot, receivedAt, ttlMs) {
   const ageMs = Math.max(0, Date.now() - receivedAt);
   const fresh = ageMs <= ttlMs;
   const original = isPlainObject(snapshot.status) ? snapshot.status : {};
+  // On conserve le mode d'origine quand l'agent relaie une source HTTP
+  // (« http-remote ») : la page garde ainsi son bandeau « lecture seule ».
+  const mode = original.mode === 'http-remote' ? 'http-remote' : 'push';
   return {
     ...snapshot,
     status: {
       ...original,
-      mode: 'push',
+      mode,
+      pushed: true,
       status: fresh ? 'live' : 'stale',
       pushedFrom: original.host || null,
       receivedAt: new Date(receivedAt).toISOString(),

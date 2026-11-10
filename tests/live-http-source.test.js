@@ -190,3 +190,23 @@ test('Bout en bout : LIVE_HTTP_SOURCES (lien acstuff) alimente /api/live/status?
   }
   assert.fail('la source HTTP n\'a jamais produit d\'instantané');
 });
+
+test('Un instantané HTTP relayé par l\'agent garde le mode lecture seule (pas de carId exigé)', () => {
+  const { validateSnapshot, decorate } = require('../tools/live-timing/push-hub');
+  const httpSnapshot = {
+    status: { mode: 'http-remote', status: 'live', sourceUrl: 'http://82.66.165.242:16835', host: 'PC-SALON' },
+    server: { name: '{GDSP_ Server test 1', track: 'ks_monza66-junior' },
+    session: { type: 'practice' },
+    cars: [{ position: 1, name: "Assassin's Street", bestLap: '1:15.576' }],
+    bestLaps: [], events: []
+  };
+  assert.equal(validateSnapshot(httpSnapshot).ok, true);
+  const decorated = decorate(httpSnapshot, Date.now(), 20000);
+  assert.equal(decorated.status.mode, 'http-remote');
+  assert.equal(decorated.status.pushed, true);
+  assert.equal(decorated.status.status, 'live');
+  assert.equal(decorated.status.pushedFrom, 'PC-SALON');
+  // Un carId non numérique reste refusé (erreur de programmation, pas de cas normal).
+  const broken = { ...httpSnapshot, cars: [{ carId: 'x', name: 'A' }] };
+  assert.equal(validateSnapshot(broken).ok, false);
+});

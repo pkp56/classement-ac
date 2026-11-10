@@ -11,10 +11,16 @@
  *
  * Aucune authentification, aucune installation côté serveur : c'est le même
  * mécanisme que le lobby et Content Manager utilisent pour la liste des
- * serveurs. On interroge toutes les 2 s et on reconstruit un instantané au
+ * serveurs. On interroge périodiquement et on reconstruit un instantané au
  * format de la page /live-timing.
  *
- * Limites assumées : pas de positions temps réel (le HTTP ne les donne pas),
+ * important : certains serveurs ne répondent qu'à des clients « normaux » —
+ * ils coupent brutalement (ECONNRESET) les sockets qui arrivent depuis une IP
+ * de datacenter. La page affiche alors « Serveur injoignable » en expliquant
+ * que la lecture doit se faire depuis un PC (mode push / agent) et non depuis
+ * l'hébergeur du site. C'est une limite du serveur distant, pas du code.
+ *
+ * Limites de ce mode : pas de positions temps réel (le HTTP ne les donne pas),
  * pas de secteurs, et les pilotes sans tour enregistré n'ont pas de temps.
  */
 
@@ -65,7 +71,10 @@ function parseTables(html) {
   return tables;
 }
 
-/** « 1:19:501 » (format Assetto : minutes:secondes:millièmes) → 79501 ms */
+/**
+ * « 1:19:501 » (format Assetto : minutes:secondes:millièmes) → 79501 ms
+ * Accepte aussi « 2.345 » (secondes.millièmes) et « +0:03:280 ».
+ */
 function parseAcTime(raw) {
   const s = String(raw == null ? '' : raw).trim();
   if (!s || /^[-–—]+$/.test(s) || /^\+?--/.test(s)) return null;
@@ -81,8 +90,6 @@ function parseAcTime(raw) {
   let ms;
   if (parts.length === 3) ms = nums[0] * 60000 + nums[1] * 1000 + nums[2];
   else ms = /^\d{1,2}$/.test(parts[0]) ? nums[0] * 1000 + nums[1] : nums[0] * 60000 + nums[1] * 1000;
-  // Le troisième champ d'Assetto est en millièmes, pas en secondes entières.
-  if (parts.length === 3 && String(parts[2]).length === 3) ms = nums[0] * 60000 + nums[1] * 1000 + nums[2];
   return negative ? -Math.round(ms) : Math.round(ms);
 }
 
@@ -137,7 +144,7 @@ function parseEntryPage(html) {
       const lastMs = iLast === -1 ? null : parseAcTime(row[iLast]);
       const totalMs = iTotal !== -1 ? parseAcTime(row[iTotal]) : (iTime !== -1 ? parseAcTime(row[iTime]) : null);
       const diffMs = iDiff === -1 ? null : parseAcTime(row[iDiff]);
-      const car = {
+      result.cars.push({
         name,
         team: iTeam === -1 ? '' : String(row[iTeam] || '').trim(),
         model: iCar === -1 ? '' : String(row[iCar] || '').trim(),
@@ -149,8 +156,7 @@ function parseEntryPage(html) {
         ping: iPing === -1 ? null : Number(String(row[iPing]).replace(/[^0-9]/g, '')) || null,
         guid: iGuid === -1 ? '' : String(row[iGuid] || '').trim(),
         position: iPos === -1 || Number.isNaN(Number(row[iPos])) ? null : Number(row[iPos]) + 1
-      };
-      result.cars.push(car);
+      });
     }
     if (result.cars.length) {
       result.mode = isRace ? 'race' : 'practice';
@@ -186,6 +192,7 @@ function buildStandings(parsed) {
       if (!race && Number.isFinite(leaderBest) && c.bestLapMs) gapMs = c.bestLapMs - leaderBest;
     }
     return {
+      carId: i, // identifiant local (l'ACSP n'en donne pas via HTTP)
       position,
       name: c.name,
       team: c.team || '',
@@ -203,8 +210,7 @@ function buildStandings(parsed) {
       ping: c.ping,
       connected: true,
       inPit: false,
-      speedKmh: null,
-      intervals: null
+      speedKmh: null
     };
   }).map((row, i, all) => {
     const ahead = all[i - 1];
@@ -216,6 +222,15 @@ function buildStandings(parsed) {
 
 // --- la source ---------------------------------------------------------------
 
+const NAVIGATOR_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+  'Accept-Encoding': 'identity',
+  Connection: 'close',
+  'Upgrade-Insecure-Requests': '1'
+};
+
 class RemoteHttpSource {
   constructor(options = {}) {
     this.url = String(options.url || '').replace(/\/+$/, '');
@@ -225,6 +240,7 @@ class RemoteHttpSource {
     this.polling = false;
     this.lastOkAt = null;
     this.lastError = null;
+    this.lastErrorCode = null;
     this.info = null;
     this.entry = null;
     this.startedAt = null;
@@ -242,7 +258,8 @@ class RemoteHttpSource {
       const proto = target.protocol === 'https:' ? https : http;
       const req = proto.get(target, {
         timeout: timeoutMs,
-        headers: { Accept: '*/*', 'User-Agent': 'GDSP-LiveTiming/1.0' }
+        headers: NAVIGATOR_HEADERS,
+        rejectUnauthorized: false // certains serveurs AC ont un certificat auto-signé
       }, res => {
         const chunks = [];
         res.on('data', c => chunks.push(c));
@@ -253,26 +270,35 @@ class RemoteHttpSource {
         res.on('error', reject);
       });
       req.on('timeout', () => req.destroy(new Error(`délai dépassé sur ${path}`)));
-      req.on('error', reject);
+      req.on('error', err => reject(Object.assign(err, { path })));
     });
   }
 
+  /**
+   * Lit /INFO et /ENTRY. /ENTRY est indispensable : sans lui on ne sait rien du
+   * classement, donc une erreur y met la source « hors ligne » avec le détail.
+   */
   async poll() {
     if (this.polling) return;
     this.polling = true;
     try {
-      const [infoRaw, entryRaw] = await Promise.all([
-        this.fetchText('/INFO').catch(() => null),
-        this.fetchText('/ENTRY')
+      const [infoResult, entryRaw] = await Promise.all([
+        this.fetchText('/INFO').then(t => ({ ok: true, text: t }), e => ({ ok: false, error: e })),
+        this.fetchText('/ENTRY').catch(e => { throw e; })
       ]);
-      if (infoRaw) {
-        try { this.info = JSON.parse(infoRaw); } catch (e) { /* page INFO illisible : on garde l'ancienne */ }
+      if (infoResult.ok) {
+        try { this.info = JSON.parse(infoResult.text); } catch (e) { /* INFO illisible : on garde l'ancien */ }
+      } else if (!this.info) {
+        // Pas de /INFO mais /ENTRY répond : on affiche quand même la feuille.
+        this.lastInfoError = infoResult.error.message;
       }
       this.entry = parseEntryPage(entryRaw);
       this.lastOkAt = Date.now();
       this.lastError = null;
+      this.lastErrorCode = null;
     } catch (err) {
       this.lastError = err.message;
+      this.lastErrorCode = err.code || null;
     } finally {
       this.polling = false;
     }
@@ -290,6 +316,22 @@ class RemoteHttpSource {
   stop() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+  }
+
+  /** Message d'aide adapté à la cause de l'échec. */
+  hint() {
+    if (!this.lastError) return null;
+    if (/ECONNRESET|EPIPE|socket hang up/i.test(this.lastError) || this.lastErrorCode === 'ECONNRESET') {
+      return "Le serveur accepte la connexion puis la coupe : il ne répond qu'à certains clients (souvent il refuse les IP de datacenter). Fais tourner l'agent sur un PC (mode push) pour le suivre depuis un site hébergé.";
+    }
+    if (/ECONNREFUSED/.test(this.lastError) || this.lastErrorCode === 'ECONNREFUSED') {
+      return "Rien n'écoute sur ce port : le serveur est arrêté, ou HTTP_PORT n'est pas ouvert/redirigé sur la box.";
+    }
+    if (/délai dépassé|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH/i.test(this.lastError)) {
+      return "Le serveur ne répond pas dans le délai imparti : box qui filtre, serveur saturé ou mauvaise adresse.";
+    }
+    if (/ENOTFOUND/i.test(this.lastError)) return "Nom d'hôte introuvable.";
+    return null;
   }
 
   snapshot(now = Date.now()) {
@@ -314,6 +356,7 @@ class RemoteHttpSource {
         sourceUrl: this.url,
         lastOkAgoMs: ageMs,
         error: this.lastError,
+        hint: this.hint(),
         startedAt: this.startedAt ? new Date(this.startedAt).toISOString() : null,
         readOnly: true
       },

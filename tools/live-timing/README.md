@@ -70,11 +70,17 @@ pas de chat, pas de kick, pas de changement de session. Et le HTTP ne donnant pa
 les positions, il n'y a ni vitesse instantanée ni « live map » — mais les temps,
 les tours et les classements sont ceux du serveur, pas des estimations.
 
-À savoir : acServer peut limiter/refuser les connexions HTTP qui ne viennent pas
-d'une IP « propre » (protection anti-DDoS de certains hébergeurs). Si la page
-affiche « Serveur injoignable » alors que `/INFO` répond dans ton navigateur,
-c'est que la machine du site est filtrée : dans ce cas, passe par le mode push
-(§ 2 bis) sur le PC du serveur, ou héberge le live timing près du serveur.
+**Limite importante, vérifiée en vrai** : certains serveurs acceptent la
+connexion TCP puis la coupent immédiatement (`ECONNRESET`) quand elle vient
+d'une IP de datacenter — c'est le cas du serveur `82.66.165.242:16835` depuis
+l'hébergeur du site, alors que `/INFO` répond normalement depuis un navigateur
+sur une box. La page affiche alors « Ce serveur public ne répond pas au site »
+et explique quoi faire. Deux solutions :
+
+1. lire depuis un PC, pas depuis l'hébergeur : lance l'agent (§ 2 bis) sur ton
+   PC, il interroge `/INFO` + `/ENTRY` et pousse le résultat au site ;
+2. héberger le live timing sur une machine « résidentielle » (le PC du serveur
+   ou un petit serveur à la maison) plutôt que sur Render.
 
 ## 2 bis. Site distant + serveur AC sur ton PC (mode push)
 
@@ -109,6 +115,10 @@ Notes pratiques :
   session, largement dans les quotas Render.
 * Le PC n'ouvre **aucun port** : c'est une simple requête HTTPS sortante.
 * `PUSH_INTERVAL_MS=2000` réduit la fréquence (et la charge) si besoin.
+* **Veille d'un serveur dont tu n'as pas la main** : lance l'agent avec
+  `WATCH_URL=http://82.66.165.242:16835` (au lieu de la config UDP). Il interroge
+  le serveur depuis ton PC et pousse le classement au site — indispensable quand
+  le serveur refuse les connexions venant d'un datacenter.
 * Les commandes admin (chat, kick, changement de session) ne sont **pas**
   disponibles en mode push : le site ne peut pas joindre le PC. Lance-les depuis
   la console acServer ou depuis l'agent sur place.
@@ -159,6 +169,7 @@ Variables d'environnement utiles (toutes facultatives) :
 | `LIVE_PUSH_TOKEN` | *(vide)* | (site) active la réception des agents distants ; **même valeur** dans `PUSH_TOKEN` de l'agent |
 | `LIVE_HTTP_SOURCES` | *(vide)* | (site) URL HTTP / `ip:port` / lien acstuff de serveurs publics à suivre, séparés par des virgules (max 5) |
 | `LIVE_HTTP_INTERVAL_MS` | `3000` | (site) fréquence de lecture des sources HTTP |
+| `WATCH_URL` | *(vide)* | (agent) au lieu d'écouter l'UDP, l'agent lit ce serveur via `/INFO` + `/ENTRY` puis pousse le résultat au site |
 
 ## 4. Essayer sans serveur AC
 

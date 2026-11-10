@@ -16,6 +16,12 @@
  *   AC_HTTP_URL    http://127.0.0.1:8081   (facultatif)
  *   PUSH_INTERVAL_MS 1000
  *
+ * Variante « veille » : si WATCH_URL est défini (ex. un serveur public qu'on ne
+ * possède pas, http://82.66.165.242:16835), l'agent n'écoute plus l'UDP mais
+ * interroge /INFO + /ENTRY de ce serveur et pousse le résultat. Utile quand le
+ * serveur refuse les connexions venant d'un datacenter (Render) mais accepte
+ * celles d'une box.
+ *
  * Démarrage : node tools/live-timing/agent.js
  */
 
@@ -24,6 +30,7 @@ const https = require('https');
 const os = require('os');
 const path = require('path');
 const { LiveTimingCollector } = require('./collector');
+const { RemoteHttpSource } = require('./http-source');
 
 function envInt(name, fallback) {
   const v = Number(process.env[name]);
@@ -44,7 +51,14 @@ if (!PUSH_TOKEN) {
   process.exit(1);
 }
 
-const collector = new LiveTimingCollector({ autoStart: true });
+const WATCH_URL = String(process.env.WATCH_URL || '').replace(/\/+$/, '');
+// Deux modes : écoute UDP d'acServer (par défaut) ou lecture HTTP d'un serveur
+// distant (WATCH_URL), dans les deux cas on pousse le résultat au site.
+const watcher = WATCH_URL
+  ? new RemoteHttpSource({ url: WATCH_URL, intervalMs: Math.max(500, INTERVAL_MS) })
+  : null;
+const collector = watcher ? null : new LiveTimingCollector({ autoStart: true });
+if (watcher) watcher.start();
 let sending = false;
 let failures = 0;
 let lastOkAt = 0;
@@ -85,7 +99,7 @@ async function tick() {
   if (sending || stopping) return;
   sending = true;
   try {
-    const snapshot = collector.snapshot();
+    const snapshot = (watcher || collector).snapshot();
     snapshot.status = { ...snapshot.status, host: os.hostname() };
     await post(snapshot);
     failures = 0;
@@ -103,15 +117,26 @@ async function tick() {
 }
 
 const timer = setInterval(tick, INTERVAL_MS);
-collector.on('event', e => {
-  if (e.kind === 'error' || e.kind === 'session') console.log(`· ${e.text}`);
-});
+if (collector) {
+  collector.on('event', e => {
+    if (e.kind === 'error' || e.kind === 'session') console.log(`· ${e.text}`);
+  });
+}
 
 // Rappel utile si acServer n'a jamais parlé : la config des deux ports est la
 // cause n°1 d'un live timing vide.
 let noDataWarnings = 0;
 const watchdog = setInterval(() => {
-  if (collector.lastPacketAt || stopping) return;
+  if (stopping) return;
+  if (watcher) {
+    if (!watcher.lastError && watcher.lastOkAt) return;
+    noDataWarnings += 1;
+    if (noDataWarnings === 1 || noDataWarnings % 6 === 0) {
+      console.warn(`⚠ ${WATCH_URL} illisible : ${watcher.lastError || 'aucune réponse'}${watcher.hint() ? '\n  → ' + watcher.hint() : ''}`);
+    }
+    return;
+  }
+  if (collector.lastPacketAt) return;
   noDataWarnings += 1;
   if (noDataWarnings > 1 && noDataWarnings % 6 !== 0) return;
   console.warn(
@@ -127,7 +152,8 @@ function shutdown() {
   stopping = true;
   clearInterval(timer);
   clearInterval(watchdog);
-  collector.stop();
+  if (watcher) watcher.stop();
+  if (collector) collector.stop();
   const ago = lastOkAt ? `dernier envoi réussi il y a ${Math.round((Date.now() - lastOkAt) / 1000)} s` : 'aucun envoi réussi';
   console.log(`\nAgent arrêté (${ago}).`);
   process.exit(0);
@@ -136,9 +162,13 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 console.log('GDSP live timing — agent local');
-console.log(`  serveur AC   : ${collector.options.host}:${collector.options.pluginPort} (écoute UDP ${collector.options.listenPort})`);
+if (watcher) {
+  console.log(`  serveur suivi: ${WATCH_URL} (lecture HTTP /INFO + /ENTRY)`);
+} else {
+  console.log(`  serveur AC   : ${collector.options.host}:${collector.options.pluginPort} (écoute UDP ${collector.options.listenPort})`);
+}
 console.log(`  site         : ${SITE_URL}${PUSH_PATH}`);
 console.log(`  fréquence    : 1 envoi / ${INTERVAL_MS} ms`);
-console.log(`  acServer doit contenir : UDP_PLUGIN_ADDRESS=127.0.0.1:${collector.options.listenPort} et UDP_PLUGIN_LOCAL_PORT=${collector.options.pluginPort}`);
+if (!watcher) console.log(`  acServer doit contenir : UDP_PLUGIN_ADDRESS=127.0.0.1:${collector.options.listenPort} et UDP_PLUGIN_LOCAL_PORT=${collector.options.pluginPort}`);
 console.log(`  (${path.basename(process.argv[1])} · Ctrl+C pour arrêter)`);
 void tick;

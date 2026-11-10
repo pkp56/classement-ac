@@ -190,13 +190,14 @@
   function renderBanner(d, st) {
     var cfg = siteConfig || {};
     if (st.mode === 'http-remote') {
-      $('bannerTitle').textContent = 'Ce serveur public ne répond pas';
+      $('bannerTitle').textContent = 'Ce serveur public ne répond pas au site';
       $('bannerBody').innerHTML =
         '<p>Cette page lit le serveur à distance via son port HTTP : <code>' + esc(st.sourceUrl || '') + '/INFO</code> et <code>/ENTRY</code>.</p>' +
-        '<p>' + (st.error ? 'Dernière erreur : <code>' + esc(st.error) + '</code>. ' : '') +
-        'Le serveur est peut-être éteint, en cours de redémarrage, ou son port HTTP n\'est pas joignable depuis Internet.</p>' +
-        '<p class="muted" style="font-size:12px">Vérifie avec la console acServer, ou essaie depuis un navigateur : ' +
-        '<code>' + esc(st.sourceUrl || '') + '/INFO</code> doit afficher du JSON.</p>';
+        (st.error ? '<p>Dernière erreur : <code>' + esc(st.error) + '</code></p>' : '') +
+        (st.hint ? '<p><b>' + esc(st.hint) + '</b></p>' : '') +
+        '<p class="muted" style="font-size:12px">Pour vérifier depuis ton PC : ouvre <code>' + esc(st.sourceUrl || '') + '/INFO</code> dans un navigateur — tu dois voir du JSON. ' +
+        'Si ça marche chez toi mais pas ici, le serveur filtre les adresses de datacenter : ' +
+        'lance l\'agent (<code>node tools/live-timing/agent.js</code>) sur un PC, il poussera les mêmes données au site.</p>';
       $('banner').style.display = 'block';
       $('copyCmd').style.display = 'none';
       return;
