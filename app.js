@@ -614,6 +614,75 @@ app.post('/api/admin/circuits/import', async (req, res) => {
   }
 });
 
+// --- LIVE TIMING (serveur AC dédié) ---
+// Lit en UDP les événements du plugin acServer (ACSP v4) et les expose à la
+// page /live-timing. Ne dépend pas du backend Render : c'est le PC qui héberge
+// le serveur AC qui alimente cette partie. Voir tools/live-timing/README.md.
+let liveTiming = null;
+let liveClients = new Set();
+function liveTimingEnabled(){
+  return String(process.env.LIVE_TIMING_ENABLED||'1') !== '0';
+}
+function getLiveTiming(){
+  if(!liveTiming){
+    const {LiveTimingCollector}=require('./tools/live-timing/collector');
+    liveTiming=new LiveTimingCollector();
+    liveTiming.on('event',entry=>{
+      const frame='event: log\ndata: '+JSON.stringify(entry)+'\n\n';
+      for(const res of liveClients){try{res.write(frame)}catch(e){}}
+    });
+    liveTiming.start();
+  }
+  return liveTiming;
+}
+if(liveTimingEnabled()){
+  try{getLiveTiming()}catch(e){console.error('live-timing: démarrage impossible —',e.message)}
+}
+app.get('/api/live/status',(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!liveTimingEnabled())return res.json({enabled:false,status:{status:'offline',mode:'disabled'}});
+  let collector;
+  try{collector=getLiveTiming()}catch(e){return res.status(500).json({error:e.message})}
+  res.json({enabled:true,...collector.snapshot()});
+});
+app.get('/api/live/snapshot',(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!liveTimingEnabled())return res.status(503).json({error:'Live timing désactivé.'});
+  try{res.json(getLiveTiming().snapshot())}catch(e){res.status(500).json({error:e.message})}
+});
+app.get('/api/live/stream',(req,res)=>{
+  if(!liveTimingEnabled())return res.status(503).end();
+  let collector;
+  try{collector=getLiveTiming()}catch(e){return res.status(500).end()}
+  res.writeHead(200,{
+    'Content-Type':'text/event-stream; charset=utf-8',
+    'Cache-Control':'no-store',
+    'Connection':'keep-alive',
+    'X-Accel-Buffering':'no'
+  });
+  res.write('retry: 3000\n\n');
+  const push=()=>{try{res.write('event: snapshot\ndata: '+JSON.stringify(collector.snapshot())+'\n\n')}catch(e){}};
+  push();
+  const timer=setInterval(push,1000);
+  liveClients.add(res);
+  req.on('close',()=>{clearInterval(timer);liveClients.delete(res)});
+});
+// Commandes admin (chat, kick, changement de session) : mêmes règles d'auth que le reste.
+app.post('/api/live/command',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!liveTimingEnabled())return res.status(503).json({error:'Live timing désactivé.'});
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  const {action,message,carId}=req.body||{};
+  const allowed=['chat','kick','next-session','restart-session'];
+  if(!allowed.includes(action))return res.status(400).json({error:'Action inconnue.'});
+  try{
+    const ok=getLiveTiming().command(action,{message,carId});
+    res.json({ok});
+  }catch(e){res.status(502).json({error:e.message})}
+});
+app.get('/live-timing',(req,res)=>res.sendFile(path.join(ROOT,'live-timing.html')));
+app.get('/live-timing.html',(req,res)=>res.sendFile(path.join(ROOT,'live-timing.html')));
+
 app.all('/api/*', (req,res)=>proxyRequest(req,res));
 
 function tryParse(s){try{return JSON.parse(s)}catch(e){return s}}

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Live Timing — GDSP</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23102a32%22 width=%22100%22 height=%22100%22/><text y=%2276%22 x=%2210%22 font-size=%2272%22 fill=%22%23d8a347%22>G</text></svg>">
+<style>
+  :root{--ink:#102a32;--ink-2:#173a45;--cream:#f4ecd8;--paper:#f8f2e4;--red:#9c3021;--gold:#cd9a42;--line:#bdb09a;--green:#3b6341;--grey:#6d726c}
+  *{box-sizing:border-box}
+  body{margin:0;background:#e9e0cb;color:var(--ink);font-family:Arial,sans-serif}
+  header{background:var(--ink);color:var(--cream);border-bottom:5px solid #a33426}
+  .top{max-width:1400px;margin:auto;display:flex;align-items:center;gap:20px;padding:12px 26px;flex-wrap:wrap}
+  .brand{font-family:Georgia,serif;font-weight:bold;font-size:19px;letter-spacing:2px;border:2px solid #e4d9c1;padding:6px 10px;text-decoration:none;color:var(--cream)}
+  .brand span{color:#d59c43}
+  .top h1{font-family:Impact,'Arial Narrow',sans-serif;font-size:20px;letter-spacing:1.4px;margin:0;font-weight:normal;text-transform:uppercase}
+  .top .meta{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:11px;letter-spacing:1.2px;color:#cfc6b0;flex-wrap:wrap}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;background:var(--grey)}
+  .dot.live{background:#4caf50;box-shadow:0 0 0 0 rgba(76,175,80,.7);animation:pulse 1.8s infinite}
+  .dot.http{background:var(--gold)}
+  .dot.offline{background:#c0392b}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(76,175,80,.6)}70%{box-shadow:0 0 0 9px rgba(76,175,80,0)}100%{box-shadow:0 0 0 0 rgba(76,175,80,0)}}
+  .page{max-width:1400px;margin:auto;padding:22px 26px 60px}
+  .banner{background:var(--paper);border:1px solid var(--line);border-left:5px solid var(--gold);padding:16px 20px;margin-bottom:18px}
+  .banner h2{font-family:Impact,sans-serif;font-size:19px;margin:0 0 6px;letter-spacing:1px;text-transform:uppercase;font-weight:normal}
+  .banner p{margin:4px 0;font-size:13px;line-height:1.55;color:#43514f}
+  .banner code{background:#e3d7bd;padding:1px 5px;font-size:12px}
+  .banner .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .banner button{background:var(--red);color:#fff;border:0;padding:9px 14px;font-size:11px;font-weight:bold;letter-spacing:1px;cursor:pointer;text-transform:uppercase}
+  .banner button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));background:var(--paper);border:1px solid var(--line);margin-bottom:18px}
+  .kpi{padding:14px 18px;border-right:1px solid var(--line)}
+  .kpi:last-child{border-right:0}
+  .kpi .label{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--grey);font-weight:bold}
+  .kpi strong{display:block;font-family:Impact,sans-serif;font-size:24px;font-weight:normal;letter-spacing:.5px;margin-top:3px;line-height:1.15}
+  .kpi small{color:var(--grey);font-size:11px}
+  .grid{display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start}
+  .panel{background:var(--paper);border:1px solid var(--line)}
+  .panel h3{font-family:Impact,sans-serif;font-size:16px;letter-spacing:1.2px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line);text-transform:uppercase;font-weight:normal;display:flex;justify-content:space-between;align-items:center}
+  .panel h3 .tag{font-size:9px;letter-spacing:1.4px;background:#d6c6a4;padding:4px 7px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{background:var(--ink);color:var(--cream);font-size:10px;letter-spacing:1.1px;text-transform:uppercase;padding:8px 8px;text-align:right;font-weight:bold;white-space:nowrap;position:sticky;top:0}
+  thead th:nth-child(1),thead th:nth-child(2){text-align:left}
+  tbody td{padding:7px 8px;border-bottom:1px solid #e0d6bf;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  tbody td:nth-child(1),tbody td:nth-child(2){text-align:left}
+  tbody tr:nth-child(even){background:#f2ead8}
+  tbody tr.best td:nth-child(7){color:#2f6b39;font-weight:bold}
+  tbody tr.pit td:nth-child(2)::after{content:' PIT';font-size:9px;background:#9c3021;color:#fff;padding:1px 4px;margin-left:6px;letter-spacing:1px;vertical-align:middle}
+  tbody tr.off td{opacity:.45}
+  .pos{font-family:Impact,sans-serif;font-size:16px}
+  .drv{display:flex;flex-direction:column;line-height:1.25}
+  .drv b{font-weight:bold;font-size:13px}
+  .drv span{font-size:10.5px;color:var(--grey);letter-spacing:.3px}
+  .muted{color:var(--grey)}
+  .feed{max-height:520px;overflow:auto}
+  .feed ul{list-style:none;margin:0;padding:0}
+  .feed li{padding:8px 14px;border-bottom:1px solid #e6dcc6;font-size:12px;line-height:1.4;display:flex;gap:8px}
+  .feed time{color:var(--grey);font-size:10.5px;min-width:38px;font-variant-numeric:tabular-nums}
+  .feed li.k-lap{background:#eef4e6}
+  .feed li.k-session{background:#e6eef2}
+  .feed li.k-error{background:#f8e4e0;color:#7c2418}
+  .feed li.k-pit{background:#f7efdc}
+  .bestlap{border-top:1px solid var(--line)}
+  .bestlap ol{list-style:none;counter-reset:b;margin:0;padding:6px 0}
+  .bestlap li{counter-increment:b;display:flex;gap:8px;padding:5px 14px;font-size:12px;border-bottom:1px dotted #ded2b8}
+  .bestlap li::before{content:counter(b) '.';color:var(--grey);min-width:16px;font-variant-numeric:tabular-nums}
+  .bestlap li b{margin-left:auto;font-variant-numeric:tabular-nums}
+  .diag{font-size:11.5px;padding:10px 14px;color:#43514f;line-height:1.6;border-top:1px solid var(--line);background:#efe6d1}
+  .diag b{color:var(--ink)}
+  .empty{padding:26px;text-align:center;color:var(--grey);font-size:13px}
+  @media(max-width:960px){.grid{grid-template-columns:1fr}}
+  @media(max-width:620px){thead th:nth-child(4),thead th:nth-child(5),thead th:nth-child(6),tbody td:nth-child(4),tbody td:nth-child(5),tbody td:nth-child(6){display:none}.page{padding:14px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <a class="brand" href="/">GDSP<span>.</span></a>
+    <h1>Live Timing</h1>
+    <div class="meta">
+      <span id="state"><span class="dot offline" id="dot"></span><span id="stateText">Connexion…</span></span>
+      <span id="clock" class="muted"></span>
+    </div>
+  </div>
+</header>
+<div class="page">
+  <div class="banner" id="banner" hidden>
+    <h2 id="bannerTitle">Le serveur n'est pas encore joignable</h2>
+    <div id="bannerBody"></div>
+    <div class="row">
+      <button type="button" id="reload">Recharger</button>
+      <button type="button" class="ghost" id="copyCmd">Copier la config serveur</button>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="label">Serveur</div><strong id="kServer">—</strong><small id="kTrack">circuit inconnu</small></div>
+    <div class="kpi"><div class="label">Session</div><strong id="kSession">—</strong><small id="kSessionSub">en attente</small></div>
+    <div class="kpi"><div class="label">Pilotes en piste</div><strong id="kDrivers">0</strong><small id="kDriversSub">—</small></div>
+    <div class="kpi"><div class="label">Meilleur tour</div><strong id="kBest">—</strong><small id="kBestSub">—</small></div>
+    <div class="kpi"><div class="label">Météo</div><strong id="kWeather">—</strong><small id="kTemp">—</small></div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h3>Classement en direct <span class="tag" id="rowCount">0 voiture</span></h3>
+      <div id="standings"><div class="empty">En attente des données du serveur…</div></div>
+    </div>
+    <div>
+      <div class="panel" style="margin-bottom:18px">
+        <h3>Meilleurs tours</h3>
+        <div class="bestlap" id="bestLaps"><div class="empty">—</div></div>
+      </div>
+      <div class="panel">
+        <h3>Fil du serveur</h3>
+        <div class="feed" id="feed"><div class="empty">Aucun événement.</div></div>
+      </div>
+      <div class="panel" style="margin-top:18px">
+        <h3>Diagnostic</h3>
+        <div class="diag" id="diag">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var last = null;
+  var socket = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function hhmmss(ms) {
+    if (ms == null || !isFinite(ms)) return '—';
+    var t = Math.max(0, Math.round(ms / 1000));
+    var h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    return (h ? h + ':' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+  function sessionLabel(s) {
+    if (!s || !s.type) return '—';
+    var names = { practice: 'Essais', qualify: 'Qualifications', race: 'Course', booking: 'Réservation' };
+    var lbl = names[s.type] || s.type;
+    if (s.laps) lbl += ' · ' + s.laps + ' tours';
+    else if (s.timeMinutes) lbl += ' · ' + s.timeMinutes + ' min';
+    return lbl;
+  }
+
+  function render(d) {
+    last = d;
+    var st = d.status || {};
+    var live = st.status === 'live';
+    var http = st.status === 'http';
+    $('dot').className = 'dot ' + (live ? 'live' : http ? 'http' : 'offline');
+    $('stateText').textContent = live ? 'Direct' : http ? 'Serveur joignable (résumé)' : 'Hors ligne';
+    $('clock').textContent = new Date(d.updatedAt).toLocaleTimeString('fr-FR');
+
+    $('kServer').textContent = (d.server && d.server.name) || '—';
+    var track = d.server && d.server.track ? d.server.track + (d.server.trackConfig ? ' · ' + d.server.trackConfig : '') : 'circuit inconnu';
+    $('kTrack').textContent = track;
+    $('kSession').textContent = sessionLabel(d.session);
+    $('kSessionSub').textContent = d.session.remaining ? 'reste ' + d.session.remaining : d.session.elapsed ? 'écoulé ' + d.session.elapsed : 'en attente';
+    $('kDrivers').textContent = String((d.cars || []).filter(function (c) { return c.connected; }).length);
+    var others = (d.cars || []).length - (d.cars || []).filter(function (c) { return c.connected; }).length;
+    $('kDriversSub').textContent = others > 0 ? others + ' parti(s)' : 'tous en piste';
+    var best = (d.bestLaps || [])[0];
+    $('kBest').textContent = best ? best.bestLap : '—';
+    $('kBestSub').textContent = best ? best.name + ' · ' + best.laps + ' tours' : 'personne';
+    $('kWeather').textContent = d.server && d.server.weather ? d.server.weather : (d.server && d.server.ambientTemp != null ? d.server.ambientTemp + '°C' : '—');
+    $('kTemp').textContent = d.server && d.server.roadTemp != null ? 'air ' + d.server.ambientTemp + '° / piste ' + d.server.roadTemp + '°' : '—';
+
+    renderStandings(d);
+    renderBest(d);
+    renderFeed(d);
+    renderDiag(d);
+    $('banner').hidden = live || http;
+    if (!live && !http) renderBanner(d, st);
+  }
+
+  function renderBanner(d, st) {
+    $('bannerTitle').textContent = st.error ? 'La liaison ACSP est en erreur' : "Le site n'arrive pas encore à lire le serveur";
+    var udp = st.udp || {};
+    $('bannerBody').innerHTML =
+      '<p>Le collecteur écoute en <b>UDP ' + esc(udp.listenPort) + '</b> et envoie ses requêtes vers <b>' + esc(udp.host) + ':' + esc(udp.serverPort) + '</b>.' +
+      (st.error ? ' Dernière erreur : <code>' + esc(st.error) + '</code>.' : ' Aucun paquet reçu pour l\'instant.') + '</p>' +
+      '<p>Dans <code>server_cfg.ini</code> du serveur dédié, la section <code>[SERVER]</code> doit contenir exactement ces deux ports :</p>' +
+      '<p><code>UDP_PLUGIN_ADDRESS = 127.0.0.1:' + esc(udp.listenPort) + '</code><br>' +
+      '<code>UDP_PLUGIN_LOCAL_PORT = ' + esc(udp.serverPort) + '</code></p>' +
+      '<p>Puis redémarrer acServer. La page se connecte seule dès les premiers paquets (aucune action de ta part).</p>';
+    $('copyCmd').dataset.text = 'UDP_PLUGIN_ADDRESS=127.0.0.1:' + udp.listenPort + '\nUDP_PLUGIN_LOCAL_PORT=' + udp.serverPort;
+  }
+
+  function renderStandings(d) {
+    var cars = d.cars || [];
+    $('rowCount').textContent = cars.length + (cars.length > 1 ? ' voitures' : ' voiture');
+    if (!cars.length) {
+      $('standings').innerHTML = '<div class="empty">Aucune voiture connectée pour le moment.</div>';
+      return;
+    }
+    var bestId = (d.bestLaps && d.bestLaps[0]) ? d.bestLaps[0].name : null;
+    var html = '<table><thead><tr><th>#</th><th>Pilote</th><th>Tours</th><th>Écart</th><th>Interv.</th><th>Dernier</th><th>Meilleur</th><th>Vit.</th></tr></thead><tbody>';
+    cars.forEach(function (c) {
+      var cls = [c.inPit ? 'pit' : '', c.connected ? '' : 'off', (d.bestLaps[0] && d.bestLaps[0].name === c.name) ? 'best' : ''].join(' ').trim();
+      html += '<tr class="' + cls + '">' +
+        '<td class="pos">' + c.position + '</td>' +
+        '<td><span class="drv"><b>' + esc(c.name) + '</b><span>' + esc(c.team || c.model || '') + '</span></span></td>' +
+        '<td>' + (c.laps || 0) + '</td>' +
+        '<td>' + esc(c.gap === 'leader' ? '—' : c.gap) + '</td>' +
+        '<td class="muted">' + esc(c.position === 1 ? '' : c.interval) + '</td>' +
+        '<td>' + esc(c.lastLap || '—') + (c.lastLapCuts ? ' <span class="muted">c</span>' : '') + '</td>' +
+        '<td>' + esc(c.bestLap || '—') + '</td>' +
+        '<td>' + (c.speedKmh != null ? c.speedKmh : '—') + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    $('standings').innerHTML = html;
+    void bestId;
+  }
+
+  function renderBest(d) {
+    var list = d.bestLaps || [];
+    if (!list.length) { $('bestLaps').innerHTML = '<div class="empty">Pas encore de tour bouclé.</div>'; return; }
+    $('bestLaps').innerHTML = '<ol>' + list.slice(0, 8).map(function (r) {
+      return '<li><span>' + esc(r.name) + '</span><b>' + esc(r.bestLap) + '</b></li>';
+    }).join('') + '</ol>';
+  }
+
+  function renderFeed(d) {
+    var ev = d.events || [];
+    if (!ev.length) { $('feed').innerHTML = '<div class="empty">Aucun événement.</div>'; return; }
+    $('feed').innerHTML = '<ul>' + ev.map(function (e) {
+      var t = new Date(e.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      return '<li class="k-' + esc(e.kind) + '"><time>' + esc(t) + '</time><span>' + esc(e.text) + '</span></li>';
+    }).join('') + '</ul>';
+  }
+
+  function renderDiag(d) {
+    var st = d.status || {}, udp = st.udp || {};
+    var lines = [
+      '<b>Liaison :</b> ' + esc(st.mode || '—') + ' · écoute UDP ' + esc(udp.listenPort) + ' (' + esc(udp.bound) + ') → ' + esc(udp.host) + ':' + esc(udp.serverPort),
+      '<b>Dernier paquet :</b> ' + (st.lastPacketAgoMs == null ? 'aucun' : (st.lastPacketAgoMs / 1000).toFixed(1) + ' s'),
+      '<b>Résumé HTTP :</b> ' + (st.lastHttpAgoMs == null ? 'non configuré' : (st.lastHttpAgoMs / 1000).toFixed(1) + ' s'),
+      '<b>Protocole :</b> ACSP v' + esc(d.server.protocolVersion == null ? '?' : d.server.protocolVersion)
+    ];
+    if (d.referenceLapMs) lines.push('<b>Écarts :</b> estimés sur un tour de référence de ' + (d.referenceLapMs / 1000).toFixed(3) + ' s');
+    if (st.error) lines.push('<b>Erreur :</b> ' + esc(st.error));
+    $('diag').innerHTML = lines.join('<br>');
+  }
+
+  function connect() {
+    if (socket) { try { socket.close(); } catch (e) {} }
+    var es = new EventSource('/api/live/stream');
+    socket = es;
+    es.addEventListener('snapshot', function (ev) {
+      try { render(JSON.parse(ev.data)); } catch (e) { console.error(e); }
+    });
+    es.addEventListener('error', function () {
+      $('dot').className = 'dot offline';
+      $('stateText').textContent = 'Reconnexion…';
+    });
+  }
+
+  $('reload').addEventListener('click', function () {
+    fetch('/api/live/status').then(function (r) { return r.json(); }).then(render);
+    connect();
+  });
+  $('copyCmd').addEventListener('click', function () {
+    var text = this.dataset.text || '';
+    if (navigator.clipboard) navigator.clipboard.writeText(text);
+    this.textContent = 'Copié !';
+    var btn = this;
+    setTimeout(function () { btn.textContent = 'Copier la config serveur'; }, 1600);
+  });
+
+  fetch('/api/live/status').then(function (r) { return r.json(); }).then(render).catch(function () {});
+  connect();
+})();
+</script>
+</body>
+</html>

@@ -17,6 +17,16 @@ Site de championnat de la GDSP, servi statiquement par un petit serveur Express 
 - Lancer les tests de calcul ciblés avec `npm test`.
 - Le cœur du site est dans `site.js` ; `patches-v71.js` contient les règles de calcul/pénalités conservées pour compatibilité. Les anciennes versions de patches non chargées ont été retirées.
 
+## Live timing d'un serveur AC dédié
+
+La page **`/live-timing`** suit en direct un serveur Assetto Corsa dédié qui
+tourne sur ton PC (classement, tours, écarts estimés, stands, fil du serveur),
+sur le modèle des pages live-timing d'AssettoHosting. Elle lit l'interface de
+plugin UDP d'acServer (ACSP v4) : rien à installer côté jeu, seulement deux
+lignes dans `server_cfg.ini` (`UDP_PLUGIN_ADDRESS`, `UDP_PLUGIN_LOCAL_PORT`).
+Détails, variables d'environnement, simulateur de test et limites :
+[`tools/live-timing/README.md`](tools/live-timing/README.md).
+
 ## Barème (mis à jour)
 
 - 41 / 38 / 35 / 32 / 30 / 28 / 26 / 24 / 22 / 20 / 18 / 17 / 16 / 15 / 14 / 13 / 12 / 11 / 10 / 9 / 8 / 7 / 6 / 5 / 4 / 3 / 2 / 1 points pour les 28 premières places ; 0 au-delà.
