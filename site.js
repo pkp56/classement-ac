@@ -110,8 +110,20 @@ function nav(){
     `<button class="${activeTop==='accueil'?'active':''}" onclick="go('accueil')">ACCUEIL</button>`
     +(backendMulti?`<button class="${activeTop==='global'?'active':''}" onclick="go('global')">GLOBAL</button>`:'')
     +`<button class="nav-event-tab ${activeTop==='event'?'active':''}" onclick="go('event')"><span class="nav-ev-kicker">Événement</span><span class="nav-ev-title">${esc(navEventTitle(evTabName))}</span></button>`
+    +(hasLiveTiming?`<a class="nav-link" href="/live-timing" target="_blank" rel="noopener" title="Suivi en direct d'un serveur Assetto Corsa">LIVE <span class="nav-link-arrow">↗</span></a>`:'')
     +`<button class="${activeTop==='admin'?'active':''}" onclick="go('admin')">ADMINISTRATION</button>`;
   renderEventSwitcher();
+}
+// Onglet LIVE : visible seulement si le serveur expose le live timing
+// (/api/live/config répond). Sinon on n'encombre pas la navigation.
+let hasLiveTiming=null;
+async function detectLiveTiming(){
+  if(hasLiveTiming!==null)return hasLiveTiming;
+  try{
+    const r=await fetch('/api/live/config',{cache:'no-store'});
+    hasLiveTiming=r.ok;
+  }catch(e){hasLiveTiming=false}
+  return hasLiveTiming;
 }
 async function go(x){
   // Pré-charger un événement par défaut si on va sur une page événementielle (event/classement/manches/pilotes)
@@ -278,6 +290,7 @@ async function detectBackend(){
 }
 async function retryBackend(){
   await detectBackend();
+  await detectLiveTiming().catch(()=>{});
   if(!backendError){
     const match=window.location&&window.location.pathname.match(/^\/evenements\/([^/]+)\/?$/);
     const target=match?decodeURIComponent(match[1]):currentSlug;

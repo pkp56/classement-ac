@@ -74,6 +74,65 @@ const event = {
   }
 };
 
+// --- Relevé de démonstration pour l'aperçu local -----------------------------
+// Reprend la forme exacte d'un instantané du collecteur, pour que la page se
+// dessine comme en production (classement, écarts, meilleurs tours, fil).
+const DEMO = {
+  name: 'GDSP · Serveur de démonstration',
+  track: 'oesterreichring1979',
+  trackConfig: 'chicane',
+  session: 'practice',
+  drivers: [
+    { name: 'Kami_Kaze31', team: 'Scuderia Tolosa', best: 118907, last: 119432, laps: 34 },
+    { name: 'TofuSan21', team: 'ECURIE GDSP #2', best: 118995, last: 119201, laps: 58 },
+    { name: 'Jim Zplouch8', team: 'Gitane Maïs', best: 119126, last: 120044, laps: 44 },
+    { name: 'Kimy Hoyer7', team: 'Ecurie GDSP #1', best: 119963, last: 120311, laps: 25 },
+    { name: 'fmherrou10', team: 'FK Racing', best: 120080, last: 120552, laps: 7 },
+    { name: 'pikoupok23', team: 'Indépendant #1', best: 120307, last: 121004, laps: 73 },
+    { name: 'SuperSlipos42', team: 'Les Bananes Flambées', best: 120448, last: 121330, laps: 29 },
+    { name: 'Elouan27', team: 'Erminig Gwenn', best: 120939, last: 121587, laps: 22 }
+  ]
+};
+function fmtDemoMs(ms) {
+  const m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000), mm = String(ms % 1000).padStart(3, '0');
+  return m > 0 ? `${m}:${String(s).padStart(2, '0')}.${mm}` : `${s}.${mm}`;
+}
+function demoLiveSnapshot() {
+  const now = Date.now();
+  const leaderBest = DEMO.drivers[0].best;
+  const cars = DEMO.drivers.map((d, i) => {
+    const diff = i === 0 ? 0 : d.best - leaderBest;
+    const prev = i === 0 ? null : DEMO.drivers[i - 1].best - leaderBest;
+    return {
+      carId: i, position: i + 1, name: d.name, team: d.team, model: 'actk_lola_t290', skin: '00_gdsp',
+      connected: true, laps: d.laps, spline: 0.42, progress: d.laps + 0.42,
+      lastLapMs: d.last, lastLap: fmtDemoMs(d.last), bestLapMs: d.best, bestLap: fmtDemoMs(d.best),
+      lastLapCuts: 0, bestLapCuts: 0, totalMs: d.best * d.laps,
+      gear: 4, rpm: 9100, speedKmh: 226 - i * 2, inPit: i === 6, pitStops: i === 6 ? 1 : 0,
+      gapMs: diff, gap: i === 0 ? 'leader' : '+' + fmtDemoMs(diff), gapEstimated: true,
+      intervalMs: i === 0 ? null : diff - prev, interval: i === 0 ? '' : '+' + fmtDemoMs(diff - prev),
+      lastSeenMs: 120, currentLapMs: 41000 + i * 3000
+    };
+  });
+  return {
+    status: { status: 'live', mode: 'demo', listening: true, lastPacketAgoMs: 120, error: null, demo: true },
+    server: { name: DEMO.name, track: DEMO.track, trackConfig: DEMO.trackConfig, weather: 'Sol 02 Few Clouds', ambientTemp: 26, roadTemp: 34, protocolVersion: 4, httpClients: cars.length, httpMaxClients: 32, passwordProtected: false },
+    session: { type: DEMO.session, name: 'Practice', index: 0, count: 2, laps: 0, timeMinutes: 60, waitTimeMinutes: 0, elapsedMs: 1900000, remainingMs: 1700000, remaining: '28:20.000', elapsed: '31:40.000' },
+    cars,
+    bestLaps: cars.slice().sort((a, b) => a.bestLapMs - b.bestLapMs).map((c, i) => ({ rank: i + 1, name: c.name, team: c.team, bestLap: c.bestLap, bestLapMs: c.bestLapMs, laps: c.laps })),
+    referenceLapMs: leaderBest,
+    events: [
+      { at: new Date(now - 4000).toISOString(), kind: 'lap', text: 'Kami_Kaze31 — tour 1:59.432' },
+      { at: new Date(now - 21000).toISOString(), kind: 'lap', text: 'TofuSan21 — tour 1:58.995' },
+      { at: new Date(now - 60000).toISOString(), kind: 'pit', text: 'SuperSlipos42 aux stands' },
+      { at: new Date(now - 95000).toISOString(), kind: 'session', text: 'Session practice : Practice' }
+    ],
+    collisions: [],
+    updatedAt: new Date(now).toISOString(),
+    serverTimeMs: now
+  };
+}
+
 function json(res, code, payload) {
   const body = Buffer.from(JSON.stringify(payload));
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'content-length': body.length, 'cache-control': 'no-store' });
@@ -86,6 +145,11 @@ const server = http.createServer((req, res) => {
   if (urlPath === '/api/events') return json(res, 200, { events: [{ slug: event.slug, name: event.name, kind: event.kind, points_config: pointsConfig, updated_at: event.updated_at }] });
   if (urlPath === '/api/events/' + encodeURIComponent(SLUG)) return json(res, 200, event);
   if (urlPath === '/api/global-exclusions') return json(res, 200, { ids: {} });
+  // Live timing : en aperçu local on renvoie un relevé « démo » pour que la page
+  // /live-timing et le lien du menu soient visibles sans serveur AC ni agent.
+  // (Le site réel, lui, lit l'UDP local, l'agent distant ou une source HTTP.)
+  if (urlPath === '/api/live/config') return json(res, 200, { enabled: true, push: { enabled: false, endpoint: '/api/live/push' }, udp: { listenPort: 12000, serverPort: 12001 }, httpSources: [], demo: true });
+  if (urlPath === '/api/live/status' || urlPath === '/api/live/snapshot') return json(res, 200, demoLiveSnapshot());
   if (urlPath === '/api/championship') return json(res, 200, { championship: { sessions: dedupedSessions, penMap: {} } });
   if (urlPath.startsWith('/api/')) return json(res, 503, { error: 'API non simulée en aperçu' });
 
