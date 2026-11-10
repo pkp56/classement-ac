@@ -182,3 +182,7 @@ cython_debug/
 # Node.js dependencies (install by npm install on Render)
 node_modules/
 node_modules
+
+# Tracés bruts Assetto Corsa (plusieurs Mo) : extraits compactés dans line.json
+maquette-circuit/assets/tracks/*/fast_lane.ai
+maquette-circuit/assets/tracks/*/*.ai

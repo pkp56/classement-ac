@@ -1,0 +1,12 @@
+{
+	"name": "Riverside Long (56 pits)",
+	"description": "Riverside",
+	"tags" : ["circuit","original","usa"],
+	"geotags": ["lat", "lon"],
+	"country": "U.S.A.",
+	"city": "Riverside",
+	"length": "5300",
+	"width": "9m-12m",
+	"pitboxes": "56",
+	"run": "clockwise"
+}

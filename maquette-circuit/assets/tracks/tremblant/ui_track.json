@@ -1,0 +1,30 @@
+{
+  "name": "Le Circuit Mont-Tremblant 1969 - Grand Prix (League)",
+  "description": "Le Circuit Mont-Tremblant 1964-1999 <br>The full GP layout was used for all major events when it was completed in 1965, including F1 in 1968 and 1970, CanAm, TransAm, F5000. This version features modern grid spacing.",
+  "tags": [
+    "circuit",
+    "historic",
+    "Canada",
+    "Formula 1",
+    "St-Jovite",
+    "CanAm",
+    "Quebec",
+    "TransAm",
+    "GPL",
+    "Historic GP"
+  ],
+  "geotags": [
+    "46.1214° N",
+    "74.5944° W"
+  ],
+  "country": "Canada",
+  "city": "St-Jovite",
+  "length": "4260",
+  "width": "8.5 m",
+  "pitboxes": "34",
+  "run": "clockwise",
+  "year": 1969,
+  "author": "Patrice Cote",
+  "version": "1.2",
+  "url": null
+}

@@ -95,7 +95,7 @@ const PROFILE_TIPS={
 };
 function gdspTip(html,mod=''){return `<span class="gdsp-tip${mod?' '+mod:''}"><i class="gdsp-i">?</i><span class="gdsp-bubble">${html}</span></span>`}
 
-function isEventPage(p){return p==='event'||p==='classement'||p==='manches'||p==='pilotes'}
+function isEventPage(p){return p==='event'||p==='classement'||p==='manches'||p==='pilotes'||p==='circuit'}
 function nav(){
   const activeTop=(page==='gpilote'||page==='global')?'global'
     :(page==='hub'||page==='accueil')?'accueil'
@@ -109,15 +109,15 @@ function nav(){
   document.getElementById('nav').innerHTML=
     `<button class="${activeTop==='accueil'?'active':''}" onclick="go('accueil')">ACCUEIL</button>`
     +(backendMulti?`<button class="${activeTop==='global'?'active':''}" onclick="go('global')">GLOBAL</button>`:'')
-    +`<button class="nav-event-tab ${activeTop==='event'?'active':''}" onclick="go('event')"><span class="nav-ev-kicker">🏁 Événement</span><span class="nav-ev-title">${esc(evTabName)}</span></button>`
-    +`<button class="${activeTop==='circuits'?'active':''}" onclick="go('circuits')">CIRCUITS <span class="nav-badge">06</span></button>`
+    +`<button class="nav-event-tab ${activeTop==='event'?'active':''}" onclick="go('event')"><span class="nav-ev-kicker">Événement</span><span class="nav-ev-title">${esc(navEventTitle(evTabName))}</span></button>`
+    +`<button class="${page==='circuit'?'active':''}" onclick="go('circuit')">CIRCUITS <span class="nav-badge">06</span></button>`
     +`<button class="${activeTop==='admin'?'active':''}" onclick="go('admin')">ADMINISTRATION</button>`;
   renderEventSwitcher();
 }
 async function go(x){
   // Pré-charger un événement par défaut si on va sur une page événementielle (event/classement/manches/pilotes)
   // sans avoir d'eventContext (ex: on arrive sur un lien profond, ou on clique sur l'onglet Événement depuis le hub).
-  const eventPages=['event','classement','manches','pilotes'];
+  const eventPages=['event','classement','manches','pilotes','circuit'];
   if(backendMulti && eventPages.includes(x) && !eventContext){
     const last=localStorage.getItem('gdsp_last_event');
     const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
@@ -127,8 +127,7 @@ async function go(x){
       try{await loadEvent(target.slug)}catch(e){}
     }
   }
-  if(x==='circuits'){window.location.href='/circuits.html';return}
-  if(x==='event'||x==='classement'||x==='manches')driverId='';
+  if(x==='event'||x==='classement'||x==='manches'||x==='circuit')driverId='';
   page=x;window.scrollTo(0,0);
   // 'accueil' et 'hub' = la VRAIE page d'accueil GDSP (hero 65/35, Règlements, Stats, Discord) en mode multi
   if((x==='accueil'||x==='hub')&&backendMulti){page='hub';if(window.history&&window.location)window.history.pushState({},'', '/');render();return}
@@ -148,9 +147,15 @@ async function go(x){
 function goHome(){go('accueil')}
 function setEventSubTab(tab){
   if(!isEventPage(tab))return;
+  if(tab==='circuit'&&!isLolaEvent())return;
   if(tab!=='pilotes')driverId='';
   page=tab;
   render();
+  if(tab==='circuit')syncCircuitHistory();
+  else if(window.history&&window.location&&/\/circuit\/?$/.test(window.location.pathname)){
+    const slug=(eventContext&&eventContext.slug)||currentSlug;
+    if(slug)window.history.pushState({},'','/evenements/'+encodeURIComponent(slug));
+  }
 }
 function openEventRoundResult(rIdx){
   const rs=rounds();
@@ -1567,8 +1572,8 @@ function renderEventShell(){
     ?'<span class="tag archive">SAISON ARCHIVÉE</span>'
     :(rs.length===0?'<span class="tag" style="background:#d7a347;color:#102a32">CHAMPIONNAT À VENIR</span>':'<span class="tag live">CHAMPIONNAT EN COURS</span>');
 
-  const activeSub=page==='classement'?'classement':page==='manches'?'manches':page==='pilotes'?'pilotes':'event';
-  const subBody=activeSub==='classement'?ranking():activeSub==='manches'?manche():activeSub==='pilotes'?drivers():eventHome();
+  const activeSub=page==='classement'?'classement':page==='manches'?'manches':page==='pilotes'?'pilotes':(page==='circuit'&&isLolaEvent())?'circuit':'event';
+  const subBody=activeSub==='classement'?ranking():activeSub==='manches'?manche():activeSub==='pilotes'?drivers():activeSub==='circuit'?circuit():eventHome();
 
   return `<div class="ev-shell">`
     +`<div class="ev-banner"><div><div class="ev-banner-kicker">${badgeHtml}<span style="font-size:11px;letter-spacing:1.8px;color:#d7a347;font-weight:700;text-transform:uppercase">Espace événement GDSP</span></div><h1>${esc(ev.name)}</h1><div class="ev-banner-meta">${rs.length?`${rs.length} manche(s) importée(s) · ${ds.length} pilote(s) engagé(s)`:'Saison en préparation · Inscriptions sur Discord'} · Coefficient Global ×${Number(cfg.globalCoef??1).toFixed(1)}</div></div>`
@@ -1577,9 +1582,376 @@ function renderEventShell(){
     +`<button type="button" class="ev-subtab ${activeSub==='event'?'active':''}" onclick="setEventSubTab('event')">Accueil <span class="ev-subtab-badge">Affiche &amp; Infos</span></button>`
     +`<button type="button" class="ev-subtab ${activeSub==='classement'?'active':''}" onclick="setEventSubTab('classement')">Classements <span class="ev-subtab-badge">${ds.length||0}</span></button>`
     +`<button type="button" class="ev-subtab ${activeSub==='manches'?'active':''}" onclick="setEventSubTab('manches')">Résultats <span class="ev-subtab-badge">${rs.length} M.</span></button>`
+    +(isLolaEvent()?`<button type="button" class="ev-subtab ${activeSub==='circuit'?'active':''}" onclick="setEventSubTab('circuit')">Circuit <span class="ev-subtab-badge">${esc(circuitBadgeLabel())}</span></button>`:'')
     +`<button type="button" class="ev-subtab ${activeSub==='pilotes'?'active':''}" onclick="setEventSubTab('pilotes')">Pilotes <span class="ev-subtab-badge">${ds.length||0}</span></button>`
     +`</div></div>`
     +`<div class="ev-subcontent">${subBody}</div>`;
+}
+
+// ---------- Onglet Circuit (section championnat) ----------
+// Une fiche par manche : M1 Mont-Tremblant → M6 Österreichring.
+// La manche affichée est choisie par le bandeau de manches (ou l'URL #M4).
+const CIRCUIT_ROUND_KEY = 'gdsp_circuit_round';
+const CIRCUIT_ALT_KEY = 'gdsp_circuit_alt';
+let circuitsCache = null, circuitsError = '', circuitsPending = null;
+
+/** Manche sélectionnée (numéro), bornée au calendrier chargé. */
+function circuitRound(){
+  const data = circuitsCache;
+  const total = (data && data.rounds && data.rounds.length) || 6;
+  const raw = Number(localStorage.getItem(CIRCUIT_ROUND_KEY));
+  if (!Number.isFinite(raw) || raw < 1) return 1;
+  return Math.min(total, Math.round(raw));
+}
+function setCircuitRound(n){
+  const total = (circuitsCache && circuitsCache.rounds && circuitsCache.rounds.length) || 6;
+  const val = Math.max(1, Math.min(total, Number(n) || 1));
+  localStorage.setItem(CIRCUIT_ROUND_KEY, String(val));
+  render();
+}
+/** Variante affichée : seulement pour les circuits qui en ont plusieurs. */
+function circuitAlt(){
+  return localStorage.getItem(CIRCUIT_ALT_KEY) === 'no_chicane' ? 'no_chicane' : 'chicane';
+}
+function setCircuitAlt(key){
+  localStorage.setItem(CIRCUIT_ALT_KEY, key === 'no_chicane' ? 'no_chicane' : 'chicane');
+  render();
+}
+async function circuitsData(){
+  if (circuitsCache) return circuitsCache;
+  if (circuitsError) return null;
+  try {
+    const r = await fetch('/data/circuits.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if (!j || !Array.isArray(j.rounds) || !j.rounds.length) throw new Error('Données circuit incomplètes');
+    circuitsCache = j; circuitsError = '';
+    return j;
+  } catch (e) {
+    circuitsError = e && e.message ? e.message : String(e);
+    return null;
+  }
+}
+/** Ouvre les résultats importés de la manche circuit affichée (appariement par date). */
+function openCircuitRoundResult(idx){
+  const data=circuitsCache;
+  const r=data&&data.rounds&&data.rounds[idx];
+  const rs=rounds();
+  const target=circuitRoundIndex(r);
+  if(target<0)return;
+  // `round` est une propriété réservée de window : on passe par la navigation
+  // standard (go) puis on sélectionne la manche.
+  const apply=()=>{ round=target; sessionIndex=(rs[target]&&rs[target].sessions.length>1)?1:0; render(); window.scrollTo(0,0); };
+  Promise.resolve(go('manches')).then(apply,apply);
+}
+// Correspondance entre le dossier du mod (JSON AH / Drive) et les libellés
+// de piste des sessions importées.
+const CIRCUIT_TRACK_ALIASES = {
+  'mt-tremblant_69': ['mont-tremblant', 'mt-tremblant_69', 'mont tremblant'],
+  'riverside': ['riverside'],
+  'sebring_90s': ['sebring', 'sebring_90s'],
+  'mid_ohio': ['mid-ohio', 'mid ohio'],
+  '6thgpmexico67': ['6thgpmexico67', 'mexico'],
+  'oesterreichring1979': ['oesterreichring1979', 'oesterreichring']
+};
+/** Retrouve l'index de la manche importée correspondant à une fiche circuit. */
+function circuitRoundIndex(r){
+  if(!r)return -1;
+  const rs=rounds();
+  const aliases=(CIRCUIT_TRACK_ALIASES[r.driverFolder]||[String(r.driverFolder||'')]).map(a=>a.toLowerCase());
+  let idx=rs.findIndex(x=>aliases.includes(String(x.track||'').toLowerCase()));
+  if(idx<0&&r.date){
+    const d=String(r.date).slice(0,10);
+    idx=rs.findIndex(x=>String(x.date||'').slice(0,10)===d);
+  }
+  return idx;
+}
+function circuitCountryCode(country){
+  return ({ 'Autriche': 'AUT', 'Canada': 'CAN', 'U.S.A.': 'USA', 'USA': 'USA', 'Mexique': 'MEX' })[country] || '—';
+}
+/** Entier formaté à la française (séparateur d'espace insécable). */
+const nb = (v, d = 0) => (v == null || !Number.isFinite(Number(v))) ? '—' : Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const frNum = (v, d = 1) => (v == null || !Number.isFinite(Number(v))) ? '—' : Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+function circuitElevSvg(profile){
+  const p = profile && profile.profile;
+  if (!p) return '';
+  return `<svg viewBox="0 0 1000 120" preserveAspectRatio="none" aria-hidden="true">`
+    + `<line class="base" x1="0" y1="119" x2="1000" y2="119"/>`
+    + `<path class="area" d="${p.closed}"/>`
+    + `<path class="line" d="${p.path}"/></svg>`;
+}
+
+/**
+ * Tracé interactif.
+ * mode = corners | collisions | sectors
+ */
+function circuitMap(round, profile, mode, opts = {}){
+  const o = (profile && profile.outline) || round.outline || {};
+  if (!o.path) return '';
+  const compact = !!opts.compact;
+  const corners = (o.corners || []).map(c =>
+    `<g class="cir-pin" data-corner="${c.id}"><circle cx="${c.x}" cy="${c.y}" r="13"/>`
+    + `<text x="${c.x}" y="${c.y + 4.5}" text-anchor="middle">${c.id}</text>`
+    + `<title>Virage ${c.id}${c.name ? ' · ' + esc(c.name) : ''} · ${Math.round(c.dist)} m</title></g>`).join('');
+  const sectorDots = (o.sectors || []).map(s =>
+    `<circle class="cir-sector-dot" cx="${s.x}" cy="${s.y}" r="8"><title>${esc(s.label || 'Secteur')} · ${Math.round(s.dist || 0)} m</title></circle>`).join('');
+  const crashPins = (round.demoCollisions || []).filter(c => c.point).map((c, i) =>
+    `<g class="cir-crash ${c.speed > 25 ? 'hard' : ''}"><circle cx="${c.point.x}" cy="${c.point.y}" r="${c.speed > 25 ? 11 : 8}"/>`
+    + `<text x="${c.point.x}" y="${c.point.y + 4}" text-anchor="middle">${i + 1}</text>`
+    + `<title>${esc(c.a)} / ${esc(c.b)} · ${c.speed} km/h · ${esc(c.corner || '')}</title></g>`).join('');
+  const pins = mode === 'collisions' ? crashPins : (mode === 'sectors' ? '' : corners);
+  return `<svg viewBox="${o.viewBox || '0 0 1000 560'}" role="img" aria-label="Tracé ${esc(round.name)}">`
+    + `<path class="cir-map-glow" d="${o.path}"/>`
+    + `<path class="cir-map-outline" d="${o.path}"/>`
+    + `<path class="cir-map-center" d="${o.path}"/>`
+    + (compact ? '' : sectorDots)
+    + pins
+    + `<circle class="cir-map-start" cx="${o.start ? o.start.x : 0}" cy="${o.start ? o.start.y : 0}" r="9"><title>Ligne de départ / arrivée</title></circle>`
+    + `</svg>`;
+}
+
+function circMode(){
+  const m = localStorage.getItem('gdsp_circuit_mode');
+  return ['corners', 'collisions', 'sectors'].includes(m) ? m : 'corners';
+}
+function setCircMode(mode){
+  localStorage.setItem('gdsp_circuit_mode', ['corners', 'collisions', 'sectors'].includes(mode) ? mode : 'corners');
+  render();
+}
+function navEventTitle(name){
+  return String(name || '').replace(/\s+/g, ' ').trim() || 'Championnat';
+}
+function isLolaEvent(){
+  const slug = eventContext && eventContext.slug;
+  return !slug || slug === LEGACY_DEFAULT_SLUG || slug === ACTIVE_LOLA_SLUG;
+}
+/** Badge de l'onglet : manche en cours de consultation + ville. */
+function circuitBadgeLabel(){
+  const data = circuitsCache;
+  if (!data || !data.rounds) return 'À VENIR';
+  const r = data.rounds[circuitRound() - 1] || data.rounds[0];
+  return `${r.label} · ${String(r.city || r.country || '').toUpperCase()}`;
+}
+function circuitStatusLabel(round){
+  return round.status === 'done' ? 'Disputée' : 'À venir';
+}
+function circuitDateLabel(round){
+  if (round.status !== 'done') return 'Date à confirmer';
+  if (round.dateLabel) return round.dateLabel;
+  if (round.date) {
+    const d = new Date(round.date);
+    return date(d);
+  }
+  return 'Date à confirmer';
+}
+
+function circuit(){
+  if (backendMulti && !eventContext) return hub();
+  if (!isLolaEvent()) return eventHome();
+  const cfg = pointsConfig();
+  const data = circuitsCache;
+  if (!data) {
+    return `<div class="eyebrow">Programme de la saison</div><h1>Circuit</h1>`
+      + `<div class="cir-wait">${circuitsError ? `La fiche circuit n'a pas pu être chargée (${esc(circuitsError)}).` : 'Chargement de la fiche circuit…'}</div>`;
+  }
+
+  const rounds = data.rounds || [];
+  const idx = Math.max(0, Math.min(rounds.length - 1, circuitRound() - 1));
+  const round = rounds[idx];
+  const alt = circuitAlt();
+  const variants = round.profiles || [];
+  const activeProfile = variants.length
+    ? (variants.find(p => p.key === alt) || variants[0])
+    : round;
+  const mode = circMode();
+  const isDone = round.status === 'done';
+
+  // --- Bandeau des manches : une pastille cliquable par manche ---
+  const calendar = rounds.map((r, i) => {
+    const cls = ['cir-round-pill',
+      r.status === 'done' ? 'done' : 'next',
+      i === idx ? 'selected' : ''].filter(Boolean).join(' ');
+    return `<button type="button" class="${cls}" onclick="setCircuitRound(${r.round})" title="${esc(r.name)}">`
+      + `<b>${esc(r.label)}</b><span>${esc(r.shortName || r.name)}</span>`
+      + `<span class="cir-round-state">${r.status === 'done' ? 'Disputée' : 'À venir'}</span></button>`;
+  }).join('');
+
+  // --- Variantes (Österreichring uniquement) ---
+  const variantButtons = variants.length > 1
+    ? `<div class="cir-variants" role="group" aria-label="Variante du tracé">`
+      + variants.map(v => `<button type="button" class="${v.key === activeProfile.key ? 'active' : ''}" onclick="setCircuitAlt('${esc(v.key)}')" title="${esc(v.lengthStr || '')}">${v.key === 'no_chicane' ? 'Sans chicane' : 'Avec chicane'}</button>`).join('')
+      + `</div>`
+    : '';
+
+  // --- Hero ---
+  const heroImage = (round.heroByVariant && round.heroByVariant[activeProfile.key]) || round.hero || 'preview.png';
+  const heroMeta = [
+    ['Plateau', 'Lola T290'],
+    ['Configuration', round.layout],
+    ['Coordonnées GPS', round.gps || 'Non communiquées'],
+    ['Auteur du mod', round.author || 'Non communiqué']
+  ];
+  const statusChip = `<span class="cir-status ${isDone ? 'done' : ''}">${circuitStatusLabel(round)}</span>`;
+  const winnerLine = round.winner
+    ? `<span class="cir-winner"><small>Vainqueur</small>${esc(round.winner)}</span>`
+    : `<span class="cir-winner"><small>Manche</small>à venir</span>`;
+
+  // --- KPI ---
+  const seasonBest = data.seasonBest;
+  const capacity = round.pitboxes ? `${round.pitboxes} stands` : '—';
+  const elev = activeProfile.elevation;
+  const kpis = `<div class="cir-kpis">`
+    + `<div class="cir-kpi"><span>Longueur du tracé</span><strong>${esc(activeProfile.lengthStr || round.lengthStr)}</strong><small>${esc(round.layout)} · ${esc(round.width || '')}</small></div>`
+    + `<div class="cir-kpi gold"><span>Dénivelé sur un tour</span><strong>${elev ? frNum(elev.delta, 1) + ' m' : '—'}</strong><small>Alt. ${elev ? frNum(elev.min, 1) + ' m → ' + frNum(elev.max, 1) + ' m' : '—'}</small></div>`
+    + `<div class="cir-kpi green"><span>Capacité des stands</span><strong>${capacity}</strong><small>Grille Lola T290 du championnat</small></div>`
+    + `<div class="cir-kpi red"><span>Meilleur tour de la saison</span><strong>${seasonBest ? esc(seasonBest.time) : '—'}</strong><small>${seasonBest ? `${esc(seasonBest.driver)} · ${esc(seasonBest.track)}` : 'Aucun tour enregistré'}</small></div>`
+    + `</div>`;
+
+  // --- Inspecteur (3 modes) ---
+  const inspector = mode === 'collisions' ? (() => {
+    const list = round.demoCollisions || [];
+    if (!list.length) {
+      return `<div class="cir-inspector"><div class="eyebrow">Contacts</div><h3>Carte des collisions</h3>`
+        + `<div class="cir-empty">Aucune collision de démonstration disponible pour ce circuit. Les contacts réels apparaîtront avec les sessions importées.</div></div>`;
+    }
+    return `<div class="cir-inspector"><div class="eyebrow">Contacts (démonstration)</div><h3>Carte des collisions</h3>`
+      + `<p class="cir-src">Positions issues du fichier de démonstration du mod. Les contacts réels arriveront avec les sessions importées.</p>`
+      + `<ul class="cir-crash-list">${list.map((c, i) => `<li><span class="cir-crash-num ${c.speed > 25 ? 'hard' : ''}">${i + 1}</span>`
+        + `<span><b>${esc(c.a)}</b> / ${esc(c.b)}<small>${esc(c.corner || '')}${c.lap ? ` · tour ${c.lap}` : ''} ${c.clock ? '· ' + esc(c.clock) : ''}</small></span>`
+        + `<b class="cir-speed">${c.speed ? frNum(c.speed, 1) + ' km/h' : ''}</b></li>`).join('')}</ul></div>`;
+  })() : mode === 'sectors' ? (() => {
+    const splits = round.outline ? (round.outline.sectors || []) : [];
+    const bounds = [0, ...splits.map(s => s.at), 1];
+    const marks = [0, ...splits.map(s => s.dist), round.lengthM || 0];
+    const rows = splits.map((s, i) => `<tr><td><b>Secteur ${i + 1}</b><small>${nb(marks[i], 0)} m → ${nb(marks[i + 1], 0)} m</small></td>`
+      + `<td class="cir-sector-time">${frNum(bounds[i + 1] * 100, 0)} %</td><td class="muted">${nb(marks[i + 1] - marks[i], 0)} m</td></tr>`).join('');
+    return `<div class="cir-inspector"><div class="eyebrow">Chronométrie</div><h3>Découpage des secteurs</h3>`
+      + `<p class="cir-src">${splits.length ? `Bornes issues du fichier <code>${esc(round.overlaysFile || 'overlays.ini')}</code> du mod.` : 'Ce circuit ne fournit pas de découpage par secteur : la chronométrie utilise les 3 tiers du tour.'}</p>`
+      + (splits.length
+        ? `<table class="cir-sector-table"><tbody>${rows}</tbody></table>`
+        : `<div class="cir-empty">Pas de secteurs officiels dans le mod.</div>`)
+      + `<div class="cir-optimal"><span>Longueur mesurée (fast_lane.ai)</span><b>${nb(round.lengthM || 0, 0)} m</b></div></div>`;
+  })() : (() => {
+    const corners = (round.outline && round.outline.corners) || [];
+    const named = round.namedCorners;
+    if (named && named.length) {
+      return `<div class="cir-inspector"><div class="eyebrow">Repères du tracé</div><h3>Points du circuit</h3><ul class="cir-sections">`
+        + named.map((s, i) => `<li><span class="cir-sec-num">${String(i + 1).padStart(2, '0')}</span>`
+          + `<span class="cir-sec-name">${esc(s.name)}<small>${esc([s.type, s.gear ? `rapport ${s.gear}` : '', s.dist != null ? `à ${String(s.dist).replace('.', ',')} km` : ''].filter(Boolean).join(' · '))}</small></span>`
+          + `<span class="cir-sec-data"><b>${s.alt != null ? frNum(s.alt, 1) + ' m' : '—'}</b><span>${s.slope != null ? (s.slope > 0 ? '+' : '') + frNum(s.slope, 1) + ' %' : ''}</span></span></li>`).join('')
+        + `</ul></div>`;
+    }
+    if (!corners.length) {
+      return `<div class="cir-inspector"><div class="eyebrow">Repères du tracé</div><h3>Points du circuit</h3>`
+        + `<div class="cir-empty">Aucun virage détecté sur la ligne rapide de ce mod.</div></div>`;
+    }
+    return `<div class="cir-inspector"><div class="eyebrow">Repères du tracé</div><h3>Points du circuit</h3>`
+      + `<p class="cir-src">${corners.length} virages relevés sur la ligne rapide (<code>fast_lane.ai</code>), numérotés depuis la ligne de départ.</p>`
+      + `<ul class="cir-sections">${corners.map(c => `<li><span class="cir-sec-num">${String(c.id).padStart(2, '0')}</span>`
+        + `<span class="cir-sec-name">Virage ${c.id}<small>à ${nb(c.dist, 0)} m de la ligne</small></span>`
+        + `<span class="cir-sec-data"><b>${frNum(c.norm * 100, 0)} %</b><span>du tour</span></span></li>`).join('')}</ul></div>`;
+  })();
+
+  // --- Carte + profil altimétrique ---
+  const cornerCount = (round.outline && round.outline.corners || []).length;
+  const tabs = [
+    ['corners', `Virages & secteurs (${cornerCount})`],
+    ['collisions', 'Carte des collisions'],
+    ['sectors', 'Records par secteur']
+  ].map(([k, l]) => `<button type="button" class="${mode === k ? 'active' : ''}" onclick="setCircMode('${k}')">${l}</button>`).join('');
+
+  const sectorPins = (round.outline && round.outline.sectors) || [];
+  const sectorLegend = `<div class="cir-map-legend">`
+    + (sectorPins.length
+        ? sectorPins.map((s, i) => `<span class="lg lg-${(i % 3) + 1}">${esc(s.label || 'Secteur')} · ${nb(s.dist, 0)} m</span>`).join('')
+        : `<span class="lg lg-1">Départ / arrivée</span>`)
+    + `</div></div>`;
+
+  const mapBlock = `<div class="cir-map-block">`
+    + `<div class="cir-map-head"><div class="cir-map-tabs">${tabs}</div>`
+    + sectorLegend
+    + `<div class="cir-map-stage"><div class="cir-map-tag">${round.direction === 'clockwise' ? 'Sens horaire' : 'Sens anti-horaire'} · tracé extrait du fast_lane.ai</div>`
+    + `${circuitMap(round, activeProfile, mode)}`
+    + `<div class="cir-map-hint">${cornerCount} virages · ${nb(round.lengthM || 0, 0)} m mesurés</div></div>`
+    + `<div class="cir-elev"><div class="cir-elev-top"><span>Profil altimétrique sur un tour</span><b>${elev ? frNum(elev.delta, 1) + " m d'amplitude" : '—'}</b></div>${circuitElevSvg(activeProfile)}</div>`
+    + `</div>`;
+
+  // --- Briefing surfaces ---
+  const surfaceRows = round.surfaces || [];
+  const surfaces = surfaceRows.map(s => `<tr><td><b>${esc(s.label)}</b></td><td>${s.grip != null ? frNum(s.grip, 0) + ' %' : '—'}</td>`
+    + `<td><span class="cir-pill ${s.valid ? 'ok' : 'no'}">${s.valid ? 'Valide' : 'Cut'}</span></td><td class="muted">${esc(s.note)}</td></tr>`).join('');
+  const briefing = `<div class="cir-panel"><div class="eyebrow">Extrait de <code>${esc(round.surfaceFile || 'surfaces.ini')}</code></div><h3>Briefing pilotes &amp; track limits</h3>`
+    + (surfaceRows.length
+      ? `<div class="table-wrap"><table class="cir-surfaces"><thead><tr><th>Surface</th><th>Adhérence</th><th>Statut</th><th>Comportement</th></tr></thead><tbody>${surfaces}</tbody></table></div>`
+      : `<div class="cir-empty">Les surfaces de ce circuit ne sont pas disponibles.</div>`)
+    + `<div class="cir-tip"><b>Rappel Direction de course :</b> le règlement du championnat s'applique quelle que soit la manche — 1 point pour la pole, 75 % de la distance minimum pour marquer, et une seule manche « Joker » décomptée sur la saison.</div></div>`;
+
+  // --- Chronométrie / meilleurs tours de la manche ---
+  const lapRows = (() => {
+    const stats = round.stats;
+    if (!stats) {
+      return `<div class="cir-empty">Cette manche n'a pas encore été disputée : les chronos seront publiés après la course.</div>`;
+    }
+    const rows = [];
+    if (stats.fastestLap) rows.push(['Meilleur tour (toutes sessions)', stats.fastestLap.time, stats.fastestLap.driver]);
+    if (stats.fastestRaceLap) rows.push(['Meilleur tour en course', stats.fastestRaceLap.time, stats.fastestRaceLap.driver]);
+    (stats.podium || []).forEach(p => rows.push([`P${p.pos} — ${p.team || 'Course'}`, p.time || '—', p.name]));
+    if (!rows.length) return `<div class="cir-empty">Aucun chrono enregistré pour cette manche.</div>`;
+    return `<div class="table-wrap"><table class="cir-surfaces"><thead><tr><th>Repère</th><th>Chrono</th><th>Pilote</th></tr></thead><tbody>`
+      + rows.map(([k, t, d]) => `<tr><td><b>${esc(k)}</b></td><td><span class="cir-partial">${esc(t || '—')}</span></td><td>${esc(d || '')}</td></tr>`).join('')
+      + `</tbody></table></div>`;
+  })();
+
+  const entries = round.stats
+    ? `${round.stats.races || 0} course${(round.stats.races || 0) > 1 ? 's' : ''}`
+    : (round.status === 'done' ? (round.format || '—') : 'Aucune session importée');
+  const sectorsTable = `<div class="cir-panel"><div class="eyebrow">Chronométrie &amp; repères de la manche</div><h3>${esc(round.label)} · ${esc(isDone ? circuitDateLabel(round) : 'À venir')}</h3>`
+    + `<p class="cir-src" style="margin:0 0 10px">${esc(round.format)}${isDone ? ' · ' + esc(entries) : ''}${round.stats && round.stats.drivers ? ` · ${round.stats.drivers} pilotes classés` : ''}${round.winner ? ` · vainqueur ${esc(round.winner)}` : ''}.</p>`
+    + lapRows
+    + `<div class="cir-optimal"><span>Tour le plus rapide de la saison</span><b>${seasonBest ? esc(seasonBest.time) : '—'}</b></div>`
+    + `<div class="cir-link"><div><div class="eyebrow" style="margin:0">Calendrier</div><div class="muted" style="margin-top:2px">${nb(data.completedCount || 0, 0)} manches disputées sur ${nb(data.totalCount || rounds.length, 0)}.</div></div>`
+    + `<button type="button" class="btn secondary small" onclick="openCircuitRoundResult(${idx})">Voir les résultats →</button></div></div>`;
+
+  // --- Détail technique de la manche ---
+  const techRows = [
+    ['Manche', `${round.label} · ${round.name}`],
+    ['Configuration du mod', round.layout + (round.layoutKey ? ` (${round.layoutKey})` : '')],
+    ['Longueur officielle', round.lengthStr || '—'],
+    ['Longueur mesurée', round.lengthM ? `${nb(round.lengthM, 0)} m` : '—'],
+    ['Largeur', round.width || '—'],
+    ['Sens de rotation', round.direction === 'clockwise' ? 'Horaire' : 'Anti-horaire'],
+    ['Stands', round.pitboxes ? `${round.pitboxes} places` : '—'],
+    ['Année du tracé', round.year || 'Non précisée'],
+    ['Version du mod', round.version || 'Non précisée'],
+    ['Dossier du mod', round.driveName || '—'],
+    ['Source du tracé', round.source || '—']
+  ];
+  const tech = `<div class="cir-panel"><div class="eyebrow">Fiche technique</div><h3>Informations de la manche</h3>`
+    + `<div class="table-wrap"><table class="cir-surfaces"><tbody>`
+    + techRows.map(([k, v]) => `<tr><td class="muted" style="white-space:nowrap">${esc(k)}</td><td><b>${esc(v)}</b></td></tr>`).join('')
+    + `</tbody></table></div></div>`;
+
+  return `<div class="cir-roundbar">${calendar}</div>`
+    + `<div class="cir-toolbar"><div class="cir-select"><span>Manche</span><b>${esc(round.label)} · ${esc(round.name)} (${esc(round.country)})</b></div>${variantButtons}</div>`
+    + `<div class="cir-hero cir-hero-photo" style="background-image:linear-gradient(90deg,#0f252c 0%,#0f252cf2 38%,#0f252c66 58%,#0f252c22 78%),url('/${esc(heroImage)}')">`
+      + `<div class="cir-hero-txt"><div>`
+        + `<div class="cir-kicker"><span class="cir-flag">${esc(round.label)}</span>${statusChip}<span class="cir-eyebrow">${esc(round.city || round.country || '')} · ${esc(round.country || '')}${round.year ? ' · ' + round.year : ''}</span></div>`
+        + `<h2>${esc(round.name)}</h2>`
+        + `<div class="cir-hero-sub">${esc(round.layout)} · ${round.direction === 'clockwise' ? 'sens horaire' : 'sens anti-horaire'}</div>`
+        + `<dl class="cir-hero-meta">${heroMeta.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`
+      + `</div>`
+      + `<div class="cir-hero-actions"><button type="button" class="btn" onclick="setCircMode('corners')">Track guide &amp; virages</button>`
+        + `<span class="cir-date-chip"><i>${isDone ? 'Course' : 'Cal.'}</i> ${esc(circuitDateLabel(round))}</span>${winnerLine}</div>`
+      + `</div>`
+      + `<div class="cir-map-badge">${circuitMap(round, activeProfile, 'corners', { compact: true })}<span>${esc(round.label)} · ${esc(round.shortName)}</span></div>`
+    + `</div>`
+    + kpis
+    + `<div class="cir-section-head"><div><div class="eyebrow">Reconnaissance &amp; direction de course</div><h2>Carte télémétrique &amp; profil altimétrique</h2></div>`
+      + `<div class="cir-map-legend big">${sectorPins.length ? `Chronométrie · ${sectorPins.length} secteurs (${esc(round.overlaysFile || 'overlays.ini')})` : 'Pas de découpage officiel par secteur'}</div></div>`
+    + `<div class="cir-map-grid">${mapBlock}${inspector}</div>`
+    + `<div class="cir-cols">${briefing}${sectorsTable}</div>`
+    + `<div class="cir-cols" style="grid-template-columns:1fr">${tech}</div>`;
 }
 
 // ---------- Pages Manches / Pilotes ----------
@@ -3027,9 +3399,29 @@ function render(){
   if(page==='hub'&&backendMulti){app.innerHTML=hub();return}
   // En mode multi, 'accueil' = LA PAGE D'ACCUEIL GDSP (hero 65/35, Règlements, Stats, Discord)
   if(page==='accueil'&&backendMulti){app.innerHTML=hub();return}
-  if(isEventPage(page)){app.innerHTML=renderEventShell();return}
+  if(isEventPage(page)){
+    if(page==='circuit'&&!circuitsCache&&!circuitsError){
+      if(!circuitsPending){
+        circuitsPending=circuitsData().finally(()=>{circuitsPending=null});
+      }
+      app.innerHTML=`<div class="panel"><p class="note">Chargement de la fiche circuit…</p></div>`;
+      circuitsPending.then(()=>{if(page==='circuit')render()});
+      return;
+    }
+    app.innerHTML=renderEventShell();return;
+  }
   const renderers={accueil:home,global:globalRankingSync,admin};
   app.innerHTML=(renderers[page]||home)();
+}
+// URL dédiée de l'onglet circuit (permet un lien direct et le bouton Retour).
+function circuitUrl(){
+  const slug=(eventContext&&eventContext.slug)||currentSlug;
+  return slug?'/evenements/'+encodeURIComponent(slug)+'/circuit':null;
+}
+function syncCircuitHistory(){
+  const target=circuitUrl();
+  if(!target||!window.history||!window.location)return;
+  if(window.location.pathname!==target)window.history.pushState({},'',target);
 }
 
 // ---------- BOOTSTRAP ----------
@@ -3068,9 +3460,9 @@ function render(){
       if(target&&!eventContext)await loadEvent(target.slug);
     }else{
       const path=window.location?window.location.pathname:'/';
-      const match=path.match(/^\/evenements\/([^/]+)\/?$/);
+      const match=path.match(/^\/evenements\/([^/]+)(\/circuit)?\/?$/);
       if(match){
-        try{await loadEvent(decodeURIComponent(match[1]));page='event'}
+        try{await loadEvent(decodeURIComponent(match[1]));page=match[2]?'circuit':'event'}
         catch(error){return} // Preserve the server's error page rather than showing another event.
       }else{
         page='hub';
@@ -3107,9 +3499,9 @@ function render(){
 
 // Permanent landing pages: Back/Forward restores the event without adding history entries.
 if(window.addEventListener)window.addEventListener('popstate',async()=>{
-  const match=window.location.pathname.match(/^\/evenements\/([^/]+)\/?$/);
+  const match=window.location.pathname.match(/^\/evenements\/([^/]+)(\/circuit)?\/?$/);
   if(match){
-    try{await loadEvent(decodeURIComponent(match[1]));page='event';driverId='';render()}
+    try{await loadEvent(decodeURIComponent(match[1]));page=match[2]?'circuit':'event';driverId='';render()}
     catch(error){window.location.reload()}
   }else if(window.location.pathname==='/'){page='hub';render()}
 });

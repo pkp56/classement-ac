@@ -54,3 +54,48 @@ L'accès au backend de production et l'indexation réelle se vérifient après d
 Le sitemap reste disponible si le backend des événements est indisponible : il
 réutilise la dernière liste valide connue par le processus, ou contient uniquement
 l’accueil après un redémarrage. Les pages HTML en panne conservent leur statut 503.
+
+## Onglet Circuit (section championnat)
+
+L'onglet **Circuit** du championnat Lola T290 affiche une fiche par manche, dans
+l'ordre du calendrier publié sur le site : M1 Mont-Tremblant, M2 Riverside,
+M3 Sebring, M4 Mid-Ohio, M5 Mexico 1967, M6 Österreichring. Le bandeau de
+pastilles en haut de page permet de passer d'une manche à l'autre ; la sélection
+est mémorisée dans `localStorage['gdsp_circuit_round']`.
+
+Chaque fiche présente le tracé réel (extrait du `fast_lane.ai` du mod), le profil
+altimétrique, le nombre de virages, le débriefing des surfaces (`surfaces.ini`),
+les repères de chronométrie (`overlays.ini`) et, pour les manches courues, la date,
+le vainqueur et les meilleurs tours issus des sessions importées. La manche 6
+n'affiche jamais de date inventée : elle indique « Date à confirmer ».
+
+### Régénérer les données
+
+```bash
+node tools/build-circuits-data.js      # écrit data/circuits.json
+```
+
+Le script est idempotent et n'utilise que des fichiers locaux :
+
+| Entrée | Rôle |
+| --- | --- |
+| `data/data.json` | sessions importées (vainqueurs, meilleurs tours) |
+| `tools/lib/championship-tracks.js` | ordre du calendrier, dates publiées, métadonnées |
+| `maquette-circuit/assets/tracks/*/line.json` | tracé compact (220 points x/y/z + virages) |
+| `maquette-circuit/assets/tracks/*/surfaces.ini` | briefing track limits |
+| `maquette-circuit/assets/tracks/*/overlays.ini` | bornes des secteurs |
+| `maquette-circuit/track-data.js` | Österreichring 1979 (virages nommés) |
+
+Les `fast_lane.ai` bruts (1,4 à 2,2 Mo pièce) restent sur le Drive et ne sont pas
+versionnés (`.gitignore`). Pour ajouter un circuit ou mettre à jour un tracé :
+
+```bash
+node tools/lib/pack-fast-lane.js chemin/vers/fast_lane.ai \
+  maquette-circuit/assets/tracks/<circuit>/line.json
+```
+
+Les virages sont détectés sur la ligne complète (pics de courbure espacés de 55 m)
+puis mémorisés en fraction de tour, ce qui garantit le même comptage quel que soit
+le niveau de décimation du tracé. `tests/circuits.test.js` vérifie les 6 manches,
+l'absence de date inventée, la présence d'un tracé exploitable et la cohérence des
+repères avec la zone de dessin.
