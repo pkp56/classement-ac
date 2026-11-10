@@ -155,6 +155,8 @@ const server = http.createServer((req, res) => {
 
   let filePath;
   if (urlPath === '/' || urlPath === '/index.html') filePath = path.join(ROOT, 'index.html');
+  // Même URL que le site en production pour la page de suivi en direct.
+  else if (urlPath === '/live-timing' || urlPath === '/live-timing/') filePath = path.join(ROOT, 'live-timing.html');
   else filePath = path.join(ROOT, path.normalize(urlPath).replace(/^(\.\.(\/|\\|$))+/, ''));
 
   fs.readFile(filePath, (err, buf) => {
