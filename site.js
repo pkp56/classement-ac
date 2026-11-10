@@ -3728,6 +3728,9 @@ function syncCircuitHistory(){
   if(storedSessions&&Array.isArray(storedSessions)&&storedSessions.length)sessions=storedSessions;
 
   await detectBackend();
+  // Détection du live timing avant le premier rendu : sinon l'onglet LIVE
+  // n'apparaît qu'après une navigation (l'utilisateur croit qu'il manque).
+  await detectLiveTiming().catch(()=>{});
 
   if(backendMulti){
     // Les visiteurs commencent toujours sur l'accueil GDSP. L'événement par

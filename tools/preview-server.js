@@ -151,12 +151,19 @@ const server = http.createServer((req, res) => {
   if (urlPath === '/api/live/config') return json(res, 200, { enabled: true, push: { enabled: false, endpoint: '/api/live/push' }, udp: { listenPort: 12000, serverPort: 12001 }, httpSources: [], demo: true });
   if (urlPath === '/api/live/status' || urlPath === '/api/live/snapshot') return json(res, 200, demoLiveSnapshot());
   if (urlPath === '/api/championship') return json(res, 200, { championship: { sessions: dedupedSessions, penMap: {} } });
-  if (urlPath.startsWith('/api/')) return json(res, 503, { error: 'API non simulée en aperçu' });
+  if (urlPath.startsWith('/api/')) {
+    // Écritures de l'administration : on répond « pas en aperçu » explicitement.
+    if (req.method !== 'GET') return json(res, 503, { error: 'Aperçu local : les écritures (sauvegarde, imports, comptes) nécessitent le backend.' });
+    return json(res, 503, { error: 'API non simulée en aperçu' });
+  }
 
   let filePath;
   if (urlPath === '/' || urlPath === '/index.html') filePath = path.join(ROOT, 'index.html');
   // Même URL que le site en production pour la page de suivi en direct.
   else if (urlPath === '/live-timing' || urlPath === '/live-timing/') filePath = path.join(ROOT, 'live-timing.html');
+  // Fiches et onglets du site (routes virtuelles gérées par le JS) : on renvoie
+  // l'index comme le fait app.js, pour éviter un 404 en aperçu.
+  else if (/^\/(evenements\/[^/]+(\/circuit)?|classement|manches|pilotes|admin)\/?$/.test(urlPath)) filePath = path.join(ROOT, 'index.html');
   else filePath = path.join(ROOT, path.normalize(urlPath).replace(/^(\.\.(\/|\\|$))+/, ''));
 
   fs.readFile(filePath, (err, buf) => {
