@@ -615,45 +615,90 @@ app.post('/api/admin/circuits/import', async (req, res) => {
 });
 
 // --- LIVE TIMING (serveur AC dédié) ---
-// Lit en UDP les événements du plugin acServer (ACSP v4) et les expose à la
-// page /live-timing. Ne dépend pas du backend Render : c'est le PC qui héberge
-// le serveur AC qui alimente cette partie. Voir tools/live-timing/README.md.
+// Deux modes, la page /live-timing est la même :
+//  • local : le serveur AC tourne sur la même machine que le site, on lit son
+//    interface de plugin en UDP (ACSP v4) — voir tools/live-timing/collector.js ;
+//  • push  : le serveur AC tourne sur un PC distant, tools/live-timing/agent.js
+//    pousse un instantané par seconde vers POST /api/live/push (simple HTTP,
+//    aucun port entrant à ouvrir sur le PC).
+// Doc : tools/live-timing/README.md. Réglage : LIVE_PUSH_TOKEN.
 let liveTiming = null;
-let liveClients = new Set();
+let livePush = null;
+const liveClients = new Set();
 function liveTimingEnabled(){
   return String(process.env.LIVE_TIMING_ENABLED||'1') !== '0';
+}
+function livePushToken(){return String(process.env.LIVE_PUSH_TOKEN||'').trim()}
+function getLivePush(){
+  if(!livePush){
+    const {PushHub}=require('./tools/live-timing/push-hub');
+    livePush=new PushHub();
+  }
+  return livePush;
 }
 function getLiveTiming(){
   if(!liveTiming){
     const {LiveTimingCollector}=require('./tools/live-timing/collector');
     liveTiming=new LiveTimingCollector();
-    liveTiming.on('event',entry=>{
-      const frame='event: log\ndata: '+JSON.stringify(entry)+'\n\n';
-      for(const res of liveClients){try{res.write(frame)}catch(e){}}
-    });
+    liveTiming.on('event',entry=>broadcastLive('log',entry));
     liveTiming.start();
   }
   return liveTiming;
 }
+function broadcastLive(event,payload){
+  const frame='event: '+event+'\ndata: '+JSON.stringify(payload)+'\n\n';
+  for(const res of liveClients){try{res.write(frame)}catch(e){/* client parti */}}
+}
+// L'agent distant est prioritaire : s'il pousse, c'est lui qu'on affiche.
+function liveSnapshot(){
+  const pushed=getLivePush().current();
+  if(pushed)return pushed;
+  try{return getLiveTiming().snapshot()}catch(e){
+    return {status:{status:'offline',mode:'error',error:e.message},server:{},session:{},cars:[],events:[]};
+  }
+}
 if(liveTimingEnabled()){
   try{getLiveTiming()}catch(e){console.error('live-timing: démarrage impossible —',e.message)}
 }
+function safeEqual(a,b){
+  const A=Buffer.from(String(a||'')),B=Buffer.from(String(b||''));
+  if(!A.length||A.length!==B.length)return false;
+  let diff=0;for(let i=0;i<A.length;i++)diff|=A[i]^B[i];
+  return diff===0;
+}
+app.get('/api/live/config',(req,res)=>{
+  res.set('Cache-Control','no-store');
+  res.json({
+    enabled:liveTimingEnabled(),
+    push:{enabled:!!livePushToken(),endpoint:'/api/live/push'},
+    udp:{listenPort:Number(process.env.AC_LISTEN_PORT||12000),serverPort:Number(process.env.AC_PLUGIN_PORT||12001)}
+  });
+});
 app.get('/api/live/status',(req,res)=>{
   res.set('Cache-Control','no-store');
-  if(!liveTimingEnabled())return res.json({enabled:false,status:{status:'offline',mode:'disabled'}});
-  let collector;
-  try{collector=getLiveTiming()}catch(e){return res.status(500).json({error:e.message})}
-  res.json({enabled:true,...collector.snapshot()});
+  if(!liveTimingEnabled())return res.json({enabled:false,status:{status:'offline',mode:'disabled'},server:{},session:{},cars:[]});
+  res.json({enabled:true,...liveSnapshot()});
 });
 app.get('/api/live/snapshot',(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!liveTimingEnabled())return res.status(503).json({error:'Live timing désactivé.'});
-  try{res.json(getLiveTiming().snapshot())}catch(e){res.status(500).json({error:e.message})}
+  res.json(liveSnapshot());
+});
+// Réception des instantanés poussés par un agent (PC distant).
+// Auth : en-tête X-Live-Token (ou ?token=) comparé à LIVE_PUSH_TOKEN.
+app.post('/api/live/push',(req,res)=>{
+  res.set('Cache-Control','no-store');
+  const expected=livePushToken();
+  if(!expected)return res.status(503).json({error:'Le mode push n\'est pas activé sur ce site (LIVE_PUSH_TOKEN manquant).'});
+  const given=(req.get('X-Live-Token')||req.query.token||'').trim()||((req.get('Authorization')||'').replace(/^Bearer\s+/i,''));
+  if(!safeEqual(given,expected))return res.status(401).json({error:'Jeton invalide.'});
+  const result=getLivePush().publish(req.body);
+  if(!result.ok)return res.status(400).json({error:result.error});
+  broadcastLive('snapshot',getLivePush().current());
+  res.json({ok:true,at:new Date(result.at).toISOString()});
 });
 app.get('/api/live/stream',(req,res)=>{
   if(!liveTimingEnabled())return res.status(503).end();
-  let collector;
-  try{collector=getLiveTiming()}catch(e){return res.status(500).end()}
   res.writeHead(200,{
     'Content-Type':'text/event-stream; charset=utf-8',
     'Cache-Control':'no-store',
@@ -661,17 +706,19 @@ app.get('/api/live/stream',(req,res)=>{
     'X-Accel-Buffering':'no'
   });
   res.write('retry: 3000\n\n');
-  const push=()=>{try{res.write('event: snapshot\ndata: '+JSON.stringify(collector.snapshot())+'\n\n')}catch(e){}};
+  const push=()=>{try{res.write('event: snapshot\ndata: '+JSON.stringify(liveSnapshot())+'\n\n')}catch(e){/* client parti */}};
   push();
   const timer=setInterval(push,1000);
   liveClients.add(res);
   req.on('close',()=>{clearInterval(timer);liveClients.delete(res)});
 });
 // Commandes admin (chat, kick, changement de session) : mêmes règles d'auth que le reste.
+// En mode push elles sont impossibles : le PC n'est pas joignable depuis le site.
 app.post('/api/live/command',async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!liveTimingEnabled())return res.status(503).json({error:'Live timing désactivé.'});
   if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  if(getLivePush().current())return res.status(409).json({error:'Serveur distant : les commandes doivent être envoyées depuis le PC qui héberge acServer.'});
   const {action,message,carId}=req.body||{};
   const allowed=['chat','kick','next-session','restart-session'];
   if(!allowed.includes(action))return res.status(400).json({error:'Action inconnue.'});

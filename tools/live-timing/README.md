@@ -4,17 +4,20 @@ Cette partie reproduit le principe d'une page comme
 `live-timing` d'AssettoHosting (classement en direct, tours, stands, fil du
 serveur), mais **pour ton propre serveur dédié qui tourne sur ton PC**.
 
-Page : **`/live-timing`** (servie par `app.js`, même serveur Node que le site GDSP).
+Page : **`/live-timing`** (servie par `app.js`, le même serveur Node que le site GDSP).
 
 ---
 
 ## 1. Comment ça marche
 
-Trois briques, toutes sur ton PC :
+Trois briques :
 
 ```
-acServer.exe ──UDP (ACSP v4)──► collector.js ──SSE──► live-timing.html
-   (ton serveur)                 (dans app.js)         (navigateur)
+mode local : acServer.exe ──UDP (ACSP v4)──► collector.js ──SSE──► live-timing.html
+             (même PC que le site)          (dans app.js)
+
+mode push  : acServer.exe ─UDP─► agent.js ─HTTPS POST /api/live/push─► site ─SSE─► navigateur
+             (ton PC)              (ton PC)                            (Render)
 ```
 
 * `acServer` possède une **interface de plugin UDP** (le même canal que celui
@@ -29,6 +32,55 @@ acServer.exe ──UDP (ACSP v4)──► collector.js ──SSE──► live-t
 
 Aucune modification du jeu ni de Content Manager n'est nécessaire : juste deux
 lignes dans `server_cfg.ini`.
+
+## 1 bis. Deux façons de brancher ton serveur
+
+| Situation | Ce qu'il faut faire |
+| --- | --- |
+| **Le site et le serveur AC tournent sur le même PC** (ou sur le même réseau local, ex. `npm start` sur ta machine) | rien de plus : le collecteur du site lit acServer en UDP localement (section 2). |
+| **Le site est hébergé ailleurs** (Render) et le serveur AC tourne sur ton PC | le PC pousse les données vers le site avec l'agent (section 2 bis) : aucun port entrant, aucune IP publique, ça marche derrière une box ou un partage 4G. |
+
+En mode « push », le site affiche en priorité ce que l'agent lui envoie ; s'il
+n'y a pas d'agent, il retombe sur l'écoute UDP locale.
+
+## 2 bis. Site distant + serveur AC sur ton PC (mode push)
+
+1. Sur le site (Render → Environment) ajoute un secret, par exemple :
+   `LIVE_PUSH_TOKEN=un-mot-de-passe-long-et-unique`
+2. Rien d'autre à changer côté site : l'endpoint `POST /api/live/push` s'active
+   dès que cette variable existe (sinon il répond 503).
+3. Sur le PC du serveur AC, avec Node installé (le dossier `tools/live-timing/`
+   suffit, inutile d'installer les dépendances du site) :
+   ```ini
+   ; server_cfg.ini → [SERVER]
+   UDP_PLUGIN_ADDRESS    = 127.0.0.1:12000
+   UDP_PLUGIN_LOCAL_PORT = 12001
+   ```
+   ```bat
+   :: Windows : lancer l'agent (à laisser tourner pendant la session)
+   set SITE_URL=https://classement-ac-1.onrender.com
+   set PUSH_TOKEN=un-mot-de-passe-long-et-unique
+   node tools/live-timing/agent.js
+   ```
+   ```bash
+   # Linux / macOS
+   SITE_URL=https://classement-ac-1.onrender.com PUSH_TOKEN=… node tools/live-timing/agent.js
+   ```
+4. Ouvre `/live-timing` sur le site : le badge passe « Direct (PC distant) » dès
+   le premier envoi accepté. Si plus rien n'arrive pendant 20 s, la page indique
+   « Instantané périmé » puis « Hors ligne » (aucune donnée fantôme).
+
+Notes pratiques :
+
+* L'agent envoie **une photo par seconde** (~10 à 40 Ko) : quelques Mo par
+  session, largement dans les quotas Render.
+* Le PC n'ouvre **aucun port** : c'est une simple requête HTTPS sortante.
+* `PUSH_INTERVAL_MS=2000` réduit la fréquence (et la charge) si besoin.
+* Les commandes admin (chat, kick, changement de session) ne sont **pas**
+  disponibles en mode push : le site ne peut pas joindre le PC. Lance-les depuis
+  la console acServer ou depuis l'agent sur place.
+* Render peut mettre le service en veille : au réveil, la page repart dès
+  l'envoi suivant (l'agent réessaie automatiquement).
 
 ## 2. Configuration du serveur AC
 
@@ -71,6 +123,7 @@ Variables d'environnement utiles (toutes facultatives) :
 | `AC_REALTIME_MS` | `500` | fréquence des positions temps réel |
 | `AC_HTTP_URL` | *(vide)* | ex. `http://127.0.0.1:8081` : ajoute le résumé `/INFO` (nb de places, mot de passe, `timeleft`) et permet un affichage « serveur joignable » même si l'UDP ne répond pas |
 | `AC_SERVER_LABEL` | `Serveur Assetto Corsa` | nom affiché avant le premier paquet |
+| `LIVE_PUSH_TOKEN` | *(vide)* | (site) active la réception des agents distants ; **même valeur** dans `PUSH_TOKEN` de l'agent |
 
 ## 4. Essayer sans serveur AC
 
@@ -124,7 +177,9 @@ Ouvre `/live-timing` : le classement se remplit en quelques secondes.
 | `GET /api/live/snapshot` | photo complète (serveur, session, voitures, meilleurs tours, événements, diagnostic) |
 | `GET /api/live/status` | identique, allégé côté client pour l'état initial |
 | `GET /api/live/stream` | flux SSE `snapshot` (1/s) + `log` (événements temps réel) |
-| `POST /api/live/command` | admin (`Bearer` mot de passe admin) : `{action:'chat'|'kick'|'next-session'|'restart-session', message, carId}` |
+| `POST /api/live/command` | admin (`Bearer` mot de passe admin) : `{action:'chat'|'kick'|'next-session'|'restart-session', message, carId}` — mode local uniquement |
+| `GET /api/live/config` | mode disponible (`push` actif ou non, ports UDP attendus) — utilisé par la page |
+| `POST /api/live/push` | reçoit l'instantané d'un agent distant ; en-tête `X-Live-Token` obligatoire |
 
 ## 8. Pièges fréquents
 
@@ -135,3 +190,6 @@ Ouvre `/live-timing` : le classement se remplit en quelques secondes.
 | Classement figé mais tours corrects | positions désactivées (`AC_REALTIME_MS=0` dans l'environnement) |
 | Messages bizarres `RP>…` | messages chiffrés du plugin Real Penalty, volontairement filtrés |
 | Tout à zéro en course | le serveur a redémarré entre-temps : les compteurs repartent avec la nouvelle session |
+| « Instantané périmé » en mode push | l'agent s'est arrêté, le PC a perdu le réseau, ou acServer ne tourne plus |
+| `401 Jeton invalide` dans l'agent | `PUSH_TOKEN` de l'agent ≠ `LIVE_PUSH_TOKEN` du site |
+| `503 mode push non activé` dans l'agent | ajoute `LIVE_PUSH_TOKEN` sur le site puis redéploie |

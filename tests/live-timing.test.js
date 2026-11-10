@@ -158,3 +158,15 @@ test('Formate les temps de tour et signale les valeurs absentes', () => {
   assert.equal(fmtMs(0), null);
   assert.equal(fmtMs(null), null);
 });
+
+test('autoStart démarre la collecte sans appel explicite (agent distant)', async () => {
+  const { EventEmitter } = require('node:events');
+  const collector = new LiveTimingCollector({ autoStart: true, listenPort: 0 });
+  // socket réel en écoute ; on vérifie simplement que start() a été déclenché.
+  await new Promise(r => setTimeout(r, 250));
+  assert.ok(collector.socket, 'la socket UDP doit être ouverte sans start() manuel');
+  assert.equal(collector.bindState, 'listening');
+  collector.stop();
+  assert.equal(collector.socket, null);
+  assert.ok(collector instanceof EventEmitter);
+});

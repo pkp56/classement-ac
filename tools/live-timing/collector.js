@@ -148,6 +148,7 @@ class LiveTimingCollector extends EventEmitter {
     this.error = null;
     this.bindState = 'idle';
     this.reset();
+    if (this.options.autoStart) this.start();
   }
 
   reset() {
@@ -213,6 +214,7 @@ class LiveTimingCollector extends EventEmitter {
       this.log('info', `Écoute ACSP sur UDP ${this.options.listenPort} (émission vers ${this.options.host}:${this.options.pluginPort})`);
       this.emit('status', this.statusSnapshot());
       this.requestSessionInfo();
+      this.send(Buffer.from([0x38])); // demande la version du protocole
     });
     // Re-réclame les infos de session tant que rien n'arrive (acServer peut
     // démarrer après nous) et garde la liaison vivante.

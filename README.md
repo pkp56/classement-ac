@@ -24,6 +24,15 @@ tourne sur ton PC (classement, tours, écarts estimés, stands, fil du serveur),
 sur le modèle des pages live-timing d'AssettoHosting. Elle lit l'interface de
 plugin UDP d'acServer (ACSP v4) : rien à installer côté jeu, seulement deux
 lignes dans `server_cfg.ini` (`UDP_PLUGIN_ADDRESS`, `UDP_PLUGIN_LOCAL_PORT`).
+Deux cas de figure :
+
+* **site et serveur AC sur le même PC** → le collecteur du site lit acServer en
+  UDP local directement ;
+* **site hébergé (Render) et serveur AC sur un PC à la maison** → lancer
+  `node tools/live-timing/agent.js` sur ce PC avec `SITE_URL` et `PUSH_TOKEN`
+  (même valeur que `LIVE_PUSH_TOKEN` sur le site) ; le PC pousse un instantané
+  par seconde en HTTPS, sans ouvrir de port entrant.
+
 Détails, variables d'environnement, simulateur de test et limites :
 [`tools/live-timing/README.md`](tools/live-timing/README.md).
 

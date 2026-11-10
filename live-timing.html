@@ -128,6 +128,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var last = null;
   var socket = null;
+  var siteConfig = null;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -154,8 +155,12 @@
     var st = d.status || {};
     var live = st.status === 'live';
     var http = st.status === 'http';
-    $('dot').className = 'dot ' + (live ? 'live' : http ? 'http' : 'offline');
-    $('stateText').textContent = live ? 'Direct' : http ? 'Serveur joignable (résumé)' : 'Hors ligne';
+    var stale = st.status === 'stale';
+    $('dot').className = 'dot ' + (live ? 'live' : stale ? 'http' : http ? 'http' : 'offline');
+    $('stateText').textContent = live
+      ? (st.mode === 'push' ? 'Direct (PC distant)' : 'Direct')
+      : stale ? 'Instantané périmé'
+      : http ? 'Serveur joignable (résumé)' : 'Hors ligne';
     $('clock').textContent = new Date(d.updatedAt).toLocaleTimeString('fr-FR');
 
     $('kServer').textContent = (d.server && d.server.name) || '—';
@@ -176,21 +181,37 @@
     renderBest(d);
     renderFeed(d);
     renderDiag(d);
-    $('banner').style.display = (live || http) ? 'none' : 'block';
+    $('banner').style.display = (live || http || stale) ? 'none' : 'block';
     if (!live && !http) renderBanner(d, st);
   }
 
   function renderBanner(d, st) {
-    $('bannerTitle').textContent = st.error ? 'La liaison ACSP est en erreur' : "Le site n'arrive pas encore à lire le serveur";
-    var udp = st.udp || {};
-    $('bannerBody').innerHTML =
-      '<p>Le collecteur écoute en <b>UDP ' + esc(udp.listenPort) + '</b> et envoie ses requêtes vers <b>' + esc(udp.host) + ':' + esc(udp.serverPort) + '</b>.' +
-      (st.error ? ' Dernière erreur : <code>' + esc(st.error) + '</code>.' : ' Aucun paquet reçu pour l\'instant.') + '</p>' +
-      '<p>Dans <code>server_cfg.ini</code> du serveur dédié, la section <code>[SERVER]</code> doit contenir exactement ces deux ports :</p>' +
-      '<p><code>UDP_PLUGIN_ADDRESS = 127.0.0.1:' + esc(udp.listenPort) + '</code><br>' +
-      '<code>UDP_PLUGIN_LOCAL_PORT = ' + esc(udp.serverPort) + '</code></p>' +
-      '<p>Puis redémarrer acServer. La page se connecte seule dès les premiers paquets (aucune action de ta part).</p>';
-    $('copyCmd').dataset.text = 'UDP_PLUGIN_ADDRESS=127.0.0.1:' + udp.listenPort + '\nUDP_PLUGIN_LOCAL_PORT=' + udp.serverPort;
+    var cfg = siteConfig || {};
+    var pushOn = cfg.push && cfg.push.enabled;
+    var udp = (cfg.udp) || st.udp || {};
+    $('bannerTitle').textContent = st.error ? 'La liaison avec le serveur est en erreur' : "Le site n'arrive pas encore à lire le serveur";
+    var html = '';
+    if (pushOn) {
+      // Site déployé ailleurs : le PC du serveur AC doit pousser les données.
+      html +=
+        '<p><b>Le site est hébergé à distance.</b> Ton PC ne peut pas être contacté directement : c\'est lui qui envoie les données, une fois par seconde, vers <code>' + esc(location.origin) + '/api/live/push</code>.</p>' +
+        '<p>Sur le PC qui héberge le serveur AC :</p>' +
+        '<p>1. dans <code>server_cfg.ini</code> → <code>[SERVER]</code> :<br><code>UDP_PLUGIN_ADDRESS = 127.0.0.1:' + esc(udp.listenPort || 12000) + '</code><br><code>UDP_PLUGIN_LOCAL_PORT = ' + esc(udp.serverPort || 12001) + '</code></p>' +
+        '<p>2. lancer l\'agent (Windows : dans <code>server</code>, avec Node installé) :</p>' +
+        '<p><code>set SITE_URL=' + esc(location.origin) + '</code><br><code>set PUSH_TOKEN=le-jeton-du-site</code><br><code>node tools/live-timing/agent.js</code></p>' +
+        '<p class="muted" style="font-size:12px">Le jeton est la variable <code>LIVE_PUSH_TOKEN</code> du site ; il faut la même valeur dans l\'agent. Aucun port entrant à ouvrir sur le PC.</p>';
+    } else {
+      html +=
+        '<p>Le collecteur local écoute en <b>UDP ' + esc(udp.listenPort) + '</b> et envoie ses requêtes vers <b>' + esc(st.udp && st.udp.host || '127.0.0.1') + ':' + esc(udp.serverPort) + '</b>.' +
+        (st.error ? ' Dernière erreur : <code>' + esc(st.error) + '</code>.' : ' Aucun paquet reçu pour l\'instant.') + '</p>' +
+        '<p>Dans <code>server_cfg.ini</code> → <code>[SERVER]</code>, le serveur dédié doit contenir :</p>' +
+        '<p><code>UDP_PLUGIN_ADDRESS = 127.0.0.1:' + esc(udp.listenPort) + '</code><br><code>UDP_PLUGIN_LOCAL_PORT = ' + esc(udp.serverPort) + '</code></p>' +
+        '<p>Puis redémarrer acServer. La page se connecte seule dès les premiers paquets.</p>' +
+        '<p class="muted" style="font-size:12px">Si le serveur AC tourne sur un <b>autre PC</b> que le site, active le mode « push » : définis <code>LIVE_PUSH_TOKEN</code> sur le site et lance <code>node tools/live-timing/agent.js</code> sur le PC du serveur.</p>';
+    }
+    $('bannerBody').innerHTML = html;
+    $('copyCmd').dataset.text = 'UDP_PLUGIN_ADDRESS=127.0.0.1:' + (udp.listenPort || 12000) + '\nUDP_PLUGIN_LOCAL_PORT=' + (udp.serverPort || 12001);
+    $('copyCmd').textContent = pushOn ? 'Copier les deux lignes INI' : 'Copier la config serveur';
   }
 
   function renderStandings(d) {
@@ -240,7 +261,10 @@
   function renderDiag(d) {
     var st = d.status || {}, udp = st.udp || {};
     var lines = [
-      '<b>Liaison :</b> ' + esc(st.mode || '—') + ' · écoute UDP ' + esc(udp.listenPort) + ' (' + esc(udp.bound) + ') → ' + esc(udp.host) + ':' + esc(udp.serverPort),
+      '<b>Liaison :</b> ' + esc(st.mode === 'push' ? 'agent distant' : st.mode || '—') +
+        (st.mode === 'push'
+          ? ' · reçu il y a ' + (st.receivedAgoMs != null ? Math.round(st.receivedAgoMs / 1000) + ' s' : '—') + (st.pushedFrom ? ' depuis ' + esc(st.pushedFrom) : '')
+          : ' · écoute UDP ' + esc(udp.listenPort) + ' (' + esc(udp.bound) + ') → ' + esc(udp.host) + ':' + esc(udp.serverPort)),
       '<b>Dernier paquet :</b> ' + (st.lastPacketAgoMs == null ? 'aucun' : (st.lastPacketAgoMs / 1000).toFixed(1) + ' s'),
       '<b>Résumé HTTP :</b> ' + (st.lastHttpAgoMs == null ? 'non configuré' : (st.lastHttpAgoMs / 1000).toFixed(1) + ' s'),
       '<b>Protocole :</b> ACSP v' + esc(d.server.protocolVersion == null ? '?' : d.server.protocolVersion)
@@ -297,6 +321,7 @@
     setTimeout(function () { btn.textContent = 'Copier la config serveur'; }, 1600);
   });
 
+  fetch('/api/live/config').then(function (r) { return r.json(); }).then(function (c) { siteConfig = c; }).catch(function () {});
   fetch('/api/live/status').then(function (r) { return r.json(); }).then(render).catch(function () {});
   connect();
 })();
