@@ -110,7 +110,6 @@ function nav(){
     `<button class="${activeTop==='accueil'?'active':''}" onclick="go('accueil')">ACCUEIL</button>`
     +(backendMulti?`<button class="${activeTop==='global'?'active':''}" onclick="go('global')">GLOBAL</button>`:'')
     +`<button class="nav-event-tab ${activeTop==='event'?'active':''}" onclick="go('event')"><span class="nav-ev-kicker">Événement</span><span class="nav-ev-title">${esc(navEventTitle(evTabName))}</span></button>`
-    +`<button class="${page==='circuit'?'active':''}" onclick="go('circuit')">CIRCUITS <span class="nav-badge">06</span></button>`
     +`<button class="${activeTop==='admin'?'active':''}" onclick="go('admin')">ADMINISTRATION</button>`;
   renderEventSwitcher();
 }
@@ -1822,10 +1821,17 @@ function circuit(){
         + `<b class="cir-speed">${c.speed ? frNum(c.speed, 1) + ' km/h' : ''}</b></li>`).join('')}</ul></div>`;
   })() : mode === 'sectors' ? (() => {
     const splits = round.outline ? (round.outline.sectors || []) : [];
+    // `splits` ne contient que les bornes internes ; le dernier tronçon va
+    // jusqu'à la ligne d'arrivée, d'où le +1 (3 secteurs pour 2 bornes).
     const bounds = [0, ...splits.map(s => s.at), 1];
     const marks = [0, ...splits.map(s => s.dist), round.lengthM || 0];
-    const rows = splits.map((s, i) => `<tr><td><b>Secteur ${i + 1}</b><small>${nb(marks[i], 0)} m → ${nb(marks[i + 1], 0)} m</small></td>`
-      + `<td class="cir-sector-time">${frNum(bounds[i + 1] * 100, 0)} %</td><td class="muted">${nb(marks[i + 1] - marks[i], 0)} m</td></tr>`).join('');
+    const rows = splits.concat([null]).map((s, i) => {
+      const from = marks[i] ?? 0;
+      const to = marks[i + 1] ?? (round.lengthM || 0);
+      const pct = (bounds[i + 1] ?? 1) * 100;
+      return `<tr><td><b>Secteur ${i + 1}</b><small>${nb(from, 0)} m → ${nb(to, 0)} m</small></td>`
+        + `<td class="cir-sector-time">${frNum(pct, 0)} %</td><td class="muted">${nb(to - from, 0)} m</td></tr>`;
+    }).join('');
     return `<div class="cir-inspector"><div class="eyebrow">Chronométrie</div><h3>Découpage des secteurs</h3>`
       + `<p class="cir-src">${splits.length ? `Bornes issues du fichier <code>${esc(round.overlaysFile || 'overlays.ini')}</code> du mod.` : 'Ce circuit ne fournit pas de découpage par secteur : la chronométrie utilise les 3 tiers du tour.'}</p>`
       + (splits.length
@@ -1861,7 +1867,13 @@ function circuit(){
     ['sectors', 'Records par secteur']
   ].map(([k, l]) => `<button type="button" class="${mode === k ? 'active' : ''}" onclick="setCircMode('${k}')">${l}</button>`).join('');
 
+  // `round.outline.sectors` ne contient que les bornes INTERNES (S1/S2… sur un
+  // tour en 3 secteurs). Le nombre de secteurs est donc pins + 1, et l'on se
+  // fie à `sectorSplits` (source de vérité) quand il est disponible.
   const sectorPins = (round.outline && round.outline.sectors) || [];
+  const sectorCount = Array.isArray(round.sectorSplits) && round.sectorSplits.length
+    ? round.sectorSplits.length
+    : (sectorPins.length ? sectorPins.length + 1 : 0);
   const sectorLegend = `<div class="cir-map-legend">`
     + (sectorPins.length
         ? sectorPins.map((s, i) => `<span class="lg lg-${(i % 3) + 1}">${esc(s.label || 'Secteur')} · ${nb(s.dist, 0)} m</span>`).join('')
@@ -1948,7 +1960,7 @@ function circuit(){
     + `</div>`
     + kpis
     + `<div class="cir-section-head"><div><div class="eyebrow">Reconnaissance &amp; direction de course</div><h2>Carte télémétrique &amp; profil altimétrique</h2></div>`
-      + `<div class="cir-map-legend big">${sectorPins.length ? `Chronométrie · ${sectorPins.length} secteurs (${esc(round.overlaysFile || 'overlays.ini')})` : 'Pas de découpage officiel par secteur'}</div></div>`
+      + `<div class="cir-map-legend big">${sectorCount ? `Chronométrie · ${sectorCount} secteurs (${esc(round.overlaysFile || 'overlays.ini')})` : 'Pas de découpage officiel par secteur'}</div></div>`
     + `<div class="cir-map-grid">${mapBlock}${inspector}</div>`
     + `<div class="cir-cols">${briefing}${sectorsTable}</div>`
     + `<div class="cir-cols" style="grid-template-columns:1fr">${tech}</div>`;
@@ -2506,6 +2518,120 @@ function toggleGlobalHidden(id,hide){
     .catch(e=>console.warn('global-exclusions: push serveur impossible',e));
   render();
 }
+// ---------- Admin : import de circuits depuis Google Drive ----------
+// Le dossier Drive doit être partagé « tout le monde disposant du lien ».
+// Aucune clé API Google n'est requise.
+const CIR_IMPORT_KEY='gdsp_circuit_import_draft';
+function circuitImportDraft(){
+  try{return JSON.parse(localStorage.getItem(CIR_IMPORT_KEY)||'null')||{}}catch(e){return {}}
+}
+function circuitsAdminSet(field,value){
+  const d=circuitImportDraft();d[field]=value;
+  try{localStorage.setItem(CIR_IMPORT_KEY,JSON.stringify(d))}catch(e){}
+}
+function renderCircuitsAdmin(){
+  const draft=circuitImportDraft();
+  return `<h2>Importer un circuit depuis Google Drive</h2>
+  <p class="note">Partagez le dossier du mod sur Drive en <b>« Tout le monde disposant du lien »</b>, puis collez son adresse ci-dessous.
+  L'import lit <code>fast_lane.ai</code> (tracé, altitude, virages), <code>surfaces.ini</code>, <code>overlays.ini</code> (secteurs) et <code>ui_track.json</code>.</p>
+  <div class="grid" style="grid-template-columns:1fr;gap:14px;margin-top:14px">
+    <div class="panel">
+      <h3>1 · Dossier du circuit</h3>
+      <input id="cir-drive-url" type="text" class="admin-input" style="width:100%"
+        placeholder="https://drive.google.com/drive/folders/…"
+        value="${esc(draft.driveUrl||'')}" oninput="circuitsAdminSet('driveUrl',this.value)">
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <input id="cir-name" type="text" class="admin-input" style="flex:2;min-width:200px"
+          placeholder="Nom du circuit (ex. Watkins Glen 1971)"
+          value="${esc(draft.name||'')}" oninput="circuitsAdminSet('name',this.value)">
+        <input id="cir-round" type="number" min="1" max="99" class="admin-input" style="flex:0 0 120px"
+          placeholder="Manche n°"
+          value="${esc(draft.round||'')}" oninput="circuitsAdminSet('round',this.value)">
+      </div>
+      <div style="margin-top:12px"><button class="btn" onclick="circuitImportRun()">📥 Analyser le dossier Drive</button></div>
+      <div id="cir-import-result" style="margin-top:12px"></div>
+    </div>
+    <div class="panel">
+      <h3>2 · Enregistrement</h3>
+      <p class="note">L'analyse produit une fiche de manche complète. Enregistrez-la pour l'ajouter à <code>data/circuits.json</code>.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn secondary" onclick="circuitImportDownload()">⬇ Télécharger le JSON</button>
+        <button class="btn secondary" onclick="circuitImportReset()">Réinitialiser</button>
+      </div>
+      <div id="cir-save-result" style="margin-top:10px"></div>
+    </div>
+    <div class="panel">
+      <h3>Fichiers attendus dans le dossier</h3>
+      <ul class="note">
+        <li><code>fast_lane.ai</code> — <b>obligatoire</b> : tracé, profil d'altitude, virages.</li>
+        <li><code>surfaces.ini</code> — grip et validité des surfaces.</li>
+        <li><code>overlays.ini</code> — bornes de secteurs.</li>
+        <li><code>ui_track.json</code> — nom et identifiant du circuit.</li>
+      </ul>
+      <p class="note">Le dossier doit contenir ces fichiers directement (pas dans un sous-dossier).</p>
+    </div>
+  </div>`;
+}
+async function circuitImportRun(){
+  const box=document.getElementById('cir-import-result');
+  const draft=circuitImportDraft();
+  const url=(draft.driveUrl||'').trim();
+  if(!url){if(box)box.innerHTML=`<p class="note" style="color:#9c3021">Collez d'abord l'adresse du dossier Drive.</p>`;return}
+  if(box)box.innerHTML=`<p class="note">Lecture du dossier Drive… (quelques secondes)</p>`;
+  try{
+    const r=await fetch('/api/admin/circuits/import',{
+      method:'POST',
+      headers:Object.assign({'Content-Type':'application/json'},adminToken?{Authorization:'Bearer '+adminToken}:{}),
+      body:JSON.stringify({driveUrl:url,name:(draft.name||'').trim()||undefined,round:draft.round?Number(draft.round):undefined})
+    });
+    const payload=await r.json().catch(()=>({error:'Réponse illisible du serveur'}));
+    if(!r.ok) throw new Error(payload.error||('HTTP '+r.status));
+    circuitImportShow(payload);
+  }catch(e){
+    if(box)box.innerHTML=`<p class="note" style="color:#9c3021">✗ ${esc(e.message)}</p>`;
+  }
+}
+function circuitImportShow(payload){
+  try{localStorage.setItem(CIR_IMPORT_KEY+'_result',JSON.stringify(payload))}catch(e){}
+  const r=payload.round||{};
+  const box=document.getElementById('cir-import-result');
+  if(!box)return;
+  const files=Object.entries(payload.files||{}).map(([k,v])=>`<li><code>${esc(v.name)}</code> — ${esc({line:'tracé',surfaces:'surfaces',overlays:'secteurs',ui:'métadonnées'}[k]||k)}</li>`).join('');
+  const warn=(payload.warnings||[]).length
+    ? `<ul class="note" style="color:#8a6a1f">${payload.warnings.map(w=>`<li>⚠ ${esc(w)}</li>`).join('')}</ul>`
+    : `<p class="note" style="color:#3b6341">✓ Tous les fichiers attendus ont été lus.</p>`;
+  box.innerHTML=`<div class="panel" style="background:#fbf7ee">
+    <h3 style="margin-top:0">Résultat</h3>
+    <table class="cir-surfaces" style="width:100%"><tbody>
+      <tr><td class="muted">Circuit</td><td><b>${esc(r.name||'—')}</b></td></tr>
+      <tr><td class="muted">Longueur</td><td><b>${nb(r.lengthM||0,0)} m</b></td></tr>
+      <tr><td class="muted">Dénivelé</td><td><b>${frNum((r.elevation&&r.elevation.max)-(r.elevation&&r.elevation.min)||0,1)} m</b></td></tr>
+      <tr><td class="muted">Virages</td><td><b>${r.cornerCount||0}</b></td></tr>
+      <tr><td class="muted">Secteurs</td><td><b>${r.sectorCount||(r.sectorSplits||[]).length||3}</b></td></tr>
+      <tr><td class="muted">Surfaces</td><td><b>${(r.surfaces||[]).length}</b></td></tr>
+    </tbody></table>
+    ${files?`<p class="note" style="margin-top:10px">Fichiers lus :</p><ul class="note">${files}</ul>`:''}
+    ${warn}
+  </div>`;
+}
+function circuitImportDownload(){
+  let payload=null;
+  try{payload=JSON.parse(localStorage.getItem(CIR_IMPORT_KEY+'_result')||'null')}catch(e){}
+  const box=document.getElementById('cir-save-result');
+  if(!payload||!payload.round){if(box)box.innerHTML=`<p class="note" style="color:#9c3021">Lancez d'abord une analyse.</p>`;return}
+  const blob=new Blob([JSON.stringify(payload.round,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='manche-'+(payload.round.round||'nouvelle')+'-'+String(payload.round.name||'circuit').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'.json';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+  if(box)box.innerHTML=`<p class="note" style="color:#3b6341">✓ Fichier téléchargé. Ajoutez-le à <code>data/circuits.json</code> (tableau <code>rounds</code>) puis committez.</p>`;
+}
+function circuitImportReset(){
+  try{localStorage.removeItem(CIR_IMPORT_KEY);localStorage.removeItem(CIR_IMPORT_KEY+'_result')}catch(e){}
+  render();
+}
+
 function renderGlobalExclusions(){
   const pilots=new Map();
   allDrivers().forEach(d=>pilots.set(d.id,{name:d.name,team:d.team||''}));
@@ -2997,9 +3123,9 @@ function admin(){
   // Les autres onglets (events, ah, globalexc) fonctionnent SANS événement sélectionné.
   const eventTabs=new Set(['import','rounds','adjust','drivers','data']);
   if(backendMulti&&!eventContext&&eventTabs.has(adminTab)){
-    return `${head('administration','Direction de course','')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel"><h2>Sélectionne d'abord un événement</h2><p class="note">Choisis un championnat/open dans le menu en haut à droite, ou crée-en un depuis l'onglet <b>« Serveurs AH »</b> ou <b>« Événements »</b>, avant d'importer des résultats.</p><button class="btn secondary" onclick="goHome()">← Retour à l'accueil</button></div>`;
+    return `${head('administration','Direction de course','')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['circuits','Circuits'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel"><h2>Sélectionne d'abord un événement</h2><p class="note">Choisis un championnat/open dans le menu en haut à droite, ou crée-en un depuis l'onglet <b>« Serveurs AH »</b> ou <b>« Événements »</b>, avant d'importer des résultats.</p><button class="btn secondary" onclick="goHome()">← Retour à l'accueil</button></div>`;
   }
-  return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Ajustements de points au championnat (+ / −), pénalités temps en course (reclassement automatique), DNF/DNS/DQ ou avertissements.</p>${renderChampPointsPanel()}${selectedRaceAdj!==null&&rs[selectedRaceAdj]?renderAdjPanel(rs[selectedRaceAdj]):rs.length?`<div class="controls"><select onchange="selectedRaceAdj=this.value===''?null:+this.value;render()"><option value="">— Choisir une manche pour ajuster un résultat de course —</option>${rs.map((x,i)=>`<option value="${i}">Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div>`:`<p class="note">Aucune manche importée pour les pénalités de course.</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='globalexc'?renderGlobalExclusions()
+  return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['circuits','Circuits'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Ajustements de points au championnat (+ / −), pénalités temps en course (reclassement automatique), DNF/DNS/DQ ou avertissements.</p>${renderChampPointsPanel()}${selectedRaceAdj!==null&&rs[selectedRaceAdj]?renderAdjPanel(rs[selectedRaceAdj]):rs.length?`<div class="controls"><select onchange="selectedRaceAdj=this.value===''?null:+this.value;render()"><option value="">— Choisir une manche pour ajuster un résultat de course —</option>${rs.map((x,i)=>`<option value="${i}">Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div>`:`<p class="note">Aucune manche importée pour les pénalités de course.</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='circuits'?renderCircuitsAdmin():adminTab==='globalexc'?renderGlobalExclusions()
 :`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>`;
 }
 function renderAdjPanel(r){

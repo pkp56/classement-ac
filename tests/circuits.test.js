@@ -78,3 +78,34 @@ test('Chaque fiche référence ses sources locales', () => {
     }
   }
 });
+
+test('Les secteurs couvrent tout le tour, sans trou ni chevauchement', () => {
+  // Régression : le build utilisait `.slice(1, -1)` sur les bornes, ce qui
+  // supprimait le dernier secteur (2 secteurs sur 3, dernier tiers orphelin).
+  for (const r of data.rounds) {
+    const splits = r.sectorSplits;
+    assert.equal(splits.length, 3, `${r.label} doit avoir 3 secteurs`);
+    assert.deepEqual(splits.map(s => s.label), ['S1', 'S2', 'S3'], `${r.label} : libellés`);
+    assert.equal(splits[0].from, 0, `${r.label} : le 1er secteur part de 0`);
+    assert.equal(splits[splits.length - 1].to, r.lengthM, `${r.label} : le dernier secteur finit sur la longueur`);
+    for (let i = 1; i < splits.length; i++) {
+      assert.equal(splits[i].from, splits[i - 1].to, `${r.label} : S${i} et S${i + 1} doivent être contigus`);
+      assert.ok(splits[i].to > splits[i].from, `${r.label} : secteur ${i + 1} vide`);
+    }
+  }
+});
+
+test('Le détecteur de virages et le compacteur restent utilisables', () => {
+  const { readFastLane, detectCorners } = require('../tools/lib/read-fast-lane');
+  const { pack } = require('../tools/lib/pack-fast-lane');
+  assert.equal(typeof readFastLane, 'function');
+  assert.equal(typeof detectCorners, 'function');
+  assert.equal(typeof pack, 'function');
+  // Détection sur une petite boucle synthétique : au moins un virage.
+  const pts = [];
+  for (let i = 0; i < 120; i++) {
+    const a = (i / 120) * Math.PI * 2;
+    pts.push({ x: Math.cos(a) * 80, y: 0, z: Math.sin(a) * 80, d: (i / 120) * 502.6 });
+  }
+  assert.ok(detectCorners(pts).length >= 1);
+});

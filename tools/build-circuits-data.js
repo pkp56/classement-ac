@@ -421,10 +421,13 @@ for (const meta of TRACKS) {
     round.outline = buildOutline(track, meta, readPackedRaw(path.join(ROOT, file)));
     round.profile = profile;
     round.surfaces = surfaceRows(meta);
-    round.sectorSplits = (meta.sectors || []).slice(1, -1).map((f, i) => {
-      const idx = Math.round(f * (track.points.length - 1));
-      return { label: `S${i + 1}`, from: Math.round((meta.sectors[i] || 0) * track.lengthM), to: Math.round(f * track.lengthM) };
-    });
+    // meta.sectors contient les bornes complètes, 0 et 1 inclus : [0, .28, .65, 1] => 3 secteurs.
+    const secBounds = (meta.sectors && meta.sectors.length > 2) ? meta.sectors : [0, 1];
+    round.sectorSplits = secBounds.slice(1).map((f, i) => ({
+      label: `S${i + 1}`,
+      from: Math.round((secBounds[i] ?? 0) * track.lengthM),
+      to: Math.round(f * track.lengthM)
+    }));
     round.hero = `maquette-circuit/assets/tracks/${meta.asset}/preview.png`;
     round.source = assetPath(meta.asset, 'line.json') + ' (extrait du fast_lane.ai)';
   } else {
@@ -467,8 +470,12 @@ for (const meta of TRACKS) {
       }
       return [{ ...base, key: s.key, label: s.label || s.key, note: s.note || '' }];
     });
-    const ostBounds = [...(ost.sectors || []), 1];
-    round.sectorSplits = (ost.sectors || []).map((f, i) => ({
+    // Le mod démarre sa ligne d'arrivée à 0.0006 (soit ~4 m) : on ramène la
+    // première borne à 0 pour que la chronométrie couvre le tour entier.
+    const ostSectors = (ost.sectors || []).slice();
+    if (ostSectors.length) ostSectors[0] = 0;
+    const ostBounds = [...ostSectors, 1];
+    round.sectorSplits = ostSectors.map((f, i) => ({
       label: `S${i + 1}`,
       from: Math.round((ostBounds[i] ?? 0) * main.lengthM),
       to: Math.round((ostBounds[i + 1] ?? 1) * main.lengthM)

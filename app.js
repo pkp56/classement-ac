@@ -585,6 +585,35 @@ app.all('/api/admin/reset', (req, res) => {
       });
     });
 });
+// --- IMPORT DE CIRCUIT DEPUIS UN DOSSIER DRIVE PARTAGÉ PAR LIEN ---
+// Protégé par le mot de passe admin (même Bearer que le reste de l'admin).
+// Le dossier doit être partagé « tout le monde disposant du lien » : aucune
+// clé API Google n'est nécessaire.
+let driveImportModule = null;
+function driveImport() {
+  if (!driveImportModule) driveImportModule = require('./tools/lib/drive-circuits');
+  return driveImportModule;
+}
+app.post('/api/admin/circuits/import', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!(await verifyAdmin(req))) return res.status(401).json({ error: 'Connexion administrateur requise.' });
+  const { driveUrl, name, round } = req.body || {};
+  if (!driveUrl || typeof driveUrl !== 'string') {
+    return res.status(400).json({ error: "Indiquez l'URL ou l'identifiant du dossier Google Drive." });
+  }
+  try {
+    const mod = driveImport();
+    const result = await mod.importFromDrive(driveUrl, {
+      name: typeof name === 'string' ? name.trim() : undefined,
+      round: Number.isFinite(Number(round)) ? Number(round) : undefined
+    });
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    const status = error.status === 400 || error.status === 403 || error.status === 422 ? error.status : 502;
+    res.status(status).json({ error: error.message || 'Import du circuit impossible.' });
+  }
+});
+
 app.all('/api/*', (req,res)=>proxyRequest(req,res));
 
 function tryParse(s){try{return JSON.parse(s)}catch(e){return s}}
