@@ -181,7 +181,7 @@ const timer = setInterval(() => {
     sendCarUpdate(car, now);
   }
   // Le serveur rappelle régulièrement sa version (comme au démarrage).
-  if (state.ticks % 50 === 0) sendSession();
+  if (state.ticks % 300 === 0) sendSession();
 }, TICK_MS);
 
 process.on('SIGINT', () => { clearInterval(timer); socket.close(); process.exit(0); });

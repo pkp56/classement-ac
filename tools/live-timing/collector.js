@@ -161,6 +161,7 @@ class LiveTimingCollector extends EventEmitter {
       roadTemp: null,
       session: null,
       sessionStartedAt: null,
+      sessionElapsedMs: null,
       cars: new Map(),
       events: [],
       collisions: [],
@@ -288,8 +289,13 @@ class LiveTimingCollector extends EventEmitter {
       }
       case 'new_session':
       case 'session_info': {
+        // Une nouvelle manche commence si l'index change, ou si le chrono de
+        // session repart de zéro (même index relancé, LOOP_MODE par exemple).
         const previousIndex = state.session ? state.session.sessionIndex : null;
-        const changed = previousIndex !== payload.sessionIndex || !state.session;
+        const previousElapsed = state.sessionElapsedMs;
+        const restarted = previousElapsed != null && payload.elapsedMs + 2000 < previousElapsed;
+        const changed = !state.session || previousIndex !== payload.sessionIndex || restarted;
+        state.sessionElapsedMs = payload.elapsedMs;
         state.serverName = payload.serverName || state.serverName;
         state.track = payload.track || state.track;
         state.trackConfig = payload.trackConfig || state.trackConfig;

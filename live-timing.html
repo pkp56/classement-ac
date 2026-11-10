@@ -85,7 +85,7 @@
   </div>
 </header>
 <div class="page">
-  <div class="banner" id="banner" hidden>
+  <div class="banner" id="banner" style="display:none">
     <h2 id="bannerTitle">Le serveur n'est pas encore joignable</h2>
     <div id="bannerBody"></div>
     <div class="row">
@@ -176,7 +176,7 @@
     renderBest(d);
     renderFeed(d);
     renderDiag(d);
-    $('banner').hidden = live || http;
+    $('banner').style.display = (live || http) ? 'none' : 'block';
     if (!live && !http) renderBanner(d, st);
   }
 
@@ -250,18 +250,40 @@
     $('diag').innerHTML = lines.join('<br>');
   }
 
+  var lastSnapshotAt = 0;
   function connect() {
     if (socket) { try { socket.close(); } catch (e) {} }
     var es = new EventSource('/api/live/stream');
     socket = es;
     es.addEventListener('snapshot', function (ev) {
+      lastSnapshotAt = Date.now();
       try { render(JSON.parse(ev.data)); } catch (e) { console.error(e); }
     });
+    es.addEventListener('log', function (ev) {
+      // Les événements arrivent aussi par le flux : on les ajoute tout de suite
+      // au fil pour un retour immédiat, sans attendre la photo suivante.
+      if (!last) return;
+      try {
+        var entry = JSON.parse(ev.data);
+        last.events = [entry].concat(last.events || []).slice(0, 60);
+        renderFeed(last);
+      } catch (e) {}
+    });
     es.addEventListener('error', function () {
-      $('dot').className = 'dot offline';
-      $('stateText').textContent = 'Reconnexion…';
+      // Si le flux est coupé (proxy, onglet en veille), on basculera sur le
+      // rafraîchissement périodique ci-dessous.
+      if (!lastSnapshotAt) $('stateText').textContent = 'Connexion au flux…';
     });
   }
+  // Filet de sécurité : si aucun événement SSE depuis 4 s (proxy qui bufferise,
+  // onglet réveillé…), on rafraîchit par requête simple.
+  setInterval(function () {
+    if (Date.now() - lastSnapshotAt < 4000) return;
+    fetch('/api/live/status').then(function (r) { return r.json(); }).then(function (d) {
+      lastSnapshotAt = Date.now();
+      render(d);
+    }).catch(function () {});
+  }, 3000);
 
   $('reload').addEventListener('click', function () {
     fetch('/api/live/status').then(function (r) { return r.json(); }).then(render);
