@@ -14,7 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# `lib/` vient du template Python : ancré à la racine pour ne pas avaler tools/lib/
+/lib/
 lib64/
 parts/
 sdist/

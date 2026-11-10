@@ -110,7 +110,6 @@ function nav(){
     `<button class="${activeTop==='accueil'?'active':''}" onclick="go('accueil')">ACCUEIL</button>`
     +(backendMulti?`<button class="${activeTop==='global'?'active':''}" onclick="go('global')">GLOBAL</button>`:'')
     +`<button class="nav-event-tab ${activeTop==='event'?'active':''}" onclick="go('event')"><span class="nav-ev-kicker">Événement</span><span class="nav-ev-title">${esc(navEventTitle(evTabName))}</span></button>`
-    +`<button class="${page==='circuit'?'active':''}" onclick="go('circuit')">CIRCUITS <span class="nav-badge">06</span></button>`
     +`<button class="${activeTop==='admin'?'active':''}" onclick="go('admin')">ADMINISTRATION</button>`;
   renderEventSwitcher();
 }
@@ -147,7 +146,9 @@ async function go(x){
 function goHome(){go('accueil')}
 function setEventSubTab(tab){
   if(!isEventPage(tab))return;
-  if(tab==='circuit'&&!isLolaEvent())return;
+  // L'onglet Circuit est ouvert à tous les événements, mais reste masqué
+  // tant qu'aucune manche n'existe (voir hasCircuitData).
+  if(tab==='circuit'&&!hasCircuitData())return;
   if(tab!=='pilotes')driverId='';
   page=tab;
   render();
@@ -300,6 +301,8 @@ async function loadEvent(slug){
     if(!ev||!ev.slug||!ev.name||isEventMarkedDeleted(ev)){console.warn('loadEvent: event invalide ou supprimé',ev);return null}
     eventContext={slug:ev.slug,name:ev.name,kind:ev.kind||'championship',pointsConfig:ev.points_config||{},data:ev.data||{}};
     currentSlug=ev.slug;
+    // Les manches importées vivent dans l'événement : on recharge le calendrier.
+    circuitsCache=null;circuitsError='';
     const d=ev.data||{};
     let _ah=(d.ahServer&&d.ahUuid)?{server:d.ahServer,uuid:d.ahUuid}:null;
     if(!_ah){try{const m=JSON.parse(localStorage.getItem('gdsp_ah_map')||'{}');_ah=m[ev.slug]||null}catch(e){}}
@@ -1572,7 +1575,7 @@ function renderEventShell(){
     ?'<span class="tag archive">SAISON ARCHIVÉE</span>'
     :(rs.length===0?'<span class="tag" style="background:#d7a347;color:#102a32">CHAMPIONNAT À VENIR</span>':'<span class="tag live">CHAMPIONNAT EN COURS</span>');
 
-  const activeSub=page==='classement'?'classement':page==='manches'?'manches':page==='pilotes'?'pilotes':(page==='circuit'&&isLolaEvent())?'circuit':'event';
+  const activeSub=page==='classement'?'classement':page==='manches'?'manches':page==='pilotes'?'pilotes':(page==='circuit'&&hasCircuitData())?'circuit':'event';
   const subBody=activeSub==='classement'?ranking():activeSub==='manches'?manche():activeSub==='pilotes'?drivers():activeSub==='circuit'?circuit():eventHome();
 
   return `<div class="ev-shell">`
@@ -1582,7 +1585,7 @@ function renderEventShell(){
     +`<button type="button" class="ev-subtab ${activeSub==='event'?'active':''}" onclick="setEventSubTab('event')">Accueil <span class="ev-subtab-badge">Affiche &amp; Infos</span></button>`
     +`<button type="button" class="ev-subtab ${activeSub==='classement'?'active':''}" onclick="setEventSubTab('classement')">Classements <span class="ev-subtab-badge">${ds.length||0}</span></button>`
     +`<button type="button" class="ev-subtab ${activeSub==='manches'?'active':''}" onclick="setEventSubTab('manches')">Résultats <span class="ev-subtab-badge">${rs.length} M.</span></button>`
-    +(isLolaEvent()?`<button type="button" class="ev-subtab ${activeSub==='circuit'?'active':''}" onclick="setEventSubTab('circuit')">Circuit <span class="ev-subtab-badge">${esc(circuitBadgeLabel())}</span></button>`:'')
+    +(hasCircuitData()?`<button type="button" class="ev-subtab ${activeSub==='circuit'?'active':''}" onclick="setEventSubTab('circuit')">Circuit <span class="ev-subtab-badge">${esc(circuitBadgeLabel())}</span></button>`:'')
     +`<button type="button" class="ev-subtab ${activeSub==='pilotes'?'active':''}" onclick="setEventSubTab('pilotes')">Pilotes <span class="ev-subtab-badge">${ds.length||0}</span></button>`
     +`</div></div>`
     +`<div class="ev-subcontent">${subBody}</div>`;
@@ -1617,20 +1620,76 @@ function setCircuitAlt(key){
   localStorage.setItem(CIRCUIT_ALT_KEY, key === 'no_chicane' ? 'no_chicane' : 'chicane');
   render();
 }
+/**
+ * Manches ajoutées depuis l'administration (import Drive).
+ * Elles vivent dans l'événement (`data.circuitRounds`), donc elles sont
+ * persistées en PostgreSQL et partagées par tous les visiteurs, alors que
+ * `data/circuits.json` est un fichier statique du dépôt.
+ */
+function importedCircuitRounds(){
+  const d = (eventContext && eventContext.data) || {};
+  const list = d.circuitRounds;
+  return Array.isArray(list) ? list.filter(r => r && typeof r === 'object' && r.name) : [];
+}
+/**
+ * Fusionne les manches statiques et importées.
+ * Une manche importée portant le même numéro remplace la statique.
+ */
+function mergeCircuitRounds(base, extra){
+  const byRound = new Map();
+  const key = r => (Number.isFinite(Number(r && r.round)) && Number(r.round) > 0)
+    ? 'n' + Number(r.round)
+    : 'k' + String((r && (r.id || r.name)) || '');
+  for (const r of base) byRound.set(key(r), r);
+  for (const r of extra) byRound.set(key(r), { ...byRound.get(key(r)), ...r, imported: true });
+  const hasRound = r => Number.isFinite(Number(r && r.round)) && Number(r.round) > 0;
+  const sorted = [...byRound.values()].sort((a, b) => {
+    const ra = Number(a.round), rb = Number(b.round);
+    if (hasRound(a) && hasRound(b) && ra !== rb) return ra - rb;
+    // Les manches sans numéro passent après celles qui en ont un.
+    if (hasRound(a) !== hasRound(b)) return hasRound(a) ? -1 : 1;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+  // Numérotation finale : on garde le numéro fourni, sinon on prend le premier
+  // numéro libre (jamais M1 si M1 existe déjà).
+  const used = new Set(sorted.filter(hasRound).map(r => Number(r.round)));
+  let next = 1;
+  return sorted.map(r => {
+    let n = Number(r.round);
+    if (!hasRound(r)) { while (used.has(next)) next++; n = next; used.add(n); }
+    return { ...r, round: n, label: r.label || `M${n}` };
+  });
+}
 async function circuitsData(){
   if (circuitsCache) return circuitsCache;
   if (circuitsError) return null;
-  try {
-    const r = await fetch('/data/circuits.json', { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json();
-    if (!j || !Array.isArray(j.rounds) || !j.rounds.length) throw new Error('Données circuit incomplètes');
-    circuitsCache = j; circuitsError = '';
-    return j;
-  } catch (e) {
-    circuitsError = e && e.message ? e.message : String(e);
-    return null;
+  let base = null, err = '';
+  // `data/circuits.json` décrit le championnat Lola T290. Les autres événements
+  // n'ont que les manches importées depuis l'administration : y mêler le
+  // calendrier Lola afficherait six circuits qui ne les concernent pas.
+  if (isLolaEvent()) {
+    try {
+      const r = await fetch('/data/circuits.json', { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      base = await r.json();
+      if (!base || !Array.isArray(base.rounds)) throw new Error('Données circuit incomplètes');
+    } catch (e) {
+      err = e && e.message ? e.message : String(e);
+    }
   }
+  const extra = importedCircuitRounds();
+  // Les manches importées suffisent à afficher l'onglet même sans fichier statique.
+  if (!base && !extra.length) { circuitsError = err || 'Aucun circuit pour cet événement'; return null; }
+  const merged = mergeCircuitRounds((base && base.rounds) || [], extra);
+  if (!merged.length) { circuitsError = err || 'Aucun circuit pour cet événement'; return null; }
+  const j = {
+    ...(base || {}),
+    rounds: merged,
+    totalCount: merged.length,
+    completedCount: merged.filter(r => r.date || (r.stats && r.stats.races)).length
+  };
+  circuitsCache = j; circuitsError = '';
+  return j;
 }
 /** Ouvre les résultats importés de la manche circuit affichée (appariement par date). */
 function openCircuitRoundResult(idx){
@@ -1722,6 +1781,33 @@ function setCircMode(mode){
 function navEventTitle(name){
   return String(name || '').replace(/\s+/g, ' ').trim() || 'Championnat';
 }
+/**
+ * L'onglet Circuit doit-il apparaître pour l'événement courant ?
+ *
+ * Vrai dès qu'au moins une manche existe : le calendrier statique pour le
+ * championnat Lola T290, ou les manches importées depuis l'administration
+ * pour n'importe quel autre événement.
+ *
+ * Le calendrier n'étant pas encore chargé au premier rendu, la fonction
+ * déclenche le chargement et renvoie `true` de façon optimiste : sans cela
+ * l'onglet n'apparaîtrait jamais. Si le chargement révèle qu'il n'y a
+ * aucune manche, il disparaît au rendu suivant.
+ */
+function hasCircuitData(){
+  if (circuitsError) return false;
+  const imported = importedCircuitRounds().length;
+  if (isLolaEvent()) return true;          // le championnat a son calendrier
+  if (imported) return true;               // manches importées
+  if (circuitsCache) return false;         // chargé : vraiment aucun circuit
+  if (!circuitsPending) {
+    circuitsPending = circuitsData().finally(() => {
+      circuitsPending = null;
+      // Re-rendu pour faire apparaître/disparaître l'onglet une fois su.
+      if (page === 'event' || page === 'circuit') render();
+    });
+  }
+  return true;
+}
 function isLolaEvent(){
   const slug = eventContext && eventContext.slug;
   return !slug || slug === LEGACY_DEFAULT_SLUG || slug === ACTIVE_LOLA_SLUG;
@@ -1729,9 +1815,11 @@ function isLolaEvent(){
 /** Badge de l'onglet : manche en cours de consultation + ville. */
 function circuitBadgeLabel(){
   const data = circuitsCache;
-  if (!data || !data.rounds) return 'À VENIR';
+  if (!data || !data.rounds || !data.rounds.length) return 'À VENIR';
   const r = data.rounds[circuitRound() - 1] || data.rounds[0];
-  return `${r.label} · ${String(r.city || r.country || '').toUpperCase()}`;
+  // Un circuit importé peut n'avoir ni ville ni pays : on n'affiche pas « M1 · ».
+  const where = String(r.city || r.country || '').trim().toUpperCase();
+  return where ? `${r.label} · ${where}` : String(r.label || 'À VENIR');
 }
 function circuitStatusLabel(round){
   return round.status === 'done' ? 'Disputée' : 'À venir';
@@ -1748,7 +1836,7 @@ function circuitDateLabel(round){
 
 function circuit(){
   if (backendMulti && !eventContext) return hub();
-  if (!isLolaEvent()) return eventHome();
+  if (!hasCircuitData()) return eventHome();
   const cfg = pointsConfig();
   const data = circuitsCache;
   if (!data) {
@@ -1785,10 +1873,14 @@ function circuit(){
     : '';
 
   // --- Hero ---
-  const heroImage = (round.heroByVariant && round.heroByVariant[activeProfile.key]) || round.hero || 'preview.png';
+  const heroImage = (round.heroByVariant && round.heroByVariant[activeProfile.key]) || round.hero || null;
+  // Un circuit importé n'a pas de photo : fond uni plutôt qu'une image 404.
+  const heroStyle = heroImage
+    ? `background-image:linear-gradient(90deg,#0f252c 0%,#0f252cf2 38%,#0f252c66 58%,#0f252c22 78%),url('/${esc(heroImage)}')`
+    : 'background-image:linear-gradient(135deg,#0f252c 0%,#143a44 60%,#1c5a63 100%)';
   const heroMeta = [
-    ['Plateau', 'Lola T290'],
-    ['Configuration', round.layout],
+    ['Plateau', isLolaEvent() ? 'Lola T290' : ((eventContext && eventContext.name) || '—')],
+    ['Configuration', round.layout || 'Non précisée'],
     ['Coordonnées GPS', round.gps || 'Non communiquées'],
     ['Auteur du mod', round.author || 'Non communiqué']
   ];
@@ -1804,8 +1896,8 @@ function circuit(){
   const kpis = `<div class="cir-kpis">`
     + `<div class="cir-kpi"><span>Longueur du tracé</span><strong>${esc(activeProfile.lengthStr || round.lengthStr)}</strong><small>${esc(round.layout)} · ${esc(round.width || '')}</small></div>`
     + `<div class="cir-kpi gold"><span>Dénivelé sur un tour</span><strong>${elev ? frNum(elev.delta, 1) + ' m' : '—'}</strong><small>Alt. ${elev ? frNum(elev.min, 1) + ' m → ' + frNum(elev.max, 1) + ' m' : '—'}</small></div>`
-    + `<div class="cir-kpi green"><span>Capacité des stands</span><strong>${capacity}</strong><small>Grille Lola T290 du championnat</small></div>`
-    + `<div class="cir-kpi red"><span>Meilleur tour de la saison</span><strong>${seasonBest ? esc(seasonBest.time) : '—'}</strong><small>${seasonBest ? `${esc(seasonBest.driver)} · ${esc(seasonBest.track)}` : 'Aucun tour enregistré'}</small></div>`
+    + `<div class="cir-kpi green"><span>Capacité des stands</span><strong>${capacity}</strong><small>${isLolaEvent() ? 'Grille Lola T290 du championnat' : 'Places en grille'}</small></div>`
+    + `<div class="cir-kpi red"><span>${isLolaEvent() ? 'Meilleur tour de la saison' : 'Meilleur tour'}</span><strong>${seasonBest ? esc(seasonBest.time) : '—'}</strong><small>${seasonBest ? `${esc(seasonBest.driver)} · ${esc(seasonBest.track)}` : 'Aucun tour enregistré'}</small></div>`
     + `</div>`;
 
   // --- Inspecteur (3 modes) ---
@@ -1822,10 +1914,17 @@ function circuit(){
         + `<b class="cir-speed">${c.speed ? frNum(c.speed, 1) + ' km/h' : ''}</b></li>`).join('')}</ul></div>`;
   })() : mode === 'sectors' ? (() => {
     const splits = round.outline ? (round.outline.sectors || []) : [];
+    // `splits` ne contient que les bornes internes ; le dernier tronçon va
+    // jusqu'à la ligne d'arrivée, d'où le +1 (3 secteurs pour 2 bornes).
     const bounds = [0, ...splits.map(s => s.at), 1];
     const marks = [0, ...splits.map(s => s.dist), round.lengthM || 0];
-    const rows = splits.map((s, i) => `<tr><td><b>Secteur ${i + 1}</b><small>${nb(marks[i], 0)} m → ${nb(marks[i + 1], 0)} m</small></td>`
-      + `<td class="cir-sector-time">${frNum(bounds[i + 1] * 100, 0)} %</td><td class="muted">${nb(marks[i + 1] - marks[i], 0)} m</td></tr>`).join('');
+    const rows = splits.concat([null]).map((s, i) => {
+      const from = marks[i] ?? 0;
+      const to = marks[i + 1] ?? (round.lengthM || 0);
+      const pct = (bounds[i + 1] ?? 1) * 100;
+      return `<tr><td><b>Secteur ${i + 1}</b><small>${nb(from, 0)} m → ${nb(to, 0)} m</small></td>`
+        + `<td class="cir-sector-time">${frNum(pct, 0)} %</td><td class="muted">${nb(to - from, 0)} m</td></tr>`;
+    }).join('');
     return `<div class="cir-inspector"><div class="eyebrow">Chronométrie</div><h3>Découpage des secteurs</h3>`
       + `<p class="cir-src">${splits.length ? `Bornes issues du fichier <code>${esc(round.overlaysFile || 'overlays.ini')}</code> du mod.` : 'Ce circuit ne fournit pas de découpage par secteur : la chronométrie utilise les 3 tiers du tour.'}</p>`
       + (splits.length
@@ -1861,7 +1960,13 @@ function circuit(){
     ['sectors', 'Records par secteur']
   ].map(([k, l]) => `<button type="button" class="${mode === k ? 'active' : ''}" onclick="setCircMode('${k}')">${l}</button>`).join('');
 
+  // `round.outline.sectors` ne contient que les bornes INTERNES (S1/S2… sur un
+  // tour en 3 secteurs). Le nombre de secteurs est donc pins + 1, et l'on se
+  // fie à `sectorSplits` (source de vérité) quand il est disponible.
   const sectorPins = (round.outline && round.outline.sectors) || [];
+  const sectorCount = Array.isArray(round.sectorSplits) && round.sectorSplits.length
+    ? round.sectorSplits.length
+    : (sectorPins.length ? sectorPins.length + 1 : 0);
   const sectorLegend = `<div class="cir-map-legend">`
     + (sectorPins.length
         ? sectorPins.map((s, i) => `<span class="lg lg-${(i % 3) + 1}">${esc(s.label || 'Secteur')} · ${nb(s.dist, 0)} m</span>`).join('')
@@ -1909,7 +2014,7 @@ function circuit(){
   const sectorsTable = `<div class="cir-panel"><div class="eyebrow">Chronométrie &amp; repères de la manche</div><h3>${esc(round.label)} · ${esc(isDone ? circuitDateLabel(round) : 'À venir')}</h3>`
     + `<p class="cir-src" style="margin:0 0 10px">${esc(round.format)}${isDone ? ' · ' + esc(entries) : ''}${round.stats && round.stats.drivers ? ` · ${round.stats.drivers} pilotes classés` : ''}${round.winner ? ` · vainqueur ${esc(round.winner)}` : ''}.</p>`
     + lapRows
-    + `<div class="cir-optimal"><span>Tour le plus rapide de la saison</span><b>${seasonBest ? esc(seasonBest.time) : '—'}</b></div>`
+    + `<div class="cir-optimal"><span>${isLolaEvent() ? 'Tour le plus rapide de la saison' : 'Tour le plus rapide'}</span><b>${seasonBest ? esc(seasonBest.time) : '—'}</b></div>`
     + `<div class="cir-link"><div><div class="eyebrow" style="margin:0">Calendrier</div><div class="muted" style="margin-top:2px">${nb(data.completedCount || 0, 0)} manches disputées sur ${nb(data.totalCount || rounds.length, 0)}.</div></div>`
     + `<button type="button" class="btn secondary small" onclick="openCircuitRoundResult(${idx})">Voir les résultats →</button></div></div>`;
 
@@ -1934,7 +2039,7 @@ function circuit(){
 
   return `<div class="cir-roundbar">${calendar}</div>`
     + `<div class="cir-toolbar"><div class="cir-select"><span>Manche</span><b>${esc(round.label)} · ${esc(round.name)} (${esc(round.country)})</b></div>${variantButtons}</div>`
-    + `<div class="cir-hero cir-hero-photo" style="background-image:linear-gradient(90deg,#0f252c 0%,#0f252cf2 38%,#0f252c66 58%,#0f252c22 78%),url('/${esc(heroImage)}')">`
+    + `<div class="cir-hero cir-hero-photo" style="${heroStyle}">`
       + `<div class="cir-hero-txt"><div>`
         + `<div class="cir-kicker"><span class="cir-flag">${esc(round.label)}</span>${statusChip}<span class="cir-eyebrow">${esc(round.city || round.country || '')} · ${esc(round.country || '')}${round.year ? ' · ' + round.year : ''}</span></div>`
         + `<h2>${esc(round.name)}</h2>`
@@ -1948,7 +2053,7 @@ function circuit(){
     + `</div>`
     + kpis
     + `<div class="cir-section-head"><div><div class="eyebrow">Reconnaissance &amp; direction de course</div><h2>Carte télémétrique &amp; profil altimétrique</h2></div>`
-      + `<div class="cir-map-legend big">${sectorPins.length ? `Chronométrie · ${sectorPins.length} secteurs (${esc(round.overlaysFile || 'overlays.ini')})` : 'Pas de découpage officiel par secteur'}</div></div>`
+      + `<div class="cir-map-legend big">${sectorCount ? `Chronométrie · ${sectorCount} secteurs (${esc(round.overlaysFile || 'overlays.ini')})` : 'Pas de découpage officiel par secteur'}</div></div>`
     + `<div class="cir-map-grid">${mapBlock}${inspector}</div>`
     + `<div class="cir-cols">${briefing}${sectorsTable}</div>`
     + `<div class="cir-cols" style="grid-template-columns:1fr">${tech}</div>`;
@@ -2282,6 +2387,9 @@ async function saveRemote(){
   if(baseData.posterImage)payload.posterImage=baseData.posterImage;
   if(Array.isArray(baseData.galleryImages)&&baseData.galleryImages.length)payload.galleryImages=baseData.galleryImages;
   if(baseData.eventInfo&&typeof baseData.eventInfo==='object')payload.eventInfo=baseData.eventInfo;
+  // Manches circuit ajoutées par l'import Drive : sans cette ligne, chaque
+  // sauvegarde de l'événement les effacerait.
+  if(Array.isArray(baseData.circuitRounds)&&baseData.circuitRounds.length)payload.circuitRounds=baseData.circuitRounds;
   Object.assign(payload,{sessions:minSessions,penMap,manualDrivers,customCalendar});
   if(eventContext)eventContext.data=Object.assign({},baseData,payload);
   let path;
@@ -2506,6 +2614,169 @@ function toggleGlobalHidden(id,hide){
     .catch(e=>console.warn('global-exclusions: push serveur impossible',e));
   render();
 }
+// ---------- Admin : import de circuits depuis Google Drive ----------
+// Le dossier Drive doit être partagé « tout le monde disposant du lien ».
+// Aucune clé API Google n'est requise.
+const CIR_IMPORT_KEY='gdsp_circuit_import_draft';
+function circuitImportDraft(){
+  try{return JSON.parse(localStorage.getItem(CIR_IMPORT_KEY)||'null')||{}}catch(e){return {}}
+}
+function circuitsAdminSet(field,value){
+  const d=circuitImportDraft();d[field]=value;
+  try{localStorage.setItem(CIR_IMPORT_KEY,JSON.stringify(d))}catch(e){}
+}
+function renderCircuitsAdmin(){
+  const draft=circuitImportDraft();
+  return `<h2>Importer un circuit depuis Google Drive</h2>
+  <p class="note">Partagez le dossier du mod sur Drive en <b>« Tout le monde disposant du lien »</b>, puis collez son adresse ci-dessous.
+  L'import lit <code>fast_lane.ai</code> (tracé, altitude, virages), <code>surfaces.ini</code>, <code>overlays.ini</code> (secteurs) et <code>ui_track.json</code>.</p>
+  <div class="grid" style="grid-template-columns:1fr;gap:14px;margin-top:14px">
+    <div class="panel">
+      <h3>1 · Dossier du circuit</h3>
+      <input id="cir-drive-url" type="text" class="admin-input" style="width:100%"
+        placeholder="https://drive.google.com/drive/folders/…"
+        value="${esc(draft.driveUrl||'')}" oninput="circuitsAdminSet('driveUrl',this.value)">
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <input id="cir-name" type="text" class="admin-input" style="flex:2;min-width:200px"
+          placeholder="Nom du circuit (ex. Watkins Glen 1971)"
+          value="${esc(draft.name||'')}" oninput="circuitsAdminSet('name',this.value)">
+        <input id="cir-round" type="number" min="1" max="99" class="admin-input" style="flex:0 0 120px"
+          placeholder="Manche n°"
+          value="${esc(draft.round||'')}" oninput="circuitsAdminSet('round',this.value)">
+      </div>
+      <div style="margin-top:12px"><button class="btn" onclick="circuitImportRun()">📥 Analyser le dossier Drive</button></div>
+      <div id="cir-import-result" style="margin-top:12px"></div>
+    </div>
+    <div class="panel">
+      <h3>2 · Enregistrement</h3>
+      <p class="note">L'analyse produit une fiche de manche complète. Enregistrez-la pour l'ajouter à <code>data/circuits.json</code>.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" onclick="circuitImportSave()">💾 Ajouter à l'onglet Circuit</button>
+        <button class="btn secondary" onclick="circuitImportDownload()">⬇ Télécharger le JSON</button>
+        <button class="btn secondary" onclick="circuitImportReset()">Réinitialiser</button>
+      </div>
+      <p class="note" style="margin-top:10px">La manche est enregistrée dans l'événement courant (<b>${esc((eventContext&&eventContext.name)||'aucun événement sélectionné')}</b>) : elle est visible par tous les visiteurs, sans redéploiement.</p>
+      <div id="cir-save-result" style="margin-top:10px"></div>
+    </div>
+    <div class="panel">
+      <h3>Fichiers attendus dans le dossier</h3>
+      <ul class="note">
+        <li><code>fast_lane.ai</code> — <b>obligatoire</b> : tracé, profil d'altitude, virages.</li>
+        <li><code>surfaces.ini</code> — grip et validité des surfaces.</li>
+        <li><code>overlays.ini</code> — bornes de secteurs.</li>
+        <li><code>ui_track.json</code> — nom et identifiant du circuit.</li>
+      </ul>
+      <p class="note">Le dossier doit contenir ces fichiers directement (pas dans un sous-dossier).</p>
+    </div>
+  </div>`;
+}
+async function circuitImportRun(){
+  const box=document.getElementById('cir-import-result');
+  const draft=circuitImportDraft();
+  const url=(draft.driveUrl||'').trim();
+  if(!url){if(box)box.innerHTML=`<p class="note" style="color:#9c3021">Collez d'abord l'adresse du dossier Drive.</p>`;return}
+  if(box)box.innerHTML=`<p class="note">Lecture du dossier Drive… (quelques secondes)</p>`;
+  try{
+    const r=await fetch('/api/admin/circuits/import',{
+      method:'POST',
+      headers:Object.assign({'Content-Type':'application/json'},adminToken?{Authorization:'Bearer '+adminToken}:{}),
+      body:JSON.stringify({driveUrl:url,name:(draft.name||'').trim()||undefined,round:draft.round?Number(draft.round):undefined})
+    });
+    const payload=await r.json().catch(()=>({error:'Réponse illisible du serveur'}));
+    if(!r.ok) throw new Error(payload.error||('HTTP '+r.status));
+    circuitImportShow(payload);
+  }catch(e){
+    if(box)box.innerHTML=`<p class="note" style="color:#9c3021">✗ ${esc(e.message)}</p>`;
+  }
+}
+function circuitImportShow(payload){
+  try{localStorage.setItem(CIR_IMPORT_KEY+'_result',JSON.stringify(payload))}catch(e){}
+  const r=payload.round||{};
+  const box=document.getElementById('cir-import-result');
+  if(!box)return;
+  const files=Object.entries(payload.files||{}).map(([k,v])=>`<li><code>${esc(v.name)}</code> — ${esc({line:'tracé',surfaces:'surfaces',overlays:'secteurs',ui:'métadonnées'}[k]||k)}</li>`).join('');
+  const warn=(payload.warnings||[]).length
+    ? `<ul class="note" style="color:#8a6a1f">${payload.warnings.map(w=>`<li>⚠ ${esc(w)}</li>`).join('')}</ul>`
+    : `<p class="note" style="color:#3b6341">✓ Tous les fichiers attendus ont été lus.</p>`;
+  box.innerHTML=`<div class="panel" style="background:#fbf7ee">
+    <h3 style="margin-top:0">Résultat</h3>
+    <table class="cir-surfaces" style="width:100%"><tbody>
+      <tr><td class="muted">Circuit</td><td><b>${esc(r.name||'—')}</b></td></tr>
+      <tr><td class="muted">Longueur</td><td><b>${nb(r.lengthM||0,0)} m</b></td></tr>
+      <tr><td class="muted">Dénivelé</td><td><b>${frNum((r.elevation&&r.elevation.max)-(r.elevation&&r.elevation.min)||0,1)} m</b></td></tr>
+      <tr><td class="muted">Virages</td><td><b>${r.cornerCount||0}</b></td></tr>
+      <tr><td class="muted">Secteurs</td><td><b>${r.sectorCount||(r.sectorSplits||[]).length||3}</b></td></tr>
+      <tr><td class="muted">Surfaces</td><td><b>${(r.surfaces||[]).length}</b></td></tr>
+    </tbody></table>
+    ${files?`<p class="note" style="margin-top:10px">Fichiers lus :</p><ul class="note">${files}</ul>`:''}
+    ${warn}
+  </div>`;
+}
+function circuitImportDownload(){
+  let payload=null;
+  try{payload=JSON.parse(localStorage.getItem(CIR_IMPORT_KEY+'_result')||'null')}catch(e){}
+  const box=document.getElementById('cir-save-result');
+  if(!payload||!payload.round){if(box)box.innerHTML=`<p class="note" style="color:#9c3021">Lancez d'abord une analyse.</p>`;return}
+  const blob=new Blob([JSON.stringify(payload.round,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='manche-'+(payload.round.round||'nouvelle')+'-'+String(payload.round.name||'circuit').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'.json';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+  if(box)box.innerHTML=`<p class="note" style="color:#3b6341">✓ Fichier téléchargé. Ajoutez-le à <code>data/circuits.json</code> (tableau <code>rounds</code>) puis committez.</p>`;
+}
+async function circuitImportSave(){
+  const box=document.getElementById('cir-save-result');
+  const say=(txt,color)=>{if(box)box.innerHTML=`<p class="note" style="color:${color||'#586260'}">${txt}</p>`};
+  let payload=null;
+  try{payload=JSON.parse(localStorage.getItem(CIR_IMPORT_KEY+'_result')||'null')}catch(e){}
+  if(!payload||!payload.round){say('Lancez d\'abord une analyse du dossier Drive.','#9c3021');return}
+  if(!adminToken){say('Connexion administrateur requise.','#9c3021');return}
+  if(!eventContext||!currentSlug){say('Sélectionnez d\'abord un événement (championnat) dans le menu.','#9c3021');return}
+  const incoming=payload.round;
+  say('Enregistrement en cours…');
+  try{
+    // On relit l'état serveur pour ne pas écraser une manche ajoutée entre-temps.
+    const r=await apiGet('/api/events/'+encodeURIComponent(currentSlug));
+    if(!r.ok)throw new Error('Impossible de relire l\'événement (HTTP '+r.status+')');
+    const ev=await r.json();
+    const data=Object.assign({},(ev&&ev.data)||eventContext.data||{});
+    const existing=Array.isArray(data.circuitRounds)?data.circuitRounds.slice():[];
+    // Remplacement par numéro de manche, sinon par nom.
+    const sameRound=r=>Number.isFinite(Number(incoming.round))&&Number.isFinite(Number(r.round))&&Number(r.round)===Number(incoming.round);
+    const sameName=r=>String(r.name||'').toLowerCase()===String(incoming.name||'').toLowerCase();
+    const idx=existing.findIndex(r=>sameRound(r)||sameName(r));
+    let added=true;
+    if(idx>=0){existing[idx]=Object.assign({},existing[idx],incoming);added=false}
+    else existing.push(incoming);
+    existing.sort((a,b)=>(Number(a.round)||999)-(Number(b.round)||999));
+    data.circuitRounds=existing;
+
+    const put=await fetch('/api/events/'+encodeURIComponent(currentSlug)+'/data',{
+      method:'POST',
+      headers:Object.assign({'Content-Type':'application/json'},adminToken?{Authorization:'Bearer '+adminToken}:{}),
+      body:JSON.stringify(data)
+    });
+    if(!put.ok){
+      let msg='HTTP '+put.status;
+      try{const j=await put.json();msg=j.error||j.message||msg}catch(e){}
+      throw new Error(msg);
+    }
+    // Mise à jour locale : la manche apparaît sans rechargement.
+    eventContext.data=data;
+    circuitsCache=null;circuitsError='';
+    try{localStorage.removeItem(CIR_IMPORT_KEY+'_result')}catch(e){}
+    say(added?'✓ Manche ajoutée à l\'onglet Circuit.':'✓ Manche mise à jour dans l\'onglet Circuit.','#3b6341');
+    setTimeout(()=>{circuitsData().then(()=>render())},600);
+  }catch(e){
+    say('✗ Échec : '+esc(e.message),'#9c3021');
+  }
+}
+function circuitImportReset(){
+  try{localStorage.removeItem(CIR_IMPORT_KEY);localStorage.removeItem(CIR_IMPORT_KEY+'_result')}catch(e){}
+  render();
+}
+
 function renderGlobalExclusions(){
   const pilots=new Map();
   allDrivers().forEach(d=>pilots.set(d.id,{name:d.name,team:d.team||''}));
@@ -2997,9 +3268,9 @@ function admin(){
   // Les autres onglets (events, ah, globalexc) fonctionnent SANS événement sélectionné.
   const eventTabs=new Set(['import','rounds','adjust','drivers','data']);
   if(backendMulti&&!eventContext&&eventTabs.has(adminTab)){
-    return `${head('administration','Direction de course','')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel"><h2>Sélectionne d'abord un événement</h2><p class="note">Choisis un championnat/open dans le menu en haut à droite, ou crée-en un depuis l'onglet <b>« Serveurs AH »</b> ou <b>« Événements »</b>, avant d'importer des résultats.</p><button class="btn secondary" onclick="goHome()">← Retour à l'accueil</button></div>`;
+    return `${head('administration','Direction de course','')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['circuits','Circuits'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel"><h2>Sélectionne d'abord un événement</h2><p class="note">Choisis un championnat/open dans le menu en haut à droite, ou crée-en un depuis l'onglet <b>« Serveurs AH »</b> ou <b>« Événements »</b>, avant d'importer des résultats.</p><button class="btn secondary" onclick="goHome()">← Retour à l'accueil</button></div>`;
   }
-  return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Ajustements de points au championnat (+ / −), pénalités temps en course (reclassement automatique), DNF/DNS/DQ ou avertissements.</p>${renderChampPointsPanel()}${selectedRaceAdj!==null&&rs[selectedRaceAdj]?renderAdjPanel(rs[selectedRaceAdj]):rs.length?`<div class="controls"><select onchange="selectedRaceAdj=this.value===''?null:+this.value;render()"><option value="">— Choisir une manche pour ajuster un résultat de course —</option>${rs.map((x,i)=>`<option value="${i}">Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div>`:`<p class="note">Aucune manche importée pour les pénalités de course.</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='globalexc'?renderGlobalExclusions()
+  return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['circuits','Circuits'],['globalexc','Global · exclusions']]:[]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Ajustements de points au championnat (+ / −), pénalités temps en course (reclassement automatique), DNF/DNS/DQ ou avertissements.</p>${renderChampPointsPanel()}${selectedRaceAdj!==null&&rs[selectedRaceAdj]?renderAdjPanel(rs[selectedRaceAdj]):rs.length?`<div class="controls"><select onchange="selectedRaceAdj=this.value===''?null:+this.value;render()"><option value="">— Choisir une manche pour ajuster un résultat de course —</option>${rs.map((x,i)=>`<option value="${i}">Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div>`:`<p class="note">Aucune manche importée pour les pénalités de course.</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='circuits'?renderCircuitsAdmin():adminTab==='globalexc'?renderGlobalExclusions()
 :`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>`;
 }
 function renderAdjPanel(r){

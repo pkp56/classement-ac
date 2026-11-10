@@ -94,8 +94,86 @@ node tools/lib/pack-fast-lane.js chemin/vers/fast_lane.ai \
   maquette-circuit/assets/tracks/<circuit>/line.json
 ```
 
-Les virages sont détectés sur la ligne complète (pics de courbure espacés de 55 m)
+Les virages sont détectés sur la ligne complète (pics de courbure espacés de 45 m)
 puis mémorisés en fraction de tour, ce qui garantit le même comptage quel que soit
 le niveau de décimation du tracé. `tests/circuits.test.js` vérifie les 6 manches,
-l'absence de date inventée, la présence d'un tracé exploitable et la cohérence des
-repères avec la zone de dessin.
+l'absence de date inventée, la présence d'un tracé exploitable, la couverture
+complète du tour par les secteurs et la cohérence des repères avec la zone de dessin.
+
+> **Attention** : `.gitignore` ignore `/lib/` (template Python). Le motif est
+> volontairement **ancré à la racine** ; sans le `/` initial il avalait aussi
+> `tools/lib/`, dont dépend tout le build.
+
+### Importer un circuit depuis Google Drive
+
+L'administration propose un onglet **Circuits**. Le dossier du mod doit être
+partagé sur Drive en « Tout le monde disposant du lien » — **aucune clé API
+Google n'est nécessaire.**
+
+1. Coller l'URL du dossier (ou son identifiant) dans le champ prévu.
+2. Renseigner éventuellement le nom du circuit et le numéro de manche.
+3. « Analyser le dossier Drive » lit les fichiers et affiche la fiche obtenue.
+4. **« Ajouter à l'onglet Circuit »** enregistre la manche dans l'événement
+   courant. Elle est alors visible par tous les visiteurs, sans redéploiement.
+   L'ajout est idempotent : réimporter le même numéro de manche la met à jour
+   au lieu de la dupliquer.
+
+« Télécharger le JSON » reste disponible pour versionner la manche dans
+`data/circuits.json` si vous préférez la figer dans le dépôt.
+
+Fichiers lus dans le dossier :
+
+| Fichier | Usage | Obligatoire |
+| --- | --- | --- |
+| `fast_lane.ai` | tracé, profil d'altitude, virages | oui |
+| `surfaces.ini` | grip et validité des surfaces | non |
+| `overlays.ini` | bornes des secteurs | non |
+| `ui_track.json` | nom et identifiant du circuit | non |
+
+Détails d'implémentation :
+
+- `tools/lib/drive-circuits.js` — extraction de l'ID, listing du dossier public
+  (`embeddedfolderview`), téléchargement, décodage `fast_lane.ai`, détection des
+  virages, parsing `surfaces.ini` / `overlays.ini`. Aucune dépendance externe.
+- `tools/lib/circuit-round.js` — fabrique commune de la fiche (tracé SVG, profil,
+  secteurs, virages). Utilisée à la fois par le build statique et par l'import,
+  pour qu'un circuit importé s'affiche exactement comme un circuit du dépôt.
+- **Stockage** : les manches importées vivent dans `data.circuitRounds` de
+  l'événement, donc en PostgreSQL côté backend. `data/circuits.json` reste un
+  fichier statique du dépôt et sert de socle ; `circuitsData()` fusionne les
+  deux (`mergeCircuitRounds`), une manche importée remplaçant la statique de
+  même numéro. `saveRemote` réexpédie `circuitRounds`, sinon une sauvegarde de
+  l'événement les effacerait.
+
+### Portée : tous les événements
+
+L'onglet Circuit n'est plus réservé au championnat Lola T290. Il apparaît sur
+n'importe quel événement dès qu'une manche existe :
+
+| Événement | Source du calendrier |
+| --- | --- |
+| Championnat Lola T290 | `data/circuits.json` (6 manches) + manches importées |
+| Tout autre événement | uniquement les manches importées |
+
+Le fichier statique n'est chargé que pour le championnat Lola : sur un autre
+événement, y mêler ce calendrier afficherait six circuits qui ne le concernent
+pas.
+
+`hasCircuitData()` décide de la visibilité de l'onglet. Tant que le calendrier
+n'est pas chargé elle répond « oui » de façon optimiste (sinon l'onglet
+n'apparaîtrait jamais), puis le rendu suivant le masque s'il s'avère qu'il n'y a
+aucune manche. Une manche importée sur un événement vierge fait donc apparaître
+l'onglet immédiatement.
+
+Les libellés qui supposaient le championnat sont neutralisés hors Lola :
+« Plateau : Lola T290 », « Grille Lola T290 », « Meilleur tour de la saison ».
+Un circuit importé n'ayant pas de photo, le bandeau utilise un fond uni au lieu
+de pointer vers une image absente.
+- `POST /api/admin/circuits/import` — route protégée par le mot de passe admin
+  (même `Bearer` que le reste de l'administration).
+- `surfaces.ini` : le nom de surface vient de `KEY=` (la section s'appelle
+  `[SURFACE_0]`), sinon on afficherait « SURFACE_0 » au lieu de « ROAD ».
+- `overlays.ini` : chaque `[SECTOR_n]` donne le **début** du secteur n.
+  Trois départs = trois secteurs (le dernier va jusqu'à 1), pas quatre.
+- `tests/drive-import.test.js` couvre l'extraction d'ID, le décodage, le rejet
+  d'un fichier tronqué et les deux cas ci-dessus.
