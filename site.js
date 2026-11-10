@@ -110,7 +110,7 @@ function nav(){
     `<button class="${activeTop==='accueil'?'active':''}" onclick="go('accueil')">ACCUEIL</button>`
     +(backendMulti?`<button class="${activeTop==='global'?'active':''}" onclick="go('global')">GLOBAL</button>`:'')
     +`<button class="nav-event-tab ${activeTop==='event'?'active':''}" onclick="go('event')"><span class="nav-ev-kicker">Événement</span><span class="nav-ev-title">${esc(navEventTitle(evTabName))}</span></button>`
-    +(hasLiveTiming?`<a class="nav-link" href="/live-timing" target="_blank" rel="noopener" title="Suivi en direct d'un serveur Assetto Corsa">LIVE <span class="nav-link-arrow">↗</span></a>`:'')
+    +(hasLiveTiming?`<a class="nav-link nav-live" href="/live-timing" title="Suivi en direct d'un serveur Assetto Corsa"><span class="nav-live-dot"></span>LIVE</a>`:'')
     +`<button class="${activeTop==='admin'?'active':''}" onclick="go('admin')">ADMINISTRATION</button>`;
   renderEventSwitcher();
 }
@@ -120,8 +120,14 @@ let hasLiveTiming=null;
 async function detectLiveTiming(){
   if(hasLiveTiming!==null)return hasLiveTiming;
   try{
-    const r=await fetch('/api/live/config',{cache:'no-store'});
-    hasLiveTiming=r.ok;
+    // Certains hébergements statiques répondent 200 avec le HTML du site sur
+    // toute URL : on n'accepte qu'une vraie réponse JSON.
+    const r=await fetch('/api/live/config',{cache:'no-store',headers:{Accept:'application/json'}});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const type=String(r.headers.get('content-type')||'');
+    if(!/json/i.test(type))throw new Error('pas du JSON');
+    const j=await r.json();
+    hasLiveTiming=!!j&&j.enabled!==false;
   }catch(e){hasLiveTiming=false}
   return hasLiveTiming;
 }
