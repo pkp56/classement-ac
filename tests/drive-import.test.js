@@ -134,3 +134,118 @@ test('Les secteurs produits couvrent le tour sans trou', () => {
   assert.deepEqual(buildSectorSplits([0, 1], 1000), [{ label: 'S1', from: 0, to: 1000 }]);
   assert.deepEqual(buildSectorSplits([], 1000), []);
 });
+
+// --------------------------------------------------------- ouverture aux events
+
+/**
+ * Charge des fonctions de `site.js` dans un bac à sable.
+ * `site.js` est un script navigateur ; on n'extrait que les fonctions pures
+ * pour pouvoir les tester sous Node sans DOM.
+ */
+function loadSiteFns(names, extra = {}) {
+  const src = fs.readFileSync(path.join(ROOT, 'site.js'), 'utf8');
+
+  // Extracteur conscient des chaînes, templates et ${...}.
+  function extractFn(name) {
+    const sig = new RegExp('(?:^|\\n)(?:async\\s+)?function\\s+' + name + '\\s*\\(');
+    const m = sig.exec(src);
+    if (!m) throw new Error('fonction introuvable : ' + name);
+    let i = m.index + 1;
+    // sauter la liste de paramètres
+    let depth = 0, st = null;
+    for (; i < src.length; i++) {
+      const c = src[i];
+      if (st) { if (c === '\\') { i++; continue } if ((st === 's1' && c === "'") || (st === 's2' && c === '"') || (st === 'tpl' && c === '`')) st = null; continue }
+      if (c === "'" || c === '"' || c === '`') { st = c === "'" ? 's1' : c === '"' ? 's2' : 'tpl'; continue }
+      if (c === '{' || c === '(') depth++;
+      else if (c === '}' || c === ')') { depth--; if (depth === 0) { i++; break } }
+    }
+    let state = null, exprDepth = 0, braces = 0;
+    for (; i < src.length; i++) {
+      const c = src[i];
+      if (state === 'line') { if (c === '\n') state = null; continue }
+      if (state === 'block') { if (c === '*' && src[i + 1] === '/') { state = null; i++ } continue }
+      if (state === 'tpl') {
+        if (c === '\\') { i++; continue }
+        if (c === '`') state = null;
+        else if (c === '$' && src[i + 1] === '{') { state = 'expr'; exprDepth = 1; i++; }
+        continue
+      }
+      if (state === 'expr') {
+        if (c === '{') exprDepth++;
+        else if (c === '}') { exprDepth--; if (exprDepth === 0) state = 'tpl' }
+        continue
+      }
+      if (state === 's1') { if (c === '\\') { i++; continue } if (c === "'") state = null; continue }
+      if (state === 's2') { if (c === '\\') { i++; continue } if (c === '"') state = null; continue }
+      if (c === '/' && src[i + 1] === '/') { state = 'line'; i++; continue }
+      if (c === '/' && src[i + 1] === '*') { state = 'block'; i++; continue }
+      if (c === '`') { state = 'tpl'; continue }
+      if (c === "'") { state = 's1'; continue }
+      if (c === '"') { state = 's2'; continue }
+      if (c === '{') braces++;
+      else if (c === '}') { braces--; if (braces === 0) return src.slice(m.index + 1, i + 1) }
+    }
+    throw new Error('accolade non fermée : ' + name);
+  }
+
+  const body = names.map(extractFn).join('\n');
+  const ctx = {
+    LEGACY_DEFAULT_SLUG: 'lola-t290-2026',
+    ACTIVE_LOLA_SLUG: 'lola-t290-gdsp-championnat-2026',
+    ...extra
+  };
+  const fn = new Function(...Object.keys(ctx), body + ';return {' + names.join(',') + '};');
+  return fn(...Object.values(ctx));
+}
+
+test("L'onglet Circuit est ouvert aux événements hors championnat Lola", () => {
+  const site = loadSiteFns(['isLolaEvent'], {
+    eventContext: { slug: 'alpha-romeo-cup', name: 'alpha romeo cup', data: {} }
+  });
+  assert.equal(site.isLolaEvent(), false, "un autre événement ne doit pas être traité comme Lola");
+});
+
+test('Une manche importée suffit à rendre l\'onglet visible sur un autre événement', () => {
+  const site = loadSiteFns(['hasCircuitData', 'isLolaEvent'], {
+    eventContext: { slug: 'alpha-romeo-cup', data: { circuitRounds: [{ round: 1, name: 'Monza' }] } },
+    circuitsCache: null, circuitsError: '', circuitsPending: null,
+    importedCircuitRounds: () => [{ round: 1, name: 'Monza' }],
+    render: () => {}, page: 'event'
+  });
+  assert.equal(site.hasCircuitData(), true);
+});
+
+test('Sans aucune manche, l\'onglet reste masqué une fois le chargement terminé', () => {
+  const site = loadSiteFns(['hasCircuitData', 'isLolaEvent'], {
+    eventContext: { slug: 'alpha-romeo-cup', data: {} },
+    circuitsCache: { rounds: [] }, circuitsError: '', circuitsPending: null,
+    importedCircuitRounds: () => [],
+    render: () => {}, page: 'event'
+  });
+  assert.equal(site.hasCircuitData(), false);
+});
+
+test('Le championnat Lola garde son onglet même sans manche importée', () => {
+  const site = loadSiteFns(['hasCircuitData', 'isLolaEvent'], {
+    eventContext: { slug: 'lola-t290-gdsp-championnat-2026', data: {} },
+    circuitsCache: null, circuitsError: '', circuitsPending: null,
+    importedCircuitRounds: () => [],
+    render: () => {}, page: 'event'
+  });
+  assert.equal(site.isLolaEvent(), true);
+  assert.equal(site.hasCircuitData(), true);
+});
+
+test('La fusion des manches numérote sans écraser M1', () => {
+  const site = loadSiteFns(['mergeCircuitRounds'], {});
+  const base = [{ round: 1, label: 'M1', name: 'Tremblant' }, { round: 2, label: 'M2', name: 'Riverside' }];
+  // Manche sans numéro : doit prendre M3, pas M1.
+  const out = site.mergeCircuitRounds(base, [{ name: 'Nouveau' }]);
+  assert.deepEqual(out.map(r => r.label), ['M1', 'M2', 'M3']);
+  // Manche importée de même numéro : remplace la statique.
+  const replaced = site.mergeCircuitRounds(base, [{ round: 2, name: 'Riverside (maj)' }]);
+  assert.equal(replaced.length, 2);
+  assert.equal(replaced[1].name, 'Riverside (maj)');
+  assert.equal(replaced[1].imported, true);
+});

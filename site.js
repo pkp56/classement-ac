@@ -146,7 +146,9 @@ async function go(x){
 function goHome(){go('accueil')}
 function setEventSubTab(tab){
   if(!isEventPage(tab))return;
-  if(tab==='circuit'&&!isLolaEvent())return;
+  // L'onglet Circuit est ouvert à tous les événements, mais reste masqué
+  // tant qu'aucune manche n'existe (voir hasCircuitData).
+  if(tab==='circuit'&&!hasCircuitData())return;
   if(tab!=='pilotes')driverId='';
   page=tab;
   render();
@@ -1573,7 +1575,7 @@ function renderEventShell(){
     ?'<span class="tag archive">SAISON ARCHIVÉE</span>'
     :(rs.length===0?'<span class="tag" style="background:#d7a347;color:#102a32">CHAMPIONNAT À VENIR</span>':'<span class="tag live">CHAMPIONNAT EN COURS</span>');
 
-  const activeSub=page==='classement'?'classement':page==='manches'?'manches':page==='pilotes'?'pilotes':(page==='circuit'&&isLolaEvent())?'circuit':'event';
+  const activeSub=page==='classement'?'classement':page==='manches'?'manches':page==='pilotes'?'pilotes':(page==='circuit'&&hasCircuitData())?'circuit':'event';
   const subBody=activeSub==='classement'?ranking():activeSub==='manches'?manche():activeSub==='pilotes'?drivers():activeSub==='circuit'?circuit():eventHome();
 
   return `<div class="ev-shell">`
@@ -1583,7 +1585,7 @@ function renderEventShell(){
     +`<button type="button" class="ev-subtab ${activeSub==='event'?'active':''}" onclick="setEventSubTab('event')">Accueil <span class="ev-subtab-badge">Affiche &amp; Infos</span></button>`
     +`<button type="button" class="ev-subtab ${activeSub==='classement'?'active':''}" onclick="setEventSubTab('classement')">Classements <span class="ev-subtab-badge">${ds.length||0}</span></button>`
     +`<button type="button" class="ev-subtab ${activeSub==='manches'?'active':''}" onclick="setEventSubTab('manches')">Résultats <span class="ev-subtab-badge">${rs.length} M.</span></button>`
-    +(isLolaEvent()?`<button type="button" class="ev-subtab ${activeSub==='circuit'?'active':''}" onclick="setEventSubTab('circuit')">Circuit <span class="ev-subtab-badge">${esc(circuitBadgeLabel())}</span></button>`:'')
+    +(hasCircuitData()?`<button type="button" class="ev-subtab ${activeSub==='circuit'?'active':''}" onclick="setEventSubTab('circuit')">Circuit <span class="ev-subtab-badge">${esc(circuitBadgeLabel())}</span></button>`:'')
     +`<button type="button" class="ev-subtab ${activeSub==='pilotes'?'active':''}" onclick="setEventSubTab('pilotes')">Pilotes <span class="ev-subtab-badge">${ds.length||0}</span></button>`
     +`</div></div>`
     +`<div class="ev-subcontent">${subBody}</div>`;
@@ -1662,20 +1664,24 @@ async function circuitsData(){
   if (circuitsCache) return circuitsCache;
   if (circuitsError) return null;
   let base = null, err = '';
-  try {
-    const r = await fetch('/data/circuits.json', { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    base = await r.json();
-    if (!base || !Array.isArray(base.rounds)) throw new Error('Données circuit incomplètes');
-  } catch (e) {
-    err = e && e.message ? e.message : String(e);
+  // `data/circuits.json` décrit le championnat Lola T290. Les autres événements
+  // n'ont que les manches importées depuis l'administration : y mêler le
+  // calendrier Lola afficherait six circuits qui ne les concernent pas.
+  if (isLolaEvent()) {
+    try {
+      const r = await fetch('/data/circuits.json', { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      base = await r.json();
+      if (!base || !Array.isArray(base.rounds)) throw new Error('Données circuit incomplètes');
+    } catch (e) {
+      err = e && e.message ? e.message : String(e);
+    }
   }
   const extra = importedCircuitRounds();
-  // Les manches importées suffisent à afficher l'onglet même si le fichier
-  // statique est absent (ex. nouvel événement sans calendrier fourni).
-  if (!base && !extra.length) { circuitsError = err || 'Données circuit incomplètes'; return null; }
+  // Les manches importées suffisent à afficher l'onglet même sans fichier statique.
+  if (!base && !extra.length) { circuitsError = err || 'Aucun circuit pour cet événement'; return null; }
   const merged = mergeCircuitRounds((base && base.rounds) || [], extra);
-  if (!merged.length) { circuitsError = err || 'Données circuit incomplètes'; return null; }
+  if (!merged.length) { circuitsError = err || 'Aucun circuit pour cet événement'; return null; }
   const j = {
     ...(base || {}),
     rounds: merged,
@@ -1775,6 +1781,33 @@ function setCircMode(mode){
 function navEventTitle(name){
   return String(name || '').replace(/\s+/g, ' ').trim() || 'Championnat';
 }
+/**
+ * L'onglet Circuit doit-il apparaître pour l'événement courant ?
+ *
+ * Vrai dès qu'au moins une manche existe : le calendrier statique pour le
+ * championnat Lola T290, ou les manches importées depuis l'administration
+ * pour n'importe quel autre événement.
+ *
+ * Le calendrier n'étant pas encore chargé au premier rendu, la fonction
+ * déclenche le chargement et renvoie `true` de façon optimiste : sans cela
+ * l'onglet n'apparaîtrait jamais. Si le chargement révèle qu'il n'y a
+ * aucune manche, il disparaît au rendu suivant.
+ */
+function hasCircuitData(){
+  if (circuitsError) return false;
+  const imported = importedCircuitRounds().length;
+  if (isLolaEvent()) return true;          // le championnat a son calendrier
+  if (imported) return true;               // manches importées
+  if (circuitsCache) return false;         // chargé : vraiment aucun circuit
+  if (!circuitsPending) {
+    circuitsPending = circuitsData().finally(() => {
+      circuitsPending = null;
+      // Re-rendu pour faire apparaître/disparaître l'onglet une fois su.
+      if (page === 'event' || page === 'circuit') render();
+    });
+  }
+  return true;
+}
 function isLolaEvent(){
   const slug = eventContext && eventContext.slug;
   return !slug || slug === LEGACY_DEFAULT_SLUG || slug === ACTIVE_LOLA_SLUG;
@@ -1782,9 +1815,11 @@ function isLolaEvent(){
 /** Badge de l'onglet : manche en cours de consultation + ville. */
 function circuitBadgeLabel(){
   const data = circuitsCache;
-  if (!data || !data.rounds) return 'À VENIR';
+  if (!data || !data.rounds || !data.rounds.length) return 'À VENIR';
   const r = data.rounds[circuitRound() - 1] || data.rounds[0];
-  return `${r.label} · ${String(r.city || r.country || '').toUpperCase()}`;
+  // Un circuit importé peut n'avoir ni ville ni pays : on n'affiche pas « M1 · ».
+  const where = String(r.city || r.country || '').trim().toUpperCase();
+  return where ? `${r.label} · ${where}` : String(r.label || 'À VENIR');
 }
 function circuitStatusLabel(round){
   return round.status === 'done' ? 'Disputée' : 'À venir';
@@ -1801,7 +1836,7 @@ function circuitDateLabel(round){
 
 function circuit(){
   if (backendMulti && !eventContext) return hub();
-  if (!isLolaEvent()) return eventHome();
+  if (!hasCircuitData()) return eventHome();
   const cfg = pointsConfig();
   const data = circuitsCache;
   if (!data) {
@@ -1838,10 +1873,14 @@ function circuit(){
     : '';
 
   // --- Hero ---
-  const heroImage = (round.heroByVariant && round.heroByVariant[activeProfile.key]) || round.hero || 'preview.png';
+  const heroImage = (round.heroByVariant && round.heroByVariant[activeProfile.key]) || round.hero || null;
+  // Un circuit importé n'a pas de photo : fond uni plutôt qu'une image 404.
+  const heroStyle = heroImage
+    ? `background-image:linear-gradient(90deg,#0f252c 0%,#0f252cf2 38%,#0f252c66 58%,#0f252c22 78%),url('/${esc(heroImage)}')`
+    : 'background-image:linear-gradient(135deg,#0f252c 0%,#143a44 60%,#1c5a63 100%)';
   const heroMeta = [
-    ['Plateau', 'Lola T290'],
-    ['Configuration', round.layout],
+    ['Plateau', isLolaEvent() ? 'Lola T290' : ((eventContext && eventContext.name) || '—')],
+    ['Configuration', round.layout || 'Non précisée'],
     ['Coordonnées GPS', round.gps || 'Non communiquées'],
     ['Auteur du mod', round.author || 'Non communiqué']
   ];
@@ -1857,8 +1896,8 @@ function circuit(){
   const kpis = `<div class="cir-kpis">`
     + `<div class="cir-kpi"><span>Longueur du tracé</span><strong>${esc(activeProfile.lengthStr || round.lengthStr)}</strong><small>${esc(round.layout)} · ${esc(round.width || '')}</small></div>`
     + `<div class="cir-kpi gold"><span>Dénivelé sur un tour</span><strong>${elev ? frNum(elev.delta, 1) + ' m' : '—'}</strong><small>Alt. ${elev ? frNum(elev.min, 1) + ' m → ' + frNum(elev.max, 1) + ' m' : '—'}</small></div>`
-    + `<div class="cir-kpi green"><span>Capacité des stands</span><strong>${capacity}</strong><small>Grille Lola T290 du championnat</small></div>`
-    + `<div class="cir-kpi red"><span>Meilleur tour de la saison</span><strong>${seasonBest ? esc(seasonBest.time) : '—'}</strong><small>${seasonBest ? `${esc(seasonBest.driver)} · ${esc(seasonBest.track)}` : 'Aucun tour enregistré'}</small></div>`
+    + `<div class="cir-kpi green"><span>Capacité des stands</span><strong>${capacity}</strong><small>${isLolaEvent() ? 'Grille Lola T290 du championnat' : 'Places en grille'}</small></div>`
+    + `<div class="cir-kpi red"><span>${isLolaEvent() ? 'Meilleur tour de la saison' : 'Meilleur tour'}</span><strong>${seasonBest ? esc(seasonBest.time) : '—'}</strong><small>${seasonBest ? `${esc(seasonBest.driver)} · ${esc(seasonBest.track)}` : 'Aucun tour enregistré'}</small></div>`
     + `</div>`;
 
   // --- Inspecteur (3 modes) ---
@@ -1975,7 +2014,7 @@ function circuit(){
   const sectorsTable = `<div class="cir-panel"><div class="eyebrow">Chronométrie &amp; repères de la manche</div><h3>${esc(round.label)} · ${esc(isDone ? circuitDateLabel(round) : 'À venir')}</h3>`
     + `<p class="cir-src" style="margin:0 0 10px">${esc(round.format)}${isDone ? ' · ' + esc(entries) : ''}${round.stats && round.stats.drivers ? ` · ${round.stats.drivers} pilotes classés` : ''}${round.winner ? ` · vainqueur ${esc(round.winner)}` : ''}.</p>`
     + lapRows
-    + `<div class="cir-optimal"><span>Tour le plus rapide de la saison</span><b>${seasonBest ? esc(seasonBest.time) : '—'}</b></div>`
+    + `<div class="cir-optimal"><span>${isLolaEvent() ? 'Tour le plus rapide de la saison' : 'Tour le plus rapide'}</span><b>${seasonBest ? esc(seasonBest.time) : '—'}</b></div>`
     + `<div class="cir-link"><div><div class="eyebrow" style="margin:0">Calendrier</div><div class="muted" style="margin-top:2px">${nb(data.completedCount || 0, 0)} manches disputées sur ${nb(data.totalCount || rounds.length, 0)}.</div></div>`
     + `<button type="button" class="btn secondary small" onclick="openCircuitRoundResult(${idx})">Voir les résultats →</button></div></div>`;
 
@@ -2000,7 +2039,7 @@ function circuit(){
 
   return `<div class="cir-roundbar">${calendar}</div>`
     + `<div class="cir-toolbar"><div class="cir-select"><span>Manche</span><b>${esc(round.label)} · ${esc(round.name)} (${esc(round.country)})</b></div>${variantButtons}</div>`
-    + `<div class="cir-hero cir-hero-photo" style="background-image:linear-gradient(90deg,#0f252c 0%,#0f252cf2 38%,#0f252c66 58%,#0f252c22 78%),url('/${esc(heroImage)}')">`
+    + `<div class="cir-hero cir-hero-photo" style="${heroStyle}">`
       + `<div class="cir-hero-txt"><div>`
         + `<div class="cir-kicker"><span class="cir-flag">${esc(round.label)}</span>${statusChip}<span class="cir-eyebrow">${esc(round.city || round.country || '')} · ${esc(round.country || '')}${round.year ? ' · ' + round.year : ''}</span></div>`
         + `<h2>${esc(round.name)}</h2>`

@@ -144,6 +144,31 @@ Détails d'implémentation :
   deux (`mergeCircuitRounds`), une manche importée remplaçant la statique de
   même numéro. `saveRemote` réexpédie `circuitRounds`, sinon une sauvegarde de
   l'événement les effacerait.
+
+### Portée : tous les événements
+
+L'onglet Circuit n'est plus réservé au championnat Lola T290. Il apparaît sur
+n'importe quel événement dès qu'une manche existe :
+
+| Événement | Source du calendrier |
+| --- | --- |
+| Championnat Lola T290 | `data/circuits.json` (6 manches) + manches importées |
+| Tout autre événement | uniquement les manches importées |
+
+Le fichier statique n'est chargé que pour le championnat Lola : sur un autre
+événement, y mêler ce calendrier afficherait six circuits qui ne le concernent
+pas.
+
+`hasCircuitData()` décide de la visibilité de l'onglet. Tant que le calendrier
+n'est pas chargé elle répond « oui » de façon optimiste (sinon l'onglet
+n'apparaîtrait jamais), puis le rendu suivant le masque s'il s'avère qu'il n'y a
+aucune manche. Une manche importée sur un événement vierge fait donc apparaître
+l'onglet immédiatement.
+
+Les libellés qui supposaient le championnat sont neutralisés hors Lola :
+« Plateau : Lola T290 », « Grille Lola T290 », « Meilleur tour de la saison ».
+Un circuit importé n'ayant pas de photo, le bandeau utilise un fond uni au lieu
+de pointer vers une image absente.
 - `POST /api/admin/circuits/import` — route protégée par le mot de passe admin
   (même `Bearer` que le reste de l'administration).
 - `surfaces.ini` : le nom de surface vient de `KEY=` (la section s'appelle
