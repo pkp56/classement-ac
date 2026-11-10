@@ -79,6 +79,7 @@
     <a class="brand" href="/">GDSP<span>.</span></a>
     <h1>Live Timing</h1>
     <div class="meta">
+      <select id="sourceSelect" title="Serveur suivi" style="display:none;background:#1c3a43;color:#f4ecd8;border:1px solid #3b5a64;padding:5px 8px;font:inherit;font-size:11px"></select>
       <span id="state"><span class="dot offline" id="dot"></span><span id="stateText">Connexion…</span></span>
       <span id="clock" class="muted"></span>
     </div>
@@ -156,10 +157,11 @@
     var live = st.status === 'live';
     var http = st.status === 'http';
     var stale = st.status === 'stale';
+    var remote = st.mode === 'http-remote';
     $('dot').className = 'dot ' + (live ? 'live' : stale ? 'http' : http ? 'http' : 'offline');
     $('stateText').textContent = live
-      ? (st.mode === 'push' ? 'Direct (PC distant)' : 'Direct')
-      : stale ? 'Instantané périmé'
+      ? (st.mode === 'push' ? 'Direct (PC distant)' : remote ? 'Direct (lecture seule)' : 'Direct')
+      : stale ? (remote ? 'Serveur injoignable' : 'Instantané périmé')
       : http ? 'Serveur joignable (résumé)' : 'Hors ligne';
     $('clock').textContent = new Date(d.updatedAt).toLocaleTimeString('fr-FR');
 
@@ -187,6 +189,19 @@
 
   function renderBanner(d, st) {
     var cfg = siteConfig || {};
+    if (st.mode === 'http-remote') {
+      $('bannerTitle').textContent = 'Ce serveur public ne répond pas';
+      $('bannerBody').innerHTML =
+        '<p>Cette page lit le serveur à distance via son port HTTP : <code>' + esc(st.sourceUrl || '') + '/INFO</code> et <code>/ENTRY</code>.</p>' +
+        '<p>' + (st.error ? 'Dernière erreur : <code>' + esc(st.error) + '</code>. ' : '') +
+        'Le serveur est peut-être éteint, en cours de redémarrage, ou son port HTTP n\'est pas joignable depuis Internet.</p>' +
+        '<p class="muted" style="font-size:12px">Vérifie avec la console acServer, ou essaie depuis un navigateur : ' +
+        '<code>' + esc(st.sourceUrl || '') + '/INFO</code> doit afficher du JSON.</p>';
+      $('banner').style.display = 'block';
+      $('copyCmd').style.display = 'none';
+      return;
+    }
+    $('copyCmd').style.display = '';
     var pushOn = cfg.push && cfg.push.enabled;
     var udp = (cfg.udp) || st.udp || {};
     $('bannerTitle').textContent = st.error ? 'La liaison avec le serveur est en erreur' : "Le site n'arrive pas encore à lire le serveur";
@@ -261,13 +276,15 @@
   function renderDiag(d) {
     var st = d.status || {}, udp = st.udp || {};
     var lines = [
-      '<b>Liaison :</b> ' + esc(st.mode === 'push' ? 'agent distant' : st.mode || '—') +
+      '<b>Liaison :</b> ' + esc(st.mode === 'push' ? 'agent distant' : st.mode === 'http-remote' ? 'HTTP public (lecture seule)' : st.mode || '—') +
         (st.mode === 'push'
           ? ' · reçu il y a ' + (st.receivedAgoMs != null ? Math.round(st.receivedAgoMs / 1000) + ' s' : '—') + (st.pushedFrom ? ' depuis ' + esc(st.pushedFrom) : '')
           : ' · écoute UDP ' + esc(udp.listenPort) + ' (' + esc(udp.bound) + ') → ' + esc(udp.host) + ':' + esc(udp.serverPort)),
       '<b>Dernier paquet :</b> ' + (st.lastPacketAgoMs == null ? 'aucun' : (st.lastPacketAgoMs / 1000).toFixed(1) + ' s'),
       '<b>Résumé HTTP :</b> ' + (st.lastHttpAgoMs == null ? 'non configuré' : (st.lastHttpAgoMs / 1000).toFixed(1) + ' s'),
-      '<b>Protocole :</b> ACSP v' + esc(d.server.protocolVersion == null ? '?' : d.server.protocolVersion)
+      st.mode === 'http-remote'
+        ? '<b>Source :</b> ' + esc(st.sourceUrl || '—') + ' · relu il y a ' + (st.lastOkAgoMs != null ? Math.round(st.lastOkAgoMs / 1000) + ' s' : '—')
+        : '<b>Protocole :</b> ACSP v' + esc(d.server.protocolVersion == null ? '?' : d.server.protocolVersion)
     ];
     if (d.referenceLapMs) lines.push('<b>Écarts :</b> estimés sur un tour de référence de ' + (d.referenceLapMs / 1000).toFixed(3) + ' s');
     if (st.error) lines.push('<b>Erreur :</b> ' + esc(st.error));
@@ -275,9 +292,26 @@
   }
 
   var lastSnapshotAt = 0;
+  var activeSource = new URLSearchParams(location.search).get('source') || '';
+  function streamUrl() {
+    return '/api/live/stream' + (activeSource ? '?source=' + encodeURIComponent(activeSource) : '');
+  }
+  function statusUrl() {
+    return '/api/live/status' + (activeSource ? '?source=' + encodeURIComponent(activeSource) : '');
+  }
+  function renderSources(cfg) {
+    var list = (cfg && cfg.httpSources) || [];
+    var sel = $('sourceSelect');
+    if (list.length < 2) { sel.style.display = 'none'; return; }
+    sel.innerHTML = list.map(function (s, i) {
+      var current = activeSource === '' ? i === 0 : String(i) === activeSource || s.url === activeSource;
+      return '<option value="' + s.index + '"' + (current ? ' selected' : '') + '>' + esc(s.url.replace(/^https?:\/\//, '')) + '</option>';
+    }).join('');
+    sel.style.display = '';
+  }
   function connect() {
     if (socket) { try { socket.close(); } catch (e) {} }
-    var es = new EventSource('/api/live/stream');
+    var es = new EventSource(streamUrl());
     socket = es;
     es.addEventListener('snapshot', function (ev) {
       lastSnapshotAt = Date.now();
@@ -303,14 +337,14 @@
   // onglet réveillé…), on rafraîchit par requête simple.
   setInterval(function () {
     if (Date.now() - lastSnapshotAt < 4000) return;
-    fetch('/api/live/status').then(function (r) { return r.json(); }).then(function (d) {
+    fetch(statusUrl()).then(function (r) { return r.json(); }).then(function (d) {
       lastSnapshotAt = Date.now();
       render(d);
     }).catch(function () {});
   }, 3000);
 
   $('reload').addEventListener('click', function () {
-    fetch('/api/live/status').then(function (r) { return r.json(); }).then(render);
+    fetch(statusUrl()).then(function (r) { return r.json(); }).then(render);
     connect();
   });
   $('copyCmd').addEventListener('click', function () {
@@ -321,9 +355,20 @@
     setTimeout(function () { btn.textContent = 'Copier la config serveur'; }, 1600);
   });
 
-  fetch('/api/live/config').then(function (r) { return r.json(); }).then(function (c) { siteConfig = c; }).catch(function () {});
-  fetch('/api/live/status').then(function (r) { return r.json(); }).then(render).catch(function () {});
+  fetch('/api/live/config').then(function (r) { return r.json(); }).then(function (c) {
+    siteConfig = c;
+    renderSources(c);
+  }).catch(function () {});
+  fetch(statusUrl()).then(function (r) { return r.json(); }).then(render).catch(function () {});
   connect();
+  $('sourceSelect').addEventListener('change', function () {
+    activeSource = this.value;
+    var url = new URL(location.href);
+    url.searchParams.set('source', activeSource);
+    history.replaceState({}, '', url);
+    lastSnapshotAt = 0;
+    connect();
+  });
 })();
 </script>
 </body>

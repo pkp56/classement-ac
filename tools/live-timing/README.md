@@ -39,9 +39,42 @@ lignes dans `server_cfg.ini`.
 | --- | --- |
 | **Le site et le serveur AC tournent sur le même PC** (ou sur le même réseau local, ex. `npm start` sur ta machine) | rien de plus : le collecteur du site lit acServer en UDP localement (section 2). |
 | **Le site est hébergé ailleurs** (Render) et le serveur AC tourne sur ton PC | le PC pousse les données vers le site avec l'agent (section 2 bis) : aucun port entrant, aucune IP publique, ça marche derrière une box ou un partage 4G. |
+| **Tu veux suivre un serveur public** dont tu n'as pas la main (celui d'un ami, un serveur d'open) | donne son adresse HTTP (`LIVE_HTTP_SOURCES`, section 1 ter) : lecture seule, mais immédiat. |
 
 En mode « push », le site affiche en priorité ce que l'agent lui envoie ; s'il
 n'y a pas d'agent, il retombe sur l'écoute UDP locale.
+
+## 1 ter. Suivre un serveur public que tu ne possèdes pas (mode HTTP)
+
+C'est le cas du lien que tu m'as envoyé
+(`http://82.66.165.242:16835`, « {GDSP_ Server test 1 »). Un acServer expose
+toujours son port HTTP (`HTTP_PORT`) avec deux pages publiques :
+
+* `/INFO` → JSON (nom, circuit, places, temps restant, mot de passe…) ;
+* `/ENTRY` → la feuille de temps (pilote, voiture, équipe, tours, dernier,
+  meilleur, total), et en course les positions et écarts officiels.
+
+Il suffit donc de donner l'adresse au site :
+
+```bash
+LIVE_HTTP_SOURCES=http://82.66.165.242:16835
+```
+
+Un lien `acstuff.club/s/q:race/online/join?ip=…&httpPort=…` est accepté tel quel
+(converti automatiquement), et plusieurs serveurs peuvent être listés, séparés
+par des virgules — un menu « Serveur suivi » apparaît alors sur la page.
+`LIVE_HTTP_INTERVAL_MS` (défaut 3000) règle la fréquence de lecture.
+
+**Ce mode est en lecture seule** : on n'a aucune autorisation sur ce serveur, donc
+pas de chat, pas de kick, pas de changement de session. Et le HTTP ne donnant pas
+les positions, il n'y a ni vitesse instantanée ni « live map » — mais les temps,
+les tours et les classements sont ceux du serveur, pas des estimations.
+
+À savoir : acServer peut limiter/refuser les connexions HTTP qui ne viennent pas
+d'une IP « propre » (protection anti-DDoS de certains hébergeurs). Si la page
+affiche « Serveur injoignable » alors que `/INFO` répond dans ton navigateur,
+c'est que la machine du site est filtrée : dans ce cas, passe par le mode push
+(§ 2 bis) sur le PC du serveur, ou héberge le live timing près du serveur.
 
 ## 2 bis. Site distant + serveur AC sur ton PC (mode push)
 
@@ -124,6 +157,8 @@ Variables d'environnement utiles (toutes facultatives) :
 | `AC_HTTP_URL` | *(vide)* | ex. `http://127.0.0.1:8081` : ajoute le résumé `/INFO` (nb de places, mot de passe, `timeleft`) et permet un affichage « serveur joignable » même si l'UDP ne répond pas |
 | `AC_SERVER_LABEL` | `Serveur Assetto Corsa` | nom affiché avant le premier paquet |
 | `LIVE_PUSH_TOKEN` | *(vide)* | (site) active la réception des agents distants ; **même valeur** dans `PUSH_TOKEN` de l'agent |
+| `LIVE_HTTP_SOURCES` | *(vide)* | (site) URL HTTP / `ip:port` / lien acstuff de serveurs publics à suivre, séparés par des virgules (max 5) |
+| `LIVE_HTTP_INTERVAL_MS` | `3000` | (site) fréquence de lecture des sources HTTP |
 
 ## 4. Essayer sans serveur AC
 
@@ -175,6 +210,7 @@ Ouvre `/live-timing` : le classement se remplit en quelques secondes.
 | Route | Contenu |
 | --- | --- |
 | `GET /api/live/snapshot` | photo complète (serveur, session, voitures, meilleurs tours, événements, diagnostic) |
+| `?source=N` | sur `/status`, `/snapshot`, `/stream` : choisit la N-ième source HTTP de `LIVE_HTTP_SOURCES` (0 par défaut) |
 | `GET /api/live/status` | identique, allégé côté client pour l'état initial |
 | `GET /api/live/stream` | flux SSE `snapshot` (1/s) + `log` (événements temps réel) |
 | `POST /api/live/command` | admin (`Bearer` mot de passe admin) : `{action:'chat'|'kick'|'next-session'|'restart-session', message, carId}` — mode local uniquement |

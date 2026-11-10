@@ -31,7 +31,9 @@ Deux cas de figure :
 * **site hébergé (Render) et serveur AC sur un PC à la maison** → lancer
   `node tools/live-timing/agent.js` sur ce PC avec `SITE_URL` et `PUSH_TOKEN`
   (même valeur que `LIVE_PUSH_TOKEN` sur le site) ; le PC pousse un instantané
-  par seconde en HTTPS, sans ouvrir de port entrant.
+  par seconde en HTTPS, sans ouvrir de port entrant ;
+* **serveur public dont tu n'as pas la main** → `LIVE_HTTP_SOURCES` avec son
+  adresse HTTP (ou son lien acstuff), lecture seule via `/INFO` + `/ENTRY`.
 
 Détails, variables d'environnement, simulateur de test et limites :
 [`tools/live-timing/README.md`](tools/live-timing/README.md).

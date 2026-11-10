@@ -624,7 +624,47 @@ app.post('/api/admin/circuits/import', async (req, res) => {
 // Doc : tools/live-timing/README.md. Réglage : LIVE_PUSH_TOKEN.
 let liveTiming = null;
 let livePush = null;
+let liveHttpSources = null;
 const liveClients = new Set();
+// Sources HTTP distantes : serveurs AC publics qu'on ne possède pas, lus via
+// leur port HTTP (/INFO + /ENTRY). Une URL, un « ip:port » ou un lien acstuff
+// séparés par des virgules. Ex. LIVE_HTTP_SOURCES=http://82.66.165.242:16835
+function normalizeLiveSource(raw){
+  let v=String(raw||'').trim();
+  if(!v)return null;
+  const acstuff=/[?&]ip=([^&]+)(?:[^#]*?[?&]httpPort=(\d+))?/i.exec(v);
+  if(acstuff){
+    const ip=decodeURIComponent(acstuff[1]);
+    const port=acstuff[2];
+    v=`http://${ip}${port?':'+port:''}`;
+  }
+  if(!/^https?:\/\//i.test(v))v='http://'+v;
+  try{
+    const u=new URL(v);
+    if(!/^https?:$/.test(u.protocol))return null;
+    return u.origin.replace(/\/+$/,'');
+  }catch(e){return null;}
+}
+function liveSourceUrls(){
+  return String(process.env.LIVE_HTTP_SOURCES||'')
+    .split(',')
+    .map(normalizeLiveSource)
+    .filter(Boolean)
+    .slice(0,5);
+}
+function getLiveHttpSources(){
+  if(!liveHttpSources){
+    const {RemoteHttpSource}=require('./tools/live-timing/http-source');
+    liveHttpSources=liveSourceUrls().map((url,i)=>new RemoteHttpSource({url,intervalMs:Number(process.env.LIVE_HTTP_INTERVAL_MS||3000),label:'Serveur '+(i+1)}));
+    for(const src of liveHttpSources){
+      try{src.start()}catch(e){console.error('live-timing: source distante',src.url,'—',e.message)}
+    }
+  }
+  return liveHttpSources;
+}
+if(liveTimingEnabled()&&liveSourceUrls().length){
+  try{getLiveHttpSources()}catch(e){console.error('live-timing: sources HTTP indisponibles —',e.message)}
+}
 function liveTimingEnabled(){
   return String(process.env.LIVE_TIMING_ENABLED||'1') !== '0';
 }
@@ -649,8 +689,22 @@ function broadcastLive(event,payload){
   const frame='event: '+event+'\ndata: '+JSON.stringify(payload)+'\n\n';
   for(const res of liveClients){try{res.write(frame)}catch(e){/* client parti */}}
 }
-// L'agent distant est prioritaire : s'il pousse, c'est lui qu'on affiche.
-function liveSnapshot(){
+// Priorité : source HTTP demandée > agent qui pousse > écoute UDP locale.
+function resolveLiveSource(param){
+  const list=getLiveHttpSources();
+  if(!list.length)return null;
+  const raw=param==null?'' : String(param);
+  if(!raw)return list[0];
+  if(/^\d+$/.test(raw)){
+    const i=Number(raw);
+    return list[i]||null;
+  }
+  const wanted=normalizeLiveSource(raw);
+  return list.find(src=>src.url===wanted)||null;
+}
+function liveSnapshot(sourceIndex){
+  const remote=resolveLiveSource(sourceIndex);
+  if(remote)return remote.snapshot();
   const pushed=getLivePush().current();
   if(pushed)return pushed;
   try{return getLiveTiming().snapshot()}catch(e){
@@ -671,18 +725,19 @@ app.get('/api/live/config',(req,res)=>{
   res.json({
     enabled:liveTimingEnabled(),
     push:{enabled:!!livePushToken(),endpoint:'/api/live/push'},
-    udp:{listenPort:Number(process.env.AC_LISTEN_PORT||12000),serverPort:Number(process.env.AC_PLUGIN_PORT||12001)}
+    udp:{listenPort:Number(process.env.AC_LISTEN_PORT||12000),serverPort:Number(process.env.AC_PLUGIN_PORT||12001)},
+    httpSources:liveSourceUrls().map((url,i)=>({index:i,url,name:'Serveur '+(i+1)}))
   });
 });
 app.get('/api/live/status',(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!liveTimingEnabled())return res.json({enabled:false,status:{status:'offline',mode:'disabled'},server:{},session:{},cars:[]});
-  res.json({enabled:true,...liveSnapshot()});
+  res.json({enabled:true,...liveSnapshot(req.query.source)});
 });
 app.get('/api/live/snapshot',(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!liveTimingEnabled())return res.status(503).json({error:'Live timing désactivé.'});
-  res.json(liveSnapshot());
+  res.json(liveSnapshot(req.query.source));
 });
 // Réception des instantanés poussés par un agent (PC distant).
 // Auth : en-tête X-Live-Token (ou ?token=) comparé à LIVE_PUSH_TOKEN.
@@ -706,7 +761,7 @@ app.get('/api/live/stream',(req,res)=>{
     'X-Accel-Buffering':'no'
   });
   res.write('retry: 3000\n\n');
-  const push=()=>{try{res.write('event: snapshot\ndata: '+JSON.stringify(liveSnapshot())+'\n\n')}catch(e){/* client parti */}};
+  const push=()=>{try{res.write('event: snapshot\ndata: '+JSON.stringify(liveSnapshot(req.query.source))+'\n\n')}catch(e){/* client parti */}};
   push();
   const timer=setInterval(push,1000);
   liveClients.add(res);
@@ -718,6 +773,7 @@ app.post('/api/live/command',async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!liveTimingEnabled())return res.status(503).json({error:'Live timing désactivé.'});
   if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  if(resolveLiveSource(req.query.source||req.body&&req.body.source))return res.status(409).json({error:'Serveur public consulté en lecture seule : aucune commande possible.'});
   if(getLivePush().current())return res.status(409).json({error:'Serveur distant : les commandes doivent être envoyées depuis le PC qui héberge acServer.'});
   const {action,message,carId}=req.body||{};
   const allowed=['chat','kick','next-session','restart-session'];
