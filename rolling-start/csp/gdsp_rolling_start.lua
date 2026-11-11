@@ -636,6 +636,7 @@ local pen = {
   cutsSincePenalty = 0,
   hadCutPenalty = false,
   cutNoticeSeq = 0,
+  queue = {},            -- penalites pit en attente (FIFO), aucune n'ecrase la penalite en cours
   active = nil,          -- { kind, reasonCode, issuedLap, deadlineLap, serveLaps, holdSec, holdElapsed, pitSeen, pitDistM, escKind, escHoldSec, finishTimeSec, escalated, lapsLeft }
   totalTimePenaltySec = 0,
   disqualified = false,
@@ -983,6 +984,50 @@ local function addTimePenalty(sec, why)
   syncLocalStewardRecord(true)
 end
 
+-- Active une penalite pit (DT / Stop&Go) comme penalite en cours
+local function activatePitPenalty(kind, reasonCode, serveLaps, holdSec, escKind, escHoldSec, finishTimeSec, why)
+  local me = ac.getCar(0)
+  if not me then return end
+  local curLap = me.lapCount or 0
+  local lapsParam = (escKind == 'black_flag') and (serveLaps + 1) or (serveLaps + 2)
+  setGamePenalty('MandatoryPits', lapsParam)
+
+  pen.active = {
+    kind = kind,
+    reasonCode = reasonCode,
+    issuedLap = curLap,
+    deadlineLap = curLap + serveLaps,
+    serveLaps = serveLaps,
+    holdSec = (kind == 'stop_and_go') and holdSec or 0,
+    holdElapsed = 0,
+    pitSeen = false,
+    pitDistM = 0,
+    escKind = escKind,
+    escHoldSec = escHoldSec,
+    finishTimeSec = finishTimeSec,
+    escalated = false,
+    lapsLeft = serveLaps,
+  }
+
+  local title = (kind == 'stop_and_go')
+    and string.format('STOP & GO %ds (DANS LES %d TOURS)', holdSec, serveLaps)
+    or string.format('DRIVE-THROUGH (DANS LES %d TOURS)', serveLaps)
+  pen.note = { title = title, why = why, untilT = uiTime + 7 }
+  pcall(ac.setMessage, title, why, 'illegal', 7)
+  safeLog(string.format('issued %s deadlineLap=%d (%s)', kind, pen.active.deadlineLap, why))
+  syncLocalStewardRecord(true)
+end
+
+-- Penalites en attente non purgees (dernier tour / arrivee) : converties en temps
+local function flushQueuedToTime(why)
+  if not pen.queue or #pen.queue == 0 then return end
+  local list = pen.queue
+  pen.queue = {}
+  for _, q in ipairs(list) do
+    addTimePenalty(q.finishTimeSec, why)
+  end
+end
+
 local function assignStewardPenalty(kind, reasonCode, serveLaps, holdSec, escKind, escHoldSec, finishTimeSec, directTimeSec, why)
   local me = ac.getCar(0)
   if not me or kind == 'off' then return end
@@ -1017,6 +1062,7 @@ local function assignStewardPenalty(kind, reasonCode, serveLaps, holdSec, escKin
     setGamePenalty('BlackFlag', 0)
     pen.disqualified = true
     pen.active = nil
+    pen.queue = {}
     pen.note = { title = 'DRAPEAU NOIR — DISQUALIFIE', why = why, untilT = uiTime + 8 }
     pcall(ac.setMessage, 'DRAPEAU NOIR', why, 'illegal', 8)
     syncLocalStewardRecord(true)
@@ -1030,44 +1076,21 @@ local function assignStewardPenalty(kind, reasonCode, serveLaps, holdSec, escKin
   end
 
   if pen.active then
-    -- Existing pit penalty still pending: add time penalty and upgrade DT -> S&G if applicable
-    if pen.active.kind == 'drive_through' and kind == 'stop_and_go' then
-      pen.active.kind = 'stop_and_go'
-      pen.active.holdSec = holdSec
-      pen.active.holdElapsed = 0
-    end
-    addTimePenalty(directTimeSec, why .. ' (cumul sur penalite en cours)')
+    -- Une penalite est deja en cours : la nouvelle attend son tour (rien n'est ecrase)
+    pen.queue = pen.queue or {}
+    table.insert(pen.queue, {
+      kind = kind, reasonCode = reasonCode, serveLaps = serveLaps, holdSec = holdSec,
+      escKind = escKind, escHoldSec = escHoldSec, finishTimeSec = finishTimeSec, why = why,
+    })
+    if (tonumber(directTimeSec) or 0) > 0 then addTimePenalty(directTimeSec, why .. ' (en attente)') end
+    pen.note = { title = 'PENALITE EN ATTENTE (' .. #pen.queue .. ')', why = why, untilT = uiTime + 6 }
+    pcall(ac.setMessage, 'PENALITE EN ATTENTE', why, 'illegal', 6)
+    safeLog(string.format('queued %s (%s) — %d en attente', kind, why, #pen.queue))
+    syncLocalStewardRecord(true)
     return
   end
 
-  local curLap = me.lapCount or 0
-  local lapsParam = (escKind == 'black_flag') and (serveLaps + 1) or (serveLaps + 2)
-  setGamePenalty('MandatoryPits', lapsParam)
-
-  pen.active = {
-    kind = kind,
-    reasonCode = reasonCode,
-    issuedLap = curLap,
-    deadlineLap = curLap + serveLaps,
-    serveLaps = serveLaps,
-    holdSec = (kind == 'stop_and_go') and holdSec or 0,
-    holdElapsed = 0,
-    pitSeen = false,
-    pitDistM = 0,
-    escKind = escKind,
-    escHoldSec = escHoldSec,
-    finishTimeSec = finishTimeSec,
-    escalated = false,
-    lapsLeft = serveLaps,
-  }
-
-  local title = (kind == 'stop_and_go')
-    and string.format('STOP & GO %ds (DANS LES %d TOURS)', holdSec, serveLaps)
-    or string.format('DRIVE-THROUGH (DANS LES %d TOURS)', serveLaps)
-  pen.note = { title = title, why = why, untilT = uiTime + 7 }
-  pcall(ac.setMessage, title, why, 'illegal', 7)
-  safeLog(string.format('issued %s deadlineLap=%d (%s)', kind, pen.active.deadlineLap, why))
-  syncLocalStewardRecord(true)
+  activatePitPenalty(kind, reasonCode, serveLaps, holdSec, escKind, escHoldSec, finishTimeSec, why)
 end
 
 local function clearAllLocalPenalties(resetCuts)
@@ -1076,6 +1099,7 @@ local function clearAllLocalPenalties(resetCuts)
   pen.driving = false
   pen.pitSeen = false
   pen.active = nil
+  pen.queue = {}
   pen.disqualified = false
   pen.jumpWarn = false
   pen.jumpQueuedRolling = false
@@ -1711,6 +1735,7 @@ local function updateActiveStewardPenalty(me, dt)
   -- Periodic / finish steward broadcast
   if me.isRaceFinished and not pen.finishedSynced then
     pen.finishedSynced = true
+    flushQueuedToTime('Penalite non effectuee avant la ligne d\'arrivee')
     if pen.active then
       local addSec = pen.active.finishTimeSec
       clearNativeGamePenalty()
@@ -1730,6 +1755,16 @@ local function updateActiveStewardPenalty(me, dt)
     end
   elseif pen.raceStartClock and (uiTime - lastPenBroadcastAt >= 6.0) then
     syncLocalStewardRecord(true)
+  end
+
+  -- Promotion de la penalite suivante en file d'attente
+  if not pen.active and pen.queue and #pen.queue > 0 then
+    if isOnLastLap(me) then
+      flushQueuedToTime('Penalite non effectuee avant l\'arrivee')
+    else
+      local q = table.remove(pen.queue, 1)
+      activatePitPenalty(q.kind, q.reasonCode, q.serveLaps, q.holdSec, q.escKind, q.escHoldSec, q.finishTimeSec, q.why)
+    end
   end
 
   if not pen.active then return end
@@ -2875,7 +2910,7 @@ function script.drawUI()
       local baseBW, baseBH = 380 * k, (mainH + gapH + penH) * k
       local bx, by, bw, bh, bSc, bHov = hudUi.computeWidgetBox('banner', baseBW, math.max(30 * k, baseBH), win, mpos, mdown, mwheel, justPressed)
       -- le contenu suit la largeur réelle du cadre : rien ne dépasse, rien n'est rogné
-      local kb = bw / math.max(1, baseBW)
+      local kb = bw / 380 -- echelle commune largeur/hauteur : contenu = cadre (k * sc)
       local cx = bx + bw * 0.5
       local cy = by
       if ui.pushClipRect then pcall(ui.pushClipRect, vec2(bx, by), vec2(bx + bw, by + bh)) end
@@ -2917,15 +2952,18 @@ function script.drawUI()
         local hdr = pen.active.kind == 'stop_and_go'
           and string.format('STOP & GO (%ds) — RESTE %.1fs  |  %d TOUR(S)', pen.active.holdSec, math.max(0, pen.active.holdSec - pen.active.holdElapsed), lapsLeft)
           or string.format('DRIVE-THROUGH OBLIGATOIRE — %d TOUR(S) RESTANT(S)', lapsLeft)
+        local nQ = pen.queue and #pen.queue or 0
+        if nQ > 0 then hdr = hdr .. '  (+' .. nQ .. ' EN ATTENTE)' end
         ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 44 * kb), hudUi.COL_RED, 8 * kb)
-        hudUi.drawCentered(hdr, 17 * kb, cx, cy + 12 * kb, hudUi.COL_WHITE)
+        hudUi.drawCentered(hdr, 14 * kb, cx, cy + 14 * kb, hudUi.COL_WHITE)
       elseif pen.note and uiTime < pen.note.untilT then
         ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 42 * kb), hudUi.COL_AMBER, 8 * kb)
         hudUi.drawCentered(pen.note.title .. ' — ' .. pen.note.why, 15 * kb, cx, cy + 11 * kb, hudUi.COL_DARK)
       end
 
-      hudUi.drawControls('banner', bx, by, bw, bh, win, bHov)
       if ui.popClipRect then pcall(ui.popClipRect) end
+      -- boutons R - + et cadre : dessines hors du clip, sinon ils sont coupes en haut
+      hudUi.drawControls('banner', bx, by, bw, bh, win, bHov)
     end
 
     local showCutsWidget = (isCutSessionActive() or pen.totalTimePenaltySec > 0 or pen.active ~= nil)
