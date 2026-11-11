@@ -32,6 +32,14 @@ nav a.nav-live:hover{background:rgba(156,48,33,.32);border-color:#d7a347}
 nav a.nav-live .nav-live-dot{width:7px;height:7px;border-radius:50%;background:#c0392b;box-shadow:0 0 0 0 rgba(192,57,43,.7);animation:pulseLive 1.8s infinite}
 @keyframes pulseLive{0%{box-shadow:0 0 0 0 rgba(192,57,43,.6)}70%{box-shadow:0 0 0 7px rgba(192,57,43,0)}100%{box-shadow:0 0 0 0 rgba(192,57,43,0)}}
 .right{margin-left:auto;color:#d2a55f;font-size:11px;letter-spacing:2px;font-weight:bold;white-space:nowrap}
+/* Bandeau d'accueil vers le live timing */
+.live-banner{display:flex;align-items:center;gap:12px;margin:18px 0 0;padding:11px 15px;background:#132d35;color:#e9dec6;text-decoration:none;border-left:4px solid #d7a347;font-size:12.5px}
+.live-banner:hover{background:#1a3b45}
+.live-banner .live-banner-dot{width:8px;height:8px;border-radius:50%;background:#c0392b;flex:none;box-shadow:0 0 0 0 rgba(192,57,43,.7);animation:pulseLive 1.8s infinite}
+.live-banner .live-banner-kicker{font-size:10px;letter-spacing:1.6px;text-transform:uppercase;color:#d7a347;font-weight:bold;white-space:nowrap}
+.live-banner .live-banner-text{color:#ddd3bd}
+.live-banner .live-banner-go{margin-left:auto;color:#f8f2e4;font-weight:bold;white-space:nowrap}
+@media(max-width:620px){.live-banner{flex-wrap:wrap}.live-banner .live-banner-go{margin-left:0}}
 .event-switcher{display:flex;align-items:center;gap:6px}
 .event-switcher select{background:#1c3a43;color:#f4ecd8;border:1px solid #3b5a64;padding:6px 8px;font:inherit;font-size:11px;letter-spacing:.5px;max-width:360px}
 .page{max-width:1330px;margin:auto;padding:34px 35px 70px}
@@ -491,8 +499,8 @@ nav button.nav-event-tab.active{background:rgba(156,48,33,.32);border-color:#d7a
 <div id="poster-lightbox" class="poster-lightbox" onclick="closePosterLightbox()"><button type="button" class="poster-lightbox-close" onclick="closePosterLightbox()">✕ FERMER</button><img id="poster-lightbox-img" src="" alt="Affiche de l'événement" onclick="event.stopPropagation()"></div>
 <footer class="footer">GDSP — Gentleman Drivers Project · Classements et résultats communautaires.</footer>
 <!-- Scripts principaux : infobulles de profil, application, calculs et pénalités. -->
-<script src="/patches-v43.js?v=96"></script>
-<script src="/site.js?v=96"></script>
-<script src="/patches-v71.js?v=96"></script>
+<script src="/patches-v43.js?v=97"></script>
+<script src="/site.js?v=97"></script>
+<script src="/patches-v71.js?v=97"></script>
 </body>
 </html>
