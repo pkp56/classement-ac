@@ -349,14 +349,63 @@ le plus court du peloton : 10 m, moyenne 143 m.
 
 | Limite | Pourquoi | Conséquence |
 | --- | --- | --- |
-| 92 % d'un tour | l'écart 1er→dernier vaut 92 s sur 15 tours | les premières voitures sont presque « un tour devant » : en course comptée en tours, elles seraient créditées d'un tour d'avance → viser **≤ 50 %** d'un tour (`--cap`) |
+| 92 % d'un tour | l'écart 1er→dernier vaut 92 s sur 15 tours | la moitié du peloton part très loin du meneur : le tour de formation devient interminable, et la moindre perte de temps met une voiture à un tour. Rien n'est faux dans le calcul, mais viser **≤ 50 %** (`--cap=40`) est plus vivable |
 | le tour de chauffe | AC exige de boucler le tour de formation en restant derrière la voiture précédente | avec des écarts de plusieurs centaines de mètres, chacun doit **rouler à son rythme** et le meneur à ~60-70 km/h |
-| le fichier de piste | les `[START_n]` sont lus dans le **mod du circuit**, côté serveur | il faut modifier `start_positions.ini` / les objets `AC_START_n` du mod (une fois par circuit) et le distribuer aux pilotes ; le serveur AC seul ne peut pas les déplacer |
+| le fichier de piste | la grille est lue dans les objets `AC_START_n` du **kn5 du circuit**, côté client comme côté serveur (voir ci-dessous) | il faut modifier le mod du circuit (une fois) et le distribuer aux pilotes ; `server_cfg.ini` ne peut pas la déplacer |
 
-Le bloc `.ini.txt` est fourni pour ce travail de mod : ce sont les valeurs
-calculées pour 28 voitures, à reporter dans le fichier de la piste (ou dans
-l'éditeur 3D du circuit). Sans modification du mod, on retombe sur `GRID_ORDER=`
-et la grille native, espacée de 8 à 12 m.
+### Où vivent vraiment les positions de départ (vérifié)
+
+Point important, parce qu'on lit souvent le contraire sur les forums et les
+pages d'hébergeurs :
+
+- Les positions de départ sont des **objets vides nommés `AC_START_0`,
+  `AC_START_1`, … dans le fichier `kn5` du circuit** — pas dans un `.ini`.
+  « Every single car needs its own `AC_START_X` object for a race start »[^hagn].
+  Un moddeur confirme la même chose : « they must be in some …kn5, not in a text
+  or ini file »[^mods1], et pour ajouter des places de grille « you must edit
+  some kn5, no other way ».
+- Un fichier `data/start_positions.ini` avec des blocs `[GRID_n]` est décrit par
+  certaines pages d'hébergeurs[^volt] mais n'est **pas** documenté par Kunos ; je
+  ne l'ai trouvé dans aucune source de modding sérieuse. À ne pas considérer
+  comme acquis : testez avant de bâtir une saison dessus.
+- Ce que le **serveur** sait faire, c'est choisir l'**ordre** : `FIXED_GRID_ORDER=1`
+  et `GRID_ORDER=<guid1>,<guid2>…` dans `server_cfg.ini`. L'espacement, lui,
+  vient de la piste.
+
+D'où le dossier prêt à l'emploi, généré par l'outil :
+
+```bash
+node tools/grille-sur-circuit.js data/2026_9_9_21_37_QUALIFY.json --tours=15 --layout-dir=exports/layout-gdsp
+```
+
+```
+exports/layout-gdsp/
+├── models_gdsp.ini        ajoute go_gdsp.kn5 par-dessus la piste existante
+├── gdsp.start.txt         les 28 AC_START_n : POS + ORIENTATION
+├── gdsp/ui/ui_track.json  pitboxes = 28 (sinon le serveur refuse les voitures)
+├── gdsp/data/             à remplir : surfaces.ini, overlays.ini, ai/fast_lane.ai
+├── go_gdsp.kn5            à produire dans ksEditor (objets vides seulement)
+└── LIRE-MOI.txt           la marche à suivre
+```
+
+Le point clé : un layout est un **kn5 supplémentaire chargé par-dessus** la piste
+existante (`models_<layout>.ini`)[^layout]. On ajoute donc des `AC_START_n` **sans
+toucher au mod d'origine** : la piste reste intacte, on crée
+`content/tracks/<piste>/gdsp/` + `models_gdsp.ini`, et on met
+`CONFIG_TRACK=gdsp` dans `server_cfg.ini`. Le kn5 ne contient que des objets
+vides, il pèse quelques kilo-octets et se distribue avec le pack du circuit.
+
+Reste à faire côté circuit (10 minutes par piste, une fois) : créer les 28 objets
+vides aux coordonnées du fichier `gdsp.start.txt` dans ksEditor, exporter
+`go_gdsp.kn5`, et copier `ai/fast_lane.ai` + `data/` depuis la piste d'origine.
+
+Sans ce travail, on retombe sur `GRID_ORDER=` et la grille native, espacée de
+8 à 12 m.
+
+[^hagn]: Hagn's Site, *track.kn5*, section Logical Objects — <https://site.hagn.io/assettocorsa/modding/tracks/track-kn5>
+[^mods1]: assettocorsamods.net, *how can i make AI path?* et *Start/Finish lines and hotlapping* — « you must edit some kn5, no other way »
+[^volt]: VolticHost, *Configuring Custom Spawn Positions for Tracks in Assetto Corsa* — <https://help.voltichost.com/hc/help/articles/1739485355-configuring-custom-spawn-positions-for-tracks-in-assetto-corsa>
+[^layout]: assettocorsamods.net / r/assettocorsa, *How do I create layouts for my track?* — un `models_<layout>.ini` par layout, un kn5 par layout
 
 ## Race Control (départ lancé)
 

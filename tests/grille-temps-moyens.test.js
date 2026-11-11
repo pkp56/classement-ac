@@ -191,3 +191,27 @@ test('le bloc AC sort des positions et des orientations exploitables', () => {
   assert.match(block, /POS=-?\d+\.\d+,-?\d+\.\d+,-?\d+\.\d+/);
   assert.match(block, /ORIENTATION=-?\d+\.\d+/);
 });
+
+test('le squelette de layout AC contient un kn5 par layout et le bon nombre de boxes', () => {
+  const os = require('node:os');
+  const fs = require('node:fs');
+  const path_ = require('node:path');
+  const { writeLayoutSkeleton } = require('../tools/grille-sur-circuit');
+  const line = readLine('tremblant');
+  const grid = buildGrid(sessionOf({
+    a: [100000, 100000], b: [101000, 101000], c: [102000, 102000]
+  }), { laps: 10, lengthM: Math.round(line.lengthM) });
+  const placed = placeGrid(grid, line, {});
+  const dir = fs.mkdtempSync(path_.join(os.tmpdir(), 'gdsp-layout-'));
+  writeLayoutSkeleton(dir, placed, line, { layout: 'gdsp', track: 'mt-tremblant_69' });
+
+  // un models_<layout>.ini qui pointe un kn5 dédié, jamais la piste d'origine
+  const models = fs.readFileSync(path_.join(dir, 'models_gdsp.ini'), 'utf8');
+  assert.match(models, /FILE=go_gdsp\.kn5/);
+  // les start positions et le nombre de boxes suivent la grille
+  const starts = fs.readFileSync(path_.join(dir, 'gdsp.start.txt'), 'utf8');
+  assert.equal((starts.match(/\[START_\d+\]/g) || []).length, 3);
+  const ui = JSON.parse(fs.readFileSync(path_.join(dir, 'gdsp', 'ui', 'ui_track.json'), 'utf8'));
+  assert.equal(ui.pitboxes, '3');
+  fs.rmSync(dir, { recursive: true, force: true });
+});

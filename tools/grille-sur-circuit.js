@@ -180,8 +180,10 @@ function placeGrid(grid, line, opts) {
   const gridLengthM = behind[behind.length - 1] - marge; // du 1er au dernier
   const worstGapM = behind[behind.length - 1];
   const valid = worstGapM < L;
-  // Au-delà d'un demi-tour, une partie du peloton est « sur le tour précédent » :
-  // en course comptée en tours, ça n'a plus de sens (l'avant aurait un tour d'avance).
+  // Repère pratique : au-delà d'un demi-tour, la moitié du peloton est très
+  // loin du meneur. Ça n'invalide pas la formule (chacun passe la ligne au même
+  // instant), mais le tour de formation devient très long et une voiture qui
+  // perd du temps est vite à un tour : on le signale sans bloquer.
   const wrapRisk = worstGapM > L * 0.5;
   const minGap = Math.min(...cars.filter(c => c.gapToCarAheadM !== null).map(c => c.gapToCarAheadM));
 
@@ -340,6 +342,72 @@ ${cars}
 </svg>`;
 }
 
+/**
+ * Génère l'arborescence d'un layout AC autonome à partir du tracé :
+ *
+ *   <dir>/models_gdsp.ini      un seul kn5 (go_gdsp.kn5) qui porte les AC_START_n
+ *   <dir>/go_gdsp.kn5          à produire dans ksEditor (objets vides, voir .txt)
+ *   <dir>/gdsp/data/…          surfaces.ini, overlays.ini, ai/fast_lane.ai à copier
+ *   <dir>/gdsp/ui/ui_track.json   pitboxes = nombre de voitures de la grille
+ *
+ * models_gdsp.ini suffit à ajouter le layout sur une piste déjà installée : le
+ * jeu charge le kn5 d'origine (via son propre models.ini) plus celui-ci.
+ */
+function writeLayoutSkeleton(dir, placed, line, opts) {
+  const o = opts || {};
+  const fsx = require('fs');
+  const layout = o.layout || 'gdsp';
+  const track = o.track || 'track';
+  const mk = p => fsx.mkdirSync(p, { recursive: true });
+
+  mk(path.join(dir, `${layout}`, 'data'));
+  mk(path.join(dir, `${layout}`, 'ui'));
+  mk(path.join(dir, `${layout}`, 'ai'));
+
+  fsx.writeFileSync(path.join(dir, `models_${layout}.ini`),
+    `; Ajouté par tools/grille-sur-circuit.js\n`
+    + `; Les AC_START_n de la grille GDSP vivent dans go_${layout}.kn5.\n`
+    + `[MODEL_0]\nFILE=go_${layout}.kn5\nPOSITION=0,0,0\nROTATION=0,0,0\n`);
+
+  const ui = {
+    name: `${track} — Grille GDSP (${placed.cars.length} voitures)`,
+    description: `Layout généré pour un départ à écarts calculés depuis la qualification. `
+      + `${placed.cars.length} positions de départ, écart 1er→dernier ${placed.worstGapM.toFixed(0)} m `
+      + `(${(placed.gridLaps * 100).toFixed(0)} % d'un tour).`,
+    tags: ['gdsp', 'grille', 'rolling start'],
+    country: '',
+    city: '',
+    length: String(Math.round(line.lengthM)),
+    width: '',
+    pitboxes: String(placed.cars.length),
+    run: 'clockwise',
+    year: 2026,
+    author: 'GDSP',
+    version: '1.0',
+    url: null
+  };
+  fsx.writeFileSync(path.join(dir, layout, 'ui', 'ui_track.json'), JSON.stringify(ui, null, 2) + '\n');
+
+  const readme = [];
+  readme.push(`Layout « ${layout} » — ${placed.cars.length} positions de départ`);
+  readme.push('');
+  readme.push('1. Dans ksEditor (ou Blender), crée un objet vide par voiture, nommé');
+  readme.push(`   AC_START_0 … AC_START_${placed.cars.length - 1}, avec les POS/ORIENTATION`);
+  readme.push(`   du fichier ${layout}.start.txt (même repère que le kn5 de la piste).`);
+  readme.push(`2. Exporte ces objets dans go_${layout}.kn5 (eux seuls, aucun mesh).`);
+  readme.push(`3. Vérifie ui/ui_track.json : "pitboxes" = ${placed.cars.length}, sinon le serveur`);
+  readme.push('   refusera plus de voitures que de boxes.');
+  readme.push(`4. Installe le dossier dans content/tracks/${track}/ puis`);
+  readme.push(`   TRACK=${track} et CONFIG_TRACK=${layout} dans server_cfg.ini.`);
+  readme.push('');
+  readme.push('Note : le serveur dédié n\'a besoin que de surfaces.ini, drs_zones.ini et');
+  readme.push(`models_${layout}.ini, mais il lui faut AUSSI go_${layout}.kn5 pour connaître la`);
+  readme.push('grille (les positions ne sont pas dans un .ini).');
+  fsx.writeFileSync(path.join(dir, 'LIRE-MOI.txt'), readme.join('\n') + '\n');
+  fsx.writeFileSync(path.join(dir, `${layout}.start.txt`), renderAcBlock(placed));
+  return dir;
+}
+
 /** Bloc texte prêt à coller dans un fichier de piste AC. */
 function renderAcBlock(placed) {
   const out = [];
@@ -364,7 +432,7 @@ function parseArgs(argv) {
     const v = m[2];
     if (k === 'laps' && v !== undefined) out.tours = Number(v);
     else if (['tours', 'cap', 'marge', 'trim', 'minLaps', 'length', 'espacement', 'longueurVoiture'].includes(k) && v !== undefined) out[k] = Number(v);
-    else if (['svg', 'txt', 'mode', 'sens', 'asset'].includes(k)) out[k] = v;
+    else if (['svg', 'txt', 'mode', 'sens', 'asset', 'layoutDir', 'layout'].includes(k)) out[k] = v;
     else if (k === 'zoom' && v !== undefined) out.zoom = Number(v);
     else if (k === 'json') out.json = true;
   }
@@ -465,11 +533,18 @@ function main() {
   }));
   const txtFile = args.txt || svgFile.replace(/\.svg$/, '') + '.ini.txt';
   fs.writeFileSync(txtFile, renderAcBlock(placed));
+  if (args.layoutDir) {
+    writeLayoutSkeleton(args.layoutDir, placed, line, {
+      layout: args.layout || 'gdsp',
+      track: round.driverFolder
+    });
+    if (!args.json) console.error(`Layout AC : ${args.layoutDir}`);
+  }
   const zoomFile = svgFile.replace(/\.svg$/, '') + '-zoom.svg';
   fs.writeFileSync(zoomFile, renderZoomSvg(placed, line, { title, around: args.zoom || 450 }));
   if (!args.json) console.error(`\nSVG : ${svgFile}\nZoom ligne : ${zoomFile}\nBloc AC : ${txtFile}`);
 }
 
-module.exports = { readLine, pointAt, placeGrid, renderSvg, renderZoomSvg, renderAcBlock, findRound, signedDelta };
+module.exports = { readLine, pointAt, placeGrid, renderSvg, renderZoomSvg, renderAcBlock, writeLayoutSkeleton, findRound, signedDelta };
 
 if (require.main === module) main();
