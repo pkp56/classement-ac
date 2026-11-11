@@ -1,6 +1,8 @@
 'use strict';
 
-const DEFAULT_SCRIPT_URL = `${window.location.origin}/csp/rolling_start.lua`;
+// URL publique (GitHub) : les pilotes distants chargent le script sans ouvrir le port 3080.
+// A remplacer par 'main' apres fusion de la branche.
+const DEFAULT_SCRIPT_URL = 'https://raw.githubusercontent.com/pkp56/classement-ac/arena/7b28d07f-classement-ac/rolling-start/csp/gdsp_rolling_start.lua';
 const BOOLEAN_FIELDS = [
   'enabled', 'everySession', 'allowP1Green', 'autoFormation',
   'jumpEnabled', 'jumpRollingCatch',
