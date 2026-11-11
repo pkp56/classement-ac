@@ -138,3 +138,64 @@ test('le site (app.js) sert la capture quand la lecture directe échoue', async 
     child.kill('SIGKILL');
   }
 });
+
+test('la capture livrée est affichée par défaut (aucune variable à configurer)', async () => {
+  // Le site publié doit montrer le serveur sans LIVE_MIRROR_FILE : la capture
+  // présente dans data/ est utilisée automatiquement.
+  const { spawn } = require('node:child_process');
+  const net = require('node:net');
+  const port = await new Promise(resolve => {
+    const srv = net.createServer();
+    srv.listen(0, '127.0.0.1', () => { const p = srv.address().port; srv.close(() => resolve(p)); });
+  });
+  const env = Object.assign({}, process.env, { PORT: String(port), BACKEND_URL: 'http://127.0.0.1:1' });
+  delete env.LIVE_MIRROR_FILE;
+  delete env.LIVE_HTTP_SOURCES;
+  delete env.LIVE_PUSH_TOKEN;
+  const child = spawn(process.execPath, ['app.js'], { cwd: path.join(__dirname, '..'), env, stdio: ['ignore', 'ignore', 'ignore'] });
+  try {
+    let snap = null;
+    for (let i = 0; i < 40 && !snap; i++) {
+      await new Promise(r => setTimeout(r, 250));
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/api/live/status`);
+        if (res.ok) snap = await res.json();
+      } catch (e) { /* pas prêt */ }
+    }
+    assert.ok(snap, 'le serveur doit répondre');
+    assert.equal(snap.status.mode, 'mirror');
+    assert.equal(snap.server.track, 'ks_monza66-junior');
+    assert.equal(snap.cars[0].name, "Assassin's Street");
+    assert.equal(snap.cars[0].bestLap, '1:15.576');
+  } finally {
+    child.kill('SIGKILL');
+  }
+});
+
+test('LIVE_MIRROR_FILE=off désactive la capture', async () => {
+  const { spawn } = require('node:child_process');
+  const net = require('node:net');
+  const port = await new Promise(resolve => {
+    const srv = net.createServer();
+    srv.listen(0, '127.0.0.1', () => { const p = srv.address().port; srv.close(() => resolve(p)); });
+  });
+  const child = spawn(process.execPath, ['app.js'], {
+    cwd: path.join(__dirname, '..'),
+    env: Object.assign({}, process.env, { PORT: String(port), BACKEND_URL: 'http://127.0.0.1:1', LIVE_MIRROR_FILE: 'off' }),
+    stdio: ['ignore', 'ignore', 'ignore']
+  });
+  try {
+    let cfg = null;
+    for (let i = 0; i < 40 && !cfg; i++) {
+      await new Promise(r => setTimeout(r, 250));
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/api/live/config`);
+        if (res.ok) cfg = await res.json();
+      } catch (e) { /* pas prêt */ }
+    }
+    assert.ok(cfg);
+    assert.equal(cfg.mirror.enabled, false);
+  } finally {
+    child.kill('SIGKILL');
+  }
+});

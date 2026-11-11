@@ -152,6 +152,7 @@ test('Bout en bout : LIVE_HTTP_SOURCES (lien acstuff) alimente /api/live/status?
       BACKEND_URL: 'http://127.0.0.1:1',
       LIVE_HTTP_SOURCES: acstuffLink,
       LIVE_HTTP_INTERVAL_MS: '200',
+      LIVE_MIRROR_FILE: 'off', // on teste la source HTTP seule
       AC_LISTEN_PORT: '0'
     }
   });
@@ -242,6 +243,7 @@ test('L\'agent relayeur a la priorité sur une source HTTP non joignable depuis 
       // Source HTTP volontairement morte : comme depuis un datacenter filtré.
       LIVE_HTTP_SOURCES: '127.0.0.1:1',
       LIVE_HTTP_INTERVAL_MS: '200',
+      LIVE_MIRROR_FILE: 'off', // capture livrée dans le dépôt : hors sujet ici
       AC_LISTEN_PORT: '0'
     }
   });

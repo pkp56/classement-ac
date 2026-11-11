@@ -651,8 +651,15 @@ function normalizeLiveSource(raw){
 // Capture enregistrée d'un serveur que le site ne peut pas joindre directement
 // (filtrage d'IP côté serveur AC). Rejouée à l'identique, signalée comme telle.
 function liveMirrorFile(){
+  const p=require('path');
   const f=String(process.env.LIVE_MIRROR_FILE||'').trim();
-  return f?require('path').resolve(f):null;
+  // « off » désactive explicitement la capture (utile pour n'afficher que du direct).
+  if(/^(off|0|none|false)$/i.test(f))return null;
+  if(f)return p.resolve(f);
+  // Par défaut : la capture livrée dans le dépôt, si elle existe. Cela permet
+  // au site publié d'afficher un serveur sans aucune variable d'environnement.
+  const def=p.join(__dirname,'data','live-mirror.json');
+  try{require('fs').accessSync(def);return def}catch(e){return null}
 }
 let liveMirrorSource=null,liveMirrorMtime=0;
 function getLiveMirror(){
