@@ -1690,7 +1690,18 @@ end
 -- Palier courant du depart lance : 'fast' -> 'slow' -> 'wait'
 local function fullFormationStage(cars)
   if RS.stage.tStart ~= S.tStart then
-    RS.stage.tStart = S.tStart; RS.stage.stage = 'fast'; RS.stage.slowT = nil
+    RS.stage.tStart = S.tStart; RS.stage.stage = 'grid'; RS.stage.slowT = nil
+  end
+  -- grille : aucune limite tant que les feux ne sont pas eteints (ou que les voitures ne partent pas)
+  if RS.stage.stage == 'grid' then
+    local tts = sim.timeToSessionStart
+    local moving = false
+    for _, c in pairs(cars) do
+      if c.speedKmh > 15 then moving = true; break end
+    end
+    if (tts and tts <= 0) or moving then
+      RS.stage.stage = 'fast'
+    end
   end
   if RS.stage.stage == 'fast' then
     local _, leadId = activeLeader(cars)
@@ -2106,6 +2117,10 @@ local function updateLocalFormation(cars, dt)
   local me = ac.getCar(0)
   if not me then return end
   local limitingPhase = (cfg.enabled == 1) and (S.phase == PHASE_FORMATION or S.phase == PHASE_READY or S.phase == PHASE_CAUTION)
+  -- depart lance : pas de limite sur la grille (palier 'grid') tant que les feux ne sont pas eteints
+  if limitingPhase and cfg.startLength == 'full' and S.phase ~= PHASE_CAUTION and RS.stage.stage == 'grid' then
+    limitingPhase = false
+  end
   if not limitingPhase or me.isInPitlane or me.isRetired then
     if localState.limiterActive then
       pcall(physics.forceUserThrottleFor, 0.001, me.gas)
