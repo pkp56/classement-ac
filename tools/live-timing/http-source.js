@@ -220,6 +220,83 @@ function buildStandings(parsed) {
   });
 }
 
+
+/**
+ * Source « miroir » : rejoue une capture enregistrée de /INFO et /ENTRY.
+ *
+ * Raison d'être : un serveur AC peut très bien répondre à un navigateur ou à un
+ * PC, tout en refusant les connexions venant de l'hébergeur du site (filtrage
+ * d'IP de datacenter, ECONNRESET). Dans ce cas le site ne peut pas le lire
+ * lui-même : on enregistre une capture côté PC (tools/live-timing/capture.js)
+ * et on la rejoue ici, en la traitant EXACTEMENT comme une vraie réponse.
+ *
+ * Le statut reste honnête : mode 'mirror', readOnly, et `capturedAt` indique
+ * l'âge de la capture. Ce n'est pas du direct.
+ */
+class MirrorHttpSource {
+  constructor(options = {}) {
+    this.url = String(options.url || '').replace(/\/+$/, '');
+    this.file = options.file || null;
+    this.label = options.label || 'Capture';
+    this.mirror = null;
+    this.lastError = null;
+    if (options.data) this.load(options.data);
+    else if (this.file) {
+      try { this.load(JSON.parse(require('fs').readFileSync(this.file, 'utf8'))); }
+      catch (e) { this.lastError = `Capture illisible : ${e.message}`; }
+    }
+  }
+
+  load(data) {
+    if (!data || typeof data !== 'object') throw new Error('capture vide');
+    this.mirror = data;
+    this.capturedAt = data.capturedAt ? Date.parse(data.capturedAt) : Date.now();
+    if (data.sourceUrl) this.url = String(data.sourceUrl).replace(/\/+$/, '');
+    this.lastOkAt = this.capturedAt;
+  }
+
+  start() { return this; }
+  stop() {}
+  hint() {
+    return "Capture enregistrée sur un PC : ce n'est pas du direct. Relance tools/live-timing/capture.js pour rafraîchir.";
+  }
+
+  snapshot(now = Date.now()) {
+    if (!this.mirror) {
+      return {
+        status: { status: 'offline', mode: 'mirror', error: this.lastError || 'aucune capture', readOnly: true },
+        server: {}, session: {}, cars: [], bestLaps: [], events: [],
+        updatedAt: new Date(now).toISOString(), serverTimeMs: now
+      };
+    }
+    const base = new RemoteHttpSource({ url: this.url || 'http://capture', label: this.label });
+    base.info = this.mirror.info || null;
+    base.entry = this.mirror.entryHtml ? parseEntryPage(this.mirror.entryHtml) : null;
+    if (this.mirror.entryParsed && !base.entry) base.entry = this.mirror.entryParsed;
+    base.lastOkAt = this.capturedAt || now;
+    base.startedAt = this.capturedAt || now;
+    const snap = base.snapshot(now);
+    const ageMs = now - (this.capturedAt || now);
+    snap.status = Object.assign({}, snap.status, {
+      status: 'mirror',
+      mode: 'mirror',
+      statusLabel: 'Capture enregistrée',
+      readOnly: true,
+      live: false,
+      capturedAt: new Date(this.capturedAt || now).toISOString(),
+      capturedAgoMs: ageMs,
+      error: this.lastError || null,
+      hint: "Capture enregistrée sur un PC : ce n'est pas du direct. Relance tools/live-timing/capture.js pour rafraîchir.",
+      hintLevel: 'info'
+    });
+    // Les emplacements vides du serveur (pilotes non connectés) restent connus.
+    if (this.mirror.info && Number.isFinite(this.mirror.info.maxclients)) {
+      snap.server.freeSlots = Math.max(0, Number(this.mirror.info.maxclients) - (snap.cars || []).length);
+    }
+    return snap;
+  }
+}
+
 // --- la source ---------------------------------------------------------------
 
 const NAVIGATOR_HEADERS = {
@@ -400,6 +477,7 @@ class RemoteHttpSource {
 
 module.exports = {
   RemoteHttpSource,
+  MirrorHttpSource,
   parseEntryPage,
   buildStandings,
   parseAcTime,

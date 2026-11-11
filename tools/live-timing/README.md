@@ -80,7 +80,23 @@ et explique quoi faire. Deux solutions :
 1. lire depuis un PC, pas depuis l'hébergeur : lance l'agent (§ 2 bis) sur ton
    PC, il interroge `/INFO` + `/ENTRY` et pousse le résultat au site ;
 2. héberger le live timing sur une machine « résidentielle » (le PC du serveur
-   ou un petit serveur à la maison) plutôt que sur Render.
+   ou un petit serveur à la maison) plutôt que sur Render ;
+3. **capture enregistrée** (dépannage, affichage immédiat) : depuis un PC qui
+   voit le serveur, on enregistre `/INFO` + `/ENTRY` dans un fichier, et le site
+   rejoue cette capture.
+
+```bash
+# sur ton PC
+node tools/live-timing/capture.js http://82.66.165.242:16835 -o data/live-mirror.json
+node tools/live-timing/capture.js <lien acstuff> -o data/live-mirror.json --watch 10
+
+# côté site
+LIVE_MIRROR_FILE=data/live-mirror.json
+```
+
+La page affiche alors le vrai classement, le vrai nom de serveur et le vrai
+circuit, avec un bandeau explicite : « Capture enregistrée — ce n'est pas du
+direct » et l'âge de la capture. L'agent reste la seule façon d'avoir du direct.
 
 ## 2 bis. Site distant + serveur AC sur ton PC (mode push)
 

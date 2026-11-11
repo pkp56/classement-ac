@@ -638,12 +638,46 @@ function normalizeLiveSource(raw){
     const port=acstuff[2];
     v=`http://${ip}${port?':'+port:''}`;
   }
+  // Autre schéma (ftp:, ws:…) : ce n'est pas un serveur AC. Sinon « ftp://x »
+  // devenait « http://ftp » et passait pour une adresse valide.
+  if(/^[a-z][a-z0-9+.-]*:\/\//i.test(v)&&!/^https?:\/\//i.test(v))return null;
   if(!/^https?:\/\//i.test(v))v='http://'+v;
   try{
     const u=new URL(v);
     if(!/^https?:$/.test(u.protocol))return null;
     return u.origin.replace(/\/+$/,'');
   }catch(e){return null;}
+}
+// Capture enregistrée d'un serveur que le site ne peut pas joindre directement
+// (filtrage d'IP côté serveur AC). Rejouée à l'identique, signalée comme telle.
+function liveMirrorFile(){
+  const f=String(process.env.LIVE_MIRROR_FILE||'').trim();
+  return f?require('path').resolve(f):null;
+}
+let liveMirrorSource=null,liveMirrorMtime=0;
+function getLiveMirror(){
+  const file=liveMirrorFile();
+  if(!file)return null;
+  try{
+    const mtime=require('fs').statSync(file).mtimeMs;
+    if(!liveMirrorSource||mtime!==liveMirrorMtime){
+      const {MirrorHttpSource}=require('./tools/live-timing/http-source');
+      liveMirrorSource=new MirrorHttpSource({file,label:'Capture'});
+      liveMirrorMtime=mtime;
+      console.log('live-timing: capture chargée —',file);
+    }
+  }catch(e){
+    if(!liveMirrorSource){
+      console.error('live-timing: capture illisible —',e.message);
+      return null;
+    }
+  }
+  return liveMirrorSource;
+}
+function liveMirrorConfig(){
+  const m=getLiveMirror();
+  if(!m)return {enabled:false};
+  return {enabled:true,file:liveMirrorFile(),sourceUrl:m.url||null,capturedAt:m.capturedAt?new Date(m.capturedAt).toISOString():null};
 }
 function liveSourceUrls(){
   return String(process.env.LIVE_HTTP_SOURCES||'')
@@ -712,6 +746,8 @@ function liveSnapshot(sourceIndex){
   }
   const pushed=getLivePush().current();
   if(pushed)return pushed;
+  const mirror=getLiveMirror();
+  if(mirror)return mirror.snapshot();
   const list=getLiveHttpSources();
   if(list.length)return list[0].snapshot();
   try{return getLiveTiming().snapshot()}catch(e){
@@ -733,7 +769,8 @@ app.get('/api/live/config',(req,res)=>{
     enabled:liveTimingEnabled(),
     push:{enabled:!!livePushToken(),endpoint:'/api/live/push'},
     udp:{listenPort:Number(process.env.AC_LISTEN_PORT||12000),serverPort:Number(process.env.AC_PLUGIN_PORT||12001)},
-    httpSources:liveSourceUrls().map((url,i)=>({index:i,url,name:'Serveur '+(i+1)}))
+    httpSources:liveSourceUrls().map((url,i)=>({index:i,url,name:'Serveur '+(i+1)})),
+    mirror:liveMirrorConfig()
   });
 });
 app.get('/api/live/status',(req,res)=>{

@@ -454,8 +454,11 @@ function liveInfoBanner(){
   const st=(window.__gdspLive&&window.__gdspLive.status)||null;
   const mode=st&&st.mode;
   let text;
+  const srvName=(window.__gdspLive&&window.__gdspLive.server&&window.__gdspLive.server.name)||'';
+  const short=srvName?`${srvName.replace(/\s+$/,'')} — `:'';
   if(mode==='demo')text='Démonstration : les données affichées sont fictives. Branche ton serveur AC pour du vrai direct.';
-  else if(mode==='live')text='Un serveur est en direct en ce moment.';
+  else if(mode==='live')text=short+'un serveur est en direct en ce moment.';
+  else if(mode==='mirror')text=short+'capture enregistrée du serveur (pas de direct). Ouvre la page pour le détail.';
   else if(mode==='stale'||mode==='http-remote')text='Serveur configuré, mais aucune donnée fraîche pour l\'instant.';
   else text='Aucun serveur branché pour le moment : la page explique comment connecter le tien (2 lignes dans server_cfg.ini).';
   return `<a class="live-banner" href="/live-timing"><span class="live-banner-dot"></span><span class="live-banner-kicker">Live timing</span><span class="live-banner-text">${esc(text)}</span><span class="live-banner-go">Ouvrir →</span></a>`;

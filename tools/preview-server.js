@@ -19,6 +19,12 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.env.PORT || 8080);
+// Quel serveur afficher dans /live-timing :
+//   demo   → relevé fictif (défaut)
+//   auto   → tentative de lecture réelle du serveur LIVE_DEMO_URL, sinon capture
+//   <url>  → lecture réelle de cette adresse (http://ip:portHTTP)
+const LIVE_MODE = String(process.env.PREVIEW_LIVE || 'demo').trim();
+const LIVE_URL = /^https?:\/\//i.test(LIVE_MODE) ? LIVE_MODE.replace(/\/+$/, '') : String(process.env.LIVE_DEMO_URL || '').replace(/\/+$/, '');
 const SLUG = process.env.PREVIEW_SLUG || 'lola-t290-gdsp-championnat-2026';
 
 const MIME = {
@@ -133,6 +139,52 @@ function demoLiveSnapshot() {
   };
 }
 
+// --- lecture réelle / capture -------------------------------------------------
+const { MirrorHttpSource, RemoteHttpSource } = require('./live-timing/http-source');
+const MIRROR_FILE = path.join(ROOT, 'data/live-mirror.json');
+let mirrorSource = null, mirrorMtime = 0, remoteSource = null;
+
+function getMirror() {
+  try {
+    const mtime = fs.statSync(MIRROR_FILE).mtimeMs;
+    if (!mirrorSource || mtime !== mirrorMtime) {
+      mirrorSource = new MirrorHttpSource({ file: MIRROR_FILE, label: 'Capture' });
+      mirrorMtime = mtime;
+    }
+    return mirrorSource;
+  } catch (e) {
+    return mirrorSource;
+  }
+}
+function getRemote() {
+  if (!LIVE_URL || LIVE_MODE === 'demo') return null;
+  if (!remoteSource) remoteSource = new RemoteHttpSource({ url: LIVE_URL, intervalMs: 3000, label: 'Serveur GDSP' });
+  remoteSource.start();
+  return remoteSource;
+}
+/** Instantané affiché par /api/live/status et /snapshot. */
+function liveSnapshotForPreview() {
+  if (LIVE_MODE === 'demo') return demoLiveSnapshot();
+  const remote = getRemote();
+  if (remote) {
+    const snap = remote.snapshot();
+    // Si le serveur réel ne répond pas (filtrage d'IP de datacenter), on
+    // retombe sur la capture enregistrée plutôt que d'afficher une page vide.
+    if (snap.status.status === 'offline' || snap.status.status === 'stale') {
+      const mirror = getMirror();
+      if (mirror) {
+        const m = mirror.snapshot();
+        m.status.fallbackFrom = remote.url;
+        m.status.remoteError = snap.status.error || null;
+        return m;
+      }
+    }
+    return snap;
+  }
+  const mirror = getMirror();
+  return mirror ? mirror.snapshot() : demoLiveSnapshot();
+}
+
 function json(res, code, payload) {
   const body = Buffer.from(JSON.stringify(payload));
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'content-length': body.length, 'cache-control': 'no-store' });
@@ -148,8 +200,18 @@ const server = http.createServer((req, res) => {
   // Live timing : en aperçu local on renvoie un relevé « démo » pour que la page
   // /live-timing et le lien du menu soient visibles sans serveur AC ni agent.
   // (Le site réel, lui, lit l'UDP local, l'agent distant ou une source HTTP.)
-  if (urlPath === '/api/live/config') return json(res, 200, { enabled: true, push: { enabled: false, endpoint: '/api/live/push' }, udp: { listenPort: 12000, serverPort: 12001 }, httpSources: [], demo: true });
-  if (urlPath === '/api/live/status' || urlPath === '/api/live/snapshot') return json(res, 200, demoLiveSnapshot());
+  if (urlPath === '/api/live/config') {
+    const mirror = getMirror();
+    return json(res, 200, {
+      enabled: true,
+      push: { enabled: false, endpoint: '/api/live/push' },
+      udp: { listenPort: 12000, serverPort: 12001 },
+      httpSources: LIVE_URL && LIVE_MODE !== 'demo' ? [{ index: 0, url: LIVE_URL, name: 'Serveur GDSP' }] : [],
+      mirror: mirror ? { enabled: true, sourceUrl: mirror.url || null, capturedAt: mirror.capturedAt ? new Date(mirror.capturedAt).toISOString() : null } : { enabled: false },
+      demo: LIVE_MODE === 'demo'
+    });
+  }
+  if (urlPath === '/api/live/status' || urlPath === '/api/live/snapshot') return json(res, 200, liveSnapshotForPreview());
   if (urlPath === '/api/championship') return json(res, 200, { championship: { sessions: dedupedSessions, penMap: {} } });
   if (urlPath.startsWith('/api/')) {
     // Écritures de l'administration : on répond « pas en aperçu » explicitement.
@@ -188,5 +250,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Aperçu GDSP en ligne sur 0.0.0.0:${PORT} (événement simulé : ${SLUG}, ${dedupedSessions.length} sessions)`);
-  console.log(`  → page de suivi en direct : http://localhost:${PORT}/live-timing (instantané de démonstration)`);
+  const mode = LIVE_MODE === 'demo' ? 'relevé de démonstration'
+    : `${LIVE_MODE === 'auto' ? 'lecture réelle + capture de secours' : 'lecture réelle'} (${LIVE_URL || 'adresse inconnue'})`;
+  console.log(`  → page de suivi en direct : http://localhost:${PORT}/live-timing — ${mode}`);
 });

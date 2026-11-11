@@ -22,6 +22,8 @@
   .dot.offline{background:#c0392b}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(76,175,80,.6)}70%{box-shadow:0 0 0 9px rgba(76,175,80,0)}100%{box-shadow:0 0 0 0 rgba(76,175,80,0)}}
   .page{max-width:1400px;margin:auto;padding:22px 26px 60px}
+  .capture-note{display:none;background:#f3ecd9;border:1px solid var(--line);border-left:5px solid var(--gold);padding:11px 15px;margin:0 0 16px;font-size:12.5px;line-height:1.6;color:#43514f}
+  .capture-note code{background:#e3d7bd;padding:1px 5px;font-size:12px}
   .banner{background:var(--paper);border:1px solid var(--line);border-left:5px solid var(--gold);padding:16px 20px;margin-bottom:18px}
   .banner h2{font-family:Impact,sans-serif;font-size:19px;margin:0 0 6px;letter-spacing:1px;text-transform:uppercase;font-weight:normal}
   .banner p{margin:4px 0;font-size:13px;line-height:1.55;color:#43514f}
@@ -86,6 +88,7 @@
   </div>
 </header>
 <div class="page">
+  <div class="capture-note" id="captureNote"></div>
   <div class="banner" id="banner" style="display:none">
     <h2 id="bannerTitle">Le serveur n'est pas encore joignable</h2>
     <div id="bannerBody"></div>
@@ -158,9 +161,11 @@
     var http = st.status === 'http';
     var stale = st.status === 'stale';
     var remote = st.mode === 'http-remote';
-    $('dot').className = 'dot ' + (live ? 'live' : stale ? 'http' : http ? 'http' : 'offline');
+    var mirror = st.mode === 'mirror';
+    $('dot').className = 'dot ' + (live ? 'live' : mirror ? 'http' : stale ? 'http' : http ? 'http' : 'offline');
     $('stateText').textContent = live
-      ? (st.mode === 'push' ? 'Direct (PC distant)' : remote ? 'Direct (lecture seule)' : 'Direct')
+      ? (st.mode === 'push' ? 'Direct (PC distant)' : st.mode === 'demo' ? 'Démonstration' : remote ? 'Direct (lecture seule)' : 'Direct')
+      : mirror ? 'Capture enregistrée'
       : stale ? (remote ? 'Serveur injoignable' : 'Instantané périmé')
       : http ? 'Serveur joignable (résumé)' : 'Hors ligne';
     $('clock').textContent = new Date(d.updatedAt).toLocaleTimeString('fr-FR');
@@ -183,8 +188,25 @@
     renderBest(d);
     renderFeed(d);
     renderDiag(d);
-    $('banner').style.display = (live || http || stale) ? 'none' : 'block';
-    if (!live && !http) renderBanner(d, st);
+    renderCaptureNote(st);
+    $('banner').style.display = (live || http || stale || mirror) ? 'none' : 'block';
+    if (!live && !http && !mirror) renderBanner(d, st);
+  }
+
+  function renderCaptureNote(st) {
+    var el = $('captureNote');
+    if (!el) return;
+    if (!st || st.mode !== 'mirror') { el.style.display = 'none'; return; }
+    var ago = st.capturedAgoMs;
+    var when = st.capturedAt ? new Date(st.capturedAt).toLocaleString('fr-FR') : '—';
+    var agoTxt = ago == null ? '' : ago < 60000 ? 'il y a ' + Math.round(ago / 1000) + ' s'
+      : ago < 3600000 ? 'il y a ' + Math.round(ago / 60000) + ' min'
+      : 'il y a ' + Math.round(ago / 3600000) + ' h';
+    el.innerHTML =
+      '<b>Capture enregistrée</b> de <code>' + esc(st.sourceUrl || '') + '</code> — ' + esc(when) + ' (' + esc(agoTxt) + '). ' +
+      'Ce n\'est pas du direct : l\'hébergeur du site ne peut pas joindre cette adresse. ' +
+      'Pour du vrai direct, fais tourner <code>node tools/live-timing/agent.js</code> sur un PC.';
+    el.style.display = 'block';
   }
 
   function renderBanner(d, st) {
@@ -276,6 +298,15 @@
 
   function renderDiag(d) {
     var st = d.status || {}, udp = st.udp || {};
+    // Capture enregistrée : diagnostic dédié (pas d'UDP ni de protocole à
+    // afficher, ce serait trompeur).
+    if (st.mode === 'mirror') {
+      var capLine = '<b>Source :</b> capture de <code>' + esc(st.sourceUrl || '—') + '</code> lue en <code>' + esc(location.origin) + '/api/live/snapshot</code>';
+      var errLine = st.remoteError ? '<br><b>Lecture directe :</b> impossible (' + esc(st.remoteError) + ')' : '';
+      $('diag').innerHTML = capLine + errLine +
+        '<br><b>Direct :</b> à activer avec l\'agent (voir la note en haut de page).';
+      return;
+    }
     var lines = [
       '<b>Liaison :</b> ' + esc(st.mode === 'push' ? 'agent distant' : st.mode === 'http-remote' ? 'HTTP public (lecture seule)' : st.mode || '—') +
         (st.mode === 'push'

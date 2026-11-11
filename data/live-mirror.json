@@ -1,0 +1,42 @@
+{
+  "capturedAt": "2026-11-10T23:58:00Z",
+  "sourceUrl": "http://82.66.165.242:16835",
+  "acstuffUrl": "https://acstuff.club/s/q:race/online/join?ip=82.66.165.242&httpPort=16835",
+  "info": {
+    "ip": "",
+    "port": 16834,
+    "cport": 16835,
+    "name": "{GDSP_ Server test 1",
+    "clients": 0,
+    "maxclients": 8,
+    "track": "ks_monza66-junior",
+    "cars": [
+      "alfa_romeo_giulietta_spider"
+    ],
+    "timeofday": 32,
+    "session": 0,
+    "sessiontypes": [
+      1
+    ],
+    "durations": [
+      60
+    ],
+    "timeleft": 26,
+    "country": [
+      "na",
+      "na"
+    ],
+    "pass": false,
+    "timestamp": 0,
+    "json": null,
+    "l": false,
+    "pickup": true,
+    "tport": 16834,
+    "timed": false,
+    "extra": false,
+    "pit": false,
+    "inverted": 0
+  },
+  "entryHtml": "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Asetto Corsa Server: Entry List</title></head><body>\n<h1>Entry List</h1>\n<h2>Session: PRACTICE [Essai], TIME LEFT 00:22</h2>\n<table>\n<tr><th>ID</th><th>Driver</th><th>Car</th><th>Team</th><th>Ping</th><th>Laps</th><th>Last</th><th>Best</th><th>Total</th><th>Guid</th></tr>\n<tr><td>1</td><td>Assassin's Street</td><td>alfa_romeo_giulietta_spider</td><td></td><td>DC</td><td>19</td><td>1:19:501</td><td>1:15:576</td><td>29:13:468</td><td>76561198015862674</td></tr>\n<tr><td>2</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>DC</td><td>0</td><td>--:--:---</td><td>--:--:---</td><td>--:--:---</td><td></td></tr>\n<tr><td>3</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>DC</td><td>0</td><td>--:--:---</td><td>--:--:---</td><td>--:--:---</td><td></td></tr>\n<tr><td>4</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>DC</td><td>0</td><td>--:--:---</td><td>--:--:---</td><td>--:--:---</td><td></td></tr>\n<tr><td>5</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>DC</td><td>0</td><td>--:--:---</td><td>--:--:---</td><td>--:--:---</td><td></td></tr>\n<tr><td>6</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>DC</td><td>0</td><td>--:--:---</td><td>--:--:---</td><td>--:--:---</td><td></td></tr>\n<tr><td>7</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>DC</td><td>0</td><td>--:--:---</td><td>--:--:---</td><td>--:--:---</td><td></td></tr>\n<tr><td>8</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>DC</td><td>0</td><td>--:--:---</td><td>--:--:---</td><td>--:--:---</td><td></td></tr>\n</table>\n<table>\n<tr><th>POS</th><th>Driver</th><th>Car</th><th>Team</th><th>Laps</th><th>Time</th><th>Diff</th></tr>\n<tr><td>0</td><td>Assassin's Street</td><td>alfa_romeo_giulietta_spider</td><td></td><td>19</td><td>1:15:576</td><td></td></tr>\n<tr><td>1</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>0</td><td>16666:39:999</td><td>+16665:24:423</td></tr>\n<tr><td>2</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>0</td><td>16666:39:999</td><td>+16665:24:423</td></tr>\n<tr><td>3</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>0</td><td>16666:39:999</td><td>+16665:24:423</td></tr>\n<tr><td>4</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>0</td><td>16666:39:999</td><td>+16665:24:423</td></tr>\n<tr><td>5</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>0</td><td>16666:39:999</td><td>+16665:24:423</td></tr>\n<tr><td>6</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>0</td><td>16666:39:999</td><td>+16665:24:423</td></tr>\n<tr><td>7</td><td></td><td>alfa_romeo_giulietta_spider</td><td></td><td>0</td><td>16666:39:999</td><td>+16665:24:423</td></tr>\n</table>\n<p>Throughput: 0kBs</p>\n</body></html>\n",
+  "note": "Capture reelle de /INFO et /ENTRY du serveur dedie GDSP, utilisee en apercu local car l'hebergeur du site ne peut pas joindre l'IP du joueur."
+}
