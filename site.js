@@ -110,8 +110,29 @@ function nav(){
     `<button class="${activeTop==='accueil'?'active':''}" onclick="go('accueil')">ACCUEIL</button>`
     +(backendMulti?`<button class="${activeTop==='global'?'active':''}" onclick="go('global')">GLOBAL</button>`:'')
     +`<button class="nav-event-tab ${activeTop==='event'?'active':''}" onclick="go('event')"><span class="nav-ev-kicker">Événement</span><span class="nav-ev-title">${esc(navEventTitle(evTabName))}</span></button>`
+    +(hasLiveTiming?`<a class="nav-link nav-live" href="/live-timing" title="Suivi en direct d'un serveur Assetto Corsa"><span class="nav-live-dot"></span>LIVE</a>`:'')
     +`<button class="${activeTop==='admin'?'active':''}" onclick="go('admin')">ADMINISTRATION</button>`;
   renderEventSwitcher();
+}
+// Onglet LIVE. Par défaut TOUJOURS visible : la page /live-timing explique
+// elle-même ce qu'il faut faire si aucun serveur n'est branché, et le lien
+// reste utile sur une machine où le live n'est pas encore configuré.
+// LIVE_TIMING_NAV=auto → ne l'afficher que si /api/live/config répond.
+const LIVE_NAV_MODE=String((window.GDSP_LIVE_NAV||'always')).toLowerCase();
+let hasLiveTiming=LIVE_NAV_MODE==='auto'?null:true;
+async function detectLiveTiming(){
+  if(hasLiveTiming!==null)return hasLiveTiming;
+  try{
+    // Certains hébergements statiques répondent 200 avec le HTML du site sur
+    // toute URL : on n'accepte qu'une vraie réponse JSON.
+    const r=await fetch('/api/live/config',{cache:'no-store',headers:{Accept:'application/json'}});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const type=String(r.headers.get('content-type')||'');
+    if(!/json/i.test(type))throw new Error('pas du JSON');
+    const j=await r.json();
+    hasLiveTiming=!!j&&j.enabled!==false;
+  }catch(e){hasLiveTiming=false}
+  return hasLiveTiming;
 }
 async function go(x){
   // Pré-charger un événement par défaut si on va sur une page événementielle (event/classement/manches/pilotes)
@@ -278,6 +299,7 @@ async function detectBackend(){
 }
 async function retryBackend(){
   await detectBackend();
+  await detectLiveTiming().catch(()=>{});
   if(!backendError){
     const match=window.location&&window.location.pathname.match(/^\/evenements\/([^/]+)\/?$/);
     const target=match?decodeURIComponent(match[1]):currentSlug;
@@ -426,7 +448,23 @@ function showrank(x){ranktab=x;render()}function showevent(x){eventtab=x;render(
 
 // ---------- Pages ----------
 // Hub page (only shown in multi mode)
+function liveInfoBanner(){
+  // Petit rappel honnête en haut de l'accueil : la page LIVE existe, son état
+  // dépend de la config (démo, serveur branché, ou rien).
+  const st=(window.__gdspLive&&window.__gdspLive.status)||null;
+  const mode=st&&st.mode;
+  let text;
+  const srvName=(window.__gdspLive&&window.__gdspLive.server&&window.__gdspLive.server.name)||'';
+  const short=srvName?`${srvName.replace(/\s+$/,'')} — `:'';
+  if(mode==='demo')text='Démonstration : les données affichées sont fictives. Branche ton serveur AC pour du vrai direct.';
+  else if(mode==='live')text=short+'un serveur est en direct en ce moment.';
+  else if(mode==='mirror')text=short+'capture enregistrée du serveur (pas de direct). Ouvre la page pour le détail.';
+  else if(mode==='stale'||mode==='http-remote')text='Serveur configuré, mais aucune donnée fraîche pour l\'instant.';
+  else text='Aucun serveur branché pour le moment : la page explique comment connecter le tien (2 lignes dans server_cfg.ini).';
+  return `<a class="live-banner" href="/live-timing"><span class="live-banner-dot"></span><span class="live-banner-kicker">Live timing</span><span class="live-banner-text">${esc(text)}</span><span class="live-banner-go">Ouvrir →</span></a>`;
+}
 function hub(){
+  const __hubInner=(()=>{
   const byKind=(k)=>events.filter(e=>e.kind===k);
   const champs=byKind('championship'), opens=byKind('open'), archives=byKind('archive');
   function card(e){
@@ -634,7 +672,8 @@ function hub(){
     ${section('Opens & week-ends',opens)}
     ${archives.length?`<details style="margin-top:42px"><summary style="cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none;list-style:none"><div class="eyebrow">Saisons archivées</div><h2 style="margin:4px 0 0;font-size:22px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:#5d5b56">${archives.length} saison${archives.length>1?'s':''} terminée${archives.length>1?'s':''}</h2><span class="chev" style="font-family:monospace;font-size:22px;color:#d8a347;margin-left:8px"></span></summary><div style="margin-top:14px"><div class="cardlist">${archives.map(card).join('')}</div></div></details>`:''}
     ${(!events.length)?'<p class="note">Aucun événement configuré pour l\'instant.</p>':''}
-  </div>`;
+  </div>`;  })();
+  return `${liveInfoBanner()}`+__hubInner;
 }
 
 // Global ranking across all events — shown only in multi mode, built on demand
@@ -3709,6 +3748,14 @@ function syncCircuitHistory(){
   if(storedSessions&&Array.isArray(storedSessions)&&storedSessions.length)sessions=storedSessions;
 
   await detectBackend();
+  // Détection du live timing avant le premier rendu : sinon l'onglet LIVE
+  // n'apparaît qu'après une navigation (l'utilisateur croit qu'il manque).
+  await detectLiveTiming().catch(()=>{});
+  // État courant du live timing (démo / direct / hors ligne) pour le bandeau
+  // d'accueil. Jamais bloquant : si l'appel échoue, le bandeau reste générique.
+  fetch('/api/live/status',{cache:'no-store'}).then(r=>r.ok?r.json():null)
+    .then(j=>{if(j&&j.status){window.__gdspLive=j;if(page==='hub'||page==='accueil')render()}})
+    .catch(()=>{});
 
   if(backendMulti){
     // Les visiteurs commencent toujours sur l'accueil GDSP. L'événement par

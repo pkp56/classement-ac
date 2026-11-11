@@ -614,6 +614,229 @@ app.post('/api/admin/circuits/import', async (req, res) => {
   }
 });
 
+// --- LIVE TIMING (serveur AC dédié) ---
+// Deux modes, la page /live-timing est la même :
+//  • local : le serveur AC tourne sur la même machine que le site, on lit son
+//    interface de plugin en UDP (ACSP v4) — voir tools/live-timing/collector.js ;
+//  • push  : le serveur AC tourne sur un PC distant, tools/live-timing/agent.js
+//    pousse un instantané par seconde vers POST /api/live/push (simple HTTP,
+//    aucun port entrant à ouvrir sur le PC).
+// Doc : tools/live-timing/README.md. Réglage : LIVE_PUSH_TOKEN.
+let liveTiming = null;
+let livePush = null;
+let liveHttpSources = null;
+const liveClients = new Set();
+// Sources HTTP distantes : serveurs AC publics qu'on ne possède pas, lus via
+// leur port HTTP (/INFO + /ENTRY). Une URL, un « ip:port » ou un lien acstuff
+// séparés par des virgules. Ex. LIVE_HTTP_SOURCES=http://82.66.165.242:16835
+function normalizeLiveSource(raw){
+  let v=String(raw||'').trim();
+  if(!v)return null;
+  const acstuff=/[?&]ip=([^&]+)(?:[^#]*?[?&]httpPort=(\d+))?/i.exec(v);
+  if(acstuff){
+    const ip=decodeURIComponent(acstuff[1]);
+    const port=acstuff[2];
+    v=`http://${ip}${port?':'+port:''}`;
+  }
+  // Autre schéma (ftp:, ws:…) : ce n'est pas un serveur AC. Sinon « ftp://x »
+  // devenait « http://ftp » et passait pour une adresse valide.
+  if(/^[a-z][a-z0-9+.-]*:\/\//i.test(v)&&!/^https?:\/\//i.test(v))return null;
+  if(!/^https?:\/\//i.test(v))v='http://'+v;
+  try{
+    const u=new URL(v);
+    if(!/^https?:$/.test(u.protocol))return null;
+    return u.origin.replace(/\/+$/,'');
+  }catch(e){return null;}
+}
+// Capture enregistrée d'un serveur que le site ne peut pas joindre directement
+// (filtrage d'IP côté serveur AC). Rejouée à l'identique, signalée comme telle.
+function liveMirrorFile(){
+  const p=require('path');
+  const f=String(process.env.LIVE_MIRROR_FILE||'').trim();
+  // « off » désactive explicitement la capture (utile pour n'afficher que du direct).
+  if(/^(off|0|none|false)$/i.test(f))return null;
+  if(f)return p.resolve(f);
+  // Par défaut : la capture livrée dans le dépôt, si elle existe. Cela permet
+  // au site publié d'afficher un serveur sans aucune variable d'environnement.
+  const def=p.join(__dirname,'data','live-mirror.json');
+  try{require('fs').accessSync(def);return def}catch(e){return null}
+}
+let liveMirrorSource=null,liveMirrorMtime=0;
+function getLiveMirror(){
+  const file=liveMirrorFile();
+  if(!file)return null;
+  try{
+    const mtime=require('fs').statSync(file).mtimeMs;
+    if(!liveMirrorSource||mtime!==liveMirrorMtime){
+      const {MirrorHttpSource}=require('./tools/live-timing/http-source');
+      liveMirrorSource=new MirrorHttpSource({file,label:'Capture'});
+      liveMirrorMtime=mtime;
+      console.log('live-timing: capture chargée —',file);
+    }
+  }catch(e){
+    if(!liveMirrorSource){
+      console.error('live-timing: capture illisible —',e.message);
+      return null;
+    }
+  }
+  return liveMirrorSource;
+}
+function liveMirrorConfig(){
+  const m=getLiveMirror();
+  if(!m)return {enabled:false};
+  return {enabled:true,file:liveMirrorFile(),sourceUrl:m.url||null,capturedAt:m.capturedAt?new Date(m.capturedAt).toISOString():null};
+}
+function liveSourceUrls(){
+  return String(process.env.LIVE_HTTP_SOURCES||'')
+    .split(',')
+    .map(normalizeLiveSource)
+    .filter(Boolean)
+    .slice(0,5);
+}
+function getLiveHttpSources(){
+  if(!liveHttpSources){
+    const {RemoteHttpSource}=require('./tools/live-timing/http-source');
+    liveHttpSources=liveSourceUrls().map((url,i)=>new RemoteHttpSource({url,intervalMs:Number(process.env.LIVE_HTTP_INTERVAL_MS||3000),label:'Serveur '+(i+1)}));
+    for(const src of liveHttpSources){
+      try{src.start()}catch(e){console.error('live-timing: source distante',src.url,'—',e.message)}
+    }
+  }
+  return liveHttpSources;
+}
+if(liveTimingEnabled()&&liveSourceUrls().length){
+  try{getLiveHttpSources()}catch(e){console.error('live-timing: sources HTTP indisponibles —',e.message)}
+}
+function liveTimingEnabled(){
+  return String(process.env.LIVE_TIMING_ENABLED||'1') !== '0';
+}
+function livePushToken(){return String(process.env.LIVE_PUSH_TOKEN||'').trim()}
+function getLivePush(){
+  if(!livePush){
+    const {PushHub}=require('./tools/live-timing/push-hub');
+    livePush=new PushHub();
+  }
+  return livePush;
+}
+function getLiveTiming(){
+  if(!liveTiming){
+    const {LiveTimingCollector}=require('./tools/live-timing/collector');
+    liveTiming=new LiveTimingCollector();
+    liveTiming.on('event',entry=>broadcastLive('log',entry));
+    liveTiming.start();
+  }
+  return liveTiming;
+}
+function broadcastLive(event,payload){
+  const frame='event: '+event+'\ndata: '+JSON.stringify(payload)+'\n\n';
+  for(const res of liveClients){try{res.write(frame)}catch(e){/* client parti */}}
+}
+// Priorité : source HTTP demandée > agent qui pousse > écoute UDP locale.
+function resolveLiveSource(param){
+  const list=getLiveHttpSources();
+  if(!list.length)return null;
+  const raw=param==null?'' : String(param);
+  if(!raw)return list[0];
+  if(/^\d+$/.test(raw)){
+    const i=Number(raw);
+    return list[i]||null;
+  }
+  const wanted=normalizeLiveSource(raw);
+  return list.find(src=>src.url===wanted)||null;
+}
+// Priorité : source explicitement demandée (?source=) > agent qui pousse >
+// source HTTP configurée > écoute UDP locale. L'agent a la priorité sur les
+// sources HTTP : c'est lui qui voit le serveur quand l'hébergeur est filtré.
+function liveSnapshot(sourceIndex){
+  if(sourceIndex!=null&&sourceIndex!==''){
+    const remote=resolveLiveSource(sourceIndex);
+    if(remote)return remote.snapshot();
+  }
+  const pushed=getLivePush().current();
+  if(pushed)return pushed;
+  const mirror=getLiveMirror();
+  if(mirror)return mirror.snapshot();
+  const list=getLiveHttpSources();
+  if(list.length)return list[0].snapshot();
+  try{return getLiveTiming().snapshot()}catch(e){
+    return {status:{status:'offline',mode:'error',error:e.message},server:{},session:{},cars:[],events:[]};
+  }
+}
+if(liveTimingEnabled()){
+  try{getLiveTiming()}catch(e){console.error('live-timing: démarrage impossible —',e.message)}
+}
+function safeEqual(a,b){
+  const A=Buffer.from(String(a||'')),B=Buffer.from(String(b||''));
+  if(!A.length||A.length!==B.length)return false;
+  let diff=0;for(let i=0;i<A.length;i++)diff|=A[i]^B[i];
+  return diff===0;
+}
+app.get('/api/live/config',(req,res)=>{
+  res.set('Cache-Control','no-store');
+  res.json({
+    enabled:liveTimingEnabled(),
+    push:{enabled:!!livePushToken(),endpoint:'/api/live/push'},
+    udp:{listenPort:Number(process.env.AC_LISTEN_PORT||12000),serverPort:Number(process.env.AC_PLUGIN_PORT||12001)},
+    httpSources:liveSourceUrls().map((url,i)=>({index:i,url,name:'Serveur '+(i+1)})),
+    mirror:liveMirrorConfig()
+  });
+});
+app.get('/api/live/status',(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!liveTimingEnabled())return res.json({enabled:false,status:{status:'offline',mode:'disabled'},server:{},session:{},cars:[]});
+  res.json({enabled:true,...liveSnapshot(req.query.source)});
+});
+app.get('/api/live/snapshot',(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!liveTimingEnabled())return res.status(503).json({error:'Live timing désactivé.'});
+  res.json(liveSnapshot(req.query.source));
+});
+// Réception des instantanés poussés par un agent (PC distant).
+// Auth : en-tête X-Live-Token (ou ?token=) comparé à LIVE_PUSH_TOKEN.
+app.post('/api/live/push',(req,res)=>{
+  res.set('Cache-Control','no-store');
+  const expected=livePushToken();
+  if(!expected)return res.status(503).json({error:'Le mode push n\'est pas activé sur ce site (LIVE_PUSH_TOKEN manquant).'});
+  const given=(req.get('X-Live-Token')||req.query.token||'').trim()||((req.get('Authorization')||'').replace(/^Bearer\s+/i,''));
+  if(!safeEqual(given,expected))return res.status(401).json({error:'Jeton invalide.'});
+  const result=getLivePush().publish(req.body);
+  if(!result.ok)return res.status(400).json({error:result.error});
+  broadcastLive('snapshot',getLivePush().current());
+  res.json({ok:true,at:new Date(result.at).toISOString()});
+});
+app.get('/api/live/stream',(req,res)=>{
+  if(!liveTimingEnabled())return res.status(503).end();
+  res.writeHead(200,{
+    'Content-Type':'text/event-stream; charset=utf-8',
+    'Cache-Control':'no-store',
+    'Connection':'keep-alive',
+    'X-Accel-Buffering':'no'
+  });
+  res.write('retry: 3000\n\n');
+  const push=()=>{try{res.write('event: snapshot\ndata: '+JSON.stringify(liveSnapshot(req.query.source))+'\n\n')}catch(e){/* client parti */}};
+  push();
+  const timer=setInterval(push,1000);
+  liveClients.add(res);
+  req.on('close',()=>{clearInterval(timer);liveClients.delete(res)});
+});
+// Commandes admin (chat, kick, changement de session) : mêmes règles d'auth que le reste.
+// En mode push elles sont impossibles : le PC n'est pas joignable depuis le site.
+app.post('/api/live/command',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!liveTimingEnabled())return res.status(503).json({error:'Live timing désactivé.'});
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  if(resolveLiveSource(req.query.source||req.body&&req.body.source))return res.status(409).json({error:'Serveur public consulté en lecture seule : aucune commande possible.'});
+  if(getLivePush().current())return res.status(409).json({error:'Serveur distant : les commandes doivent être envoyées depuis le PC qui héberge acServer.'});
+  const {action,message,carId}=req.body||{};
+  const allowed=['chat','kick','next-session','restart-session'];
+  if(!allowed.includes(action))return res.status(400).json({error:'Action inconnue.'});
+  try{
+    const ok=getLiveTiming().command(action,{message,carId});
+    res.json({ok});
+  }catch(e){res.status(502).json({error:e.message})}
+});
+app.get('/live-timing',(req,res)=>res.sendFile(path.join(ROOT,'live-timing.html')));
+app.get('/live-timing.html',(req,res)=>res.sendFile(path.join(ROOT,'live-timing.html')));
+
 app.all('/api/*', (req,res)=>proxyRequest(req,res));
 
 function tryParse(s){try{return JSON.parse(s)}catch(e){return s}}

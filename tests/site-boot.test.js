@@ -690,3 +690,16 @@ test('Malformed events response is an outage, not a successful empty catalog or 
   assert.equal(vm.runInContext('backendMulti',sandbox),true);
   assert.ok(vm.runInContext('backendError',sandbox));
 });
+
+test("L'onglet LIVE est détecté avant le premier rendu (pas seulement après navigation)", () => {
+  const src=require('node:fs').readFileSync(require('node:path').join(__dirname,'..','site.js'),'utf8');
+  const boot=src.indexOf('// ---------- BOOTSTRAP ----------');
+  assert.ok(boot>0,'bootstrap introuvable');
+  const after=src.slice(boot);
+  const iDetect=after.indexOf('detectLiveTiming()');
+  const iFirstRender=after.indexOf('render()');
+  assert.ok(iDetect>0 && iFirstRender>0,'appels introuvables dans le bootstrap');
+  assert.ok(iDetect<iFirstRender, "detectLiveTiming doit précéder le premier render (onglet LIVE visible tout de suite)");
+  // La détection n'accepte pas n'importe quelle réponse 200 : elle exige du JSON.
+  assert.match(src,/content-type[^\n]*json/i);
+});
