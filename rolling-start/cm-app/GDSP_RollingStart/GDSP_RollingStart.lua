@@ -176,6 +176,7 @@ local function computeLocalPelotonAccess()
 end
 
 local lastChatSendAt = -99
+local lastStartDown, lastGreenDown = false, false
 local function sendCommand(cmdType, maybeCfg, action, targetSid, param)
   if isBridgeActive() and bridge then
     if maybeCfg then
@@ -191,6 +192,8 @@ local function sendCommand(cmdType, maybeCfg, action, targetSid, param)
 
   if sim and sim.isOnlineRace then
     -- anti-spam : au plus un message de commande par 4 s (le chat est partage avec tous les pilotes)
+    -- hors admin, le serveur ignore les commandes : ne pas spammer le chat
+    if sim.isAdmin ~= true then return end
     if uiTime - lastChatSendAt < 4 then return end
     lastChatSendAt = uiTime
     if cmdType == proto.CMD_START then pcall(ac.sendChatMessage, '!rs start')
@@ -525,8 +528,13 @@ function script.update(dt)
     state.pelotonRole = rolePel
   end
 
-  if btnStart and btnStart:pressed() then sendCommand(proto.CMD_START) end
-  if btnGreen and btnGreen:pressed() then sendCommand(proto.CMD_GREEN) end
+  -- front montant seulement (un bouton maintenu ne doit pas renvoyer la commande en boucle)
+  local startDown = btnStart and btnStart:pressed() or false
+  if startDown and not lastStartDown then sendCommand(proto.CMD_START) end
+  lastStartDown = startDown
+  local greenDown = btnGreen and btnGreen:pressed() or false
+  if greenDown and not lastGreenDown then sendCommand(proto.CMD_GREEN) end
+  lastGreenDown = greenDown
 end
 
 function script.onHudShow() hudVisible = true end

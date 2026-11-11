@@ -1600,7 +1600,10 @@ local function callReady()
   end
 end
 
-local function triggerGreen(reason)
+local function triggerGreen(reason, why)
+  if S.phase ~= PHASE_IDLE then
+    safeLog(string.format('GREEN declenche par %s (t=%.1fs depuis feux)', tostring(why or 'admin/bouton'), (clock() - S.tStart) / 1000))
+  end
   if S.phase == PHASE_IDLE then return end
   commitState(PHASE_GREEN, reason or REASON_NONE, clock(), S.s0, 0, S.order)
 end
@@ -2372,7 +2375,7 @@ local function controlFormation(cars, rank)
     if cfg.greenTrigger ~= 'manual' then
       local triggerAt = (cfg.autoGreenAt == 'zone') and zoneThresh or targetDist
       if progressDist >= triggerAt and due('short_green', rank) then
-        triggerGreen(REASON_NONE)
+        triggerGreen(REASON_NONE, 'short ligne')
         return
       end
     end
@@ -2385,7 +2388,7 @@ local function controlFormation(cars, rank)
       local lt = leadId and carTrackDist[leadId]
       local lapsDoneM = cfg.formationLaps * trackLen()
       if lt and lt.crossedNow and lt.distM >= lapsDoneM and due('full_green', rank) then
-        triggerGreen(REASON_NONE)
+        triggerGreen(REASON_NONE, string.format('leader ligne, dist=%.0fm / %.0fm', lt.distM, lapsDoneM))
         return
       end
     end
@@ -2394,7 +2397,7 @@ local function controlFormation(cars, rank)
   -- depart lance : pas de plafond global (il couperait le vert avant la fin des tours) ; le vert reste au passage du leader ou manuel
   if cfg.maxFormationSec > 0 and cfg.greenTrigger ~= 'manual' and cfg.startLength ~= 'full' then
     if (clock() - S.tStart) / 1000 >= cfg.maxFormationSec and due('timeout_green', rank) then
-      triggerGreen(REASON_NONE)
+      triggerGreen(REASON_NONE, 'timeout')
     end
   end
 end
@@ -3241,8 +3244,9 @@ function script.draw3D()
   end)()
 end
 
-safeLog(string.format('loaded %s (CSP %s) start=%s cut=%d jump=%d',
-  VERSION, tostring(build), cfg.enabled == 1 and cfg.formationMode or 'standing', cfg.cutEnabled, cfg.jumpEnabled))
+safeLog(string.format('loaded %s (CSP %s) start=%s cut=%d jump=%d | startLength=%s formationLaps=%s greenTrigger=%s trackLen=%s',
+  VERSION, tostring(build), cfg.enabled == 1 and cfg.formationMode or 'standing', cfg.cutEnabled, cfg.jumpEnabled,
+  tostring(cfg.startLength), tostring(cfg.formationLaps), tostring(cfg.greenTrigger), tostring(trackLen())))
 
 if GDSP_RS_TEST then
   return {
