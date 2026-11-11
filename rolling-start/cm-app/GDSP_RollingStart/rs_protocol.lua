@@ -93,6 +93,10 @@ M.CFG_DEFAULTS = {
   limiterMode = 'limiter',   -- 'limiter' | 'hard' | 'off'
   paceKmh = 90,              -- 40..180
   catchupKmh = 35,           -- 0..100
+  fastKmh = 160,             -- phase 1 : vitesse max (km/h) 40..200
+  fastPct = 75,              -- phase 1 : % du tour 25..100
+  slowKmh = 80,              -- phase 2 : regroupement (km/h) 30..150
+  bunchM = 80,               -- seuil de regroupement (m) 20..300
   speedTolKmh = 6,           -- 1..30
   targetGapM = 16,           -- 6..60
   rowAlignTolM = 8,          -- 2..25
@@ -372,6 +376,10 @@ function M.sanitizeCfg(cfg)
   cfg.limiterMode = normChoice(cfg.limiterMode, { 'limiter', 'hard', 'off' }, 'limiter')
   cfg.paceKmh = math.floor(M.clamp(tonumber(cfg.paceKmh) or 90, 40, 180) + 0.5)
   cfg.catchupKmh = math.floor(M.clamp(tonumber(cfg.catchupKmh) or 35, 0, 100) + 0.5)
+  cfg.fastKmh = math.floor(M.clamp(tonumber(cfg.fastKmh) or 160, 40, 200) + 0.5)
+  cfg.fastPct = math.floor(M.clamp(tonumber(cfg.fastPct) or 75, 25, 100) + 0.5)
+  cfg.slowKmh = math.floor(M.clamp(tonumber(cfg.slowKmh) or 80, 30, 150) + 0.5)
+  cfg.bunchM = math.floor(M.clamp(tonumber(cfg.bunchM) or 80, 20, 300) + 0.5)
   cfg.speedTolKmh = math.floor(M.clamp(tonumber(cfg.speedTolKmh) or 6, 1, 30) + 0.5)
   cfg.targetGapM = math.floor(M.clamp(tonumber(cfg.targetGapM) or 16, 6, 60) + 0.5)
   cfg.rowAlignTolM = math.floor(M.clamp(tonumber(cfg.rowAlignTolM) or 8, 2, 25) + 0.5)
@@ -749,6 +757,10 @@ function M.createBridgeLayout()
     cutTimePenaltySec = ac.StructItem.uint8(),
     cutDisabledZones = ac.StructItem.string(80),
     safetyCarKey = ac.StructItem.string(24),
+    fastKmh = ac.StructItem.uint8(),
+    fastPct = ac.StructItem.uint8(),
+    slowKmh = ac.StructItem.uint8(),
+    bunchM = ac.StructItem.uint8(),
 
     -- Command channel (App -> Online Script)
     cmdSeq = ac.StructItem.int32(),
@@ -795,6 +807,10 @@ function M.createBridgeLayout()
     cmdCutTimePenaltySec = ac.StructItem.uint8(),
     cmdCutDisabledZones = ac.StructItem.string(80),
     cmdSafetyCarKey = ac.StructItem.string(24),
+    cmdFastKmh = ac.StructItem.uint8(),
+    cmdFastPct = ac.StructItem.uint8(),
+    cmdSlowKmh = ac.StructItem.uint8(),
+    cmdBunchM = ac.StructItem.uint8(),
   }
 end
 
@@ -808,6 +824,10 @@ function M.writeCfgToBridge(b, cfg, asCmd)
     b.cmdCutEscCode = escCode
     b.cmdPaceKmh = cfg.paceKmh
     b.cmdCatchupKmh = cfg.catchupKmh
+    b.cmdFastKmh = cfg.fastKmh
+    b.cmdFastPct = cfg.fastPct
+    b.cmdSlowKmh = cfg.slowKmh
+    b.cmdBunchM = cfg.bunchM
     b.cmdSpeedTolKmh = cfg.speedTolKmh
     b.cmdTargetGapM = cfg.targetGapM
     b.cmdRowAlignTolM = cfg.rowAlignTolM
@@ -848,6 +868,10 @@ function M.writeCfgToBridge(b, cfg, asCmd)
     b.cutEscCode = escCode
     b.paceKmh = cfg.paceKmh
     b.catchupKmh = cfg.catchupKmh
+    b.fastKmh = cfg.fastKmh
+    b.fastPct = cfg.fastPct
+    b.slowKmh = cfg.slowKmh
+    b.bunchM = cfg.bunchM
     b.speedTolKmh = cfg.speedTolKmh
     b.targetGapM = cfg.targetGapM
     b.rowAlignTolM = cfg.rowAlignTolM
@@ -892,6 +916,10 @@ function M.readCfgFromBridge(b, fromCmd, base)
   if fromCmd then
     cfg.paceKmh = b.cmdPaceKmh
     cfg.catchupKmh = b.cmdCatchupKmh
+    cfg.fastKmh = b.cmdFastKmh
+    cfg.fastPct = b.cmdFastPct
+    cfg.slowKmh = b.cmdSlowKmh
+    cfg.bunchM = b.cmdBunchM
     cfg.speedTolKmh = b.cmdSpeedTolKmh
     cfg.targetGapM = b.cmdTargetGapM
     cfg.rowAlignTolM = b.cmdRowAlignTolM
@@ -929,6 +957,10 @@ function M.readCfgFromBridge(b, fromCmd, base)
   else
     cfg.paceKmh = b.paceKmh
     cfg.catchupKmh = b.catchupKmh
+    cfg.fastKmh = b.fastKmh
+    cfg.fastPct = b.fastPct
+    cfg.slowKmh = b.slowKmh
+    cfg.bunchM = b.bunchM
     cfg.speedTolKmh = b.speedTolKmh
     cfg.targetGapM = b.targetGapM
     cfg.rowAlignTolM = b.rowAlignTolM

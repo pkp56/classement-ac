@@ -269,11 +269,11 @@
                 <input id="shortSec" type="number" min="5" max="180" value="22" />
               </div>
               <div class="field">
-                <label for="limiterMode">Limiteur de vitesse</label>
+                <label for="limiterMode">Limiteur automatique</label>
                 <select id="limiterMode">
                   <option value="limiter">Limiteur mécanique doux</option>
                   <option value="hard">Limiteur strict</option>
-                  <option value="off">Désactivé (visuel)</option>
+                  <option value="off">Désactivé : les pilotes régulent eux-mêmes (alertes visuelles seulement)</option>
                 </select>
               </div>
               <div class="field">
@@ -283,6 +283,22 @@
               <div class="field">
                 <label for="catchupKmh">Bonus rattrapage (+km/h)</label>
                 <input id="catchupKmh" type="number" min="0" max="80" value="22" />
+              </div>
+              <div class="field">
+                <label for="fastKmh">Phase 1 : vitesse max (km/h)</label>
+                <input id="fastKmh" type="number" min="40" max="200" value="160" />
+              </div>
+              <div class="field">
+                <label for="fastPct">Phase 1 : longueur (% du tour)</label>
+                <input id="fastPct" type="number" min="25" max="100" value="75" />
+              </div>
+              <div class="field">
+                <label for="slowKmh">Phase 2 : vitesse de regroupement (km/h)</label>
+                <input id="slowKmh" type="number" min="30" max="150" value="80" />
+              </div>
+              <div class="field">
+                <label for="bunchM">Seuil de regroupement (m)</label>
+                <input id="bunchM" type="number" min="20" max="300" value="80" />
               </div>
               <div class="field">
                 <label for="targetGapM">Espacement entre voitures (m)</label>

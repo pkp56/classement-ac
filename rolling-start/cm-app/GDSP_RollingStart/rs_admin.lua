@@ -274,9 +274,13 @@ function M.drawAdmin(ctx, dt)
         end
       end
 
-      d.limiterMode = choiceRow('Limiteur mecanique :', d.limiterMode, { { 'limiter', 'Limiteur Doux' }, { 'hard', 'Strict' }, { 'off', 'Off' } })
+      d.limiterMode = choiceRow('Limiteur auto :', d.limiterMode, { { 'limiter', 'Doux' }, { 'hard', 'Strict' }, { 'off', 'Off (pilotes regulent)' } })
       d.paceKmh = sliderInt('Vitesse Pace (km/h)', d.paceKmh, 45, 160, '%.0f km/h')
       d.catchupKmh = sliderInt('Bonus rattrapage (km/h)', d.catchupKmh, 0, 80, '+%.0f km/h')
+      d.fastKmh = sliderInt('Phase 1 - vitesse max (km/h)', d.fastKmh, 40, 200, '%.0f km/h')
+      d.fastPct = sliderInt('Phase 1 - longueur (% du tour)', d.fastPct, 25, 100, '%.0f %%')
+      d.slowKmh = sliderInt('Phase 2 - regroupement (km/h)', d.slowKmh, 30, 150, '%.0f km/h')
+      d.bunchM = sliderInt('Seuil de regroupement (m)', d.bunchM, 20, 300, '%.0f m')
       d.targetGapM = sliderInt('Espacement cible (m)', d.targetGapM, 8, 45, '%.0f m')
 
       d.greenTrigger = choiceRow('Declencheur Green :', d.greenTrigger, { { 'both', 'Auto + Manuel' }, { 'auto', 'Auto seul' }, { 'manual', 'Manuel seul' } })

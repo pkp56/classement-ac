@@ -9,7 +9,7 @@ const BOOLEAN_FIELDS = [
 const FIELD_IDS = [
   'enabled', 'everySession', 'autoFormation', 'formationMode', 'poleSide', 'startLength',
   'formationLaps', 'shortMode', 'shortDistanceM', 'shortGreenSpline', 'shortSec',
-  'limiterMode', 'paceKmh', 'catchupKmh', 'targetGapM', 'greenTrigger', 'autoGreenAt', 'allowP1Green',
+  'limiterMode', 'paceKmh', 'catchupKmh', 'fastKmh', 'fastPct', 'slowKmh', 'bunchM', 'targetGapM', 'greenTrigger', 'autoGreenAt', 'allowP1Green',
   'jumpEnabled', 'jumpStandingTolM', 'jumpRollingCatch', 'jumpPenaltyType',
   'jumpStopGoSec', 'jumpServeLaps', 'jumpEscPenalty', 'jumpEscStopGoSec', 'jumpTimePenaltySec',
   'cutEnabled', 'cutEverySession', 'cutWheelsMin', 'cutUseKunosInvalid',

@@ -83,6 +83,10 @@ local CFG_DEFAULTS = {
   limiterMode = 'limiter',
   paceKmh = 90,
   catchupKmh = 35,
+  fastKmh = 160,      -- phase 1 : vitesse max (km/h)
+  fastPct = 75,       -- phase 1 : longueur en % du tour
+  slowKmh = 80,       -- phase 2 : vitesse de regroupement (km/h)
+  bunchM = 80,        -- ecart max leader -> dernier pour considerer le groupe regroupe (m)
   speedTolKmh = 6,
   targetGapM = 16,
   rowAlignTolM = 8,
@@ -229,6 +233,10 @@ local function sanitizeCfg(cfg)
   cfg.limiterMode = normChoice(cfg.limiterMode, { 'limiter', 'hard', 'off' }, 'limiter')
   cfg.paceKmh = math.floor(clamp(tonumber(cfg.paceKmh) or 90, 40, 180) + 0.5)
   cfg.catchupKmh = math.floor(clamp(tonumber(cfg.catchupKmh) or 35, 0, 100) + 0.5)
+  cfg.fastKmh = math.floor(clamp(tonumber(cfg.fastKmh) or 160, 40, 200) + 0.5)
+  cfg.fastPct = math.floor(clamp(tonumber(cfg.fastPct) or 75, 25, 100) + 0.5)
+  cfg.slowKmh = math.floor(clamp(tonumber(cfg.slowKmh) or 80, 30, 150) + 0.5)
+  cfg.bunchM = math.floor(clamp(tonumber(cfg.bunchM) or 80, 20, 300) + 0.5)
   cfg.speedTolKmh = math.floor(clamp(tonumber(cfg.speedTolKmh) or 6, 1, 30) + 0.5)
   cfg.targetGapM = math.floor(clamp(tonumber(cfg.targetGapM) or 16, 6, 60) + 0.5)
   cfg.rowAlignTolM = math.floor(clamp(tonumber(cfg.rowAlignTolM) or 8, 2, 25) + 0.5)
@@ -764,6 +772,10 @@ do
     cutTimePenaltySec = ac.StructItem.uint8(),
     cutDisabledZones = ac.StructItem.string(80),
     safetyCarKey = ac.StructItem.string(24),
+    fastKmh = ac.StructItem.uint8(),
+    fastPct = ac.StructItem.uint8(),
+    slowKmh = ac.StructItem.uint8(),
+    bunchM = ac.StructItem.uint8(),
 
     cmdSeq = ac.StructItem.int32(),
     cmdType = ac.StructItem.uint8(),
@@ -809,6 +821,10 @@ do
     cmdCutTimePenaltySec = ac.StructItem.uint8(),
     cmdCutDisabledZones = ac.StructItem.string(80),
     cmdSafetyCarKey = ac.StructItem.string(24),
+    cmdFastKmh = ac.StructItem.uint8(),
+    cmdFastPct = ac.StructItem.uint8(),
+    cmdSlowKmh = ac.StructItem.uint8(),
+    cmdBunchM = ac.StructItem.uint8(),
   }, true, ns)
   if okB and b then
     bridge = b
@@ -823,6 +839,10 @@ local function writeCfgToBridge(c)
   bridge.cutEscCode = packCutEscAndFallback(c)
   bridge.paceKmh = c.paceKmh
   bridge.catchupKmh = c.catchupKmh
+  bridge.fastKmh = c.fastKmh
+  bridge.fastPct = c.fastPct
+  bridge.slowKmh = c.slowKmh
+  bridge.bunchM = c.bunchM
   bridge.speedTolKmh = c.speedTolKmh
   bridge.targetGapM = c.targetGapM
   bridge.rowAlignTolM = c.rowAlignTolM
@@ -866,6 +886,10 @@ local function readCfgFromBridgeCmd()
   c.cutEscPenalty, c.scFallback = unpackCutEscAndFallback(bridge.cmdCutEscCode)
   c.paceKmh = bridge.cmdPaceKmh
   c.catchupKmh = bridge.cmdCatchupKmh
+  c.fastKmh = bridge.cmdFastKmh
+  c.fastPct = bridge.cmdFastPct
+  c.slowKmh = bridge.cmdSlowKmh
+  c.bunchM = bridge.cmdBunchM
   c.speedTolKmh = bridge.cmdSpeedTolKmh
   c.targetGapM = bridge.cmdTargetGapM
   c.rowAlignTolM = bridge.cmdRowAlignTolM
@@ -1185,6 +1209,10 @@ local function onCfgEvent(sender, d)
   nc.cutEscPenalty, nc.scFallback = unpackCutEscAndFallback(d.cutEscCode)
   nc.paceKmh = d.paceKmh
   nc.catchupKmh = d.catchupKmh
+  nc.fastKmh = d.fastKmh
+  nc.fastPct = d.fastPct
+  nc.slowKmh = d.slowKmh
+  nc.bunchM = d.bunchM
   nc.speedTolKmh = d.speedTolKmh
   nc.targetGapM = d.targetGapM
   nc.rowAlignTolM = d.rowAlignTolM
@@ -1349,6 +1377,10 @@ do
       cutTimePenaltySec = ac.StructItem.uint8(),
       cutDisabledZones = ac.StructItem.string(80),
       safetyCarKey = ac.StructItem.string(24),
+      fastKmh = ac.StructItem.uint8(),
+      fastPct = ac.StructItem.uint8(),
+      slowKmh = ac.StructItem.uint8(),
+      bunchM = ac.StructItem.uint8(),
     }, onCfgEvent)
   end)
   if ok2 then sendCfgEvt, accessCfgEvt = s2, a2 end
@@ -1391,6 +1423,10 @@ local function flushOutbox()
     p.cutEscCode = packCutEscAndFallback(cfg)
     p.paceKmh = cfg.paceKmh
     p.catchupKmh = cfg.catchupKmh
+    p.fastKmh = cfg.fastKmh
+    p.fastPct = cfg.fastPct
+    p.slowKmh = cfg.slowKmh
+    p.bunchM = cfg.bunchM
     p.speedTolKmh = cfg.speedTolKmh
     p.targetGapM = cfg.targetGapM
     p.rowAlignTolM = cfg.rowAlignTolM
@@ -1610,13 +1646,10 @@ local function paceSpline()
 end
 
 -- Depart lance (startLength = full) :
---   1) 3/4 de tour a RS.FAST_KMH, 2) RS.SLOW_KMH jusqu'au regroupement du groupe,
+--   1) 3/4 de tour a cfg.fastKmh, 2) cfg.slowKmh jusqu'au regroupement du groupe,
 --   3) drapeau vert au passage de la ligne par le leader apres formationLaps passages.
 -- (table unique : limite Lua de 200 variables locales au niveau principal)
 local RS = {
-  FAST_KMH = 160, SLOW_KMH = 80,
-  FAST_FRAC = 0.75,          -- fraction de tour a 160 km/h
-  BUNCH_M = 80,              -- ecart max leader -> dernier pour considerer le groupe regroupe
   BUNCH_TIMEOUT_MS = 90000,  -- repli : passe en attente si le regroupement tarde
   stage = { tStart = nil, stage = 'fast', slowT = nil },
 }
@@ -1662,7 +1695,7 @@ local function fullFormationStage(cars)
   if RS.stage.stage == 'fast' then
     local _, leadId = activeLeader(cars)
     local lt = leadId and carTrackDist[leadId]
-    if lt and lt.distM >= RS.FAST_FRAC * trackLen() then
+    if lt and lt.distM >= (cfg.fastPct / 100) * trackLen() then
       RS.stage.stage = 'slow'; RS.stage.slowT = clock()
     end
   end
@@ -1676,7 +1709,7 @@ local function fullFormationStage(cars)
         if not maxD or tr.distM > maxD then maxD = tr.distM end
       end
     end
-    local bunched = n >= 1 and (maxD - minD) <= RS.BUNCH_M
+    local bunched = n >= 1 and (maxD - minD) <= cfg.bunchM
     local timedOut = RS.stage.slowT and (clock() - RS.stage.slowT) >= RS.BUNCH_TIMEOUT_MS
     if bunched or timedOut then RS.stage.stage = 'wait' end
   end
@@ -2175,7 +2208,7 @@ local function updateLocalFormation(cars, dt)
   local elapsedSec = math.max(0, (clock() - S.tStart) / 1000)
   local allowed = cfg.paceKmh
   if cfg.startLength == 'full' and (S.phase == PHASE_FORMATION or S.phase == PHASE_READY) then
-    allowed = (RS.stage.stage == 'fast') and RS.FAST_KMH or RS.SLOW_KMH
+    allowed = (RS.stage.stage == 'fast') and cfg.fastKmh or cfg.slowKmh
   elseif cfg.limiterMode ~= 'hard' then
     if localState.slotDeltaM > 3 then
       allowed = cfg.paceKmh + clamp((localState.slotDeltaM - 3) / 35, 0, 1) * cfg.catchupKmh
