@@ -2497,6 +2497,7 @@ local hudUi = {
   COL_TEAL = rgbm(0.06, 0.16, 0.20, 0.90),
   COL_WHITE = rgbm(0.97, 0.95, 0.90, 1),
   COL_DARK = rgbm(0.05, 0.08, 0.10, 1),
+  COL_GOLD = rgbm(0.86, 0.66, 0.26, 0.96),
 }
 pcall(function()
   if ac.storage then
@@ -2987,8 +2988,8 @@ function script.drawUI()
           or nil
       end
       local formH = (showFormation and warn) and 100 or 70
-      local mainH = showGreen and 46 or (showFormation and formH or 0)
-      local penH = pen.active and 44 or ((pen.note and uiTime < pen.note.untilT) and 42 or 0)
+      local mainH = showGreen and 56 or (showFormation and formH or 0)
+      local penH = pen.active and 80 or ((pen.note and uiTime < pen.note.untilT) and 42 or 0)
       local gapH = (mainH > 0 and penH > 0) and 6 or 0
       local baseBW, baseBH = 380 * k, (mainH + gapH + penH) * k
       local bx, by, bw, bh, bSc, bHov = hudUi.computeWidgetBox('banner', baseBW, math.max(30 * k, baseBH), win, mpos, mdown, mwheel, justPressed)
@@ -2999,9 +3000,12 @@ function script.drawUI()
       if ui.pushClipRect then pcall(ui.pushClipRect, vec2(bx, by), vec2(bx + bw, by + bh)) end
 
       if showGreen then
-        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 46 * kb), hudUi.COL_GREEN, 8 * kb)
-        hudUi.drawCentered('GREEN FLAG — GO!', 22 * kb, cx, cy + 11 * kb, hudUi.COL_DARK)
-        cy = cy + 52 * kb
+        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 56 * kb), rgbm(0.04, 0.22, 0.10, 0.95), 8 * kb)
+        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 17 * kb), hudUi.COL_GREEN, 8 * kb)
+        hudUi.drawCentered('GREEN FLAG — EN COURSE', 11 * kb, cx, cy + 2.5 * kb, hudUi.COL_DARK)
+        hudUi.drawCentered('DRAPEAU VERT — EN COURSE', 16 * kb, cx, cy + 20 * kb, hudUi.COL_WHITE)
+        hudUi.drawCentered('Limiteur coupé · Compteur personnel actif', 9 * kb, cx, cy + 41 * kb, hudUi.COL_GREEN)
+        cy = cy + 60 * kb
       elseif showFormation then
         local title = (S.phase == PHASE_READY or localState.inAccelZone)
           and (localState.inAccelZone and 'ACCELERATION ZONE — PREPARE' or 'ONE TO GO — FORM UP')
@@ -3011,8 +3015,9 @@ function script.drawUI()
                      slow = 'REGROUPEMENT — 80 km/h',
                      wait = 'VERT AU PASSAGE DE LA LIGNE DU LEADER' })[RS.stage.stage] or title
         end
-        local bgHeader = localState.inAccelZone and hudUi.COL_GREEN or hudUi.COL_AMBER
+        local bgHeader = localState.inAccelZone and hudUi.COL_GREEN or hudUi.COL_GOLD
         ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + formH * kb), hudUi.COL_TEAL, 8 * kb)
+        ui.drawRect(vec2(bx, cy), vec2(bx + bw, cy + formH * kb), hudUi.COL_GOLD, 8 * kb, 1.5)
         ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 24 * kb), bgHeader, 8 * kb)
         hudUi.drawCentered(title, 14 * kb, cx, cy + 5 * kb, hudUi.COL_DARK)
 
@@ -3036,14 +3041,30 @@ function script.drawUI()
       if mainH > 0 and penH > 0 then cy = cy + gapH * kb end
 
       if pen.active then
-        local lapsLeft = math.max(0, pen.active.deadlineLap - (me and me.lapCount or 0))
-        local hdr = pen.active.kind == 'stop_and_go'
-          and string.format('STOP & GO (%ds) — RESTE %.1fs  |  %d TOUR(S)', pen.active.holdSec, math.max(0, pen.active.holdSec - pen.active.holdElapsed), lapsLeft)
-          or string.format('DRIVE-THROUGH OBLIGATOIRE — %d TOUR(S) RESTANT(S)', lapsLeft)
+        local me2 = ac.getCar(0)
+        local lapsLeft = math.max(0, pen.active.deadlineLap - (me2 and me2.lapCount or 0))
+        local isSG = pen.active.kind == 'stop_and_go'
         local nQ = pen.queue and #pen.queue or 0
-        if nQ > 0 then hdr = hdr .. '  (+' .. nQ .. ' EN ATTENTE)' end
-        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 44 * kb), hudUi.COL_RED, 8 * kb)
-        hudUi.drawCentered(hdr, 14 * kb, cx, cy + 14 * kb, hudUi.COL_WHITE)
+        local hdrTxt = isSG and 'STOP & GO OBLIGATOIRE' or 'DRIVE-THROUGH OBLIGATOIRE'
+        if nQ > 0 then hdrTxt = hdrTxt .. '  (+' .. nQ .. ' EN ATTENTE)' end
+        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 80 * kb), rgbm(0.30, 0.05, 0.05, 0.95), 8 * kb)
+        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 17 * kb), hudUi.COL_RED, 8 * kb)
+        hudUi.drawCentered(hdrTxt, 11 * kb, cx, cy + 2.5 * kb, hudUi.COL_WHITE)
+        if isSG then
+          local left = math.max(0, pen.active.holdSec - pen.active.holdElapsed)
+          hudUi.drawCentered(string.format('STOP & GO (%ds)', pen.active.holdSec), 15 * kb, cx, cy + 20 * kb, hudUi.COL_WHITE)
+          hudUi.drawCentered(string.format('ARRET EN COURS : %.1fs RESTANT — RESTEZ IMMOBILE', left), 9 * kb, cx, cy + 37 * kb, hudUi.COL_WHITE)
+          local frac = clamp(pen.active.holdElapsed / math.max(0.1, pen.active.holdSec), 0, 1)
+          ui.drawRectFilled(vec2(bx + 10 * kb, cy + 48 * kb), vec2(bx + bw - 10 * kb, cy + 53 * kb), rgbm(0.2, 0.2, 0.2, 0.8), 3 * kb)
+          ui.drawRectFilled(vec2(bx + 10 * kb, cy + 48 * kb), vec2(bx + 10 * kb + (bw - 20 * kb) * frac, cy + 53 * kb), hudUi.COL_GREEN, 3 * kb)
+        else
+          hudUi.drawCentered(string.format('DRIVE-THROUGH — %d TOUR(S) RESTANT(S)', lapsLeft), 14 * kb, cx, cy + 22 * kb, hudUi.COL_WHITE)
+        end
+        local ESC_LBL = { stop_and_go = 'Stop & Go', drive_through = 'Drive-through', teleport_pits = 'Retour aux stands', black_flag = 'Drapeau noir', time_penalty = '+temps' }
+        local escTxt = 'Sinon : ' .. (ESC_LBL[pen.active.escKind] or 'pénalité') .. ' — délai : ' .. lapsLeft .. ' tour(s)'
+        ui.drawRectFilled(vec2(bx + 6 * kb, cy + 60 * kb), vec2(bx + bw - 6 * kb, cy + 75 * kb), hudUi.COL_RED, 5 * kb)
+        hudUi.drawCentered(escTxt, 9 * kb, cx, cy + 64 * kb, hudUi.COL_WHITE)
+        cy = cy + 84 * kb
       elseif pen.note and uiTime < pen.note.untilT then
         ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 42 * kb), hudUi.COL_AMBER, 8 * kb)
         hudUi.drawCentered(pen.note.title .. ' — ' .. pen.note.why, 15 * kb, cx, cy + 11 * kb, hudUi.COL_DARK)
@@ -3086,7 +3107,8 @@ function script.drawUI()
           local px, py, pw, ph, pSc, pHov = hudUi.computeWidgetBox('peloton', basePW, basePH, win, mpos, mdown, mwheel, justPressed)
           local kp = k * pSc
           ui.drawRectFilled(vec2(px, py), vec2(px + pw, py + ph), rgbm(0.06, 0.16, 0.20, 0.88), 6 * kp)
-          ui.dwriteDrawText('CUTS & PENALITES PELOTON — ' .. tostring(pelotonRoleLabel or 'SAFETY CAR'), 11 * kp, vec2(px + 8 * kp, py + 5 * kp), hudUi.COL_AMBER)
+          ui.drawRectFilled(vec2(px, py), vec2(px + pw, py + 20 * kp), hudUi.COL_GOLD, 6 * kp)
+          ui.dwriteDrawText('CUTS & PENALITES PELOTON — ' .. tostring(pelotonRoleLabel or 'SAFETY CAR'), 11 * kp, vec2(px + 8 * kp, py + 4 * kp), hudUi.COL_DARK)
           for j = 1, maxShown do
             ui.dwriteDrawText(gridRows[j].txt, 12 * kp, vec2(px + 8 * kp, py + (20 + (j - 1) * 18) * kp),
               gridRows[j].alert and hudUi.COL_RED or hudUi.COL_WHITE)
