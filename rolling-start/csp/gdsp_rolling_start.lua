@@ -609,10 +609,14 @@ local function canViewPelotonCuts()
   return false, ROLE_NONE, nil, false
 end
 local uiTime = 0
--- horloge partagee script <-> app CM : uiTime est propre a chaque etat Lua (decalage -> bridge jugé inactif)
-local function sharedNow()
-  if os.preciseClock then return os.preciseClock() end
-  return os.clock()
+-- Heartbeats script <-> app CM : l'app tourne dans un autre processus (horloges non comparables).
+-- On utilise un compteur qui s'incremente ; l'autre cote juge "vivant" tant que le compteur bouge.
+local scriptBeatCount = 0
+local appSeenVal, appSeenAt = nil, -99
+local function appRecentlyAlive(b)
+  local v = b and b.appHeartbeat
+  if v ~= appSeenVal then appSeenVal = v; appSeenAt = uiTime end
+  return v ~= nil and (uiTime - appSeenAt) < 1.5
 end
 local lastClock = 0
 local lastSessionIdx = sim and sim.currentSessionIndex or -1
@@ -2419,7 +2423,8 @@ end
 -- ── Bridge Command Consumer ──────────────────────────────────────────────────
 local function processBridgeCommands()
   if not bridge then return end
-  bridge.scriptHeartbeat = sharedNow()
+  scriptBeatCount = scriptBeatCount + 1
+  bridge.scriptHeartbeat = scriptBeatCount
   if (bridge.cmdSeq or 0) > lastCmdSeqProcessed then
     lastCmdSeqProcessed = bridge.cmdSeq
     local cmd = bridge.cmdType
@@ -2986,7 +2991,7 @@ function script.drawUI()
       pcall(ui.drawRaceFlag, hudFlag)
     end
 
-    if cfg.hideHudWhenAppOpen == 1 and bridge and bridge.appVisible == 1 and (sharedNow() - (bridge.appHeartbeat or -99)) < 1.5 then
+    if cfg.hideHudWhenAppOpen == 1 and bridge and bridge.appVisible == 1 and appRecentlyAlive(bridge) then
       return
     end
 
@@ -3221,7 +3226,7 @@ function script.draw3D()
   guard(function()
     if not isRollingSessionActive() then return end
     if S.phase ~= PHASE_FORMATION and S.phase ~= PHASE_READY and S.phase ~= PHASE_CAUTION then return end
-    if cfg.hideHudWhenAppOpen == 1 and bridge and bridge.appVisible == 1 and (sharedNow() - (bridge.appHeartbeat or -99)) < 1.5 then
+    if cfg.hideHudWhenAppOpen == 1 and bridge and bridge.appVisible == 1 and appRecentlyAlive(bridge) then
       return
     end
     local p = ac.trackCoordinateToWorld(vec3(0, 0, paceSpline()))

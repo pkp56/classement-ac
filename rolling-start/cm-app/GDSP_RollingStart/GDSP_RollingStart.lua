@@ -8,11 +8,9 @@ local admin = require('rs_admin')
 
 local sim = ac.getSim()
 local uiTime = 0
--- horloge partagee script <-> app CM (voir script : uiTime differe entre etats Lua)
-local function sharedNow()
-  if os.preciseClock then return os.preciseClock() end
-  return os.clock()
-end
+-- heartbeat = compteur incremente par le script (processus different : pas d'horloge commune)
+local appBeatCount = 0
+local seenScriptVal, seenScriptAt = nil, -99
 local lastClock = 0
 local lastSessionIdx = sim and sim.currentSessionIndex or -1
 local hudVisible = false
@@ -127,7 +125,9 @@ local standalone = {
 
 local function isBridgeActive()
   if not bridge then return false end
-  return bridge.scriptHeartbeat > 0 and (sharedNow() - bridge.scriptHeartbeat) < 1.5
+  local v = bridge.scriptHeartbeat
+  if v ~= seenScriptVal then seenScriptVal = v; seenScriptAt = uiTime end
+  return v > 0 and (uiTime - seenScriptAt) < 1.5
 end
 
 local function activeCars()
@@ -280,7 +280,7 @@ local function updateStandalone(dt)
       if tts and tts > 500 then standalone.startWatch.armed = true end
       if me.speedKmh < 12 and now < 120000 then standalone.startWatch.seen = true end
       if standalone.startWatch.seen and ((standalone.startWatch.armed and (tts or -1) <= 0) or (not standalone.startWatch.armed and now > 2500 and me.speedKmh > 12)) then
-        sendCommand(proto.CMD_START)
+        if not sim.isOnlineRace then sendCommand(proto.CMD_START) end
       end
     end
   end
@@ -351,7 +351,7 @@ local function updateStandalone(dt)
     if state.phase == proto.PHASE_FORMATION and pDist >= readyT then state.phase = proto.PHASE_READY end
     if cfg.greenTrigger ~= 'manual' then
       local trig = cfg.autoGreenAt == 'zone' and zoneT or targetDist
-      if pDist >= trig then sendCommand(proto.CMD_GREEN) end
+      if pDist >= trig and not sim.isOnlineRace then sendCommand(proto.CMD_GREEN) end
     end
   else
     local readyW = proto.forwardArc(cfg.oneToGoSpline, cfg.greenLineSpline) * len
@@ -360,7 +360,7 @@ local function updateStandalone(dt)
     if accelW < 40 then accelW = len * 0.12 end
     state.inAccelZone = state.distRemainingM <= accelW
     if state.phase == proto.PHASE_FORMATION and state.distRemainingM <= readyW then state.phase = proto.PHASE_READY end
-    if cfg.greenTrigger ~= 'manual' and ((cfg.autoGreenAt == 'zone' and state.inAccelZone) or state.distRemainingM <= 2.5) then
+    if cfg.greenTrigger ~= 'manual' and not sim.isOnlineRace and ((cfg.autoGreenAt == 'zone' and state.inAccelZone) or state.distRemainingM <= 2.5) then
       sendCommand(proto.CMD_GREEN)
     end
   end
@@ -447,7 +447,8 @@ function script.update(dt)
   end
 
   if bridge then
-    bridge.appHeartbeat = sharedNow()
+    appBeatCount = appBeatCount + 1
+    bridge.appHeartbeat = appBeatCount
     bridge.appVisible = (hudVisible and localPrefs.hideOnlineBanner) and 1 or 0
   end
 
