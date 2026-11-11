@@ -176,6 +176,7 @@ local function computeLocalPelotonAccess()
 end
 
 local lastChatSendAt = -99
+local lastChatCmd = nil
 local lastStartDown, lastGreenDown = false, false
 local function sendCommand(cmdType, maybeCfg, action, targetSid, param)
   if isBridgeActive() and bridge then
@@ -195,7 +196,10 @@ local function sendCommand(cmdType, maybeCfg, action, targetSid, param)
     -- hors admin, le serveur ignore les commandes : ne pas spammer le chat
     if sim.isAdmin ~= true then return end
     if uiTime - lastChatSendAt < 4 then return end
+    -- meme commande : au plus une fois toutes les 15 s (evite toute rafale de !rs start)
+    if cmdType == lastChatCmd and uiTime - lastChatSendAt < 15 then return end
     lastChatSendAt = uiTime
+    lastChatCmd = cmdType
     if cmdType == proto.CMD_START then pcall(ac.sendChatMessage, '!rs start')
     elseif cmdType == proto.CMD_READY then pcall(ac.sendChatMessage, '!rs ready')
     elseif cmdType == proto.CMD_GREEN then pcall(ac.sendChatMessage, '!green')
