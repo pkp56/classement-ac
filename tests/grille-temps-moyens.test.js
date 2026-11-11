@@ -92,3 +92,31 @@ test('aucun pilote classé : grille vide, pas de plantage', () => {
   assert.equal(grid.drivers.length, 0);
   assert.equal(grid.meta.classified, 0);
 });
+
+test('le nombre de tours maximum est celui où la grille tient dans un tour', () => {
+  // 100 s au tour, 10 s d'écart au tour entre le plus lent et le meilleur :
+  // 1 tour de handicap tous les 10 tours → 10 tours maximum pour un peloton
+  // d'un tour, 5 tours pour un demi-tour.
+  const grid = buildGrid(sessionOf({
+    lent: [110000, 110000],
+    rapide: [100000, 100000]
+  }), { laps: 5, lengthM: 5000 });
+  const f = grid.meta.feasible;
+  assert.equal(f.pleine[0].laps, 10);      // 1 tour de circuit
+  assert.equal(f.pleine[1].laps, 5);       // 1/2 tour
+  assert.equal(f.demi[0].laps, 20);        // écarts divisés par deux
+});
+
+test('les écarts réduits doublent la distance faisable', () => {
+  const grid = buildGrid(sessionOf({
+    lent: [106000, 106000],
+    rapide: [100000, 100000]
+  }), { laps: 12, lengthM: 4000 });
+  const f = grid.meta.feasible;
+  assert.equal(f.demi[0].laps, f.pleine[0].laps * 2);
+});
+
+test('la faisabilité est absente quand aucun pilote n’est classé', () => {
+  const grid = buildGrid({ Type: 'QUALIFY', Laps: [], Result: [] }, { laps: 10 });
+  assert.equal(grid.meta.feasible.pleine[0].laps, null);
+});

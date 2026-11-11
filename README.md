@@ -258,6 +258,29 @@ Règles de calcul appliquées :
 - un pilote avec moins de `--min-laps` tours propres (défaut 2) n'est pas classé
   et part derrière.
 
+### Combien de tours maximum pour que ce soit faisable ?
+
+La limite n'est pas la longueur de la course mais **la longueur du peloton** :
+si la grille fait plus d'un tour de circuit, le plus lent n'est plus sur la
+piste quand le meilleur passe la ligne — ça ne peut pas être posé, et en jeu ça
+donne des voitures hors piste ou des tours de retard immédiats.
+
+Avec `S` = écart de rythme entre le plus lent et le meilleur (s au tour) et
+`T` = temps d'un tour de référence (s), la grille occupe
+`N × S / T` tours de circuit pour une course de `N` tours. D'où :
+
+| Grille tolérée | Nombre de tours de course maximum |
+| --- | --- |
+| un tour de circuit (`N = T/S`) | le maximum absolu |
+| un demi-tour | `T/(2S)` |
+| un tiers de tour | `T/(3S)` |
+| un quart de tour | `T/(4S)` |
+
+Le script affiche ce tableau pour la session : c'est la réponse directe à
+« c'est faisable jusqu'à combien de tours ». Deux façons de pousser la limite :
+réduire la distance, ou diviser les écarts (`--cap`, qui correspond à la colonne
+« écarts ÷ 2 » : les voitures se rejoignent vers la mi-course).
+
 ### Ordres de grandeur mesurés sur les qualifs du championnat
 
 Sur les quatre qualifications déjà importées (15 à 19 min, 20 à 28 pilotes),
@@ -269,6 +292,18 @@ tour**. Le handicap du plus lent vaut donc :
 | 10 tours | 49 à 66 s |
 | 15 tours | 74 à 99 s |
 | 20 tours | 98 à 132 s |
+
+Nombre de tours maximum pour que la grille tienne sur la piste :
+
+| Circuit | Écart de rythme | Grille = 1 tour | Grille = 1/2 tour | Grille = 1/4 de tour |
+| --- | --- | --- | --- | --- |
+| Mid-Ohio (3,6 km) | 6,3 s | **14,5 tours** | 7,3 | 3,6 |
+| Mont-Tremblant (4,2 km) | 6,2 s | **16,5 tours** | 8,2 | 4,1 |
+| Sebring (5,8 km) | 6,6 s | **20,0 tours** | 10,0 | 5,0 |
+| Riverside (5,2 km) | 4,9 s | **21,5 tours** | 10,8 | 5,4 |
+
+En divisant les écarts par deux (`--cap`), ces plafonds doublent : 29 à 43 tours
+avec un peloton d'un tour, 15 à 22 tours avec un demi-tour.
 
 À Mont-Tremblant (4,2 km, meilleur tour 1:42), 20 tours donnent 123 s de
 handicap pour le plus lent, soit **1,2 tour de circuit** : la grille ferait plus

@@ -161,6 +161,20 @@ function buildGrid(session, opts) {
   // un tour de circuit et la grille ne peut plus être posée sur la piste.
   const lapSec = Number.isFinite(lapTimeRef) && lapTimeRef > 0 ? lapTimeRef / 1000 : null;
   const maxLapsForOneLap = (lapSec && spreadSec > 0) ? lapSec / spreadSec : null;
+  // « Combien de tours au maximum pour que ce soit faisable ? »
+  // Un tour d'écart = au-delà, le plus lent serait hors de la piste au moment
+  // où le meilleur passe la ligne. On expose donc la distance max de course
+  // pour plusieurs fenêtres de peloton, à écarts normaux et à écarts divisés
+  // par deux (les deux pilotes se rejoignent à mi-course).
+  const fracs = [1, 0.5, 1 / 3, 0.25];
+  const limite = (frac, compression) =>
+    (lapSec && spreadSec > 0) ? (frac * lapSec) / (spreadSec * compression) : null;
+  const feasibilty = {
+    // grille = la totalité de l'écart de rythme (finir ensemble, handicap réel)
+    pleine: fracs.map(f => ({ frac: f, laps: limite(f, 1) })),
+    // peloton divisé par deux : les voitures se croisent vers la mi-course
+    demi: fracs.map(f => ({ frac: f, laps: limite(f, 0.5) }))
+  };
   const totalGridM = classified.length > 0 && speed ? (classified[0].gapSec || 0) * speed : null;
 
   return {
@@ -185,6 +199,7 @@ function buildGrid(session, opts) {
       lengthM,
       speed,
       maxLapsForOneLap,
+      feasible: feasibilty,
       cap,
       scale,
       totalGridM
@@ -253,6 +268,8 @@ function renderTable(grid) {
     if (Number.isFinite(m.maxLapsForOneLap)) {
       lines.push(`Distance maximale avant de dépasser 1 tour d’écart : ${m.maxLapsForOneLap.toFixed(1)} tours`
         + (m.laps > m.maxLapsForOneLap ? '  ⚠ ta course est plus longue' : '  ✓ ta course est dans les clous'));
+      lines.push('');
+      lines.push(renderFeasible(m));
     }
   }
   return lines.join('\n');
@@ -273,6 +290,31 @@ function renderCsv(grid) {
       Number.isFinite(d.gapM) ? d.gapM.toFixed(0) : '',
       d.classified ? 'oui' : 'non'
     ].join(';'));
+  }
+  return out.join('\n');
+}
+
+/**
+ * Tableau « nombre de tours maximum » : jusqu'où la course peut aller pour que
+ * la grille tienne sur la piste, selon la fraction de tour qu'on accepte
+ * d'occuper et selon qu'on garde les écarts pleins ou divisés par deux.
+ */
+function renderFeasible(m) {
+  const label = f => (f === 1 ? '1 tour' : f === 0.5 ? '1/2 tour' : f === 1 / 3 ? '1/3 de tour' : '1/4 de tour');
+  const col = v => (Number.isFinite(v) ? v.toFixed(1) + ' tr' : '—').padStart(10);
+  const out = [];
+  out.push('Longueur de grille tolérée → nombre de tours de course maximum');
+  out.push('  peloton                          écarts pleins    écarts ÷ 2');
+  m.feasible.pleine.forEach((p, i) => {
+    const d = m.feasible.demi[i];
+    out.push('  ' + label(p.frac).padEnd(32) + col(p.laps) + col(d.laps));
+  });
+  const full = m.feasible.pleine[0];
+  if (Number.isFinite(full.laps)) {
+    out.push(`  → avec toute la grille sur un tour de circuit : ${full.laps.toFixed(1)} tours maximum`);
+    out.push(`  → pour une course de ${m.laps} tours : la grille doit tenir dans `
+      + `${((m.spreadSec * m.laps) / m.lapSec).toFixed(2)} tour(s), `
+      + (m.spreadSec * m.laps / m.lapSec <= 1 ? 'c’est bon' : 'trop long : réduire la distance ou compresser (--cap)'));
   }
   return out.join('\n');
 }
@@ -338,6 +380,6 @@ function main() {
   }
 }
 
-module.exports = { buildGrid, paceOf, renderTable, renderCsv, renderGridOrder, fmtLap };
+module.exports = { buildGrid, paceOf, renderTable, renderFeasible, renderCsv, renderGridOrder, fmtLap };
 
 if (require.main === module) main();
