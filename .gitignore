@@ -182,3 +182,4 @@ cython_debug/
 # Node.js dependencies (install by npm install on Render)
 node_modules/
 node_modules
+rolling-start/packages/*.zip
