@@ -3107,7 +3107,8 @@ function script.drawUI()
     end
 
     local showCutsWidget = (isCutSessionActive() or pen.totalTimePenaltySec > 0 or pen.active ~= nil)
-    if showCutsWidget then
+    -- compteur cuts en jeu : masquable depuis le reglage du HUD (bridge.hideBanner = 1)
+    if showCutsWidget and not (bridge and bridge.hideBanner == 1) then
       local canViewPeloton, _, pelotonRoleLabel = canViewPelotonCuts()
       if canViewPeloton and not inFormation then
         local gridRows = {}

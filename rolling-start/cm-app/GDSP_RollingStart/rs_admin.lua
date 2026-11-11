@@ -572,9 +572,14 @@ function M.drawSettings(ctx)
     ctx.localPrefs.hideOnlineBanner = not hideB
   end
 
+  local showCuts = (ctx.localPrefs.showCutsInSim ~= false)
+  if ui.checkbox('Afficher le compteur cuts en jeu (dans le jeu, pas dans le menu CM)', showCuts) then
+    ctx.localPrefs.showCutsInSim = not showCuts
+  end
+
   ui.separator()
   ui.textColored('Position & Taille des fenetres HUD', rgbm(0.85, 0.64, 0.28, 1))
-  ui.textWrapped('Toutes les fenetres (Rolling Start HUD, GDSP Compteur Cuts, Race Control) sont deplacables librement et redimensionnables par le coin bas-droit.')
+  ui.textWrapped('Toutes les fenetres (Rolling Start HUD, Race Control) sont deplacables librement et redimensionnables par le coin bas-droit.')
 
   local hs = tonumber(ctx.localPrefs.hudScale) or 1.0
   local newHs = ui.slider('Echelle contenu HUD', hs, 0.65, 2.00, '%.2fx')
@@ -594,24 +599,11 @@ function M.drawSettings(ctx)
   local cs = tonumber(ctx.localPrefs.cutsScale) or 1.0
   local newCs = ui.slider('Echelle Compteur Cuts', cs, 0.65, 2.20, '%.2fx')
   ctx.localPrefs.cutsScale = newCs
-  if ui.button('Petit (180x46)', vec2(115, 22)) and ctx.applyAppWindowSize then
-    ctx.applyAppWindowSize('GDSP Compteur Cuts', 180, 46)
-  end
-  ui.sameLine(0, 6)
-  if ui.button('Moyen (240x60)', vec2(120, 22)) and ctx.applyAppWindowSize then
-    ctx.applyAppWindowSize('GDSP Compteur Cuts', 240, 60)
-  end
-  ui.sameLine(0, 6)
-  if ui.button('Grand (340x86)', vec2(120, 22)) and ctx.applyAppWindowSize then
-    ctx.applyAppWindowSize('GDSP Compteur Cuts', 340, 86)
-  end
-
   if ui.button('Reinitialiser tailles & positions', vec2(230, 24)) then
     ctx.localPrefs.hudScale = 1.0
     ctx.localPrefs.cutsScale = 1.0
     if ctx.applyAppWindowSize then
       ctx.applyAppWindowSize('Rolling Start HUD', 460, 310, 40, 40)
-      ctx.applyAppWindowSize('GDSP Compteur Cuts', 240, 60, 40, 370)
     end
   end
 

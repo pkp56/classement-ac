@@ -28,7 +28,8 @@ pcall(function()
 end)
 
 local localPrefs = {
-  hideOnlineBanner = storage and storage.hideOnlineBanner ~= false or true,
+  hideOnlineBanner = not (storage and storage.hideOnlineBanner == false),
+  showCutsInSim = not (storage and storage.showCutsInSim == false),
   hudScale = (storage and tonumber(storage.hudScale)) or 1.0,
   cutsScale = (storage and tonumber(storage.cutsScale)) or 1.0,
 }
@@ -442,6 +443,7 @@ function script.update(dt)
 
   if storage then
     storage.hideOnlineBanner = localPrefs.hideOnlineBanner
+    storage.showCutsInSim = localPrefs.showCutsInSim
     storage.hudScale = localPrefs.hudScale
     storage.cutsScale = localPrefs.cutsScale
   end
@@ -450,6 +452,8 @@ function script.update(dt)
     appBeatCount = appBeatCount + 1
     bridge.appHeartbeat = appBeatCount
     bridge.appVisible = (hudVisible and localPrefs.hideOnlineBanner) and 1 or 0
+    -- hideBanner (champ existant du bridge) = 1 : masquer le compteur cuts en jeu
+    bridge.hideBanner = (localPrefs.showCutsInSim == false) and 1 or 0
   end
 
   local bActive = isBridgeActive()
