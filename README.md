@@ -198,3 +198,115 @@ de pointer vers une image absente.
   Trois départs = trois secteurs (le dernier va jusqu'à 1), pas quatre.
 - `tests/drive-import.test.js` couvre l'extraction d'ID, le décodage, le rejet
   d'un fichier tronqué et les deux cas ci-dessus.
+
+## Grille « finir ensemble » (départ lancé à écarts calculés)
+
+Objectif : départ lancé, voitures placées à des endroits différents du circuit,
+chacune avec l'écart qui correspond à sa moyenne de qualification, de sorte que
+tout le monde passe la ligne au même instant au bout de N tours.
+
+### Ce que permet Assetto Corsa, et ce qu'il ne permet pas
+
+| Besoin | Faisable ? | Par quel moyen |
+| --- | --- | --- |
+| Classer du plus mauvais au meilleur rythme de qualif | oui | calcul hors jeu (ci-dessous) |
+| Placer les voitures les unes derrière les autres à des endroits précis | **non** côté serveur | les positions de grille viennent du fichier **piste** `start_positions.ini` (`[GRID_n]`), pas du serveur : impossible d'en inventer de nouvelles à distance depuis `server_cfg.ini` |
+| Choisir qui est devant | oui | `FIXED_GRID_ORDER=1` + `GRID_ORDER=<steamid1>,<steamid2>…` dans `server_cfg.ini` |
+| Écarts de plusieurs centaines de mètres entre les voitures | non avec le départ arrêté | la grille native espace les voitures de quelques mètres seulement (8 à 12 m par rangée) ; il faudrait réécrire la piste |
+| Vrai départ lancé (roulant, écarts libres) | oui, côté client | plugin serveur type CSP/Real Penalty, ou l'outil **Race Control** (§ plus bas) : le serveur AC ne sait pas faire de tour de formation |
+
+Conséquence : la « grille à écarts calculés » n'est pas un réglage du serveur
+Assetto Corsa. Deux chemins réalistes :
+
+1. **Départ arrêté + handicap par la piste** — on garde la grille native, mais on
+   peut envoyer le plus lent devant (`GRID_ORDER`) ; les écarts réels restent
+   ceux de la piste. Pour de vrais écarts, il faut modifier `start_positions.ini`
+   du circuit (fichier de piste, à faire une fois par circuit, hors serveur).
+2. **Départ lancé** — le peloton part groupé derrière un meneur et les écarts se
+   font naturellement en course, ce qui rend le handicap inutile : c'est la
+   solution retenue par Race Control (voir ci-dessous).
+
+### L'outil de calcul : `tools/grille-temps-moyens.js`
+
+Il lit une session de qualification importée (le JSON Assetto Corsa de `data/`)
+et produit la grille, les écarts et, si besoin, une ligne `GRID_ORDER=`.
+
+```bash
+# course de 20 tours, rythme = médiane des tours propres
+node tools/grille-temps-moyens.js data/2026_9_9_21_37_QUALIFY.json --laps=20
+
+# moyenne des tours propres, et export CSV pour la commission
+node tools/grille-temps-moyens.js data/2026_9_9_21_37_QUALIFY.json --laps=15 --mode=mean --csv=grille.csv
+
+# plafonner la grille : le plus lent n'a que 40 s de handicap, tout est
+# comprimé proportionnellement (l'ordre ne change pas)
+node tools/grille-temps-moyens.js data/2026_9_9_21_37_QUALIFY.json --laps=20 --cap=40
+```
+
+Règles de calcul appliquées :
+
+- **rythme** = médiane (défaut) des tours à **+4 % maximum** du meilleur tour du
+  pilote ; `--trim=P` change la fenêtre. Les tours de sortie/entrée des stands et
+  les tours lents sont donc écartés. `--mode=mean` (moyenne) et `--mode=best`
+  (meilleur tour) sont disponibles.
+- **classement du plus mauvais au meilleur** : le plus lent reçoit la position 1.
+- **écart** = `(rythme du pilote − rythme du meilleur) × nombre de tours` :
+  c'est exactement le temps qu'il perdrait sur la distance, donc l'instant
+  d'arrivée théorique est identique pour tous.
+- **distance** = écart × vitesse de référence (longueur du circuit ÷ meilleur
+  tour), pour savoir si la grille tient sur la piste.
+- un pilote avec moins de `--min-laps` tours propres (défaut 2) n'est pas classé
+  et part derrière.
+
+### Ordres de grandeur mesurés sur les qualifs du championnat
+
+Sur les quatre qualifications déjà importées (15 à 19 min, 20 à 28 pilotes),
+l'écart de rythme entre le plus lent et le meilleur va de **4,9 s à 6,6 s au
+tour**. Le handicap du plus lent vaut donc :
+
+| Course | Écart 1er → dernier |
+| --- | --- |
+| 10 tours | 49 à 66 s |
+| 15 tours | 74 à 99 s |
+| 20 tours | 98 à 132 s |
+
+À Mont-Tremblant (4,2 km, meilleur tour 1:42), 20 tours donnent 123 s de
+handicap pour le plus lent, soit **1,2 tour de circuit** : la grille ferait plus
+de 5 km, elle ne tient pas sur la piste. Le seuil où la grille reste sous un tour
+d'écart est de **14 à 22 tours** selon le circuit (16,5 à Mont-Tremblant, 14,5 à
+Mid-Ohio, 20 à Sebring, 21,5 à Riverside). D'où l'option `--cap` : elle garde
+l'ordre de la grille et comprime tous les écarts pour que le plus lent reste dans
+une fenêtre raisonnable (40 s ≈ 1,7 km de peloton à Mont-Tremblant).
+
+## Race Control (départ lancé)
+
+[Race Control](https://github.com/FranQuarnolo/race-control) (projet
+communautaire, en espagnol, libellé « Largada en movimiento y penalizaciones en
+tiempo real propias para Assetto Corsa ») fait le départ lancé : tour de
+formation, vitesse limitée, bouton « Verte », sanctions automatiques (vitesse en
+formation, pit lane, coupes de piste) et un client app à installer côté pilote
+dans Content Manager. Il s'intègre à un panel de ligue ou sert seul.
+
+Ce qu'il fait et ne fait pas pour cette idée :
+
+- il **gère la procédure** de départ lancé (formation, vitesse, verte, pénalités) ;
+- il **ne calcule pas** de grille à écarts de rythme de qualification : la mise
+  en grille reste celle du jeu / de la piste ;
+- le timing exact du départ est laissé au jeu : l'admin clique « Verte » au
+  moment où le semaphore s'éteint.
+
+C'est donc la brique complémentaire de l'outil ci-dessus, pas un remplacement :
+Race Control pour la procédure, `tools/grille-temps-moyens.js` pour décider de
+l'ordre et publier les écarts dans le classement / la commission.
+
+### Mise en place pratique
+
+1. Qualif (20 min) → import de la session comme d'habitude dans l'administration.
+2. `node tools/grille-temps-moyens.js <session_QUALIFY.json> --laps=<tours de course> --csv=grille.csv --cap=40`.
+3. Reporter l'ordre dans `GRID_ORDER=` (le script le génère) si le serveur est en
+   `FIXED_GRID_ORDER=1`, ou simplement dans un tableau publié pour les pilotes.
+4. Race Control (ou le plugin du serveur) lance la procédure de départ lancé.
+
+Test : `npm test` (fichier `tests/grille-temps-moyens.test.js`) couvre le calcul
+du rythme, l'ordre « plus mauvais devant », le handicap, le plafonnement et la
+conversion en mètres.
