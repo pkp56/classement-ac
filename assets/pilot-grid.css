@@ -1,0 +1,26 @@
+/* Liste des pilotes : vignettes compactes, sans modifier les fiches. */
+#drivers.pilot-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:13px 18px}
+#drivers .pilot-tile{position:relative;display:flex;flex-direction:column;min-width:0;padding:0;background:#fffdf8;border:1px solid #d6d8d5;border-top:3px solid #193e49;border-radius:9px;overflow:hidden;box-shadow:0 3px 9px #213b3308;cursor:default;transition:box-shadow .2s,border-color .2s}
+#drivers .pilot-tile:hover{transform:none;border-color:#b48a43;box-shadow:0 8px 24px #14343e22}
+#drivers .pilot-visual{position:relative;aspect-ratio:2.4;background:radial-gradient(ellipse at center,#f7f6f0,#e4e9e8);border-bottom:2px solid #b48a43;overflow:hidden}
+#drivers .pilot-visual img{display:block;width:100%;height:100%;object-fit:contain;padding:14px 5px 15px}
+#drivers .pilot-number{position:absolute;top:5px;left:6px;display:grid;place-items:center;width:23px;height:23px;border-radius:5px;background:#163944;color:#f5dfaa;border:1px solid #bc9654;font:bold 13px Georgia,serif}
+#drivers .pilot-series{position:absolute;bottom:4px;left:7px;font:bold 6px Arial,sans-serif;letter-spacing:1px;color:#244853}
+#drivers .pilot-initials{display:grid;place-items:center;height:100%;font:30px Georgia,serif;color:#244853}
+#drivers .pilot-body{display:flex;flex-direction:column;flex:1;padding:8px 9px 7px}
+#drivers .pilot-body h3{font:bold 15px/1.15 Georgia,serif;color:#14343e;min-height:35px;margin:0 0 3px;overflow-wrap:anywhere}
+#drivers .pilot-team{font:600 8px/1.3 Arial,sans-serif;text-transform:uppercase;letter-spacing:.2px;min-height:21px;color:#957031;overflow-wrap:anywhere}
+#drivers .pilot-stats{display:flex;margin:6px 0;padding-top:5px;border-top:1px solid #ded3bc}
+#drivers .pilot-stats>div{flex:1;min-width:0}
+#drivers .pilot-stats>div+div{padding-left:9px;border-left:1px solid #e6e1d7}
+#drivers .pilot-stats span{display:block;font:7px Arial,sans-serif;text-transform:uppercase;color:#71796f}
+#drivers .pilot-stats strong{font:17px/1.1 Georgia,serif;color:#193e49}
+#drivers .pilot-body button{display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:auto;padding:5px 8px;border:1px solid #193e49;border-radius:4px;background:#193e49;color:#fff4db;font:9px Arial,sans-serif;cursor:pointer}
+#drivers .pilot-body button span{color:#dfb86e;font-size:14px}
+#drivers .pilot-body button::after{content:'';position:absolute;inset:0}
+#drivers .pilot-body button:hover{background:#244e5b;border-color:#b48a43}
+#drivers .pilot-tile:focus-within{outline:2px solid #b48a43;outline-offset:3px}
+@media(max-width:1000px){#drivers.pilot-grid{gap:13px 12px}}
+@media(max-width:760px){#drivers.pilot-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:480px){#drivers.pilot-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#drivers .pilot-visual{aspect-ratio:2.2}#drivers .pilot-body h3{font-size:14px;min-height:33px}}
+@media(prefers-reduced-motion:reduce){#drivers .pilot-tile{transition:none}}
