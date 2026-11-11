@@ -2232,7 +2232,11 @@ local function controlFormation(cars, rank)
   local _, leadId = activeLeader(cars)
   local pDist = paceDistM()
   local leadDist = (leadId and carTrackDist[leadId] and carTrackDist[leadId].distM) or pDist
-  local progressDist = math.max(leadDist, pDist * 0.85)
+  -- Progression réelle : distance parcourue par le leader. Le terme "pace" (temps x vitesse)
+  -- ne sert qu'en secours si aucune donnée de voiture n'existe ; sinon une voiture plus lente
+  -- que le pace faisait passer le vert trop tôt, avant d'avoir roulé les tours de formation.
+  local leaderHasData = leadId and carTrackDist[leadId] ~= nil
+  local progressDist = leaderHasData and leadDist or (pDist * 0.85)
   local targetDist = computeTargetDistanceM(S.s0, cfg, len)
   local remM = math.max(0, targetDist - progressDist)
   localState.distRemainingM = remM
