@@ -46,6 +46,8 @@ const CFG_DEFAULTS = Object.freeze({
   launchGraceSec: 5,
   maxFormationSec: 240,
   hideHudWhenAppOpen: 1,
+  showStartBanner: 1,
+  showCutCounter: 1,
   debug: 0,
 
   // Jump-start (Standing & Rolling)
@@ -299,6 +301,8 @@ function sanitizeConfig(input = {}) {
   c.launchGraceSec = clamp(Math.round(numOr(c.launchGraceSec, 5)), 0, 20);
   c.maxFormationSec = clamp(Math.round(numOr(c.maxFormationSec, 240)), 0, 600);
   c.hideHudWhenAppOpen = toInt01(c.hideHudWhenAppOpen, 1);
+  c.showStartBanner = toInt01(c.showStartBanner, 1);
+  c.showCutCounter = toInt01(c.showCutCounter, 1);
   c.debug = toInt01(c.debug, 0);
 
   // Jump-start

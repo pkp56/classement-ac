@@ -9,7 +9,7 @@
 --     and automatic Last-Lap / Finish time added to total race time
 --   * Network sync via ac.OnlineEvent (<=175B packets) + IPC bridge to GDSP_RollingStart CM App
 
-local VERSION = 'GDSP-RS 1.1.0'
+local VERSION = 'GDSP-RS 1.1.1'
 local ORDER_MAX = 48
 local NONE = 255
 local SEND_INTERVAL = 0.25
@@ -100,6 +100,8 @@ local CFG_DEFAULTS = {
   launchGraceSec = 5,
   maxFormationSec = 240,
   hideHudWhenAppOpen = 1,
+  showStartBanner = 1,   -- 0 = masquer le bandeau de depart (panneau formation / GREEN) pour tout le monde
+  showCutCounter = 1,    -- 0 = masquer le compteur de cuts pour tout le monde (les penalites restent appliquees)
   debug = 0,
 
   jumpEnabled = 1,
@@ -250,6 +252,8 @@ local function sanitizeCfg(cfg)
   cfg.launchGraceSec = math.floor(clamp(tonumber(cfg.launchGraceSec) or 5, 0, 20) + 0.5)
   cfg.maxFormationSec = math.floor(clamp(tonumber(cfg.maxFormationSec) or 240, 0, 600) + 0.5)
   cfg.hideHudWhenAppOpen = (tonumber(cfg.hideHudWhenAppOpen) or 1) ~= 0 and 1 or 0
+  cfg.showStartBanner = (tonumber(cfg.showStartBanner) or 1) ~= 0 and 1 or 0
+  cfg.showCutCounter = (tonumber(cfg.showCutCounter) or 1) ~= 0 and 1 or 0
   cfg.debug = (tonumber(cfg.debug) or 0) ~= 0 and 1 or 0
 
   cfg.jumpEnabled = (tonumber(cfg.jumpEnabled) or 1) ~= 0 and 1 or 0
@@ -3011,8 +3015,8 @@ function script.drawUI()
     local justPressed = mdown and not hudUi.drag.prevDown
 
     local k = win.y / 1080
-    local showGreen = cfg.enabled == 1 and S.phase == PHASE_GREEN and (clock() - S.tStart) < 4500
-    local showFormation = cfg.enabled == 1 and (S.phase == PHASE_FORMATION or S.phase == PHASE_READY or S.phase == PHASE_CAUTION)
+    local showGreen = cfg.showStartBanner == 1 and cfg.enabled == 1 and S.phase == PHASE_GREEN and (clock() - S.tStart) < 4500
+    local showFormation = cfg.showStartBanner == 1 and cfg.enabled == 1 and (S.phase == PHASE_FORMATION or S.phase == PHASE_READY or S.phase == PHASE_CAUTION)
     local inFormation = (S.phase == PHASE_FORMATION or S.phase == PHASE_READY or S.phase == PHASE_CAUTION)
     local hasPenaltyCard = (pen.active ~= nil) or (pen.note ~= nil and uiTime < pen.note.untilT)
 
@@ -3116,7 +3120,7 @@ function script.drawUI()
 
     local showCutsWidget = (isCutSessionActive() or pen.totalTimePenaltySec > 0 or pen.active ~= nil)
     -- compteur cuts en jeu : masquable depuis le reglage du HUD (bridge.hideBanner = 1)
-    if showCutsWidget and not (bridge and bridge.hideBanner == 1) then
+    if showCutsWidget and cfg.showCutCounter == 1 and not (bridge and bridge.hideBanner == 1) then
       local canViewPeloton, _, pelotonRoleLabel = canViewPelotonCuts()
       if canViewPeloton and not inFormation then
         local gridRows = {}
