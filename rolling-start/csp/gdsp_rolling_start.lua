@@ -1671,7 +1671,11 @@ local function updateCarDistances(cars)
       local initD = wrapSigned(c.splinePosition - S.s0) * len
       carTrackDist[id] = { lastS = c.splinePosition, distM = initD, cross = 0, crossT = S.tStart, crossedNow = false }
     else
-      if tr.crossT ~= S.tStart then tr.crossT = S.tStart; tr.cross = 0 end
+      -- nouvelle formation : distance re-ancree sur la grille (sinon le tour precedent comptait deja)
+      if tr.crossT ~= S.tStart then
+        tr.crossT = S.tStart; tr.cross = 0
+        tr.distM = wrapSigned(c.splinePosition - S.s0) * len
+      end
       tr.crossedNow = false
       local prevS = tr.lastS
       local ds = wrapSigned(c.splinePosition - tr.lastS) * len
@@ -2387,7 +2391,8 @@ local function controlFormation(cars, rank)
     end
   end
 
-  if cfg.maxFormationSec > 0 and cfg.greenTrigger ~= 'manual' then
+  -- depart lance : pas de plafond global (il couperait le vert avant la fin des tours) ; le vert reste au passage du leader ou manuel
+  if cfg.maxFormationSec > 0 and cfg.greenTrigger ~= 'manual' and cfg.startLength ~= 'full' then
     if (clock() - S.tStart) / 1000 >= cfg.maxFormationSec and due('timeout_green', rank) then
       triggerGreen(REASON_NONE)
     end

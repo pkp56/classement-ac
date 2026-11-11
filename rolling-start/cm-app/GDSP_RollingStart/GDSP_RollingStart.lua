@@ -175,6 +175,7 @@ local function computeLocalPelotonAccess()
   return allowed == true, role or ''
 end
 
+local lastChatSendAt = -99
 local function sendCommand(cmdType, maybeCfg, action, targetSid, param)
   if isBridgeActive() and bridge then
     if maybeCfg then
@@ -189,6 +190,9 @@ local function sendCommand(cmdType, maybeCfg, action, targetSid, param)
   end
 
   if sim and sim.isOnlineRace then
+    -- anti-spam : au plus un message de commande par 4 s (le chat est partage avec tous les pilotes)
+    if uiTime - lastChatSendAt < 4 then return end
+    lastChatSendAt = uiTime
     if cmdType == proto.CMD_START then pcall(ac.sendChatMessage, '!rs start')
     elseif cmdType == proto.CMD_READY then pcall(ac.sendChatMessage, '!rs ready')
     elseif cmdType == proto.CMD_GREEN then pcall(ac.sendChatMessage, '!green')
