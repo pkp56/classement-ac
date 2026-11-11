@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aperçu en Jeu — GDSP Race Control (HUD, Drapeaux &amp; Cuts)</title>
+  <style>
+    :root {
+      --bg: #e9e0cb;
+      --ink: #102a32;
+      --panel: #f8f2e4;
+      --panel-dark: #0a1c24;
+      --border: #bdb09a;
+      --gold: #d7a347;
+      --cream: #f4ecd8;
+      --muted: #6d726c;
+      --green: #2c7a4b;
+      --amber: #f5bd24;
+      --red: #9c3021;
+      --blue: #38adf5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    .heritage-stripe {
+      height: 5px; display: grid; grid-template-columns: repeat(4, 1fr);
+    }
+    .heritage-stripe span:nth-child(1) { background: #c8281c; }
+    .heritage-stripe span:nth-child(2) { background: #e18c17; }
+    .heritage-stripe span:nth-child(3) { background: #f4ecd8; }
+    .heritage-stripe span:nth-child(4) { background: #0e706e; }
+    .topbar {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 14px 22px; background: var(--ink); color: var(--cream);
+      border-bottom: 5px solid var(--red);
+      box-shadow: 0 10px 26px rgba(16,42,50,0.16);
+    }
+    .topbar-brand { display: flex; align-items: center; gap: 12px; }
+    .topbar-logo { width: 42px; height: 48px; object-fit: contain; }
+    .topbar h1 {
+      margin: 0; font-family: Impact, 'Arial Narrow', sans-serif; font-weight: normal;
+      font-size: 1.35rem; letter-spacing: 0.8px; text-transform: uppercase; color: var(--cream);
+    }
+    .tabs { display: flex; flex-wrap: wrap; gap: 7px; }
+    .tab-btn {
+      padding: 8px 13px; border-radius: 6px; border: 1px solid rgba(215,163,71,0.42);
+      background: #163942; color: var(--cream); font-weight: 700; font-size: 0.81rem;
+      cursor: pointer; transition: 0.15s;
+    }
+    .tab-btn:hover { border-color: var(--gold); color: var(--gold); }
+    .tab-btn.active { background: var(--gold); color: #091317; border-color: var(--gold); }
+    .back-link {
+      color: var(--cream); text-decoration: none; font-size: 0.82rem; font-weight: 700;
+      padding: 7px 12px; border: 1px solid rgba(244,236,216,0.35); border-radius: 6px;
+    }
+    .back-link:hover { border-color: var(--gold); color: var(--gold); }
+
+    .wrap { max-width: 1280px; margin: 18px auto 40px; padding: 0 18px; }
+    .desc-bar {
+      background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--red);
+      border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; flex-wrap: wrap;
+      justify-content: space-between; align-items: center; gap: 10px;
+      box-shadow: 0 6px 16px rgba(16,42,50,0.06);
+    }
+    .desc-bar strong { color: var(--red); }
+    .mode-switch { display: flex; gap: 8px; align-items: center; font-weight: 600; color: var(--ink); }
+
+    /* Simulated 16:9 Assetto Corsa Viewport with 70s Sunset Atmosphere */
+    .viewport {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      min-height: 540px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid var(--ink);
+      background: linear-gradient(180deg, #15303c 0%, #6f624c 24%, #c58a50 35%, #273429 35.5%, #161e19 100%);
+      box-shadow: 0 18px 42px rgba(16,42,50,0.28);
+      color: var(--cream);
+      user-select: none;
+    }
+
+    /* Perspective race track surface */
+    .track-svg {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+    }
+
+    /* AC Native Top-Left Race Flag (ui.drawRaceFlag) */
+    .ac-flag {
+      position: absolute; top: 16px; left: 18px;
+      width: 142px; height: 78px; border-radius: 6px;
+      border: 2px solid rgba(0,0,0,0.65);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 0.78rem; letter-spacing: 0.5px;
+      z-index: 5;
+    }
+    .ac-flag .sub { font-size: 0.66rem; font-weight: 700; opacity: 0.88; margin-top: 2px; }
+    .flag-yellow { background: linear-gradient(135deg, #fbbf24 0%, #eab308 100%); color: #111; }
+    .flag-green { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #052e16; }
+    .flag-blink { animation: blinkFlag 0.6s infinite alternate; }
+    @keyframes blinkFlag {
+      from { background: #eab308; color: #111; }
+      to { background: #22c55e; color: #052e16; }
+    }
+    .flag-meatball {
+      background: #141414; color: #fff; border-color: #f97316;
+    }
+    .flag-meatball .dot {
+      width: 34px; height: 34px; border-radius: 50%; background: #f97316; margin-bottom: 3px;
+      box-shadow: 0 0 10px rgba(249,115,22,0.6);
+    }
+    .flag-unsport {
+      background: linear-gradient(135deg, #f8fafc 50%, #0f172a 50%);
+      color: #f59e0b; text-shadow: 0 1px 3px #000;
+    }
+    .flag-black { background: #0b0b0b; color: #f87171; border-color: #ef4444; }
+
+    /* CM App HUD Window (rs_hud.lua) */
+    .cm-hud {
+      position: absolute; top: 28px; left: 405px;
+      width: 470px; max-width: calc(100% - 20px);
+      background: rgba(15, 41, 51, 0.92);
+      border: 1.5px solid rgba(217, 163, 74, 0.72);
+      border-radius: 9px;
+      padding: 3px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.55);
+      z-index: 6;
+      transform-origin: top left;
+      cursor: grab;
+    }
+    .hud-movable { cursor: grab; transform-origin: top left; position: relative; }
+    .hud-movable:active, .cm-hud:active { cursor: grabbing; }
+    .resize-grip {
+      position: absolute; right: 2px; bottom: 2px; width: 14px; height: 14px;
+      cursor: nwse-resize; z-index: 12;
+      background: linear-gradient(135deg, transparent 45%, rgba(215,163,71,0.85) 45%, rgba(215,163,71,0.85) 58%, transparent 58%, transparent 74%, rgba(215,163,71,0.85) 74%, rgba(215,163,71,0.85) 86%, transparent 86%);
+    }
+    .mini-controls {
+      position: absolute; top: -21px; right: 0; display: none; gap: 3px; z-index: 14;
+    }
+    .hud-movable:hover .mini-controls, .cm-hud:hover .mini-controls, .rc-window:hover .mini-controls { display: flex; }
+    .mini-ctrl-btn {
+      width: 19px; height: 19px; border-radius: 3px; border: 1px solid rgba(215,163,71,0.8);
+      background: rgba(10,28,36,0.92); color: #d7a347; font-size: 11px; font-weight: 800;
+      cursor: pointer; line-height: 16px; padding: 0;
+    }
+    .cm-hud-hdr {
+      height: 36px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      position: relative; font-weight: 800; font-size: 0.95rem; color: #091317;
+    }
+    .mini-flag {
+      position: absolute; left: 10px; top: 7px; display: flex; align-items: center;
+    }
+    .mini-flag-pole { width: 2px; height: 22px; background: var(--cream); }
+    .mini-flag-cloth {
+      width: 24px; height: 15px; border: 1px solid #091317; border-radius: 2px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 5px;
+    }
+    .cm-hud-body { padding: 8px 10px 10px; }
+    .hud-meta {
+      display: flex; justify-content: space-between; font-size: 0.71rem; margin-bottom: 7px; font-weight: 600;
+    }
+    .hud-card {
+      background: rgba(10, 28, 36, 0.94); border-radius: 6px; padding: 8px 10px; margin-bottom: 7px;
+    }
+    .hud-pen-card {
+      background: rgba(97, 15, 15, 0.94); border: 1.5px solid var(--red);
+      border-radius: 6px; padding: 8px 10px; margin-bottom: 7px; text-align: center;
+    }
+    .hud-warn-bar {
+      background: var(--red); border-radius: 5px; padding: 5px 8px; text-align: center;
+      font-weight: 700; font-size: 0.77rem; margin-bottom: 7px;
+    }
+    .hud-green-banner {
+      background: rgba(20, 82, 40, 0.94); border-radius: 6px; padding: 18px 10px; text-align: center; margin-bottom: 7px;
+    }
+    .bar-bg { height: 10px; background: #22353d; border-radius: 4px; position: relative; overflow: hidden; margin-top: 5px; }
+    .bar-fill { height: 100%; border-radius: 4px; }
+    .bar-tick { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--cream); }
+    .hud-footer {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 3px;
+    }
+    .hud-btn {
+      border: none; border-radius: 4px; padding: 5px 10px; font-weight: 700; font-size: 0.74rem; cursor: pointer;
+    }
+    .hud-btn-dark { background: #1e3f4b; color: var(--cream); border: 1px solid rgba(217,163,74,0.45); }
+    .hud-btn-green { background: var(--green); color: #07190e; }
+
+    /* Peloton table inside HUD or bottom-left fallback */
+    .peloton-table { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+    .peloton-table th { text-align: left; color: var(--gold); font-size: 0.69rem; padding-bottom: 4px; }
+    .peloton-table td { padding: 3px 0; border-top: 1px solid rgba(152,176,182,0.12); }
+
+    /* Fallback Bottom-Left Overlay (without CM App) */
+    .fallback-bottom-left {
+      position: absolute; inset: 0; pointer-events: none; z-index: 6;
+    }
+    .fallback-bottom-left > * { pointer-events: auto; position: absolute !important; }
+    .fb-panel {
+      left: 16px; bottom: 52px;
+      background: rgba(15, 41, 51, 0.90); border: 1px solid rgba(217,163,74,0.45);
+      border-radius: 6px; padding: 7px 14px 9px 11px; min-width: 320px; font-size: 0.77rem;
+    }
+
+    /* Optional Admin Race Control side window */
+    .rc-window {
+      position: absolute; right: 16px; top: 18px; width: 325px; max-width: calc(100% - 32px);
+      background: rgba(12, 32, 39, 0.94); border: 1.5px solid rgba(217,163,74,0.65);
+      border-radius: 8px; padding: 10px; font-size: 0.76rem; z-index: 6;
+      box-shadow: 0 10px 26px rgba(0,0,0,0.55); transform-origin: top left; cursor: grab;
+    }
+    .rc-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 4px 6px; background: rgba(8,21,25,0.8); border-radius: 4px; margin-bottom: 4px;
+    }
+    .pill {
+      display: inline-block; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 0.69rem;
+    }
+    .pill-ok { background: rgba(36,204,97,0.2); color: var(--green); }
+    .pill-warn { background: rgba(245,189,36,0.2); color: var(--amber); }
+    .pill-red { background: rgba(230,46,46,0.24); color: #fca5a5; }
+    .pill-blue { background: rgba(56,173,245,0.2); color: var(--blue); }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="heritage-stripe"><span></span><span></span><span></span><span></span></div>
+  <div class="topbar">
+    <div class="topbar-brand">
+      <img class="topbar-logo" src="/assets/gdsp-logo.png" alt="Logo GDSP" />
+      <h1>Aperçu en Jeu — GDSP Race Control</h1>
+    </div>
+    <div class="tabs" id="sceneTabs">
+      <button class="tab-btn active" data-scene="formation">1. Départ Lancé 2×2 (Pilote)</button>
+      <button class="tab-btn" data-scene="accel">2. Zone Accel &amp; Green Flag</button>
+      <button class="tab-btn" data-scene="stopgo">3. Cut &amp; Stop &amp; Go aux Stands</button>
+      <button class="tab-btn" data-scene="peloton">4. Safety Car : « Peloton Cuts »</button>
+      <button class="tab-btn" data-scene="zones">5. Admin : Zones Cut &amp; Stewards</button>
+    </div>
+    <a class="back-link" href="/images.html">Images simples</a>
+    <a class="back-link" href="/">← Configurateur Serveur</a>
+  </div>
+
+  <div class="wrap">
+    <div class="desc-bar">
+      <div id="sceneDesc"></div>
+      <div class="mode-switch">
+        <label style="font-size:0.83rem; cursor:pointer; display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="noAppMode" />
+          Simuler un pilote <strong>sans l'app Content Manager</strong> (HUD auto déplaçable)
+        </label>
+        <button class="hud-btn hud-btn-dark" id="resetHudPosBtn" type="button" title="Remettre toutes les fenêtres à leur place et taille d'origine">Réinitialiser positions / tailles</button>
+      </div>
+    </div>
+
+    <div class="viewport" id="viewport">
+      <!-- Track & 3D Guides SVG -->
+      <svg class="track-svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+        <!-- Horizon treeline & asphalt -->
+        <polygon points="0,256 0,224 180,218 420,234 780,226 1060,216 1280,222 1280,256" fill="#1b2824" />
+        <polygon points="490,256 790,256 1160,720 120,720" fill="#23282b" />
+        <!-- Alternating Vintage Crimson & Cream Curbs -->
+        <polygon points="484,256 494,256 124,720 96,720" fill="#9c3021" stroke="#f4ecd8" stroke-width="4" stroke-dasharray="28 28" />
+        <polygon points="786,256 796,256 1184,720 1156,720" fill="#9c3021" stroke="#f4ecd8" stroke-width="4" stroke-dasharray="28 28" />
+        <!-- Center dashed line -->
+        <line x1="640" y1="262" x2="640" y2="720" stroke="rgba(244,236,216,0.34)" stroke-width="3" stroke-dasharray="18 16" />
+
+        <!-- 3D Accel / Green Line (Scene 2) -->
+        <g id="svgGreenLine" class="hidden">
+          <line x1="395" y1="455" x2="885" y2="455" stroke="#24cc61" stroke-width="6" />
+          <text x="640" y="446" text-anchor="middle" fill="#24cc61" font-size="16" font-weight="800">GREEN LINE</text>
+        </g>
+
+        <!-- 3D Disabled Cut Zone lines (Scene 5) -->
+        <g id="svgCutZone" class="hidden">
+          <line x1="420" y1="420" x2="860" y2="420" stroke="#38adf5" stroke-width="5" />
+          <line x1="320" y1="530" x2="960" y2="530" stroke="#38adf5" stroke-width="5" />
+          <text x="640" y="410" text-anchor="middle" fill="#38adf5" font-size="16" font-weight="800">CUT OFF #1 (Zone tolérée)</text>
+        </g>
+
+        <!-- 3D Pace Marker + Formation Box (Scene 1 & 2) -->
+        <g id="svgFormation3D">
+          <!-- Target car ahead in left lane -->
+          <rect x="485" y="465" width="96" height="44" rx="8" fill="#475569" stroke="#cbd5e1" stroke-width="2" />
+          <text x="533" y="492" text-anchor="middle" fill="#f8fafc" font-size="13" font-weight="700">P1 • PACE</text>
+          <!-- Pace car arrow -->
+          <line x1="640" y1="355" x2="640" y2="420" stroke="#d9a34a" stroke-width="5" />
+          <polygon points="628,414 652,414 640,432" fill="#d9a34a" />
+          <text x="640" y="346" text-anchor="middle" fill="#d9a34a" font-size="15" font-weight="800">PACE 90 KM/H</text>
+
+          <!-- Player 3D Box (Left Lane P3) -->
+          <polygon points="415,575 565,575 595,645 385,645" fill="rgba(36,204,97,0.18)" stroke="#24cc61" stroke-width="4" />
+          <text x="490" y="616" text-anchor="middle" fill="#24cc61" font-size="14" font-weight="800">VOTRE BOX P3 (GAUCHE)</text>
+        </g>
+
+        <!-- Pitlane representation (Scene 3) -->
+        <g id="svgPit3D" class="hidden">
+          <rect x="190" y="470" width="900" height="190" fill="rgba(15,23,42,0.45)" stroke="#f5bd24" stroke-width="3" stroke-dasharray="12 10" />
+          <text x="640" y="560" text-anchor="middle" fill="#f5bd24" font-size="22" font-weight="800">VOIE DES STANDS — ARRÊT STOP &amp; GO (0.4 km/h)</text>
+        </g>
+
+        <!-- Cockpit hood foreground hint -->
+        <path d="M 280,720 Q 640,655 1000,720 Z" fill="#0d1216" stroke="rgba(255,255,255,0.12)" stroke-width="2" />
+      </svg>
+
+      <!-- Top-Left Native CSP Race Flag (ui.drawRaceFlag) -->
+      <div class="ac-flag flag-yellow" id="acFlagBox">
+        <div id="acFlagMain">DRAPEAU JAUNE</div>
+        <div class="sub" id="acFlagSub">FORMATION</div>
+      </div>
+
+      <!-- Main CM App HUD (rs_hud.lua) -->
+      <div class="cm-hud hud-movable" id="cmHud" data-widget="cmHud">
+        <div class="mini-controls"><button class="mini-ctrl-btn" data-act="minus">−</button><button class="mini-ctrl-btn" data-act="plus">+</button></div>
+        <div class="resize-grip" title="Glisser pour redimensionner"></div>
+        <div class="heritage-stripe" style="height:4px; border-radius:6px 6px 0 0; overflow:hidden; margin-bottom:2px;"><span></span><span></span><span></span><span></span></div>
+        <div class="cm-hud-hdr" id="cmHdr" style="background: var(--gold);">
+          <div class="mini-flag">
+            <div class="mini-flag-pole"></div>
+            <div class="mini-flag-cloth" id="miniFlagCloth" style="background: var(--amber);"></div>
+          </div>
+          <span id="cmHdrTitle">TOUR DE FORMATION (2X2)</span>
+        </div>
+
+        <div class="cm-hud-body">
+          <div class="hud-meta">
+            <span style="color: var(--green);">HYBRIDE (SERVEUR + LIMITEUR)</span>
+            <span style="color: var(--muted);" id="cmModeMeta">2X2 • 1T • Cuts:ON</span>
+          </div>
+
+          <div id="cmHudMainContent"></div>
+
+          <div class="hud-footer">
+            <span id="cmFooterCuts" style="display:inline-flex; align-items:center; gap:7px; padding:3px 9px; border-radius:5px; background:rgba(10,28,36,0.82); font-size:0.75rem; font-weight:700; color: var(--cream);"></span>
+            <div style="display:flex; gap:6px; padding-right:10px;">
+              <button class="hud-btn hud-btn-dark hidden" id="togglePelotonBtn">Peloton Cuts</button>
+              <button class="hud-btn hud-btn-green hidden" id="p1GreenBtn">LANCER GREEN (P1)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fallback Script HUD (when driver does NOT have CM App) -->
+      <div class="fallback-bottom-left hidden" id="fallbackStack">
+        <div class="fb-panel hud-movable hidden" id="fallbackPelotonPanel" data-widget="fbPel">
+          <div class="mini-controls"><button class="mini-ctrl-btn" data-act="minus">−</button><button class="mini-ctrl-btn" data-act="plus">+</button></div>
+          <div class="resize-grip" title="Glisser pour redimensionner"></div>
+          <div id="fallbackPelotonInner"></div>
+        </div>
+        <div class="hud-movable" id="fallbackMyCuts" data-widget="fbCuts" style="left:16px; bottom:14px; display:inline-flex; align-items:center; gap:8px; background:rgba(15,41,51,0.82); border:1px solid rgba(217,163,74,0.45); border-radius:6px; padding:5px 16px 5px 10px; font-size:0.76rem; font-weight:700; width:fit-content;">
+          <div class="mini-controls"><button class="mini-ctrl-btn" data-act="minus">−</button><button class="mini-ctrl-btn" data-act="plus">+</button></div>
+          <div class="resize-grip" title="Glisser pour redimensionner"></div>
+          <span id="fallbackMyCutsInner" style="display:inline-flex; align-items:center; gap:8px;"></span>
+        </div>
+      </div>
+
+      <!-- Admin Race Control Window (Scene 5) -->
+      <div class="rc-window hud-movable hidden" id="rcWindow" data-widget="rcWin">
+        <div class="mini-controls"><button class="mini-ctrl-btn" data-act="minus">−</button><button class="mini-ctrl-btn" data-act="plus">+</button></div>
+        <div class="resize-grip" title="Glisser pour redimensionner"></div>
+        <div style="color:var(--gold); font-weight:800; margin-bottom:6px; display:flex; justify-content:space-between;">
+          <span>Race Control — Stewards &amp; Zones</span>
+          <span style="color:var(--green); font-size:0.7rem;">[Hybride OK]</span>
+        </div>
+        <div style="background:rgba(16,42,49,0.9); padding:6px 8px; border-radius:5px; margin-bottom:7px;">
+          <div style="font-weight:700; color:var(--blue); margin-bottom:4px;">Zones Cut Circuit (spa)</div>
+          <div class="rc-row"><span>Raidillon (0.145 → 0.195)</span><span class="pill pill-warn">Cut OFF</span></div>
+          <div class="rc-row"><span>Blanchimont (0.760 → 0.790)</span><span class="pill pill-ok">Cut ON</span></div>
+        </div>
+        <div style="background:rgba(16,42,49,0.9); padding:6px 8px; border-radius:5px;">
+          <div style="font-weight:700; color:var(--gold); margin-bottom:4px;">Tableau Stewards Live</div>
+          <div class="rc-row"><span>P1 Max</span><span>1 cut • <span class="pill pill-ok">OK</span> • 1:42:10</span></div>
+          <div class="rc-row"><span>P2 Lucas</span><span>3 cuts • <span class="pill pill-red">S&amp;G(2t)</span> • +0s</span></div>
+          <div class="rc-row"><span>P3 Alex</span><span>4 cuts • <span class="pill pill-red">DT(1t)</span> • +25s</span></div>
+          <div class="rc-row"><span>P4 Tom</span><span>6 cuts • <span class="pill pill-red">DQ</span> • +25s</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SCENES = {
+      formation: {
+        desc: '<strong>Départ Lancé 2×2 (Vue Pilote) :</strong> Vrai <strong>Drapeau Jaune AC</strong> en haut à gauche, boîte 3D verte dans sa file, limiteur mécanique et <strong>compteur personnel discret</strong> en bas (sans accès aux cuts du peloton).',
+        flagClass: 'flag-yellow', flagMain: 'DRAPEAU JAUNE', flagSub: 'FORMATION (NO PASS)',
+        hdrBg: '#d9a34a', hdrTitle: 'TOUR DE FORMATION (2X2)', miniFlagBg: '#f5bd24',
+        meta: '2X2 • 1T • Cuts:ON',
+        cutsCount: 0, cutsQuota: 3, timeAdd: 0, cutsColor: '#98b0b6',
+        canViewPeloton: false, showGreenLine: false, showCutZone: false, showFormation3D: true, showPit3D: false,
+        showP1Btn: false, showRC: false, pelotonOpen: false,
+        bodyHtml: `
+          <div class="hud-card" style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="width:40px; height:40px; border-radius:50%; background:#f8f2e4; color:#102a32; border:2.5px solid #d7a347; display:inline-flex; align-items:center; justify-content:center; font-family:Impact,sans-serif; font-size:1.15rem; box-shadow:inset 0 0 0 1.5px #102a32;">P3</span>
+              <div>
+                <div style="font-size:1.05rem; font-weight:800;">Ligne 2 • File Gauche</div>
+                <div style="font-size:0.78rem; font-weight:700; color:#d7a347;">Dans la boîte idéale</div>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:0.82rem; font-weight:700;">Suivre: P1_Leader</div>
+              <div style="font-size:0.76rem; color:#98b0b6;">Ecart devant: 15.8 m</div>
+            </div>
+          </div>
+          <div class="hud-card">
+            <div style="display:flex; justify-content:space-between; font-size:0.84rem; font-weight:800;">
+              <span style="color:#f5bd24;">88 / 90 km/h</span>
+              <span style="color:#f5bd24; font-size:0.74rem;">LIMITEUR ACTIF</span>
+            </div>
+            <div class="bar-bg">
+              <div class="bar-fill" style="width:83%; background:#f5bd24;"></div>
+              <div class="bar-tick" style="left:85%;"></div>
+            </div>
+          </div>
+          <div class="hud-card" style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="width:52%;">
+              <div style="font-size:0.72rem; color:#98b0b6; margin-bottom:4px;">Alignement file (G / D)</div>
+              <div class="bar-bg" style="height:12px;">
+                <div style="position:absolute; left:14%; width:30%; top:0; bottom:0; background:rgba(36,204,97,0.38);"></div>
+                <div style="position:absolute; left:27%; top:1px; width:10px; height:10px; border-radius:50%; background:#f5efe0;"></div>
+              </div>
+            </div>
+            <div style="font-size:0.84rem; font-weight:700;">Green dans: 640 m</div>
+          </div>
+        `,
+        fallbackBanner: `
+          <div style="background:#f5bd24; color:#091317; font-weight:800; padding:4px 8px; border-radius:4px; text-align:center; margin-bottom:5px;">
+            ROLLING START 2X2 — P3 | FILE GAUCHE | SUIVRE P1
+          </div>
+          <div style="color:#f5bd24; font-weight:700; text-align:center;">88 / 90 km/h [LIM]  |  Green: 640 m</div>
+        `,
+      },
+      accel: {
+        desc: '<strong>Zone d\'Accélération &amp; Green Flag (Vue Pilote) :</strong> Dès le Green Flag, le <strong>Drapeau Vert AC</strong> s\'affiche et le limiteur se coupe ; chaque pilote garde uniquement son <strong>compteur discret personnel</strong> (<code>Cuts : 1/3</code>).',
+        flagClass: 'flag-green', flagMain: 'DRAPEAU VERT', flagSub: 'GREEN FLAG — GO!',
+        hdrBg: '#24cc61', hdrTitle: 'ZONE D\'ACCELERATION — PRET', miniFlagBg: '#24cc61',
+        meta: '2X2 • 1T • Cuts:ON',
+        cutsCount: 1, cutsQuota: 3, timeAdd: 0, cutsColor: '#f5bd24',
+        canViewPeloton: false, showGreenLine: true, showCutZone: false, showFormation3D: true, showPit3D: false,
+        showP1Btn: true, showRC: false, pelotonOpen: false,
+        bodyHtml: `
+          <div class="hud-green-banner">
+            <div style="font-size:1.25rem; font-weight:800;">GREEN FLAG — EN COURSE</div>
+            <div style="font-size:0.79rem; color:#24cc61; margin-top:4px;">Limiteur coupé instantanément • Compteur personnel actif</div>
+          </div>
+        `,
+        fallbackBanner: `
+          <div style="background:#24cc61; color:#052e16; font-weight:800; padding:6px 8px; border-radius:4px; text-align:center;">
+            GREEN FLAG — GO! GO! GO!
+          </div>
+        `,
+      },
+      stopgo: {
+        desc: '<strong>Pénalité Cut / Faux Départ (Vue Pilote) :</strong> Le pilote a dépassé ses 3 cuts tolérés. Le HUD affiche le <strong>Drapeau Pénalité (« Meatball »)</strong> + le <strong>décompte Stop &amp; Go aux stands</strong> et son compteur personnel <code>4/3</code>.',
+        flagClass: 'flag-meatball', flagMain: 'DRAPEAU PENALITE', flagSub: 'RETOUR STANDS',
+        hdrBg: '#e62e2e', hdrTitle: 'STOP & GO OBLIGATOIRE', miniFlagBg: '#111', miniMeatball: true,
+        meta: 'ARRETE • FauxDep:ON • Cuts:ON',
+        cutsCount: 4, cutsQuota: 3, timeAdd: 0, cutsColor: '#e62e2e',
+        canViewPeloton: false, showGreenLine: false, showCutZone: false, showFormation3D: false, showPit3D: true,
+        showP1Btn: false, showRC: false, pelotonOpen: false,
+        bodyHtml: `
+          <div class="hud-pen-card">
+            <div style="font-size:1.08rem; font-weight:800;">STOP &amp; GO (10s)</div>
+            <div style="font-size:0.82rem; font-weight:700; color:#f5bd24; margin-top:4px;">
+              ARRET EN COURS : 6.4s RESTANT — RESTEZ IMMOBILE
+            </div>
+            <div class="bar-bg" style="margin-top:7px;">
+              <div class="bar-fill" style="width:36%; background:#24cc61;"></div>
+            </div>
+          </div>
+          <div class="hud-warn-bar">Limite cuts dépassée (4 cuts) — Escalade Drapeau Noir si non purgée sous 2 tours !</div>
+        `,
+        fallbackBanner: `
+          <div style="background:#e62e2e; color:#fff; font-weight:800; padding:6px 8px; border-radius:4px; text-align:center;">
+            STOP &amp; GO (10s) — RESTE 6.4s | 2 TOUR(S)
+          </div>
+        `,
+      },
+      peloton: {
+        desc: '<strong>HUD « Peloton Cuts » — Réservé uniquement à la Safety Car :</strong> Jamais visible pour les pilotes lambda. Seule la <strong>Safety Car</strong> (ou le mode secours <code>Admin</code> / <code>Relais P1</code> / <code>!rs steward</code> s\'il n\'y a pas de Safety Car sur le serveur) accède au tableau complet.',
+        flagClass: 'flag-unsport', flagMain: 'AVERTISSEMENT CUT', flagSub: 'NOIR & BLANC',
+        hdrBg: '#f5bd24', hdrTitle: 'SAFETY CAR — SUPERVISION', miniFlagBg: '#24cc61',
+        meta: 'SAFETY CAR • Cuts:ON',
+        cutsCount: 0, cutsQuota: 3, timeAdd: 0, cutsColor: '#98b0b6',
+        canViewPeloton: true, showGreenLine: false, showCutZone: false, showFormation3D: false, showPit3D: false,
+        showP1Btn: false, showRC: false, pelotonOpen: true,
+        bodyHtml: `
+          <div class="hud-card">
+            <table class="peloton-table">
+              <thead>
+                <tr><th>PILOTE (SAFETY CAR)</th><th>CUTS</th><th>PENALITE / TEMPS</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><strong style="color:#d9a34a;">SC Safety_Car (Vous)</strong></td><td style="color:#98b0b6;">0 / 3</td><td style="color:#24cc61; font-weight:700;">OK</td></tr>
+                <tr><td>P1 Max</td><td style="color:#f5bd24;">2 / 3</td><td style="color:#24cc61; font-weight:700;">OK</td></tr>
+                <tr><td>P2 Lucas</td><td style="color:#f5bd24;">4 / 3</td><td style="color:#e62e2e; font-weight:700;">S&amp;G(2t)</td></tr>
+                <tr><td>P3 Alex</td><td style="color:#f5bd24;">3 / 3</td><td style="color:#e62e2e; font-weight:700;">DT(1t) +25s</td></tr>
+                <tr><td>P5 Tom</td><td style="color:#f5bd24;">6 / 3</td><td style="color:#e62e2e; font-weight:700;">DQ +25s</td></tr>
+              </tbody>
+            </table>
+          </div>
+        `,
+        fallbackBanner: '',
+      },
+      zones: {
+        desc: '<strong>Admin Race Control (Secours sans SC, Zones 3D &amp; Commissaire) :</strong> En l\'absence de Safety Car sur le serveur, la Direction de Course (ou le Relais P1 / <code>!rs steward</code> selon l\'option choisie) récupère les <strong>Peloton Cuts</strong> et gère les virages désactivés.',
+        flagClass: 'flag-green', flagMain: 'DRAPEAU VERT', flagSub: 'RACE CONTROL',
+        hdrBg: '#24cc61', hdrTitle: 'DRAPEAU VERT — RACE CONTROL', miniFlagBg: '#24cc61',
+        meta: 'ARRETE • Secours:ADMIN',
+        cutsCount: 1, cutsQuota: 3, timeAdd: 0, cutsColor: '#f5bd24',
+        canViewPeloton: true, showGreenLine: false, showCutZone: true, showFormation3D: false, showPit3D: false,
+        showP1Btn: false, showRC: true, pelotonOpen: false,
+        bodyHtml: `
+          <div class="hud-card" style="text-align:center;">
+            <div style="font-weight:700;">Surveillance Stewards Active (Aucune SC en piste → Relais Admin)</div>
+            <div style="font-size:0.75rem; color:#98b0b6; margin-top:4px;">Cuts tolérés: 3  |  1re péna: drive_through (3t)  |  2e: stop_and_go</div>
+            <div style="font-size:0.74rem; color:#d9a34a; margin-top:3px;">Pénalité dernier tour / non purgée : +25s</div>
+          </div>
+        `,
+        fallbackBanner: '',
+      },
+    };
+
+    let currentScene = 'formation';
+
+    function renderPersonalDots(count, quota) {
+      const n = Math.min(quota, 5);
+      let html = '';
+      for (let i = 1; i <= n; i++) {
+        const active = i <= Math.min(count, n);
+        const col = active ? (count >= quota ? '#e62e2e' : '#f5bd24') : 'rgba(244,236,216,0.22)';
+        html += `<span style="width:7px;height:7px;border-radius:50%;background:${col};display:inline-block;"></span>`;
+      }
+      return `<span style="display:inline-flex;gap:4px;align-items:center;">${html}</span>`;
+    }
+
+    function renderScene() {
+      const s = SCENES[currentScene];
+      const noApp = document.getElementById('noAppMode').checked;
+      document.getElementById('sceneDesc').innerHTML = s.desc;
+
+      // Native AC Top-Left Flag
+      const flagBox = document.getElementById('acFlagBox');
+      flagBox.className = `ac-flag ${s.flagClass}`;
+      if (s.flagClass === 'flag-meatball') {
+        flagBox.innerHTML = `<div class="dot"></div><div>${s.flagMain}</div><div class="sub">${s.flagSub}</div>`;
+      } else {
+        flagBox.innerHTML = `<div>${s.flagMain}</div><div class="sub">${s.flagSub}</div>`;
+      }
+
+      // 3D Track guides
+      document.getElementById('svgGreenLine').classList.toggle('hidden', !s.showGreenLine);
+      document.getElementById('svgCutZone').classList.toggle('hidden', !s.showCutZone);
+      document.getElementById('svgFormation3D').classList.toggle('hidden', !s.showFormation3D);
+      document.getElementById('svgPit3D').classList.toggle('hidden', !s.showPit3D);
+
+      // Admin Race Control window
+      document.getElementById('rcWindow').classList.toggle('hidden', !s.showRC || noApp);
+
+      // CM HUD vs Fallback HUD
+      document.getElementById('cmHud').classList.toggle('hidden', noApp);
+      document.getElementById('fallbackStack').classList.toggle('hidden', !noApp);
+
+      const personalHtml = `
+        <span style="color:${s.cutsColor}">Cuts : ${s.cutsCount}/${s.cutsQuota}</span>
+        ${renderPersonalDots(s.cutsCount, s.cutsQuota)}
+        ${s.timeAdd > 0 ? `<span style="color:#f5bd24">+${s.timeAdd}s</span>` : ''}
+      `;
+
+      if (!noApp) {
+        document.getElementById('cmHdr').style.background = s.hdrBg;
+        document.getElementById('cmHdrTitle').textContent = s.hdrTitle;
+        const cloth = document.getElementById('miniFlagCloth');
+        cloth.style.background = s.miniFlagBg;
+        cloth.innerHTML = s.miniMeatball ? '<div style="width:7px;height:7px;border-radius:50%;background:#f97316;"></div>' : '';
+        document.getElementById('cmModeMeta').textContent = s.meta;
+        document.getElementById('cmHudMainContent').innerHTML = s.bodyHtml;
+        document.getElementById('cmFooterCuts').innerHTML = personalHtml;
+        document.getElementById('p1GreenBtn').classList.toggle('hidden', !s.showP1Btn);
+        const pelBtn = document.getElementById('togglePelotonBtn');
+        pelBtn.classList.toggle('hidden', !s.canViewPeloton);
+        pelBtn.textContent = s.pelotonOpen ? 'Vue HUD' : 'Peloton Cuts';
+      } else {
+        const fbPeloton = document.getElementById('fallbackPelotonPanel');
+        const fbPelInner = document.getElementById('fallbackPelotonInner');
+        const showFbPel = Boolean(s.fallbackBanner) || s.canViewPeloton;
+        fbPeloton.classList.toggle('hidden', !showFbPel);
+        if (s.canViewPeloton) {
+          fbPelInner.innerHTML = `
+            <div style="color:#f5bd24; font-weight:800; font-size:0.71rem; margin-bottom:3px;">CUTS &amp; PENALITES PELOTON — SAFETY CAR</div>
+            <div style="color:#fca5a5;">P2 Lucas : 4 cuts | S&amp;G(2t)</div>
+            <div style="color:#fca5a5;">P3 Alex : 3 cuts | DT(1t) +25s</div>
+            <div style="color:#f5efe0;">P1 Max : 2 cuts | OK</div>
+          `;
+        } else if (s.fallbackBanner) {
+          fbPelInner.innerHTML = s.fallbackBanner;
+        }
+        document.getElementById('fallbackMyCutsInner').innerHTML = personalHtml;
+      }
+    }
+
+    // Interactive Drag & Corner-Resize for every HUD widget in preview
+    const widgetState = {};
+    function applyWidgetTransform(el) {
+      const id = el.dataset.widget;
+      const st = widgetState[id] || { scale: 1 };
+      el.style.transform = `scale(${st.scale})`;
+    }
+    document.querySelectorAll('[data-widget]').forEach((el) => {
+      const id = el.dataset.widget;
+      widgetState[id] = { scale: 1, origLeft: el.style.left || '', origTop: el.style.top || '', origRight: el.style.right || '', origBottom: el.style.bottom || '' };
+      el.addEventListener('mousedown', (ev) => {
+        if (ev.target.closest('button')) {
+          const act = ev.target.closest('button').dataset.act;
+          if (act === 'plus' || act === 'minus') {
+            ev.stopPropagation();
+            widgetState[id].scale = Math.max(0.6, Math.min(2.2, +(widgetState[id].scale + (act === 'plus' ? 0.12 : -0.12)).toFixed(2)));
+            applyWidgetTransform(el);
+          }
+          return;
+        }
+        ev.preventDefault();
+        const vp = document.getElementById('viewport').getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
+        const isResize = ev.target.classList.contains('resize-grip');
+        const startX = ev.clientX;
+        const startY = ev.clientY;
+        const startScale = widgetState[id].scale;
+        const offX = startX - rect.left;
+        const offY = startY - rect.top;
+        if (!isResize) {
+          el.style.right = 'auto';
+          el.style.bottom = 'auto';
+          el.style.left = `${rect.left - vp.left}px`;
+          el.style.top = `${rect.top - vp.top}px`;
+        }
+        const onMove = (m) => {
+          if (isResize) {
+            const delta = Math.max((m.clientX - startX) / 260, (m.clientY - startY) / 140);
+            widgetState[id].scale = Math.max(0.6, Math.min(2.2, +(startScale + delta).toFixed(2)));
+            applyWidgetTransform(el);
+          } else {
+            const nx = Math.max(4, Math.min(vp.width - rect.width - 4, m.clientX - vp.left - offX));
+            const ny = Math.max(4, Math.min(vp.height - rect.height - 4, m.clientY - vp.top - offY));
+            el.style.left = `${nx}px`;
+            el.style.top = `${ny}px`;
+          }
+        };
+        const onUp = () => {
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+    });
+
+    document.getElementById('resetHudPosBtn').addEventListener('click', () => {
+      document.querySelectorAll('[data-widget]').forEach((el) => {
+        const id = el.dataset.widget;
+        const st = widgetState[id];
+        st.scale = 1;
+        el.style.transform = '';
+        el.style.left = st.origLeft;
+        el.style.top = st.origTop;
+        el.style.right = st.origRight;
+        el.style.bottom = st.origBottom;
+      });
+    });
+
+    document.getElementById('sceneTabs').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-scene]');
+      if (!btn) return;
+      document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentScene = btn.dataset.scene;
+      renderScene();
+    });
+
+    document.getElementById('togglePelotonBtn').addEventListener('click', () => {
+      currentScene = (currentScene === 'peloton') ? 'formation' : 'peloton';
+      document.querySelectorAll('.tab-btn').forEach((b) => {
+        b.classList.toggle('active', b.dataset.scene === currentScene);
+      });
+      renderScene();
+    });
+
+    document.getElementById('noAppMode').addEventListener('change', renderScene);
+    renderScene();
+  </script>
+</body>
+</html>

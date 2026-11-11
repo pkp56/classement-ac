@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GDSP Race Control — Départ Lancé/Arrêté, Faux Départ &amp; Pénalités Cut</title>
+  <style>
+    :root {
+      --bg: #e9e0cb;
+      --ink: #102a32;
+      --panel: #f8f2e4;
+      --panel-2: #f1e8d3;
+      --border: #bdb09a;
+      --gold: #d7a347;
+      --cream: #f4ecd8;
+      --muted: #586260;
+      --green: #2b6a43;
+      --amber: #b57314;
+      --red: #9c3021;
+      --blue: #1b6588;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    .heritage-stripe {
+      height: 5px; display: grid; grid-template-columns: repeat(4, 1fr);
+    }
+    .heritage-stripe span:nth-child(1) { background: #c8281c; }
+    .heritage-stripe span:nth-child(2) { background: #e18c17; }
+    .heritage-stripe span:nth-child(3) { background: #f4ecd8; }
+    .heritage-stripe span:nth-child(4) { background: #0e706e; }
+    .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 20px 60px; }
+    header {
+      background: var(--ink); color: var(--cream);
+      border-bottom: 5px solid var(--red);
+      padding: 18px 24px; margin: -24px -20px 22px;
+      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px;
+      box-shadow: 0 10px 28px rgba(16, 42, 50, 0.16);
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand-logo { width: 48px; height: 56px; object-fit: contain; filter: drop-shadow(0 3px 6px rgba(0,0,0,.35)); }
+    .brand-eyebrow { font-size: 10px; letter-spacing: 2.3px; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+    .brand h1 {
+      margin: 0; font-family: Impact, 'Arial Narrow', sans-serif; font-weight: normal;
+      font-size: clamp(1.45rem, 2.5vw, 2rem); color: var(--cream); letter-spacing: 0.9px; text-transform: uppercase;
+    }
+    .brand p { margin: 3px 0 0; color: #cbd5cb; font-size: 0.88rem; }
+    .dl-bar { display: flex; flex-wrap: wrap; gap: 9px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 14px; border-radius: 6px; border: 1px solid rgba(215, 163, 71, 0.55);
+      background: #163942; color: var(--cream); cursor: pointer; font-weight: 700;
+      font-size: 0.84rem; text-decoration: none; transition: 0.15s;
+    }
+    .btn:hover { border-color: var(--gold); background: #1d4a56; color: #fff; }
+    .btn-gold { background: var(--red); color: #fff; border-color: var(--red); }
+    .btn-gold:hover { background: #b13928; }
+    .btn-danger { background: rgba(156,48,33,0.12); border-color: rgba(156,48,33,0.45); color: var(--red); }
+    .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+
+    .grid { display: grid; grid-template-columns: 1.18fr 0.82fr; gap: 20px; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--panel); border: 1px solid var(--border); border-top: 3px solid var(--ink);
+      border-radius: 8px; padding: 18px; margin-bottom: 18px;
+      box-shadow: 0 6px 18px rgba(16, 42, 50, 0.06);
+    }
+    .card h2 {
+      margin: 0 0 12px; font-family: Impact, 'Arial Narrow', sans-serif; font-weight: normal;
+      font-size: 1.25rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--ink);
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      border-bottom: 1px dashed var(--border); padding-bottom: 8px;
+    }
+    .card h3 { margin: 14px 0 8px; font-size: 0.95rem; color: var(--ink); }
+    .presets { display: flex; flex-wrap: wrap; gap: 8px; }
+    .preset-btn {
+      background: #fbf7ec; color: var(--ink); border: 1px solid var(--border);
+      border-radius: 6px; padding: 7px 12px; cursor: pointer; font-size: 0.82rem; font-weight: 700;
+    }
+    .preset-btn:hover, .preset-btn.active { background: var(--ink); border-color: var(--ink); color: var(--cream); }
+
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    @media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; } }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field.full { grid-column: 1 / -1; }
+    label { font-size: 0.81rem; color: var(--ink); font-weight: 700; }
+    input, select, textarea {
+      width: 100%; background: #fbf7ec; color: var(--ink);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 8px 10px; font-size: 0.88rem; font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--red); }
+    textarea {
+      background: #102a32; color: #f4ecd8; border-color: rgba(215,163,71,0.5);
+      font-family: Consolas, monospace; font-size: 0.79rem; resize: vertical;
+    }
+    .hint { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+    .hidden { display: none !important; }
+
+    .switch-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      background: var(--panel-2); border: 1px solid var(--border);
+      border-radius: 7px; padding: 10px 12px; margin-bottom: 10px;
+    }
+    .switch-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--red); cursor: pointer; }
+
+    .badge {
+      display: inline-block; padding: 3px 9px; border-radius: 99px; font-size: 0.73rem; font-weight: 700;
+      font-family: 'Segoe UI', system-ui, sans-serif; letter-spacing: 0.2px; text-transform: none;
+    }
+    .badge-ok { background: rgba(43,106,67,0.14); color: var(--green); border: 1px solid rgba(43,106,67,0.45); }
+    .badge-warn { background: rgba(215,163,71,0.22); color: #7a4b06; border: 1px solid rgba(181,115,20,0.45); }
+    .badge-err { background: rgba(156,48,33,0.15); color: var(--red); border: 1px solid rgba(156,48,33,0.45); }
+    .badge-blue { background: rgba(16,42,50,0.10); color: var(--ink); border: 1px solid rgba(16,42,50,0.3); }
+
+    .out-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; gap: 8px; }
+    .steps { margin: 0; padding-left: 18px; color: var(--muted); font-size: 0.87rem; }
+    .steps li { margin-bottom: 6px; }
+    .steps code { color: var(--red); background: var(--panel-2); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border); }
+
+    .zone-row {
+      display: grid; grid-template-columns: 1.2fr 0.7fr 0.7fr auto auto; gap: 8px; align-items: center;
+      background: #fbf7ec; border: 1px solid var(--border);
+      padding: 7px 10px; border-radius: 6px; margin-bottom: 6px; font-size: 0.83rem;
+    }
+    @media (max-width: 640px) { .zone-row { grid-template-columns: 1fr 1fr; } }
+    .summary-strip {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="heritage-stripe"><span></span><span></span><span></span><span></span></div>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <img class="brand-logo" src="/assets/gdsp-logo.png" alt="Logo GDSP" />
+        <div>
+          <div class="brand-eyebrow">Gentleman Drivers Project</div>
+          <h1>GDSP Race Control — Configurateur Serveur &amp; Stewards</h1>
+          <p>Départ Lancé (1x1/2x2) ou Départ Arrêté • Faux Départ • Pénalités Cut • Zones par virage</p>
+        </div>
+      </div>
+      <div class="dl-bar">
+        <a class="btn" href="/images.html">Galerie Images</a>
+        <a class="btn" href="/hud-preview.html">Aperçu en Jeu (HUD &amp; Drapeaux)</a>
+        <a class="btn btn-gold" id="downloadLocalPackLink" href="/cm-app/GDSP_LocalTestPack.zip" target="_blank" rel="noopener" download="GDSP_LocalTestPack.zip">Pack Test Serveur Local (.zip)</a>
+        <a class="btn" id="downloadCmAppLink" href="/cm-app/GDSP_RollingStart.zip" target="_blank" rel="noopener" download="GDSP_RollingStart.zip">App CM (.zip)</a>
+        <a class="btn" id="downloadLuaLink" href="/csp/rolling_start.lua" target="_blank" rel="noopener" download="rolling_start.lua">Script Serveur CSP (.lua)</a>
+      </div>
+    </header>
+
+    <div class="card hidden" id="downloadHelperBanner" style="border-top-color: var(--red); background: #fff9eb;">
+      <h2 style="font-size:1.05rem;">Téléchargement depuis l'aperçu (si le navigateur bloque le ZIP dans l'iframe)</h2>
+      <p class="hint" style="margin:0 0 10px;">
+        Certains aperçus intégrés bloquent les téléchargements directs. Utilisez l'un de ces moyens immédiats (ou téléchargez <code>rolling-start/packages/GDSP_LocalTestPack.zip</code> directement depuis la visionneuse de fichiers Arena) :
+      </p>
+      <div class="form-grid">
+        <div class="field">
+          <label for="directZipUrlInput">1. Lien direct (ouvrir dans un nouvel onglet du navigateur)</label>
+          <div style="display:flex; gap:6px;">
+            <input id="directZipUrlInput" type="text" readonly />
+            <button class="btn btn-sm" type="button" id="copyDirectZipUrlBtn">Copier URL</button>
+            <a class="btn btn-gold btn-sm" id="helperOpenTabLink" href="/cm-app/GDSP_LocalTestPack.zip" target="_blank" rel="noopener">Ouvrir onglet</a>
+          </div>
+        </div>
+        <div class="field">
+          <label for="psDownloadCmdInput">2. Commande PowerShell Windows (enregistre sur le Bureau)</label>
+          <div style="display:flex; gap:6px;">
+            <input id="psDownloadCmdInput" type="text" readonly />
+            <button class="btn btn-sm" type="button" id="copyPsDownloadBtn">Copier PowerShell</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-strip" id="summaryStrip"></div>
+
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h2>Préréglages &amp; Profils Rapides</h2>
+          <div class="presets" id="presetsBar"></div>
+        </div>
+
+        <div class="card">
+          <h2>1. Mode de Départ (Lancé / Arrêté) <span class="badge badge-blue" id="startModeBadge"></span></h2>
+          <div class="switch-row">
+            <div>
+              <strong>Activer le Départ Lancé (Rolling Start)</strong>
+              <div class="hint">Décochez pour un <strong>Départ Arrêté</strong> standard tout en gardant faux départs &amp; pénalités de cut actifs.</div>
+            </div>
+            <input type="checkbox" id="enabled" checked />
+          </div>
+
+          <div class="switch-row">
+            <div>
+              <strong>Départ lancé automatique (sans !yellow)</strong>
+              <div class="hint">Lance la formation tout seul ~5 s après qu'au moins une voiture est en piste. Combinez avec <em>Green Flag Automatique</em> pour un départ 100 % sans commande chat.</div>
+            </div>
+            <input type="checkbox" id="autoFormation" />
+          </div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="everySession">Activer aussi en Essais / Qualifs</label>
+              <select id="everySession">
+                <option value="0">Course uniquement (Recommandé)</option>
+                <option value="1">Toutes sessions (Mode Test)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="scriptUrl">URL publique du script CSP (.lua)</label>
+              <input id="scriptUrl" type="text" placeholder="https://votre-domaine/csp/rolling_start.lua" />
+            </div>
+          </div>
+
+          <div id="rollingSettingsBox" style="margin-top: 12px;">
+            <div class="form-grid">
+              <div class="field">
+                <label for="formationMode">Format de formation</label>
+                <select id="formationMode">
+                  <option value="2x2">2x2 Double File (GT3 / WEC / IMSA)</option>
+                  <option value="1x1">1x1 File Indienne</option>
+                </select>
+              </div>
+              <div class="field" id="poleSideField">
+                <label for="poleSide">Côté de la Pole (P1)</label>
+                <select id="poleSide">
+                  <option value="left">Gauche (Left)</option>
+                  <option value="right">Droite (Right)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="startLength">Longueur de formation</label>
+                <select id="startLength">
+                  <option value="full">Tour complet (1 à 3 tours)</option>
+                  <option value="short">Départ court (mètres / spline / timer)</option>
+                </select>
+              </div>
+              <div class="field" id="formationLapsField">
+                <label for="formationLaps">Passages de ligne du leader avant le vert (départ lancé complet : 3/4 tour à 160 km/h, puis 80 km/h jusqu'au regroupement)</label>
+                <input id="formationLaps" type="number" min="1" max="5" value="1" />
+              </div>
+              <div class="field hidden" id="shortModeField">
+                <label for="shortMode">Déclencheur départ court</label>
+                <select id="shortMode">
+                  <option value="distance">Distance parcourue (mètres)</option>
+                  <option value="spline">Spline fixe du circuit (0..1)</option>
+                  <option value="timer">Durée chronométrée (secondes)</option>
+                </select>
+              </div>
+              <div class="field hidden" id="shortDistanceField">
+                <label for="shortDistanceM">Distance avant Green Flag (m)</label>
+                <input id="shortDistanceM" type="number" min="80" max="2500" value="350" />
+              </div>
+              <div class="field hidden" id="shortSplineField">
+                <label for="shortGreenSpline">Spline du Green Flag (0.01 - 0.99)</label>
+                <input id="shortGreenSpline" type="number" min="0.01" max="0.99" step="0.01" value="0.22" />
+              </div>
+              <div class="field hidden" id="shortSecField">
+                <label for="shortSec">Durée avant Green Flag (s)</label>
+                <input id="shortSec" type="number" min="5" max="180" value="22" />
+              </div>
+              <div class="field">
+                <label for="limiterMode">Limiteur de vitesse</label>
+                <select id="limiterMode">
+                  <option value="limiter">Limiteur mécanique doux</option>
+                  <option value="hard">Limiteur strict</option>
+                  <option value="off">Désactivé (visuel)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="paceKmh">Vitesse du Pace (km/h)</label>
+                <input id="paceKmh" type="number" min="45" max="160" value="90" />
+              </div>
+              <div class="field">
+                <label for="catchupKmh">Bonus rattrapage (+km/h)</label>
+                <input id="catchupKmh" type="number" min="0" max="80" value="22" />
+              </div>
+              <div class="field">
+                <label for="targetGapM">Espacement entre voitures (m)</label>
+                <input id="targetGapM" type="number" min="8" max="45" value="18" />
+              </div>
+              <div class="field">
+                <label for="greenTrigger">Déclenchement Green Flag</label>
+                <select id="greenTrigger">
+                  <option value="both">Automatique + Admin</option>
+                  <option value="auto">Automatique seul</option>
+                  <option value="manual">Manuel Admin uniquement</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="autoGreenAt">Point Auto-Green</label>
+                <select id="autoGreenAt">
+                  <option value="line">Ligne d'arrivée / cible</option>
+                  <option value="zone">Entrée zone d'accélération</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="allowP1Green">Autoriser P1 à lancer le Green</label>
+                <select id="allowP1Green">
+                  <option value="1">Oui (dans la zone)</option>
+                  <option value="0">Non (serveur / admin)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>2. Départ Anticipé (Jump-Start — Arrêté &amp; Lancé)</h2>
+          <div class="switch-row">
+            <div>
+              <strong>Détection &amp; pénalité Départ Anticipé</strong>
+              <div class="hint">Surveille le mouvement pendant les feux rouges (départ arrêté) ET les dépassements/excès avant Green (départ lancé).</div>
+            </div>
+            <input type="checkbox" id="jumpEnabled" checked />
+          </div>
+          <div id="jumpSettingsBox" class="form-grid">
+            <div class="field">
+              <label for="jumpStandingTolM">Tolérance mouvement feux allumés (m)</label>
+              <input id="jumpStandingTolM" type="number" min="0.2" max="5" step="0.1" value="0.8" />
+            </div>
+            <div class="field">
+              <label for="jumpRollingCatch">Sanction en départ lancé (avant Green)</label>
+              <select id="jumpRollingCatch">
+                <option value="1">Oui (appliquer pénalité Jump-Start)</option>
+                <option value="0">Non (alerte HUD uniquement)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="jumpPenaltyType">1re Pénalité Départ Anticipé</label>
+              <select id="jumpPenaltyType">
+                <option value="drive_through">Drive-Through (passage stands)</option>
+                <option value="stop_and_go">Stop &amp; Go (arrêt chronométré stands)</option>
+                <option value="time_penalty">Temps ajouté au classement (+s)</option>
+                <option value="slow_cut">Coupure gaz temporaire</option>
+                <option value="teleport_pits">Téléportation aux stands</option>
+                <option value="warn">Avertissement chat/HUD uniquement</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="jumpStopGoSec">Durée arrêt Stop &amp; Go (s)</label>
+              <input id="jumpStopGoSec" type="number" min="3" max="60" value="10" />
+            </div>
+            <div class="field">
+              <label for="jumpServeLaps">À effectuer dans les X tours</label>
+              <input id="jumpServeLaps" type="number" min="1" max="10" value="3" />
+            </div>
+            <div class="field">
+              <label for="jumpEscPenalty">2e Pénalité si non effectuée</label>
+              <select id="jumpEscPenalty">
+                <option value="stop_and_go">Stop &amp; Go</option>
+                <option value="black_flag">Drapeau Noir (DQ)</option>
+                <option value="teleport_pits">Téléportation stands</option>
+                <option value="time_penalty">Temps ajouté fin de course</option>
+                <option value="none">Aucune escalade</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="jumpEscStopGoSec">Durée Stop &amp; Go (2e pénalité, s)</label>
+              <input id="jumpEscStopGoSec" type="number" min="3" max="60" value="15" />
+            </div>
+            <div class="field">
+              <label for="jumpTimePenaltySec">Temps ajouté (direct / dernier tour / non purgée, s)</label>
+              <input id="jumpTimePenaltySec" type="number" min="5" max="180" value="20" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>3. Pénalités de Cut (Track Limits &amp; Escalade)</h2>
+          <div class="switch-row">
+            <div>
+              <strong>Système de pénalités Track-Cut actif</strong>
+              <div class="hint">Compte les cuts tolérés puis déclenche Drive-Through / Stop&amp;Go, 2e pénalité si non purgée, et temps ajouté au dernier tour.</div>
+            </div>
+            <input type="checkbox" id="cutEnabled" checked />
+          </div>
+
+          <div id="cutSettingsBox">
+            <div class="form-grid">
+              <div class="field">
+                <label for="cutEverySession">Compter les cuts en Essais / Qualifs</label>
+                <select id="cutEverySession">
+                  <option value="0">Course uniquement</option>
+                  <option value="1">Toutes sessions (test)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="cutWheelsMin">Seuil de détection</label>
+                <select id="cutWheelsMin">
+                  <option value="4">4 roues hors piste (strict F1/GT)</option>
+                  <option value="3">3 roues hors piste</option>
+                  <option value="2">2 roues hors piste</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="cutUseKunosInvalid">Méthode de détection</label>
+                <select id="cutUseKunosInvalid">
+                  <option value="0">Roues hors piste (configurable)</option>
+                  <option value="1">Invalidation tour Kunos</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="cutMinDurationSec">Durée mini hors piste (s)</label>
+                <input id="cutMinDurationSec" type="number" min="0.05" max="3" step="0.05" value="0.25" />
+              </div>
+              <div class="field">
+                <label for="cutMinSpeedKmh">Vitesse mini pour compter un cut (km/h)</label>
+                <input id="cutMinSpeedKmh" type="number" min="15" max="120" value="40" />
+              </div>
+              <div class="field">
+                <label for="cutCooldownSec">Délai anti-double-comptage (s)</label>
+                <input id="cutCooldownSec" type="number" min="1" max="15" step="0.5" value="3.0" />
+              </div>
+              <div class="field">
+                <label for="cutMaxBeforePenalty">Cuts tolérés avant pénalité <span id="cutTriggerExplain" style="color:var(--gold)"></span></label>
+                <input id="cutMaxBeforePenalty" type="number" min="0" max="20" value="3" />
+              </div>
+              <div class="field">
+                <label for="cutRepeatEvery">Puis pénalité tous les N cuts (0 = même quota)</label>
+                <input id="cutRepeatEvery" type="number" min="0" max="15" value="0" />
+              </div>
+              <div class="field">
+                <label for="cutPenaltyType">1re Pénalité Cut</label>
+                <select id="cutPenaltyType">
+                  <option value="drive_through">Drive-Through (passage stands)</option>
+                  <option value="stop_and_go">Stop &amp; Go (arrêt stands)</option>
+                  <option value="time_penalty">Temps ajouté au total (+s)</option>
+                  <option value="slow_cut">Coupure gaz temporaire</option>
+                  <option value="teleport_pits">Téléportation stands</option>
+                  <option value="warn">Avertissement uniquement</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="cutStopGoSec">Durée arrêt Stop &amp; Go (s)</label>
+                <input id="cutStopGoSec" type="number" min="3" max="60" value="10" />
+              </div>
+              <div class="field">
+                <label for="cutServeLaps">À effectuer dans les X tours</label>
+                <input id="cutServeLaps" type="number" min="1" max="10" value="3" />
+              </div>
+              <div class="field">
+                <label for="cutEscPenalty">2e Pénalité si non effectuée dans les X tours</label>
+                <select id="cutEscPenalty">
+                  <option value="stop_and_go">Stop &amp; Go</option>
+                  <option value="black_flag">Drapeau Noir (DQ)</option>
+                  <option value="teleport_pits">Téléportation stands</option>
+                  <option value="time_penalty">Temps ajouté fin de course</option>
+                  <option value="none">Aucune escalade</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="cutEscStopGoSec">Durée arrêt 2e Stop &amp; Go (s)</label>
+                <input id="cutEscStopGoSec" type="number" min="3" max="60" value="15" />
+              </div>
+              <div class="field">
+                <label for="cutFinishTimeSec">Temps ajouté si dernier tour / non purgée à l'arrivée (s)</label>
+                <input id="cutFinishTimeSec" type="number" min="5" max="180" value="25" />
+              </div>
+              <div class="field">
+                <label for="cutSlowSec">Durée coupure gaz (si mode Coupure Gaz, s)</label>
+                <input id="cutSlowSec" type="number" min="1" max="15" step="0.5" value="3" />
+              </div>
+              <div class="field">
+                <label for="cutTimePenaltySec">Temps direct par pénalité (si mode Temps, s)</label>
+                <input id="cutTimePenaltySec" type="number" min="2" max="120" value="10" />
+              </div>
+              <div class="field">
+                <label for="scFallback">Peloton Cuts — Solution si aucune Safety Car en piste</label>
+                <select id="scFallback">
+                  <option value="admin">Admin / Race Control (défaut, jamais pilotes lambda)</option>
+                  <option value="p1">Relais Leader P1 + Admin</option>
+                  <option value="off">Safety Car / Commissaire (!rs steward) uniquement</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="safetyCarKey">Mots-clés Safety Car (car ID ou nom pilote)</label>
+                <input id="safetyCarKey" type="text" maxlength="23" value="safety" placeholder="safety" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>4. Zones de Cut par Virage (Activer / Désactiver sur le circuit)</h2>
+          <p class="hint" style="margin-bottom:10px">
+            Ajoutez ici les virages où vous souhaitez <strong>désactiver</strong> la détection de cut (ex : vibreur toléré, sortie de virage).
+            En jeu, l'onglet <strong>Zones Cut</strong> du panneau Race Control permet aussi de capturer les splines en direct sur la piste !
+          </p>
+          <div class="form-grid" style="margin-bottom: 10px;">
+            <div class="field">
+              <label for="zoneNameInput">Nom du virage</label>
+              <input id="zoneNameInput" type="text" placeholder="Ex: Raidillon / Chicane T1" />
+            </div>
+            <div class="field" style="display:grid; grid-template-columns:1fr 1fr auto; gap:8px; align-items:end;">
+              <div>
+                <label for="zoneStartInput">Spline début</label>
+                <input id="zoneStartInput" type="number" min="0" max="0.999" step="0.005" value="0.120" />
+              </div>
+              <div>
+                <label for="zoneEndInput">Spline fin</label>
+                <input id="zoneEndInput" type="number" min="0" max="0.999" step="0.005" value="0.165" />
+              </div>
+              <button class="btn btn-gold" type="button" id="addZoneBtn">+ Ajouter</button>
+            </div>
+          </div>
+          <div id="zonesList"></div>
+          <div class="field" style="margin-top:8px;">
+            <label for="cutDisabledZones">Chaîne encodée <code>cutDisabledZones</code> (max 6 plages spline)</label>
+            <input id="cutDisabledZones" type="text" placeholder="0.120-0.165,0.440-0.475" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>5. AssettoHosting — MOTD <code>$CSP0:</code></h2>
+          <div class="field" style="margin-bottom:10px;">
+            <label for="welcomeText">Message d'accueil MOTD (affiché avant la charge CSP)</label>
+            <input id="welcomeText" type="text" value="GDSP Race Control Actif — Respectez les limites de piste et le départ." />
+          </div>
+          <div class="out-head">
+            <span id="motdSizeBadge" class="badge badge-ok">0 / 2039 octets</span>
+            <button class="btn btn-gold btn-sm" id="copyMotdBtn">Copier MOTD $CSP0:</button>
+          </div>
+          <textarea id="motdOut" rows="6" readonly></textarea>
+          <p class="hint">Collez dans <code>server_cfg.ini</code> → champ MOTD / Message of the Day sur AssettoHosting ou AC Server Manager.</p>
+        </div>
+
+        <div class="card">
+          <h2>6. CSP Extra Options (<code>[SCRIPT_1]</code>)</h2>
+          <div class="out-head">
+            <span class="hint">Pour CM Server / 2e PC / <code>csp_extra_options.ini</code></span>
+            <button class="btn btn-gold btn-sm" id="copyIniBtn">Copier [SCRIPT_1]</button>
+          </div>
+          <textarea id="iniOut" rows="13" readonly></textarea>
+        </div>
+
+        <div class="card">
+          <h2>7. URL Dynamique (Sans toucher au .ini)</h2>
+          <div class="out-head">
+            <span class="hint">Seules les options modifiées sont ajoutées en query string</span>
+            <button class="btn btn-sm" id="copyUrlBtn">Copier URL</button>
+          </div>
+          <textarea id="urlOut" rows="3" readonly></textarea>
+        </div>
+
+        <div class="card">
+          <h2>8. Vérifier / Décoder un MOTD <code>$CSP0:</code></h2>
+          <textarea id="decodeIn" rows="3" placeholder="Collez ici un MOTD contenant $CSP0:..."></textarea>
+          <div style="margin:8px 0;">
+            <button class="btn btn-sm" id="decodeBtn">Décoder le payload</button>
+          </div>
+          <textarea id="decodeOut" rows="5" readonly></textarea>
+        </div>
+
+        <div class="card">
+          <h2>Test Rapide — Serveur Hébergé en Local (1 PC ou 2e PC LAN)</h2>
+          <p class="hint" style="margin-bottom:10px;">
+            Téléchargez le pack complet prêt à lancer pour votre serveur Assetto Corsa local (contient le mini-serveur HTTP <code>LANCER_SERVEUR_LOCAL.bat</code>, l'App CM, le script <code>.lua</code> pré-configuré, <code>[SCRIPT_1]</code> et le MOTD <code>$CSP0:</code>).
+          </p>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+            <button class="btn btn-sm" type="button" id="presetLocalSamePcBtn">Cibler Même PC (127.0.0.1:3080)</button>
+            <button class="btn btn-sm" type="button" id="presetLocalLanBtn">Cibler 2e PC LAN (IP locale)</button>
+            <button class="btn btn-sm" type="button" id="presetLocalDuckBtn">Cibler Internet (DuckDNS)</button>
+            <a class="btn btn-gold btn-sm" id="downloadLocalPackCardLink" href="/cm-app/GDSP_LocalTestPack.zip" target="_blank" rel="noopener" download="GDSP_LocalTestPack.zip">Télécharger Pack Test Local (.zip)</a>
+          </div>
+          <ol class="steps">
+            <li>Décompressez <strong>GDSP_LocalTestPack.zip</strong> et double-cliquez sur <code>LANCER_SERVEUR_LOCAL.bat</code> (laisse le script disponible sur le port <code>3080</code>).</li>
+            <li>Glissez-déposez <code>GDSP_RollingStart.zip</code> dans <strong>Content Manager</strong> puis cochez-la dans les apps Lua.</li>
+            <li>Collez <code>csp_extra_options_LOCAL.ini</code> (ou le MOTD <code>$CSP0:</code> de <code>motd_CSP0_LOCAL.txt</code>) dans votre serveur AC local (ports <code>9600 TCP/UDP</code>, <code>8081 TCP</code>, <code>3080 TCP</code> si 2e PC).</li>
+            <li>En jeu : déplacez et redimensionnez les fenêtres du HUD à la souris (ou <code>!rshud reset</code>), testez <code>!yellow</code>, <code>!green</code> et <code>!rs steward &lt;nom&gt;</code>.</li>
+          </ol>
+        </div>
+
+        <div class="card">
+          <h2>Guide Rapide Serveur (AssettoHosting ou 2e PC)</h2>
+          <ol class="steps">
+            <li>Hébergez ce dossier ou exposez l'URL <code>/csp/rolling_start.lua</code> (sur AssettoHosting, ou sur votre 2e PC via IP/tunnel).</li>
+            <li>Collez le <strong>MOTD <code>$CSP0:</code></strong> dans AssettoHosting, ou le bloc <code>[SCRIPT_1]</code> dans <code>csp_extra_options.ini</code>.</li>
+            <li>Installez l'App CM (<code>GDSP_RollingStart.zip</code>) pour le HUD (compteur personnel discret pour les pilotes, Peloton Cuts réservé à la Safety Car ou Race Control) et les réglages en direct (chat : <code>!rs on/off</code>, <code>!rs cut on/off</code>, <code>!rs steward &lt;nom|off&gt;</code>, <code>!rs clearall</code>).</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

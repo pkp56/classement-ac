@@ -1609,16 +1609,36 @@ local function paceSpline()
   return frac(S.s0 + paceDistM() / trackLen())
 end
 
+-- Depart lance (startLength = full) :
+--   1) 3/4 de tour a RS.FAST_KMH, 2) RS.SLOW_KMH jusqu'au regroupement du groupe,
+--   3) drapeau vert au passage de la ligne par le leader apres formationLaps passages.
+-- (table unique : limite Lua de 200 variables locales au niveau principal)
+local RS = {
+  FAST_KMH = 160, SLOW_KMH = 80,
+  FAST_FRAC = 0.75,          -- fraction de tour a 160 km/h
+  BUNCH_M = 80,              -- ecart max leader -> dernier pour considerer le groupe regroupe
+  BUNCH_TIMEOUT_MS = 90000,  -- repli : passe en attente si le regroupement tarde
+  stage = { tStart = nil, stage = 'fast', slowT = nil },
+}
+
 local function updateCarDistances(cars)
   local len = trackLen()
   for id, c in pairs(cars) do
     local tr = carTrackDist[id]
     if not tr then
       local initD = wrapSigned(c.splinePosition - S.s0) * len
-      carTrackDist[id] = { lastS = c.splinePosition, distM = initD }
+      carTrackDist[id] = { lastS = c.splinePosition, distM = initD, cross = 0, crossT = S.tStart, crossedNow = false }
     else
+      if tr.crossT ~= S.tStart then tr.crossT = S.tStart; tr.cross = 0 end
+      tr.crossedNow = false
+      local prevS = tr.lastS
       local ds = wrapSigned(c.splinePosition - tr.lastS) * len
       tr.distM = tr.distM + ds
+      -- passage de ligne vers l'avant : la position repasse de ~1 a ~0
+      if prevS > 0.75 and c.splinePosition < 0.25 then
+        tr.cross = tr.cross + 1
+        tr.crossedNow = true
+      end
       tr.lastS = c.splinePosition
     end
   end
@@ -1633,6 +1653,36 @@ local function activeLeader(cars)
   end
   return nil, nil
 end
+
+-- Palier courant du depart lance : 'fast' -> 'slow' -> 'wait'
+local function fullFormationStage(cars)
+  if RS.stage.tStart ~= S.tStart then
+    RS.stage.tStart = S.tStart; RS.stage.stage = 'fast'; RS.stage.slowT = nil
+  end
+  if RS.stage.stage == 'fast' then
+    local _, leadId = activeLeader(cars)
+    local lt = leadId and carTrackDist[leadId]
+    if lt and lt.distM >= RS.FAST_FRAC * trackLen() then
+      RS.stage.stage = 'slow'; RS.stage.slowT = clock()
+    end
+  end
+  if RS.stage.stage == 'slow' then
+    local minD, maxD, n = nil, nil, 0
+    for id, c in pairs(cars) do
+      local tr = carTrackDist[id]
+      if tr and not c.isInPitlane and not c.isRetired then
+        n = n + 1
+        if not minD or tr.distM < minD then minD = tr.distM end
+        if not maxD or tr.distM > maxD then maxD = tr.distM end
+      end
+    end
+    local bunched = n >= 1 and (maxD - minD) <= RS.BUNCH_M
+    local timedOut = RS.stage.slowT and (clock() - RS.stage.slowT) >= RS.BUNCH_TIMEOUT_MS
+    if bunched or timedOut then RS.stage.stage = 'wait' end
+  end
+  return RS.stage.stage
+end
+
 
 local function due(key, rank)
   if pend.key ~= key or pend.seq ~= S.seq or uiTime - pend.last > 0.5 then
@@ -2124,7 +2174,9 @@ local function updateLocalFormation(cars, dt)
 
   local elapsedSec = math.max(0, (clock() - S.tStart) / 1000)
   local allowed = cfg.paceKmh
-  if cfg.limiterMode ~= 'hard' then
+  if cfg.startLength == 'full' and (S.phase == PHASE_FORMATION or S.phase == PHASE_READY) then
+    allowed = (RS.stage.stage == 'fast') and RS.FAST_KMH or RS.SLOW_KMH
+  elseif cfg.limiterMode ~= 'hard' then
     if localState.slotDeltaM > 3 then
       allowed = cfg.paceKmh + clamp((localState.slotDeltaM - 3) / 35, 0, 1) * cfg.catchupKmh
     elseif localState.slotDeltaM < -3 then
@@ -2259,19 +2311,13 @@ local function controlFormation(cars, rank)
       end
     end
   else
-    local readyWindowM = forwardArc(cfg.oneToGoSpline, cfg.greenLineSpline) * len
-    local accelWindowM = forwardArc(cfg.accelZoneStart, cfg.greenLineSpline) * len
-    if readyWindowM < 100 then readyWindowM = len * 0.25 end
-    if accelWindowM < 40 then accelWindowM = len * 0.12 end
-    inZone = remM <= accelWindowM
-    localState.inAccelZone = inZone
-    if S.phase == PHASE_FORMATION and remM <= readyWindowM and due('full_ready', rank) then
-      commitState(PHASE_READY, S.reason, S.tStart, S.s0, 1, S.order)
-      return
-    end
-    if cfg.greenTrigger ~= 'manual' then
-      local shouldGreen = (cfg.autoGreenAt == 'zone' and inZone) or (remM <= 2.5)
-      if shouldGreen and due('full_green', rank) then
+    local stage = fullFormationStage(cars)
+    localState.inAccelZone = (stage == 'wait')
+    localState.distRemainingM = 0
+    if cfg.greenTrigger ~= 'manual' and stage == 'wait' then
+      local _, leadId = activeLeader(cars)
+      local lt = leadId and carTrackDist[leadId]
+      if lt and lt.crossedNow and lt.cross >= cfg.formationLaps and due('full_green', rank) then
         triggerGreen(REASON_NONE)
         return
       end
@@ -2927,6 +2973,11 @@ function script.drawUI()
         local title = (S.phase == PHASE_READY or localState.inAccelZone)
           and (localState.inAccelZone and 'ACCELERATION ZONE — PREPARE' or 'ONE TO GO — FORM UP')
           or ('ROLLING START ' .. cfg.formationMode:upper())
+        if cfg.startLength == 'full' then
+          title = ({ fast = 'DEPART LANCE — 3/4 TOUR A 160 km/h',
+                     slow = 'REGROUPEMENT — 80 km/h',
+                     wait = 'VERT AU PASSAGE DE LA LIGNE DU LEADER' })[RS.stage.stage] or title
+        end
         local bgHeader = localState.inAccelZone and hudUi.COL_GREEN or hudUi.COL_AMBER
         ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + formH * kb), hudUi.COL_TEAL, 8 * kb)
         ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 24 * kb), bgHeader, 8 * kb)

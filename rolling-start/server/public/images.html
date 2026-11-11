@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aperçu en Jeu — GDSP Gentleman Drivers Project</title>
+  <style>
+    :root {
+      --ink: #102a32;
+      --cream: #f4ecd8;
+      --paper: #e9e0cb;
+      --card: #f8f2e4;
+      --red: #9c3021;
+      --gold: #d7a347;
+      --line: #bdb09a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+    }
+    .heritage-stripe {
+      height: 5px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+    }
+    .heritage-stripe span:nth-child(1) { background: #c8281c; }
+    .heritage-stripe span:nth-child(2) { background: #e18c17; }
+    .heritage-stripe span:nth-child(3) { background: #f4ecd8; }
+    .heritage-stripe span:nth-child(4) { background: #0e706e; }
+
+    header {
+      background: var(--ink);
+      color: var(--cream);
+      border-bottom: 5px solid var(--red);
+      box-shadow: 0 10px 28px rgba(16, 42, 50, 0.18);
+    }
+    .hdr-inner {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand-box {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-logo {
+      width: 48px;
+      height: 56px;
+      object-fit: contain;
+      filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.35));
+    }
+    .eyebrow {
+      font-size: 10px;
+      letter-spacing: 2.3px;
+      text-transform: uppercase;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    h1 {
+      margin: 0;
+      font-family: Impact, 'Arial Narrow', sans-serif;
+      font-weight: normal;
+      font-size: clamp(1.5rem, 2.8vw, 2.15rem);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--cream);
+    }
+    .hdr-links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .nav-btn {
+      text-decoration: none;
+      padding: 9px 15px;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      border: 1px solid rgba(215, 163, 71, 0.5);
+      color: var(--cream);
+      background: rgba(255, 255, 255, 0.06);
+      transition: 0.15s;
+    }
+    .nav-btn:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+    .nav-btn.primary {
+      background: var(--red);
+      border-color: var(--red);
+      color: #fff;
+    }
+    .nav-btn.primary:hover {
+      background: #b03a2a;
+      color: #fff;
+    }
+
+    .container {
+      max-width: 1220px;
+      margin: 28px auto 56px;
+      padding: 0 24px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(510px, 1fr));
+      gap: 24px;
+    }
+    @media (max-width: 600px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    figure {
+      margin: 0;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--ink);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 10px 26px rgba(16, 42, 50, 0.10);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    figure:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 32px rgba(16, 42, 50, 0.16);
+    }
+    img.scene {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-bottom: 1px solid var(--line);
+    }
+    figcaption {
+      padding: 15px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 0.96rem;
+      line-height: 1.45;
+      color: var(--ink);
+      font-weight: 600;
+    }
+    .roundel {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #fff;
+      color: var(--ink);
+      border: 2.5px solid var(--gold);
+      box-shadow: 0 2px 6px rgba(16, 42, 50, 0.18), inset 0 0 0 1.5px var(--ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: Impact, 'Arial Narrow', sans-serif;
+      font-size: 1.05rem;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="heritage-stripe"><span></span><span></span><span></span><span></span></div>
+  <header>
+    <div class="hdr-inner">
+      <div class="brand-box">
+        <img class="brand-logo" src="/assets/gdsp-logo.png" alt="Logo GDSP" />
+        <div>
+          <div class="eyebrow">Gentleman Drivers Project</div>
+          <h1>Aperçu en Jeu — Direction de Course</h1>
+        </div>
+      </div>
+      <div class="hdr-links">
+        <a class="nav-btn" href="/hud-preview.html">Simulateur interactif</a>
+        <a class="nav-btn primary" href="/">Configurateur</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="grid">
+      <figure>
+        <img class="scene" src="/previews/scene-1-depart-lance.png" alt="Départ lancé avec drapeau jaune et boîte verte" />
+        <figcaption><span class="roundel">01</span><span>Pendant le tour de formation, le pilote reste dans sa boîte verte avec le limiteur actif et le drapeau jaune affiché.</span></figcaption>
+      </figure>
+      <figure>
+        <img class="scene" src="/previews/scene-2-green-flag.png" alt="Drapeau vert et compteur personnel de cuts discret" />
+        <figcaption><span class="roundel">02</span><span>Au drapeau vert, le limiteur se coupe aussitôt et chaque pilote garde un compteur discret de ses propres cuts.</span></figcaption>
+      </figure>
+      <figure>
+        <img class="scene" src="/previews/scene-3-stop-and-go.png" alt="Drapeau pénalité et décompte Stop & Go aux stands" />
+        <figcaption><span class="roundel">03</span><span>En cas de cut ou de faux départ, le pilote reçoit un drapeau pénalité et effectue son Stop &amp; Go aux stands avec décompte en direct.</span></figcaption>
+      </figure>
+      <figure>
+        <img class="scene" src="/previews/scene-4-peloton-cuts.png" alt="Vue Safety Car Peloton Cuts réservée à la Safety Car" />
+        <figcaption><span class="roundel">04</span><span>Le tableau Peloton Cuts est réservé uniquement à la Safety Car, avec relais vers la Direction de Course s'il n'y en a pas sur le serveur.</span></figcaption>
+      </figure>
+    </div>
+  </div>
+</body>
+</html>
