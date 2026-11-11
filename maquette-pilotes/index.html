@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Les engagés · Maquette GDSP</title>
+<style>
+:root{--ink:#213b33;--paper:#f4f0e7;--gold:#aa7836;--muted:#6d756d;--line:#ded9cd}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 Arial,sans-serif}header{background:var(--ink);color:#fff;padding:20px max(24px,calc((100vw - 1180px)/2));display:flex;align-items:center;gap:16px}header img{width:52px;height:52px;object-fit:contain}header strong{letter-spacing:2px}header small{display:block;color:#c6cebd;font-size:10px;letter-spacing:2px}header>a{margin-left:auto;color:#e5ddc8;text-decoration:none;font-size:12px}.preview{background:#e7dfcb;text-align:center;padding:9px 16px;font-size:12px;color:#61573e}main{max-width:1228px;margin:auto;padding:44px 24px 60px}.eyebrow{text-transform:uppercase;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--gold)}.intro{display:flex;justify-content:space-between;align-items:end;gap:24px;margin-bottom:30px}h1{font-family:Georgia,serif;font-size:clamp(40px,6vw,64px);font-weight:normal;margin:6px 0 8px;line-height:1.1}p{color:var(--muted);margin:0}.season{border-left:2px solid var(--gold);padding-left:16px;min-width:190px}.season strong{display:block;font-family:Georgia,serif;font-size:20px}.season small{color:var(--muted)}.toolbar{display:flex;align-items:end;gap:14px;padding:20px 0;border-top:1px solid var(--line);margin-bottom:14px}.toolbar label{display:block;font-size:11px;font-weight:bold;color:var(--muted);letter-spacing:1px;text-transform:uppercase}.search{flex:1}input,select{font:14px Arial;color:var(--ink);border:1px solid #ccc7bb;border-radius:4px;background:#fffdf8;padding:13px;margin-top:6px;width:100%}select{min-width:175px}#count{font-size:12px;color:var(--muted);white-space:nowrap;padding-bottom:12px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}.card{background:#fffdf8;border:1px solid var(--line);border-radius:7px;overflow:hidden;transition:transform .2s,box-shadow .2s}.card:hover{transform:translateY(-4px);box-shadow:0 12px 24px #213b3312}.visual{position:relative;aspect-ratio:16/10;background:#e8e6df;overflow:hidden}.visual img{width:100%;height:100%;object-fit:cover}.number{position:absolute;top:14px;left:14px;min-width:43px;height:43px;border-radius:50%;background:#fffdf8;color:var(--ink);display:grid;place-items:center;font:bold 19px Georgia;box-shadow:0 2px 12px #0002}.series{position:absolute;right:12px;bottom:12px;background:#213b33ed;color:#fff;padding:4px 9px;font-size:10px;letter-spacing:1.5px}.body{padding:21px}.team{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);font-weight:bold;min-height:30px}h2{font-size:23px;font-family:Georgia,serif;margin:0 0 18px;overflow-wrap:anywhere}.stats{display:flex;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0;margin-bottom:16px}.stat{flex:1}.stat+.stat{border-left:1px solid var(--line);padding-left:20px}.stat span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}.stat strong{font-size:22px}.card button{width:100%;border:1px solid var(--ink);border-radius:3px;background:transparent;color:var(--ink);padding:11px 14px;text-align:left;font-weight:bold;cursor:pointer}.card button:hover{background:var(--ink);color:white}.card button span{float:right}button:focus-visible,a:focus-visible{outline:3px solid var(--gold);outline-offset:3px}.footnote{font-size:12px;margin-top:26px}dialog{max-width:460px;border:1px solid var(--line);border-radius:8px;padding:30px;background:var(--paper);color:var(--ink)}dialog::backdrop{background:#142a24aa}dialog h2{margin-bottom:12px}dialog button{margin-top:20px;padding:10px 18px;background:var(--ink);color:white;border:0;border-radius:3px;cursor:pointer}#empty{padding:36px;text-align:center;background:#fffdf8;border:1px dashed var(--line)}footer{border-top:1px solid var(--line);padding:22px 0;margin-top:35px;display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:1px}@media(max-width:950px) and (min-width:701px){.grid{gap:14px}.body{padding:15px}h2{font-size:20px}}@media(max-width:700px){.grid{grid-template-columns:1fr}.intro{display:block}.season{margin-top:22px}.toolbar{flex-wrap:wrap}.search{flex-basis:100%}.toolbar>label{flex:1}main{padding:30px 18px}.visual{aspect-ratio:16/9}header{padding:16px 18px}header>a{font-size:11px}footer{gap:20px}}
+
+/* Proposition 02 : un plateau compact en lignes, et non une galerie. */
+.list-head{display:grid;grid-template-columns:76px 240px minmax(0,1fr) 170px 40px;gap:20px;padding:0 22px 12px;font-size:10px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+.grid{display:flex;flex-direction:column;gap:12px}
+.card{position:relative;display:grid;grid-template-columns:76px 240px minmax(0,1fr) 170px 40px;gap:20px;align-items:center;min-height:132px;padding:14px 22px;border-radius:3px;border-left:3px solid #c5b48d}
+.card:hover{transform:translateX(3px);border-left-color:var(--gold);box-shadow:0 5px 18px #213b3312}
+.card:focus-within{outline:2px solid var(--gold);outline-offset:3px}
+.visual{position:static;grid-column:2;grid-row:1;aspect-ratio:2.5;border-radius:2px;overflow:visible;background:#e8e6df}
+.visual img{display:block;object-fit:cover;border-radius:2px;aspect-ratio:2.5}
+.number{position:absolute;left:22px;top:50%;transform:translateY(-50%);height:auto;min-width:0;width:76px;background:transparent;box-shadow:none;border-radius:0;font:italic 44px Georgia,serif;color:var(--ink)}
+.series{display:none}
+.body{display:contents}
+h2{grid-column:3;grid-row:1;align-self:center;margin:0 0 23px;font:bold 23px Georgia,serif;line-height:1.15}
+.team{grid-column:3;grid-row:1;align-self:center;margin-top:43px;min-height:0;font-size:10px;line-height:1.4;overflow-wrap:anywhere;padding-bottom:3px}
+.stats{grid-column:4;grid-row:1;border:0;padding:0;margin:0;gap:10px}
+.stat{min-width:0}.stat+.stat{padding-left:16px}.stat span{font-size:9px;letter-spacing:.5px}.stat strong{font:28px Georgia,serif;line-height:1.5}
+.card button{grid-column:5;grid-row:1;padding:10px 0;border:0;border-radius:50%;width:38px;height:38px;text-align:center;background:#eee9dd;font-size:0}
+.card button span{float:none;font-size:21px;font-weight:normal}
+.card button::after{content:'';position:absolute;inset:0;cursor:pointer}
+.card button:hover{background:var(--ink)}
+.card:nth-child(3n+2){border-left-color:#7c9181}.card:nth-child(3n){border-left-color:#ad7965}
+@media(max-width:1050px){.list-head,.card{grid-template-columns:60px 185px minmax(0,1fr) 150px 34px;gap:14px}.number{width:60px;font-size:38px}h2{font-size:20px}.card{padding:14px 18px}.number{left:18px}.list-head{padding-left:18px;padding-right:18px}}
+@media(max-width:800px){.list-head{display:none}.card{grid-template-columns:55px 150px minmax(0,1fr) 34px;gap:12px;min-height:145px}.visual{grid-column:2}.number{width:55px;font-size:34px}h2{align-self:start;margin-top:6px;margin-bottom:0;font-size:19px}.team{align-self:start;margin-top:37px;font-size:9px}.stats{grid-column:3;grid-row:1;align-self:end;margin-top:68px}.stat strong{font-size:22px}.stat span{font-size:8px}.card button{grid-column:4}.visual,.visual img{aspect-ratio:1.7}}
+@media(max-width:540px){.card{grid-template-columns:46px minmax(0,1fr) 36px;grid-template-rows:auto auto;gap:12px;padding:18px 14px;min-height:0}.number{left:14px;top:33px;transform:none;font-size:31px;width:46px}.visual{grid-column:2;grid-row:2;aspect-ratio:2.8;margin-top:5px}.visual img{aspect-ratio:2.8}.card button{grid-column:3;grid-row:1;align-self:start}.team{grid-column:2;grid-row:1;position:static;margin:0;align-self:start;padding-top:31px;font-size:9px}h2{grid-column:2;grid-row:1;align-self:start;margin:0;font-size:20px;padding-bottom:37px}.stats{grid-column:1 / -1;grid-row:3;border-top:1px solid var(--line);margin:0;padding-top:10px;gap:0}.stat{display:flex;align-items:center;justify-content:space-between;padding-right:20px}.stat+.stat{padding-right:0;padding-left:20px}.stat span{font-size:10px}.stat strong{font-size:25px}.toolbar{margin-bottom:8px}.intro{margin-bottom:24px}.season{margin-top:19px}}
+@media(prefers-reduced-motion:reduce){.card{transition:none}.card:hover{transform:none}}
+
+
+/* Proposition 03 : cinq vignettes par rangée, décalées comme sur la grille. */
+.list-head{display:none}
+.grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:28px 16px;padding:0 28px 24px 0;align-items:start}
+.card{display:flex;flex-direction:column;align-items:stretch;gap:0;min-height:0;padding:0;border:1px solid var(--line);border-top:3px solid var(--ink);border-radius:4px;overflow:visible;background:#fffdf8;box-shadow:0 5px 0 -2px var(--paper),0 7px 0 -2px #c9c3b6;isolation:isolate}
+.card:nth-child(10n+6),.card:nth-child(10n+7),.card:nth-child(10n+8),.card:nth-child(10n+9),.card:nth-child(10n+10){translate:28px 0}
+.card:nth-child(5n+2),.card:nth-child(5n+4){transform:translateY(15px)}
+.card:hover{transform:translateY(-4px);border-color:var(--gold);box-shadow:0 10px 24px #213b3320}
+.card:nth-child(5n+2):hover,.card:nth-child(5n+4):hover{transform:translateY(11px)}
+.card::before{content:'';position:absolute;left:-7px;right:-7px;top:23px;bottom:-10px;border:2px solid #c8c1b4;border-top:0;z-index:-1;pointer-events:none}
+.visual{position:relative;aspect-ratio:1.65;width:100%;overflow:hidden;background:#e8e6df;border-radius:1px 1px 0 0}
+.visual img{width:100%;height:100%;aspect-ratio:auto;object-fit:cover;border-radius:0}
+.number{position:absolute;left:8px;top:8px;transform:none;display:grid;place-items:center;width:33px;min-width:33px;height:33px;background:#fffdf8ed;border-radius:50%;font:bold 17px Georgia,serif;box-shadow:0 2px 6px #0002}
+.series{display:none}.body{display:flex;flex:1;flex-direction:column;padding:13px 12px 11px}
+h2{font:bold 18px/1.2 Georgia,serif;margin:0 0 8px;padding:0;min-height:44px;overflow-wrap:anywhere;order:0}
+.team{font-size:9px;line-height:1.45;letter-spacing:.7px;margin:0;padding:0;min-height:29px;order:1;color:var(--gold)}
+.stats{display:flex;gap:0;margin:12px 0 10px;padding:9px 0 0;border-top:1px solid var(--line);order:2;align-self:stretch}
+.stat{display:block;padding:0;flex:1}.stat+.stat{padding:0 0 0 10px}.stat span{display:block;font-size:8px;letter-spacing:.2px}.stat strong{font:22px/1.4 Georgia,serif}
+.card button{width:100%;height:auto;border:0;border-top:1px solid var(--line);border-radius:0;background:transparent;padding:10px 0 0;text-align:left;font-size:10px;letter-spacing:.4px;order:3}
+.card button span{float:right;font-size:15px;line-height:1}.card button:hover{background:transparent;color:var(--gold)}
+.card:nth-child(3n+2){border-left-color:var(--line);border-top-color:#7c9181}.card:nth-child(3n){border-left-color:var(--line);border-top-color:#ad7965}
+@media(max-width:1000px) and (min-width:761px){.grid{gap:24px 10px;padding-right:20px}.body{padding:10px 8px}h2{font-size:15px}.team{font-size:8px;min-height:34px}.stat span{font-size:7px}.card:nth-child(10n+6),.card:nth-child(10n+7),.card:nth-child(10n+8),.card:nth-child(10n+9),.card:nth-child(10n+10){translate:20px 0}}
+@media(max-width:760px){.grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:25px 14px;padding-right:16px}.card:nth-child(n){translate:none;transform:none}.card:nth-child(6n+4),.card:nth-child(6n+5),.card:nth-child(6n+6){translate:16px 0}.card:nth-child(3n+2){transform:translateY(12px)}.card:nth-child(n):hover{transform:translateY(-3px)}h2{font-size:17px}.body{padding:12px 10px}}
+@media(max-width:480px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:26px 14px;padding-right:12px}.card:nth-child(n){translate:none;transform:none}.card:nth-child(4n+3),.card:nth-child(4n+4){translate:12px 0}.card:nth-child(2n){transform:translateY(15px)}.card:nth-child(n):hover{transform:translateY(-3px)}h2{font-size:17px}.number{width:30px;min-width:30px;height:30px;font-size:16px}.stat span{font-size:8px}.stat+.stat{padding-left:8px}.team{font-size:8px}}
+@media(prefers-reduced-motion:reduce){.card{transition:none}}
+
+
+/* Proposition 04 : grille alignée, hiérarchie et finitions des vignettes. */
+.grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:22px 18px;padding:0;align-items:stretch}
+.grid .card:nth-child(n){translate:none;transform:none;border:1px solid #d7d2c6;border-radius:9px;overflow:hidden;box-shadow:0 3px 9px #213b3308;transition:box-shadow .2s,border-color .2s}
+.grid .card:nth-child(n):hover{translate:none;transform:none;border-color:#aa7836;box-shadow:0 8px 24px #213b3320}
+.card::before{display:none}
+.visual{aspect-ratio:1.4;background:#deddd6;position:relative;border-radius:0;overflow:hidden}
+.visual::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,#122a2328,transparent 40%,#122a2370);pointer-events:none}
+.visual img{height:100%;width:100%;object-fit:cover;transition:transform .35s}
+.card:hover .visual img{transform:scale(1.035)}
+.number{z-index:1;left:11px;top:11px;min-width:38px;width:38px;height:38px;border:1px solid #ffffffaa;border-radius:5px;background:#fffdf8f2;color:#213b33;font:bold 20px Georgia,serif;box-shadow:0 2px 8px #0002}
+.series{display:block;z-index:1;position:absolute;right:auto;left:12px;bottom:11px;padding:0;background:transparent;color:#fff9e7;font-size:9px;font-weight:bold;letter-spacing:1.8px}
+.body{padding:16px 14px 12px;background:#fffdf8}
+h2{font:bold 19px/1.2 Georgia,serif;color:#213b33;min-height:46px;margin:0 0 7px;letter-spacing:-.3px}
+.team{font-size:9px;letter-spacing:.6px;font-weight:600;line-height:1.5;min-height:29px;color:#856635}
+.stats{margin:15px 0 12px;padding:11px 0 0;border-color:#e6e1d7}
+.stat span{color:#71796f;font-size:8px;letter-spacing:.5px}.stat strong{font:24px/1.35 Georgia,serif;color:#213b33}.stat+.stat{border-color:#e6e1d7;padding-left:12px}
+.card button{display:flex;align-items:center;justify-content:space-between;border:0;border-radius:4px;background:#edf0e9;color:#213b33;padding:10px 11px;font-size:10px;letter-spacing:.2px}
+.card button span{float:none;font-size:17px;line-height:1}
+.card button:hover{background:#213b33;color:#fff9e7}
+.card:focus-within{outline:2px solid var(--gold);outline-offset:3px}
+@media(max-width:1050px) and (min-width:761px){.grid{gap:16px 12px}.body{padding:12px 10px}h2{font-size:16px;min-height:40px}.team{font-size:8px;min-height:36px}.stat span{font-size:7px;letter-spacing:0}.stat+.stat{padding-left:8px}.number{width:32px;min-width:32px;height:32px;font-size:18px}.series{font-size:8px;letter-spacing:1px}.card button{padding:9px 8px;font-size:9px}}
+@media(max-width:760px){.grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:18px 14px;padding:0}.body{padding:14px 11px}h2{font-size:18px;min-height:44px}}
+@media(max-width:480px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px;padding:0}.visual{aspect-ratio:1.35}.body{padding:13px 10px 10px}h2{font-size:17px;min-height:42px}.team{font-size:8px;min-height:32px}.number{left:9px;top:9px;width:32px;min-width:32px;height:32px;font-size:17px}.series{left:10px;font-size:8px;letter-spacing:1px}.card button{padding:10px 9px}.stat span{font-size:7px;letter-spacing:0}.stat+.stat{padding-left:9px}}
+@media(prefers-reduced-motion:reduce){.visual img,.grid .card{transition:none}.card:hover .visual img{transform:none}}
+
+
+/* Voiture entière, bleu pétrole GDSP et accents dorés. */
+:root{--ink:#14343e;--gold:#b48a43}
+.grid .card:nth-child(n){border-color:#d6d8d5;border-top:3px solid #193e49}
+.grid .card:nth-child(n):hover{border-color:#b48a43;box-shadow:0 8px 24px #14343e22}
+.visual{background:radial-gradient(ellipse at center,#f7f6f0 0%,#e4e9e8 100%);border-bottom:2px solid #b48a43}
+.visual img{object-fit:contain;padding:27px 9px 26px;transform:none}
+.card:hover .visual img{transform:none}
+.visual::after{background:none;border:0}
+.number{background:#163944;color:#f5dfaa;border:1px solid #bc9654;box-shadow:0 2px 6px #14343e20}
+.series{color:#244853;font-size:8px;letter-spacing:1.5px;bottom:8px}
+h2{color:#14343e}.team{color:#957031}
+.stat strong{color:#193e49}.stats{border-top-color:#ded3bc}
+.card button{background:#193e49;color:#fff4db;border:1px solid #193e49}
+.card button span{color:#dfb86e}.card button:hover{background:#244e5b;color:#fff4db;border-color:#b48a43}
+header{background:#14343e;border-bottom:3px solid #b48a43}
+@media(max-width:480px){.visual img{padding:26px 7px 25px}.series{font-size:7px}}
+
+
+/* Vignettes plus compactes, voiture toujours visible en entier. */
+.visual{aspect-ratio:1.95}
+.visual img{padding:19px 7px 19px}
+.number{left:8px;top:7px;width:28px;min-width:28px;height:28px;font-size:16px}
+.series{bottom:5px;left:9px;font-size:7px;letter-spacing:1px}
+.body{padding:11px 12px 9px}
+h2{font-size:17px;min-height:41px;margin-bottom:4px}
+.team{min-height:26px;font-size:8px;line-height:1.4}
+.stats{margin:9px 0 8px;padding-top:7px}
+.stat strong{font-size:20px;line-height:1.25}
+.card button{padding:7px 9px;font-size:9px}
+.grid{row-gap:17px}
+@media(max-width:1050px) and (min-width:761px){.body{padding:9px 8px 8px}h2{font-size:15px;min-height:36px}.team{font-size:8px;min-height:32px}.series{font-size:6px}.visual img{padding:18px 5px}}
+@media(max-width:760px){.visual{aspect-ratio:1.95}.body{padding:11px 10px 9px}h2{font-size:17px;min-height:41px}}
+@media(max-width:480px){.visual{aspect-ratio:1.85}.visual img{padding:19px 6px}.number{width:26px;min-width:26px;height:26px;font-size:15px}.series{font-size:6px}h2{font-size:16px;min-height:39px}.team{min-height:28px}.card button{padding:7px 8px}}
+
+
+/* Format encore plus compact. */
+.grid .visual{aspect-ratio:2.4}
+.grid .visual img{padding:14px 5px 15px}
+.grid .number{width:23px;min-width:23px;height:23px;font-size:13px;top:5px;left:6px}
+.grid .series{bottom:4px;font-size:6px;left:7px}
+.grid .body{padding:8px 9px 7px}
+.grid h2{font-size:15px;line-height:1.15;min-height:35px;margin-bottom:3px}
+.grid .team{font-size:8px;line-height:1.3;min-height:21px;letter-spacing:.2px}
+.grid .stats{margin:6px 0;padding-top:5px}
+.grid .stat strong{font-size:17px;line-height:1.1}
+.grid .stat span{font-size:7px}
+.grid .card button{padding:5px 8px;font-size:9px}
+.grid .card button span{font-size:14px}
+.grid{row-gap:13px}
+@media(max-width:480px){.grid .visual{aspect-ratio:2.2}.grid h2{font-size:14px;min-height:33px}.grid .team{min-height:21px}}
+</style>
+</head>
+<body>
+<header><img src="../assets/logo.png" alt="GDSP"><div><strong>GDSP</strong><small>GENTLEMAN DRIVER · SIM RACING</small></div><a href="../index.html">Retour au site ↗</a></header>
+<div class="preview">MAQUETTE · Proposition « Vignettes alignées » — la présentation actuelle reste inchangée</div>
+<main>
+<section class="intro"><div><div class="eyebrow">Le paddock · International Series</div><h1>Les engagés<span style="color:var(--gold)">.</span></h1><p>Le plateau au complet. Trouvez votre pilote, suivez votre écurie.</p></div><div class="season"><span class="eyebrow">Le championnat historique</span><strong>Lola T290</strong><small>Assetto Corsa · GDSP</small></div></section>
+<div class="toolbar"><label class="search">Rechercher un pilote ou une équipe<input id="search" type="search" placeholder="Nom du pilote, écurie…"></label><label>Trier par<select id="sort"><option value="name">Nom du pilote</option><option value="team">Équipe</option><option value="number">Numéro de course</option></select></label><span id="count" role="status" aria-live="polite"></span></div>
+<div class="list-head" aria-hidden="true"><span>N°</span><span>Voiture engagée</span><span>Pilote / Écurie</span><span>Classement · Points</span><span></span></div><div id="grid" class="grid"></div><p id="empty" hidden>Aucun pilote ne correspond à votre recherche.</p>
+<p class="footnote">Noms, équipes et voitures issus des données du dépôt. Les positions et points seront reliés au classement officiel lors de l’intégration ; aucun classement fictif n’est affiché ici.</p>
+<footer><span>GDSP · L’ESPRIT GENTLEMAN DRIVER</span><span>PROPOSITION 04 / VIGNETTES ALIGNÉES</span></footer>
+</main>
+<dialog id="preview-dialog" aria-labelledby="dialog-title"><h2 id="dialog-title">Fiche pilote</h2><p>Cette maquette concerne uniquement la présentation des engagés. Après validation, ce bouton ouvrira la fiche existante du pilote, sans en modifier le contenu.</p><form method="dialog"><button>Revenir à la grille</button></form></dialog>
+<script>
+let drivers=[];
+const grid=document.querySelector('#grid'),search=document.querySelector('#search'),sort=document.querySelector('#sort');
+const normalize=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr');
+function render(){
+ const query=normalize(search.value.trim());
+ const filtered=drivers.filter(d=>normalize(d.name+' '+d.team).includes(query)).sort((a,b)=>sort.value==='number'?(parseInt(a.number)||999)-(parseInt(b.number)||999)||a.name.localeCompare(b.name,'fr'):a[sort.value].localeCompare(b[sort.value],'fr')||a.name.localeCompare(b.name,'fr'));
+ grid.replaceChildren();
+ for(const d of filtered){
+  const card=document.createElement('article');card.className='card';
+  card.innerHTML='<div class="visual"><span class="number"></span><span class="series">LOLA T290</span></div><div class="body"><div class="team"></div><h2></h2><div class="stats"><div class="stat"><span>Championnat</span><strong>—</strong></div><div class="stat"><span>Points</span><strong>—</strong></div></div><button type="button">Voir la fiche <span aria-hidden="true">↗</span></button></div>';
+  card.querySelector('.number').textContent=d.number;card.querySelector('.team').textContent=d.team;card.querySelector('h2').textContent=d.name;
+  if(d.image){const img=document.createElement('img');img.src='../assets/'+d.image+'.jpg';img.alt='Lola T290 de '+d.name;img.loading='lazy';card.querySelector('.visual').prepend(img);}
+  const button=card.querySelector('button');button.setAttribute('aria-label','Voir la fiche de '+d.name);button.onclick=()=>{document.querySelector('#dialog-title').textContent=d.name;document.querySelector('dialog').showModal()};grid.append(card);
+ }
+ document.querySelector('#count').textContent=filtered.length+' / '+drivers.length+' pilotes';document.querySelector('#empty').hidden=filtered.length>0;
+}
+search.addEventListener('input',render);sort.addEventListener('change',render);
+fetch('./pilotes.json').then(r=>{if(!r.ok)throw Error();return r.json()}).then(data=>{drivers=data;render()}).catch(()=>{document.querySelector('#empty').textContent='Impossible de charger les pilotes. Rechargez la page pour réessayer.';document.querySelector('#empty').hidden=false});
+</script>
+</body></html>
