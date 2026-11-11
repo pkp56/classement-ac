@@ -609,6 +609,11 @@ local function canViewPelotonCuts()
   return false, ROLE_NONE, nil, false
 end
 local uiTime = 0
+-- horloge partagee script <-> app CM : uiTime est propre a chaque etat Lua (decalage -> bridge jugé inactif)
+local function sharedNow()
+  if os.preciseClock then return os.preciseClock() end
+  return os.clock()
+end
 local lastClock = 0
 local lastSessionIdx = sim and sim.currentSessionIndex or -1
 local lastError = nil
@@ -1701,6 +1706,7 @@ local function fullFormationStage(cars)
     end
     if (tts and tts <= 0) or moving then
       RS.stage.stage = 'fast'
+      safeLog('depart lance : feux eteints, limite ' .. tostring(cfg.fastKmh) .. ' km/h sur ' .. tostring(cfg.fastPct) .. '% du tour')
     end
   end
   if RS.stage.stage == 'fast' then
@@ -1708,6 +1714,7 @@ local function fullFormationStage(cars)
     local lt = leadId and carTrackDist[leadId]
     if lt and lt.distM >= (cfg.fastPct / 100) * trackLen() then
       RS.stage.stage = 'slow'; RS.stage.slowT = clock()
+      safeLog('depart lance : limite ' .. tostring(cfg.slowKmh) .. ' km/h jusqu\'au regroupement')
     end
   end
   if RS.stage.stage == 'slow' then
@@ -1722,7 +1729,10 @@ local function fullFormationStage(cars)
     end
     local bunched = n >= 1 and (maxD - minD) <= cfg.bunchM
     local timedOut = RS.stage.slowT and (clock() - RS.stage.slowT) >= RS.BUNCH_TIMEOUT_MS
-    if bunched or timedOut then RS.stage.stage = 'wait' end
+    if bunched or timedOut then
+      RS.stage.stage = 'wait'
+      safeLog('depart lance : ' .. (bunched and 'groupe regroupe' or 'delai de regroupement depasse') .. ', vert au passage de ligne (' .. tostring(cfg.formationLaps) .. ' tour(s))')
+    end
   end
   return RS.stage.stage
 end
@@ -2365,7 +2375,8 @@ local function controlFormation(cars, rank)
     if cfg.greenTrigger ~= 'manual' and stage == 'wait' then
       local _, leadId = activeLeader(cars)
       local lt = leadId and carTrackDist[leadId]
-      if lt and lt.crossedNow and lt.cross >= cfg.formationLaps and due('full_green', rank) then
+      local lapsDoneM = cfg.formationLaps * trackLen()
+      if lt and lt.crossedNow and lt.distM >= lapsDoneM and due('full_green', rank) then
         triggerGreen(REASON_NONE)
         return
       end
@@ -2408,7 +2419,7 @@ end
 -- ── Bridge Command Consumer ──────────────────────────────────────────────────
 local function processBridgeCommands()
   if not bridge then return end
-  bridge.scriptHeartbeat = uiTime
+  bridge.scriptHeartbeat = sharedNow()
   if (bridge.cmdSeq or 0) > lastCmdSeqProcessed then
     lastCmdSeqProcessed = bridge.cmdSeq
     local cmd = bridge.cmdType
@@ -2975,7 +2986,7 @@ function script.drawUI()
       pcall(ui.drawRaceFlag, hudFlag)
     end
 
-    if cfg.hideHudWhenAppOpen == 1 and bridge and bridge.appVisible == 1 and (uiTime - (bridge.appHeartbeat or -99)) < 1.5 then
+    if cfg.hideHudWhenAppOpen == 1 and bridge and bridge.appVisible == 1 and (sharedNow() - (bridge.appHeartbeat or -99)) < 1.5 then
       return
     end
 
@@ -3199,7 +3210,6 @@ function script.drawUI()
         end
 
         if ui.popClipRect then pcall(ui.popClipRect) end
-        hudUi.drawControls('cuts', cx0, cy0, cw, ch, win, cHov)
       end
     end
 
@@ -3211,7 +3221,7 @@ function script.draw3D()
   guard(function()
     if not isRollingSessionActive() then return end
     if S.phase ~= PHASE_FORMATION and S.phase ~= PHASE_READY and S.phase ~= PHASE_CAUTION then return end
-    if cfg.hideHudWhenAppOpen == 1 and bridge and bridge.appVisible == 1 and (uiTime - (bridge.appHeartbeat or -99)) < 1.5 then
+    if cfg.hideHudWhenAppOpen == 1 and bridge and bridge.appVisible == 1 and (sharedNow() - (bridge.appHeartbeat or -99)) < 1.5 then
       return
     end
     local p = ac.trackCoordinateToWorld(vec3(0, 0, paceSpline()))

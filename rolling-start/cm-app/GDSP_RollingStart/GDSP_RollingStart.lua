@@ -8,6 +8,11 @@ local admin = require('rs_admin')
 
 local sim = ac.getSim()
 local uiTime = 0
+-- horloge partagee script <-> app CM (voir script : uiTime differe entre etats Lua)
+local function sharedNow()
+  if os.preciseClock then return os.preciseClock() end
+  return os.clock()
+end
 local lastClock = 0
 local lastSessionIdx = sim and sim.currentSessionIndex or -1
 local hudVisible = false
@@ -122,7 +127,7 @@ local standalone = {
 
 local function isBridgeActive()
   if not bridge then return false end
-  return bridge.scriptHeartbeat > 0 and (uiTime - bridge.scriptHeartbeat) < 1.5
+  return bridge.scriptHeartbeat > 0 and (sharedNow() - bridge.scriptHeartbeat) < 1.5
 end
 
 local function activeCars()
@@ -201,13 +206,8 @@ local function sendCommand(cmdType, maybeCfg, action, targetSid, param)
         end
       end
     elseif cmdType == proto.CMD_APPLY_CFG and maybeCfg then
+      -- pas de spam de chat : les reglages ne passent que par le bridge (sinon non appliques)
       cfg = proto.copyCfg(maybeCfg)
-      pcall(ac.sendChatMessage, cfg.enabled == 1 and '!rs on' or '!rs off')
-      pcall(ac.sendChatMessage, '!rs ' .. cfg.formationMode)
-      pcall(ac.sendChatMessage, '!rs ' .. cfg.startLength)
-      pcall(ac.sendChatMessage, '!rs pace ' .. cfg.paceKmh)
-      pcall(ac.sendChatMessage, cfg.cutEnabled == 1 and '!rs cut on' or '!rs cut off')
-      pcall(ac.sendChatMessage, '!rs cutlimit ' .. cfg.cutMaxBeforePenalty)
     end
     return
   end
@@ -447,7 +447,7 @@ function script.update(dt)
   end
 
   if bridge then
-    bridge.appHeartbeat = uiTime
+    bridge.appHeartbeat = sharedNow()
     bridge.appVisible = (hudVisible and localPrefs.hideOnlineBanner) and 1 or 0
   end
 
