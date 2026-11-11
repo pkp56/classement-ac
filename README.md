@@ -313,6 +313,51 @@ Mid-Ohio, 20 à Sebring, 21,5 à Riverside). D'où l'option `--cap` : elle garde
 l'ordre de la grille et comprime tous les écarts pour que le plus lent reste dans
 une fenêtre raisonnable (40 s ≈ 1,7 km de peloton à Mont-Tremblant).
 
+### Poser la grille SUR le circuit : `tools/grille-sur-circuit.js`
+
+Le calcul ci-dessus donne des écarts en secondes ; celui-ci les convertit en
+positions réelles le long de la piste, à partir du tracé du circuit
+(`maquette-circuit/assets/tracks/<asset>/line.json`, extrait du `fast_lane.ai`).
+
+```bash
+node tools/grille-sur-circuit.js data/2026_9_9_21_37_QUALIFY.json --tours=15
+# -> exports/grille-mont-tremblant-69-15t.svg        vue d'ensemble à l'échelle
+# -> exports/grille-mont-tremblant-69-15t-zoom.svg   zoom ±450 m sur la ligne
+# -> exports/grille-mont-tremblant-69-15t.ini.txt    blocs [START_n] POS / ORIENTATION
+```
+
+Exemple versionné pour Mont-Tremblant 15 tours : `docs/grille-mont-tremblant-15t.svg`
+et son zoom. Options : `--marge=30` (distance du 1er à la ligne), `--espacement=10`
+(écart mini entre deux voitures), `--cap=40`, `--zoom=450`.
+
+**Comment les voitures sont placées**, dans cet ordre :
+
+1. le plus lent (position 1) est posé **juste avant la ligne**, à `--marge` mètres ;
+2. chaque voiture suivante recule de `handicap(i−1) − handicap(i)` mètres, c'est-à-dire
+   de l'écart de rythme × tours entre elle et celle de devant, jamais moins que
+   `--espacement` ;
+3. la position sur la piste est trouvée par interpolation sur le tracé, ce qui
+   donne aussi le point et le cap : `POS=x,y,z` (repère du monde AC, identique à
+   celui de `start_positions.ini`) et `ORIENTATION` en radians.
+
+Résultat sur Mont-Tremblant 15 tours, 28 pilotes : la grille occupe **3 865 m,
+soit 92 % d'un tour**, du 1er au dernier. Deux voitures seulement ont dû être
+écartées à l'espacement minimum de 10 m (elles se seraient chevauchées), écart
+le plus court du peloton : 10 m, moyenne 143 m.
+
+**Les trois limites à connaître** :
+
+| Limite | Pourquoi | Conséquence |
+| --- | --- | --- |
+| 92 % d'un tour | l'écart 1er→dernier vaut 92 s sur 15 tours | les premières voitures sont presque « un tour devant » : en course comptée en tours, elles seraient créditées d'un tour d'avance → viser **≤ 50 %** d'un tour (`--cap`) |
+| le tour de chauffe | AC exige de boucler le tour de formation en restant derrière la voiture précédente | avec des écarts de plusieurs centaines de mètres, chacun doit **rouler à son rythme** et le meneur à ~60-70 km/h |
+| le fichier de piste | les `[START_n]` sont lus dans le **mod du circuit**, côté serveur | il faut modifier `start_positions.ini` / les objets `AC_START_n` du mod (une fois par circuit) et le distribuer aux pilotes ; le serveur AC seul ne peut pas les déplacer |
+
+Le bloc `.ini.txt` est fourni pour ce travail de mod : ce sont les valeurs
+calculées pour 28 voitures, à reporter dans le fichier de la piste (ou dans
+l'éditeur 3D du circuit). Sans modification du mod, on retombe sur `GRID_ORDER=`
+et la grille native, espacée de 8 à 12 m.
+
 ## Race Control (départ lancé)
 
 [Race Control](https://github.com/FranQuarnolo/race-control) (projet

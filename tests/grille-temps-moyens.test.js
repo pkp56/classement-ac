@@ -120,3 +120,74 @@ test('la faisabilité est absente quand aucun pilote n’est classé', () => {
   const grid = buildGrid({ Type: 'QUALIFY', Laps: [], Result: [] }, { laps: 10 });
   assert.equal(grid.meta.feasible.pleine[0].laps, null);
 });
+
+// --- Placement sur le tracé réel (tools/grille-sur-circuit.js) ---
+const { readLine, pointAt, placeGrid } = require('../tools/grille-sur-circuit');
+
+test('le tracé de Mont-Tremblant est lu avec la bonne longueur', () => {
+  const line = readLine('tremblant');
+  assert.ok(line.lengthM > 4100 && line.lengthM < 4400, `longueur ${line.lengthM}`);
+  // le premier point est à la distance 0, le dernier avant la boucle
+  assert.equal(line.points[0].d, 0);
+  assert.ok(line.points[line.points.length - 1].d < line.lengthM);
+});
+
+test('pointAt interpole et boucle correctement', () => {
+  const line = readLine('tremblant');
+  const a = pointAt(line, 0);
+  const b = pointAt(line, line.lengthM);
+  assert.ok(Math.abs(a.x - b.x) < 1 && Math.abs(a.z - b.z) < 1, 'un tour complet ramène au départ');
+  const mid = pointAt(line, line.lengthM / 2);
+  assert.ok(Number.isFinite(mid.headingRad));
+});
+
+test('la voiture n°1 est la plus avancée, juste derrière la ligne', () => {
+  const line = readLine('tremblant');
+  const grid = buildGrid(sessionOf({
+    lent: [110000, 110000],
+    moyen: [105000, 105000],
+    rapide: [100000, 100000]
+  }), { laps: 10, lengthM: Math.round(line.lengthM) });
+  const placed = placeGrid(grid, line, { marge: 30, minSpacing: 10 });
+  assert.equal(placed.cars[0].name, 'lent');
+  assert.equal(placed.cars[0].behindLineM, 30);
+  // les voitures reculent dans l'ordre de la grille
+  assert.ok(placed.cars[1].behindLineM > placed.cars[0].behindLineM);
+  assert.ok(placed.cars[2].behindLineM > placed.cars[1].behindLineM);
+  // et ne se chevauchent pas
+  assert.equal(placed.cars.filter(c => c.overlapping).length, 0);
+});
+
+test('l’espacement minimum évite les voitures superposées', () => {
+  const line = readLine('tremblant');
+  // 0,02 s au tour sur 10 tours = 0,2 s ≈ 8 m : sous l'espacement minimum
+  const grid = buildGrid(sessionOf({
+    a: [100020, 100020],
+    b: [100000, 100000]
+  }), { laps: 10, lengthM: Math.round(line.lengthM) });
+  const placed = placeGrid(grid, line, { marge: 30, minSpacing: 10 });
+  assert.ok(placed.cars[1].gapToCarAheadM >= 10, `écart ${placed.cars[1].gapToCarAheadM}`);
+  assert.equal(placed.adjusted, 1);
+});
+
+test('une grille plus longue qu’un tour est signalée comme impossible', () => {
+  const line = readLine('tremblant');
+  const grid = buildGrid(sessionOf({
+    lent: [120000, 120000],
+    rapide: [100000, 100000]
+  }), { laps: 40, lengthM: Math.round(line.lengthM) });
+  const placed = placeGrid(grid, line, { marge: 30 });
+  assert.equal(placed.valid, false);
+  assert.ok(placed.wrapRisk);
+});
+
+test('le bloc AC sort des positions et des orientations exploitables', () => {
+  const line = readLine('tremblant');
+  const grid = buildGrid(sessionOf({ a: [100000, 100000] }), { laps: 5, lengthM: Math.round(line.lengthM) });
+  const placed = placeGrid(grid, line, {});
+  const { renderAcBlock } = require('../tools/grille-sur-circuit');
+  const block = renderAcBlock(placed);
+  assert.match(block, /\[START_0\]/);
+  assert.match(block, /POS=-?\d+\.\d+,-?\d+\.\d+,-?\d+\.\d+/);
+  assert.match(block, /ORIENTATION=-?\d+\.\d+/);
+});
