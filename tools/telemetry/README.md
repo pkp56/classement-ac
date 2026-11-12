@@ -195,6 +195,21 @@ Connexion avec le compte administrateur habituel du site, puis :
 
 Chaque cellule non mesurée affiche « — » : c'est une information, pas un zéro.
 
+#### Si la connexion est refusée
+
+La page distingue maintenant trois situations, avec le message correspondant :
+
+| Message | Cause | Correction |
+| --- | --- | --- |
+| « Identifiants refusés par le serveur. » | le login (relayé au backend) refuse le couple utilisateur/mot de passe | vérifier `ADMIN_USERNAME` / `ADMIN_PASSWORD` |
+| « Ce service refuse le jeton (HTTP 401) » | le backend a validé la connexion, mais **ce service-ci** n'a pas le même mot de passe | poser `ADMIN_PASSWORD` (et `ADMIN_USERNAME`) sur le **même** service Render que le site |
+| « Le service démarre (Render à froid, ~30 s) » | le service ou le backend est injoignable | réessayer : le jeton est **conservé**, pas besoin de se reconnecter |
+
+Le mot de passe admin sert à deux choses distinctes : il est le jeton renvoyé
+par le login, et c'est lui que `checkAdminAuth` compare localement. S'ils
+diffèrent entre le site et le backend, la connexion réussit puis les routes de
+télémétrie répondent 401 : c'est exactement ce que le message d'écran explique.
+
 ### 5. Base PostgreSQL / Neon
 
 La télémétrie va dans la **même base Neon que le site**, dans un schéma séparé :
