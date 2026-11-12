@@ -58,6 +58,10 @@ local state = {
   sendErrors = 0,
   hasWeb = false,
   pinged = false,           -- le ping de démarrage n'est envoyé qu'une fois
+  pingAttempts = 0,         -- tentatives de ping (le réseau peut être en retard)
+  lastAttemptAt = -1e9,     -- cadence des tentatives
+  why = '',                 -- dernière raison d'un envoi impossible
+  updates = 0,              -- nombre d'appels à script.update
 }
 
 -------------------------------------------------------------------------------
@@ -269,10 +273,16 @@ end
 --    en ligne. On vérifie sa présence une fois : sans transport, inutile de
 --    collecter des tours qu'on ne pourrait pas transmettre.
 -------------------------------------------------------------------------------
-do
+--- Détection du transport, répétable : dans un script en ligne, l'objet `web`
+--- n'est pas forcément complet au moment du chargement. Une vérification faite
+--- une seule fois dans un `do ... end` initial fige un `false` définitif —
+--- et le script reste muet pour toute la session, sans le moindre message.
+local function detectWeb()
   local ok, fn = pcall(function() return web.post end)
   state.hasWeb = ok and type(fn) == 'function'
+  return state.hasWeb
 end
+detectWeb()
 
 local function post(body, callback)
   if not state.hasWeb then
@@ -460,6 +470,23 @@ end
 -------------------------------------------------------------------------------
 function script.update(dt)
   state.now = state.now + (tonumber(dt) or 0)
+  state.updates = state.updates + 1
+
+  -- Preuve de vie : une seule ligne, à la première image. Si elle n'apparaît
+  -- nulle part, le script ne tourne pas du tout — et aucun autre diagnostic
+  -- n'aurait de sens.
+  if state.updates == 1 then
+    log('boucle démarrée · url=' .. (cfg.url ~= '' and cfg.url or 'AUCUNE') ..
+      ' · transport=' .. tostring(state.hasWeb))
+  end
+
+  -- Le ping est retenté à chaque image tant qu'il n'a pas abouti : au
+  -- chargement, la session réseau n'est pas encore établie, et une tentative
+  -- unique à cet instant échoue silencieusement une fois pour toutes.
+  if not state.pinged and (state.now - state.lastAttemptAt) > 2 then
+    script.ping()
+  end
+
   if not car then return end
   ensureIdentity()
   if not identityKnown() then return end
@@ -511,8 +538,30 @@ end
 --- (script exécuté → réseau → jeton accepté → base joignable). Sans lui, un
 --- échec silencieux ne se voit qu'au premier tour terminé, voire jamais.
 function script.ping()
-  if state.pinged or not state.hasWeb or cfg.url == '' then return end
-  state.pinged = true
+  if state.pinged then return end
+  if cfg.url == '' then
+    -- Sans URL, inutile de réessayer : mais le dire une fois, clairement.
+    if state.why ~= 'sans URL' then
+      state.why = 'sans URL'
+      log('aucune URL de télémétrie : le script n\'a pas reçu sa configuration')
+      message('Télémétrie GDSP : pas d\'URL', 'Le script n\'a pas reçu sa configuration (csp_extra_options.ini).')
+    end
+    return
+  end
+  if not detectWeb() then
+    -- `web.post` absent : on retentera (voir script.update), le transport peut
+    -- apparaître une fois la session réseau réellement établie.
+    if state.why ~= 'web.post absent' then
+      state.why = 'web.post absent'
+      log('web.post indisponible : nouvelle tentative à chaque image')
+      message('Télémétrie GDSP : transport indisponible', 'web.post absent — CSP trop ancien ou script hors ligne.')
+    end
+    return
+  end
+  state.why = ''
+  state.pingAttempts = state.pingAttempts + 1
+  state.lastAttemptAt = state.now
+  if state.pingAttempts > 60 then return end   -- on abandonne après ~1 min d'images
   local body = toJson({
     v = 1,
     script = VERSION,
@@ -526,11 +575,16 @@ function script.ping()
   post(body, function(err, res)
     local status = res and tonumber(res.status) or nil
     if err then
-      log('PING échoué : ' .. tostring(err))
-      message('Télémétrie GDSP : envoi impossible', tostring(err):sub(1, 80))
+      -- Échec réseau : on réessaiera. On ne parle qu'aux première et dixième
+      -- tentatives, pour ne pas noyer le joueur de messages.
+      if state.pingAttempts == 1 or state.pingAttempts % 10 == 0 then
+        log('PING échoué (' .. state.pingAttempts .. '×) : ' .. tostring(err))
+        message('Télémétrie GDSP : envoi impossible', tostring(err):sub(1, 80))
+      end
       return
     end
     if status and status >= 200 and status < 300 then
+      state.pinged = true
       log('PING accepté (HTTP ' .. tostring(status) .. ') · base joignable côté serveur')
       message('Télémétrie GDSP', 'Connexion au site établie (' .. tostring(status) .. ').')
     else
