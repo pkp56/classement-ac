@@ -98,6 +98,16 @@ function runTelemetryScript(options = {}) {
   });
   lua.lua_setfield(L, -2, to_luastring('setMessage'));
   lua.lua_pushjsfunction(L, (state) => {                 // ac.configValues
+    // Le 1er argument est le « layout » : on le remplit avec `options.config`
+    // (ce que CSP lirait dans la section [SCRIPT_x] de csp_extra_options.ini),
+    // puis on le renvoie. Sans lui, `url` reste vide et le script ne peut rien
+    // envoyer — c'est exactement le cas « envoi sans URL ».
+    if (options.config && typeof options.config === 'object') {
+      for (const [k, v] of Object.entries(options.config)) {
+        pushValue(L, v);
+        lua.lua_setfield(state, 1, to_luastring(k));
+      }
+    }
     lua.lua_pushvalue(state, 1);
     return 1;
   });
