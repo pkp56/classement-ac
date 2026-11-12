@@ -187,6 +187,13 @@ qui distingue les pannes sans faire rouler personne :
 | `envoi impossible` | pas de réseau, ou `web.post` indisponible (CSP < 0.1.79) |
 | **aucun message** | le script n'a pas été téléchargé ou n'a pas démarré |
 
+Le script ne reste jamais silencieux par construction : s'il n'a pas d'URL ou
+pas de `web.post`, il le dit en jeu. Et dans tous les cas, il écrit une ligne
+unique à la première image (`boucle démarrée · url=… · transport=…`) et son ping
+est **retenté toutes les 2 s** tant qu'il n'a pas abouti — la session réseau
+n'est pas établie à l'instant du chargement, et une tentative unique y échoue
+silencieusement une fois pour toutes.
+
 **c. Vérifier sur le premier tour.** Le script affiche un message en jeu :
 
 ```

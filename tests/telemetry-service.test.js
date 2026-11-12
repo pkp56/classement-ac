@@ -709,3 +709,39 @@ test('le ping n\'est pas un tour : il est accepté et n\'écrit rien dans la bas
   assert.equal(store.data.lap.length, 0, 'aucune mesure inventée');
   assert.equal(store.data.session.length, 0, 'aucune session créée pour un ping');
 });
+
+// --- le script ne doit jamais rester silencieux ------------------------------
+
+test('sans URL, le script le dit au lieu de se taire', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  const run = simulate({ callInit: true });
+  assert.equal(run.error, null);
+  assert.equal(run.sent.length, 0);
+  assert.ok(run.messages.some(m => /pas d'URL/.test(m)),
+    'un script muet est indiscernable d\'un script qui ne tourne pas');
+});
+
+test('sans web.post, le script le dit et retentera', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  const run = simulate({
+    callInit: true, noWeb: true,
+    config: { url: 'https://exemple.test/api/telemetry/push', token: 'j' }
+  });
+  assert.equal(run.error, null);
+  assert.equal(run.sent.length, 0);
+  assert.ok(run.messages.some(m => /transport indisponible/.test(m)));
+});
+
+test('un seul ping, même après plusieurs images', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // La boucle retente le ping tant qu'il n'a pas abouti : il ne doit pas
+  // pour autant en envoyer un par image une fois qu'il a réussi.
+  const run = simulate({
+    callInit: true,
+    config: { url: 'https://exemple.test/api/telemetry/push', token: 'j' },
+    steps: [{ dt: 0.016 }, { dt: 0.016 }]
+  });
+  assert.equal(run.error, null);
+  assert.equal(run.sent.length, 1, 'un seul ping, malgré les images');
+  assert.ok(run.messages.some(m => /Connexion au site établie/.test(m)));
+});

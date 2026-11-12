@@ -153,6 +153,9 @@ function runTelemetryScript(options = {}) {
   });
   lua.lua_setfield(L, -2, to_luastring('post'));
   lua.lua_setglobal(L, to_luastring('web'));
+  // `options.noWeb` simule un script en ligne où `web.post` n'est pas exposé :
+  // le script doit alors le DIRE au lieu de rester silencieux, et retenter.
+  if (options.noWeb) lua.lua_pushnil(L), lua.lua_setglobal(L, to_luastring('web'));
 
   const file = path.join(cwd, 'csp', 'gdsp_telemetry.lua');
   if (!fs.existsSync(file)) return { sent, messages, error: 'csp/gdsp_telemetry.lua absent', L: null };
