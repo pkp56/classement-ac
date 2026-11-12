@@ -58,6 +58,7 @@ local state = {
   sendErrors = 0,
   hasWeb = false,
   pinged = false,           -- le ping de démarrage n'est envoyé qu'une fois
+  started = false,          -- init déjà exécuté (les deux noms d'init existent)
   pingAttempts = 0,         -- tentatives de ping (le réseau peut être en retard)
   lastAttemptAt = -1e9,     -- cadence des tentatives
   why = '',                 -- dernière raison d'un envoi impossible
@@ -595,7 +596,9 @@ function script.ping()
   end)
 end
 
-function script.__init__()
+function script.init()
+  if state.started then return end
+  state.started = true
   ensureIdentity()
   local fuelOk = readFuelLiters() ~= nil
   local wearOk = readTyreWear() ~= nil
@@ -609,6 +612,30 @@ function script.__init__()
   print('[' .. VERSION .. '] ' .. status .. ' · url=' .. cfg.url ..
     ' · guid=' .. tostring(state.driverGuid) .. ' · voiture=' .. tostring(state.carId))
   script.ping()
+end
+
+-- `__init__` est conservé en plus de `init` : selon que CSP résout le hook de
+-- la lib (`__script.__init__`, appelé automatiquement) ou la clé `script.init`,
+-- un seul des deux noms pourrait être appelé. Les deux pointent sur la même
+-- fonction, et le garde-fou `state.started` rend l'appel idempotent.
+script.__init__ = function() script.init() end
+
+--- Battement visible à l'écran, pendant les 20 premières secondes.
+--- Les online scripts n'ont ni IO ni journal garanti : `ui.text` dans `drawUI`
+--- est le seul canal dont on soit sûr. Si lui aussi reste muet, c'est que le
+--- script ne s'exécute pas du tout.
+function script.drawUI()
+  if state.now > 20 then return end
+  local lines = {
+    'GDSP-TELEMETRY ' .. (state.pinged and 'OK' or 'attente'),
+    (cfg.url ~= '' and cfg.url or 'URL MANQUANTE'),
+    'web=' .. tostring(state.hasWeb) .. ' guid=' .. tostring(state.driverGuid or '?'),
+  }
+  for i = 1, #lines do
+    -- pcall autour de l'appel ET de l'accès à `ui` : si l'objet n'existe pas,
+    -- `ui.text` lèverait avant même d'entrer dans pcall.
+    pcall(function() ui.text(lines[i]) end)
+  end
 end
 
 function script.onCarReset()

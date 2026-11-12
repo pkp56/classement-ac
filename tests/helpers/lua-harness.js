@@ -77,11 +77,12 @@ function runTelemetryScript(options = {}) {
   const env = defaultEnv(options);
   const sent = [];
   const messages = [];
+  const ui = [];
   const L = lauxlib.luaL_newstate();
   lualib.luaL_openlibs(L);
 
   if (lauxlib.luaL_dostring(L, to_luastring(PRELUDE)) !== lua.LUA_OK) {
-    return { sent, messages, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
+    return { sent, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
   }
 
   // `ac` : uniquement les fonctions utilisées par le script.
@@ -153,6 +154,17 @@ function runTelemetryScript(options = {}) {
   });
   lua.lua_setfield(L, -2, to_luastring('post'));
   lua.lua_setglobal(L, to_luastring('web'));
+  // `ui` minimal : `drawUI` sert de canal de diagnostic, il doit pouvoir être
+  // appelé sans planter, même hors rendu.
+  lua.lua_newtable(L);
+  lua.lua_pushjsfunction(L, (state) => {
+    const text = lua.lua_tostring(state, 1);
+    if (text) ui.push(to_jsstring(text));
+    return 0;
+  });
+  lua.lua_setfield(L, -2, to_luastring('text'));
+  lua.lua_setglobal(L, to_luastring('ui'));
+
   // `options.noWeb` simule un script en ligne où `web.post` n'est pas exposé :
   // le script doit alors le DIRE au lieu de rester silencieux, et retenter.
   if (options.noWeb) lua.lua_pushnil(L), lua.lua_setglobal(L, to_luastring('web'));
@@ -160,10 +172,10 @@ function runTelemetryScript(options = {}) {
   const file = path.join(cwd, 'csp', 'gdsp_telemetry.lua');
   if (!fs.existsSync(file)) return { sent, messages, error: 'csp/gdsp_telemetry.lua absent', L: null };
   if (lauxlib.luaL_loadfile(L, to_luastring(file)) !== lua.LUA_OK) {
-    return { sent, messages, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
+    return { sent, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
   }
   if (lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) {
-    return { sent, messages, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
+    return { sent, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
   }
   // CSP appelle `script.__init__` juste après le chargement : c'est là que le
   // script affiche son diagnostic « carburant lu / pneus lus ».
@@ -173,13 +185,13 @@ function runTelemetryScript(options = {}) {
     if (lua.lua_isfunction(L, -1)) {
       lua.lua_remove(L, -2);
       if (lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) {
-        return { sent, messages, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
+        return { sent, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
       }
     } else {
       lua.lua_pop(L, 2);
     }
   }
-  return { sent, messages, error: null, L };
+  return { sent, messages, ui, error: null, L };
 }
 
 /**
@@ -202,12 +214,28 @@ function simulate(options = {}) {
     lua.lua_remove(L, -2);
   }
 
+  // CSP appelle `drawUI` à chaque image, après `update` : on l'imite, sinon
+  // le canal de diagnostic le plus sûr ne serait jamais exercé par les tests.
+  function pushDrawUI() {
+    lua.lua_getglobal(L, to_luastring('script'));
+    if (!lua.lua_istable(L, -1)) { lua.lua_pop(L, 1); return false; }
+    lua.lua_getfield(L, -1, to_luastring('drawUI'));
+    if (!lua.lua_isfunction(L, -1)) { lua.lua_pop(L, 2); return false; }
+    lua.lua_remove(L, -2);
+    return true;
+  }
+
   for (const step of steps) {
     if (typeof step === 'function') { step(L); continue; }
     pushUpdate();
     lua.lua_pushnumber(L, typeof step === 'number' ? step : step.dt);
     if (lua.lua_pcall(L, 1, 0, 0) !== lua.LUA_OK) {
       return { ...result, error: to_jsstring(lua.lua_tostring(L, -1)) };
+    }
+    if (options.drawUI !== false && pushDrawUI()) {
+      if (lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) {
+        return { ...result, error: to_jsstring(lua.lua_tostring(L, -1)) };
+      }
     }
   }
   return result;
