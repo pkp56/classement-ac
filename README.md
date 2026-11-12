@@ -31,7 +31,10 @@ Deux cas de figure :
 * **site hébergé (Render) et serveur AC sur un PC à la maison** → lancer
   `node tools/live-timing/agent.js` sur ce PC avec `SITE_URL` et `PUSH_TOKEN`
   (même valeur que `LIVE_PUSH_TOKEN` sur le site) ; le PC pousse un instantané
-  par seconde en HTTPS, sans ouvrir de port entrant ;
+  par seconde en HTTPS, sans ouvrir de port entrant. Serveur lancé par Content
+  Manager : voir `tools/live-timing/CONTENT-MANAGER.md` et
+  `tools/live-timing/set-plugin-ports.js` (ajoute les deux lignes de plugin UDP
+  dans `server_cfg.ini`) ;
 * **serveur public dont tu n'as pas la main** → `LIVE_HTTP_SOURCES` avec son
   adresse HTTP (ou son lien acstuff), lecture seule via `/INFO` + `/ENTRY`.
 

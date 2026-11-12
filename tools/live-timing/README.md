@@ -98,6 +98,10 @@ La page affiche alors le vrai classement, le vrai nom de serveur et le vrai
 circuit, avec un bandeau explicite : « Capture enregistrée — ce n'est pas du
 direct » et l'âge de la capture. L'agent reste la seule façon d'avoir du direct.
 
+> **Serveur lancé par Content Manager ?** Guide dédié :
+> [`CONTENT-MANAGER.md`](CONTENT-MANAGER.md) (deux lignes dans server_cfg.ini,
+> script `set-plugin-ports.js`, double-clic sur `AGENT-gdsp.bat`).
+
 ## 2 bis. Site distant + serveur AC sur ton PC (mode push)
 
 1. Sur le site (Render → Environment) ajoute un secret, par exemple :

@@ -46,8 +46,14 @@ function decodeEntities(s) {
   });
 }
 
+const BLOCK_TAGS = 'br|div|p|tr|li|h[1-6]|table|tbody|thead';
+
 function stripTags(html) {
-  return decodeEntities(String(html).replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
+  // Les balises de bloc deviennent un espace AVANT d'être supprimées, sinon
+  // « 1:19:501<br>1:15:576 » se collait en « 1:19:5011:15:576 ». Les balises
+  // en ligne (b, span, td…) restent collées à leur texte comme dans un tableau.
+  const withSpaces = String(html).replace(new RegExp('<\\/?(?:' + BLOCK_TAGS + ')\\b[^>]*>', 'gi'), ' ');
+  return decodeEntities(withSpaces.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
 }
 
 /** Extrait les tableaux d'une page HTML : [[[cellules], …], …] */
@@ -142,7 +148,11 @@ function parseEntryPage(html) {
       const laps = iLaps === -1 ? null : Number(String(row[iLaps]).replace(/[^0-9]/g, '')) || 0;
       const bestMs = iBest === -1 ? null : parseAcTime(row[iBest]);
       const lastMs = iLast === -1 ? null : parseAcTime(row[iLast]);
-      const totalMs = iTotal !== -1 ? parseAcTime(row[iTotal]) : (iTime !== -1 ? parseAcTime(row[iTime]) : null);
+      // /ENTRY de la course met le temps TOTAL de course dans « Time » ; dans les
+      // autres sessions c'est « Total » qui cumule. On garde les deux, « Time »
+      // peut aussi être un simple temps au tour selon la version du serveur.
+      const totalMs = iTotal !== -1 ? parseAcTime(row[iTotal]) : null;
+      const timeMs = iTime !== -1 ? parseAcTime(row[iTime]) : null;
       const diffMs = iDiff === -1 ? null : parseAcTime(row[iDiff]);
       result.cars.push({
         name,
@@ -151,7 +161,10 @@ function parseEntryPage(html) {
         laps: laps == null ? 0 : laps,
         bestLapMs: bestMs && bestMs > 0 ? bestMs : null,
         lastLapMs: lastMs && lastMs > 0 ? lastMs : null,
-        totalMs: totalMs && totalMs > 0 ? totalMs : null,
+        // Un temps « au tour » ne dépasse jamais ~25 min : au-delà (ou s'il est
+        // proche du cumul « Total »), c'est un temps de course, pas un tour.
+        raceTimeMs: timeMs && timeMs > 0 && (timeMs > 1500000 || (totalMs && timeMs === totalMs)) ? timeMs : null,
+        totalMs: totalMs && totalMs > 0 ? totalMs : (timeMs && timeMs > 0 ? timeMs : null),
         gapMs: diffMs != null && diffMs !== 0 ? Math.abs(diffMs) : null,
         ping: iPing === -1 ? null : Number(String(row[iPing]).replace(/[^0-9]/g, '')) || null,
         guid: iGuid === -1 ? '' : String(row[iGuid] || '').trim(),
@@ -204,6 +217,12 @@ function buildStandings(parsed) {
       bestLap: fmtMs(c.bestLapMs),
       totalMs: c.totalMs,
       total: fmtMs(c.totalMs),
+      // Même quand le serveur ne renvoie rien pour un pilote (une seule voiture
+      // en piste), on sait où il en est : tours faits × son meilleur tour.
+      totalEstimated: !!c.totalMs || !(c.laps > 0 && c.bestLapMs),
+      totalFallback: !c.totalMs && c.laps > 0 && c.bestLapMs ? fmtMs(c.laps * c.bestLapMs) : null,
+      raceTimeMs: c.raceTimeMs || null,
+      raceTime: fmtMs(c.raceTimeMs),
       gapMs: gapMs == null ? null : gapMs,
       gap: gapMs == null ? '' : isLeader ? 'leader' : '+' + fmtMs(gapMs),
       gapEstimated: c.gapMs == null,
