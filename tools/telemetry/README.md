@@ -199,6 +199,27 @@ tourne.
 Le harnais de test reproduit cet ordre (`options.injected` est posé **après**
 le chargement, `options.served` teste le fichier + sa table comme en ligne).
 
+### Ce que l'API CSP n'expose pas
+
+Vérifié dans le SDK (`acc-lua-sdk`, `common/ac_state.lua`) : `ac.StateCar` ne
+contient **aucun identifiant Steam** — ni `driverGuid`, ni `driverSteamID`. Les
+champs lus auparavant n'existaient pas et renvoyaient `nil` en silence.
+
+Conséquences, désormais assumées dans le code :
+
+- l'absence de guid **n'interrompt plus** la boucle ni ne jette un tour ; le
+  paquet part avec `driver.guid = ''` et un compteur `sansguid` s'affiche dans
+  le diagnostic ;
+- pour obtenir un guid malgré tout, la section `[SCRIPT_x]` de
+  `csp_extra_options.ini` peut substituer `{SteamID}` dans l'URL du script
+  (documentation CSP) : le script lit alors `__GDSP_IDENT__.steamID`.
+
+Deux autres corrections du même ordre :
+
+- `previousLapTimeMs` est le nom réel du temps au tour (et non `lastLapTimeMs`) ;
+- `web.post` peut ne jamais appeler son callback : un délai de 10 s déclare
+  l'envoi perdu, affiche « pas de réponse » et retente.
+
 Le script ne reste jamais silencieux par construction : s'il n'a pas d'URL ou
 pas de `web.post`, il le dit en jeu. Et dans tous les cas, il écrit une ligne
 unique à la première image (`boucle démarrée · url=… · transport=…`) et son ping

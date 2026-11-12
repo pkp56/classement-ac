@@ -59,6 +59,10 @@ local state = {
   hasWeb = false,
   pinged = false,           -- le ping de démarrage n'est envoyé qu'une fois
   started = false,          -- init déjà exécuté (les deux noms d'init existent)
+  inflight = false,         -- une requête est en cours
+  inflightSince = -1e9,     -- quand elle est partie (détection du callback perdu)
+  lastError = '',           -- dernière erreur d'envoi, affichée en jeu
+  lastResponse = '',        -- dernière réponse reçue (code HTTP)
   pingAttempts = 0,         -- tentatives de ping (le réseau peut être en retard)
   lastAttemptAt = -1e9,     -- cadence des tentatives
   why = '',                 -- dernière raison d'un envoi impossible
@@ -214,6 +218,10 @@ end
 
 local function readLastLapMs()
   local ms = firstNumber({
+    -- `previousLapTimeMs` est le nom RÉEL dans ac.StateCar (SDK,
+    -- common/ac_state.lua). `lastLapTimeMs` existe dans le harnais de test mais
+    -- pas forcément en jeu : vérifié, le SDK n'expose que previousLapTimeMs.
+    function() return car and car.previousLapTimeMs end,
     function() return car and car.lastLapTimeMs end,
     function() return car and car.lastLapMs end,
   })
@@ -307,13 +315,36 @@ local function post(body, callback)
     callback('Transport HTTP indisponible dans ce type de script CSP', nil)
     return
   end
+  -- Un callback qui ne vient JAMAIS laissait le ping « en attente » pour
+  -- toujours, sans un mot. On arme un délai : au-delà, on considère l'envoi
+  -- perdu et on réessaiera.
+  local done = false
+  local function finish(err, res)
+    if done then return end
+    done = true
+    state.inflight = false
+    callback(err, res)
+  end
+  state.inflight = true
+  state.inflightSince = state.now
+  state.lastResponse = ''
   local headers = {
     ['Content-Type'] = 'application/json',
     ['User-Agent'] = VERSION,
   }
   if cfg.token ~= '' then headers['X-Telemetry-Token'] = cfg.token end
-  local ok, err = pcall(web.post, cfg.url, headers, body, callback)
-  if not ok then callback(tostring(err), nil) end
+  state.lastError = ''
+  local ok, err = pcall(web.post, cfg.url, headers, body, finish)
+  if not ok then
+    -- Certaines versions n'acceptent que (url, data, callback) : on retente
+    -- sans les en-têtes avant d'abandonner.
+    state.lastError = 'entêtes refusées: ' .. tostring(err)
+    local ok2, err2 = pcall(web.post, cfg.url, body, finish)
+    if not ok2 then
+      state.lastError = 'web.post: ' .. tostring(err2)
+      finish(tostring(err), nil)
+    end
+  end
 end
 
 -------------------------------------------------------------------------------
@@ -323,7 +354,12 @@ end
 -------------------------------------------------------------------------------
 local function ensureIdentity()
   if not state.driverGuid and car then
-    local candidates = { car.driverGuid, car.driverSteamID, car.guid }
+    -- `ac.StateCar` (SDK, common/ac_state.lua) n'expose AUCUN identifiant
+    -- Steam : ni driverGuid, ni driverSteamID. Lire ces champs renvoyait nil
+    -- en silence, d'où un guid éternellement vide. Les identifiants réels
+    -- passent par csp_extra_options.ini, qui sait substituer {SteamID} dans
+    -- l'URL du script (documentation CSP, section [SCRIPT_...]).
+    local candidates = { car.driverGuid, car.driverSteamID, car.guid, car.steamID }
     for i = 1, #candidates do
       local v = candidates[i]
       if v ~= nil and tostring(v) ~= '' then state.driverGuid = tostring(v) break end
@@ -331,6 +367,17 @@ local function ensureIdentity()
     if not state.driverGuid and ac.getDriverSteamID then
       local ok, v = pcall(ac.getDriverSteamID, 0)
       if ok and v ~= nil and tostring(v) ~= '' then state.driverGuid = tostring(v) end
+    end
+    -- Repli : la section [SCRIPT_x] peut fournir `steamID`, à poser dans
+    -- csp_extra_options.ini avec SCRIPT = '…/telemetry.lua?s={SteamID}'.
+    if not state.driverGuid then
+      for _, key in ipairs({ 'steamID', 'steamId', 'driverGuid', 'guid' }) do
+        local v = rawget(_G, '__GDSP_IDENT__')
+        if type(v) == 'table' and v[key] ~= nil and tostring(v[key]) ~= '' then
+          state.driverGuid = tostring(v[key])
+          break
+        end
+      end
     end
   end
   if not state.driverName and car then
@@ -351,6 +398,8 @@ local function ensureIdentity()
   end
 end
 
+-- Sert uniquement au diagnostic : l'absence d'identifiant ne doit plus
+-- interrompre la boucle.
 local function identityKnown()
   return state.driverGuid ~= nil and state.carId ~= nil
 end
@@ -384,7 +433,9 @@ end
 local function flush(force)
   if state.pendingCount == 0 then return end
   if not force and (state.now - state.lastSendAt) < cfg.intervalSec then return end
-  if not identityKnown() then return end
+  -- Même raison que dans completeLap : l'absence de guid ne doit pas retenir
+  -- les tours indéfiniment. Seule la voiture est indispensable.
+  if not state.carId then return end
 
   local body = toJson(buildPayload())
   local batch = state.pending
@@ -439,9 +490,18 @@ local function wearDeltaPct(startWear, endWear)
 end
 
 local function completeLap(lapNumber)
-  if not identityKnown() then
-    log('tour ignoré : identité pilote ou voiture introuvable')
+  -- NE JETTE PLUS le tour quand l'identité manque. C'était le verrou le plus
+  -- coûteux : sans guid, CHAQUE tour partait à la poubelle, en silence (le
+  -- message partait dans un log inaccessible aux scripts en ligne). Le guid ne
+  -- sert qu'au regroupement par pilote ; la voiture, le circuit et les mesures
+  -- suffisent à une mesure de BoP. Le site ignore les paquets sans guid s'il
+  -- en a besoin — mais nous, on ne perd plus la donnée.
+  if not state.carId then
+    state.lapsDropped = (state.lapsDropped or 0) + 1
     return
+  end
+  if not state.driverGuid then
+    state.lapsWithoutGuid = (state.lapsWithoutGuid or 0) + 1
   end
   local fuelNow = readFuelLiters()
   local wearNow = readTyreWear()
@@ -501,13 +561,28 @@ function script.update(dt)
   -- Le ping est retenté à chaque image tant qu'il n'a pas abouti : au
   -- chargement, la session réseau n'est pas encore établie, et une tentative
   -- unique à cet instant échoue silencieusement une fois pour toutes.
-  if not state.pinged and (state.now - state.lastAttemptAt) > 2 then
+  -- Délai dépassé alors qu'une requête est en vol : le callback n'est jamais
+  -- venu. On le dit, puis on considère la tentative comme terminée.
+  if state.inflight and (state.now - state.inflightSince) > 10 then
+    state.inflight = false
+    state.lastError = 'aucune réponse après 10 s'
+    if state.pingAttempts <= 2 then
+      log('PING sans réponse après 10 s (tentative ' .. state.pingAttempts .. ')')
+      message('Télémétrie GDSP : pas de réponse', tostring(cfg.url) .. ' — rien reçu en 10 s.')
+    end
+  end
+
+  if not state.pinged and not state.inflight and (state.now - state.lastAttemptAt) > 2 then
     script.ping()
   end
 
+  -- On NE sort PAS si l'identité manque : le guid Steam n'est pas exposé par
+  -- l'API (voir ensureIdentity), l'exiger condamnait le script au silence sur
+  -- toutes les voitures. L'identité sert au regroupement, pas au fonctionne-
+  -- ment : un tour sans guid reste utile, un tour jamais lu ne l'est pas.
   if not car then return end
   ensureIdentity()
-  if not identityKnown() then return end
+  if not state.driverGuid then state.guidMissing = (state.guidMissing or 0) + 1 end
 
   local speed = readSpeedKmh()
   if speed and speed > state.currentLapSpeedMax then state.currentLapSpeedMax = speed end
@@ -650,7 +725,13 @@ function script.drawUI()
   local lines = {
     'GDSP-TELEMETRY ' .. (state.pinged and 'OK' or 'attente'),
     'url(' .. cfgSource .. '): ' .. (cfg.url ~= '' and cfg.url or 'MANQUANTE'),
-    'web=' .. tostring(state.hasWeb) .. ' guid=' .. tostring(state.driverGuid or '?'),
+    'web=' .. tostring(state.hasWeb) ..
+      ' guid=' .. tostring(state.driverGuid or 'ABSENT (API)') ..
+      ' tours=' .. tostring(state.sentLaps) ..
+      ((state.lapsWithoutGuid or 0) > 0 and (' sansguid=' .. state.lapsWithoutGuid) or ''),
+    'essais=' .. tostring(state.pingAttempts) ..
+      (state.inflight and ' · en vol' or '') ..
+      (state.lastError ~= '' and (' · ' .. state.lastError) or ''),
   }
   for i = 1, #lines do
     -- pcall autour de l'appel ET de l'accès à `ui` : si l'objet n'existe pas,
