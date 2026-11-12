@@ -272,6 +272,9 @@ function fmtLap(ms) {
 
 function fmtDelta(ms) {
   if (!Number.isFinite(ms)) return '—';
+  // Un delta nul affiché « 0.000 » se lit mal à côté de « +9.510 » : la
+  // référence est une position, pas une avance.
+  if (Math.abs(ms) < 0.5) return 'réf.';
   const sign = ms > 0 ? '+' : ms < 0 ? '−' : '';
   const abs = Math.abs(ms);
   const s = Math.floor(abs / 1000);

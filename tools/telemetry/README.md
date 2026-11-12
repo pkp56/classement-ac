@@ -25,13 +25,17 @@ Exemple réel (démonstration, données de contexte ci-dessous) :
 
 | Voiture | Tour médian | L/tour | Autonomie | Arrêts sur 20 min | Course à distance égale |
 | --- | --- | --- | --- | --- | --- |
-| alfa_giulietta_spider | 1:15.576 | 1,50 | 30 tours | 0 | **18:53.640** |
+| alfa_giulietta_spider | 1:15.576 | 1,50 | 30,0 tours | 0 | **18:53.640** (réf.) |
 | bmw_m3_e30 | 1:16.210 | 1,90 | 28,9 tours | 0 | +9.510 |
 | actk_lola_t290 | **1:14.902** | 2,40 | 12,5 tours | 1 | +23.410 |
 
 La Lola est **0,7 s plus rapide au tour** et perd **23 s** sur 20 minutes. C'est
 exactement la décision qu'un BoP doit prendre, et qu'un classement de chronos ne
 peut pas prendre.
+
+Ces chiffres sont reproductibles : `node tools/telemetry/cli.js demo --force`
+régénère le rapport complet (CSV, Markdown, HTML) depuis
+`data/telemetry/demo-monza-junior.json`.
 
 Le rapport simule les trois formats demandés : **20, 30 et 45 minutes**.
 
@@ -42,8 +46,8 @@ Le rapport simule les trois formats demandés : **20, 30 et 45 minutes**.
 | Donnée | Source | Sans rien installer chez les pilotes ? |
 | --- | --- | --- |
 | temps, tours, écarts, vitesse max | UDP du serveur (plugin ACSP) | oui |
-| consommation, usure pneus, températures | à instrumenter (script CSP poussé par le serveur) | oui, une fois le script en place |
-| pit-lane, débit de ravitaillement, changement de gommes | mesure dédiée (jour 4) | oui |
+| consommation, usure pneus, vitesse max | script CSP `csp/gdsp_telemetry.lua`, poussé par le serveur | oui, une fois le script déclaré sur le serveur |
+| pit-lane, débit de ravitaillement, changement de gommes | mesure dédiée (jour 4), saisie dans `/telemetry` | oui |
 
 **Règle absolue** : une valeur qui n'a pas été mesurée reste `null`. Elle
 n'entre jamais dans un calcul de BoP. Un tour sans mesure de conso compte pour
@@ -109,20 +113,152 @@ Les trois fichiers sortent dans `reports/` :
 `--force` génère le rapport malgré une campagne incomplète, en inscrivant
 l'avertissement en tête des trois fichiers.
 
-### 3. Base PostgreSQL / Neon
+### 3. En ligne : le script CSP poussé aux pilotes
+
+C'est le chemin normal : le script se dépose **une seule fois sur le serveur**,
+et chaque pilote l'exécute à la connexion, sans rien installer.
+
+```
+serveur AC
+  server/cfg/csp_extra_options.ini        ← 3 lignes à ajouter, une fois
+        │
+        └─► le client télécharge  <site>/csp/telemetry.lua
+                │                 (le site y injecte l'URL et le jeton)
+                └─► web.post  ──► POST <site>/api/telemetry/push
+                                        │
+                                        └─► schéma `telemetry` → page /telemetry → rapport BoP
+```
+
+**a. Déclarer le script sur le serveur** — `server/cfg/csp_extra_options.ini` :
+
+```ini
+[SCRIPT_2]
+SCRIPT = https://<ton-site>/csp/telemetry.lua
+REQUIRED = 0
+```
+
+`REQUIRED = 0` est volontaire : si le site est momentanément hors ligne, les
+pilotes ne doivent pas être éjectés du serveur. Le script n'empêche jamais de
+rouler.
+
+**b. Rien d'autre à écrire à la main.** La route `/csp/telemetry.lua` sert le
+script avec, à la fin, la table de configuration :
+
+```lua
+__GDSP_TELEMETRY__ = { url = ".../api/telemetry/push", token = "...", campaign = "...", intervalSec = 5 }
+```
+
+Le jeton n'est donc pas dans le dépôt : il vient de l'environnement du site.
+Si le script n'est pas servi par le site (copie locale, gist), il retombe sur
+`ac.configValues` : les mêmes quatre paramètres peuvent alors être passés dans
+le bloc `[SCRIPT_2]`.
+
+**c. Vérifier sur le premier tour.** Le script affiche un message en jeu :
+
+```
+Télémétrie GDSP · carburant lu · pneus lus · envoi actif
+```
+
+Si un champ est absent de ta version de CSP, le message dit `NON LU` /
+`NON LUS` et **le script n'envoie pas de valeur inventée** : le tour part avec
+`fuelUsedL` / `tyreWearPct` absents, et la page affiche « — ». C'est le
+diagnostic à demander au pilote avant de conclure qu'un chiffre manque.
+
+**d. Ce que le script fait et ne fait pas**
+
+| | |
+| --- | --- |
+| lit | niveau de carburant (L), usure des 4 pneus (0…1), temps au tour, vitesse max, compteur de tours |
+| calcule | consommation = niveau début − niveau fin ; usure = usure début − usure fin, par roue |
+| ne fait pas | aucune conduite, aucune modification de la voiture, aucun réglage — lecture seule |
+| en cas de doute | ravitaillement (niveau qui monte) → pas de consommation publiée ; tour sans identité → ignoré |
+| réseau | un envoi toutes les 5 s au plus, lots de 120 tours max, hors-ligne → les tours restent en mémoire et repartent au rétablissement |
+| doublons | le site déduplique par `pilote | voiture | numéro de tour` — un renvoi ne crée jamais de doublon |
+
+Le script a été écrit pour ne jamais casser la session : chaque lecture est
+protégée (`pcall`), et si rien n'est lisible il se contente de le dire.
+
+### 4. Page de consultation `/telemetry` (admin)
+
+Connexion avec le compte administrateur habituel du site, puis :
+
+- **filtres** voiture / circuit / pilote / campagne, avec regroupement par
+  pilote (même voiture, plusieurs pilotes) ;
+- **quatre indicateurs** : tours mesurés, voitures comparables, voiture la plus
+  rapide au tour, voiture la plus rapide en course ;
+- **tableau par voiture** : tour médian, L/tour, gomme %/tour, réservoir,
+  autonomies essence et gomme, vitesse max ;
+- **mesures pit-lane** du circuit (sans elles, aucun temps de course n'est
+  calculable) : temps de traversée des stands, débit de ravitaillement, temps
+  de changement de gommes ;
+- **rapport** téléchargeable en CSV, Markdown et HTML.
+
+Chaque cellule non mesurée affiche « — » : c'est une information, pas un zéro.
+
+### 5. Base PostgreSQL / Neon
 
 La télémétrie va dans la **même base Neon que le site**, dans un schéma séparé :
 
 ```bash
-TELEMETRY_DATABASE_URL=postgres://...   # ou DATABASE_URL
-npm i pg
+TELEMETRY_DATABASE_URL=postgres://...
 ```
+
+`pg` est **déjà dans les dépendances** : rien à installer. Le schéma `telemetry`
+(tables `session`, `stint`, `lap`, `circuit_profile`) est créé automatiquement
+au premier appel — aucune migration à lancer à la main.
 
 Sans cette variable, un fichier JSON local sert de base (même API, sans
 dépendance) : pratique pour tester ou travailler hors ligne.
 
 Sur Render, la base est **obligatoire** : le disque est effacé à chaque
-déploiement, un fichier local ne survivrait pas.
+déploiement, un fichier local ne survivrait pas. Si `TELEMETRY_DATABASE_URL`
+est définie sans que la base soit joignable, les routes de télémétrie répondent
+503 et le reste du site continue de fonctionner normalement.
+
+### 6. Essai local, sans serveur AC
+
+Deux commandes suffisent pour voir la page et le rapport avec de vraies données
+de démonstration (Monza junior, trois voitures, deux pilotes) :
+
+```bash
+node tools/telemetry/demo-seed.js --write        # remplit data/telemetry/demo-store.json
+TELEMETRY_STORE_FILE=data/telemetry/demo-store.json \
+ADMIN_PASSWORD=secret TELEMETRY_TOKEN=jeton node app.js
+```
+
+Puis `http://localhost:10000/telemetry` (port par défaut, `PORT=8080` pour en
+changer) et connexion avec `secret`. Le store de démonstration est un fichier
+ordinaire : le supprimer suffit à repartir de zéro. Il n'est jamais lu en
+production, où `TELEMETRY_STORE_FILE` n'est pas défini.
+
+Les chiffres de la démonstration sortent du **même** code que la production :
+`demo-seed.js` appelle `TelemetryService.ingest` puis `report`, pas une maquette
+HTML. Le rapport produit est reproduit ci-dessous (extrait) :
+
+```
+| Voiture                | Tour médian | L/tour | Gomme %/tour | Autonomie essence |
+| alfa_giulietta_spider  | 1:15.576    | 1,50   | 1,40         | 30,0 tours        |
+| bmw_m3_e30             | 1:16.210    | 1,90   | 2,80         | 28,9 tours        |
+| actk_lola_t290         | 1:14.902    | 2,40   | 2,20         | 12,5 tours        |
+```
+
+---
+
+## Variables d'environnement
+
+| Variable | Défaut | Rôle |
+| --- | --- | --- |
+| `TELEMETRY_TOKEN` | *(vide)* | jeton attendu dans `X-Telemetry-Token`. Vide = les envois sont **refusés** (503), sauf `TELEMETRY_ALLOW_OPEN=1` |
+| `TELEMETRY_ALLOW_OPEN` | `0` | `1` accepte les envois sans jeton — réservé aux essais, jamais en prod |
+| `TELEMETRY_ENABLED` | `1` | `0` coupe la télémétrie : les routes répondent 503, le reste du site continue |
+| `TELEMETRY_CAMPAIGN` | `campagne` | nom de campagne injecté dans le script, pour séparer les périodes |
+| `TELEMETRY_INTERVAL_SEC` | `5` | intervalle minimum entre deux envois (2 s plancher) |
+| `TELEMETRY_DATABASE_URL` | *(vide)* | base `telemetry` (schéma séparé) ; vide = fichier JSON local |
+| `TELEMETRY_STORE_FILE` | `data/telemetry-store.json` | chemin du fichier quand il n'y a pas de base |
+| `PUBLIC_SITE_URL` | *(hôte de la requête)* | adresse publique injectée dans le script |
+
+Sur Render, `TELEMETRY_DATABASE_URL` est **obligatoire** : le disque est effacé
+à chaque déploiement, un fichier local ne survivrait pas.
 
 ---
 

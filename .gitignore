@@ -189,3 +189,5 @@ maquette-circuit/assets/tracks/*/fast_lane.ai
 maquette-circuit/assets/tracks/*/*.ai
 reports/
 data/telemetry-store.json
+# Jeu de démonstration, régénérable par `node tools/telemetry/demo-seed.js --write`
+data/telemetry/demo-store.json
