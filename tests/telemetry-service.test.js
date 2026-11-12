@@ -745,3 +745,28 @@ test('un seul ping, même après plusieurs images', () => {
   assert.equal(run.sent.length, 1, 'un seul ping, malgré les images');
   assert.ok(run.messages.some(m => /Connexion au site établie/.test(m)));
 });
+
+test('le script expose init ET __init__, sans double initialisation', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  const run = simulate({
+    callInit: true,
+    config: { url: 'https://exemple.test/api/telemetry/push', token: 'j' }
+  });
+  assert.equal(run.error, null);
+  // Un seul ping : si les deux noms d'init étaient appelés, il y en aurait deux.
+  assert.equal(run.sent.length, 1);
+});
+
+test('drawUI affiche le diagnostic à l\'écran', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  const run = simulate({
+    callInit: true,
+    config: { url: 'https://exemple.test/api/telemetry/push', token: 'j' },
+    steps: [{ dt: 0.016 }]
+  });
+  assert.equal(run.error, null);
+  // `drawUI` est le seul canal garanti pour un script en ligne : s'il ne dit
+  // rien, on ne peut pas distinguer « script muet » de « script absent ».
+  assert.ok(run.ui.length > 0, 'drawUI doit écrire à l\'écran');
+  assert.ok(run.ui.some(l => /GDSP-TELEMETRY/.test(l)));
+});
