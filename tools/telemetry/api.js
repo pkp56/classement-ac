@@ -43,6 +43,21 @@ function validatePush(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return { ok: false, error: 'charge utile absente' };
   }
+  // Ping de démarrage du script CSP : il n'apporte aucune mesure, il prouve
+  // seulement que la chaîne script → réseau → jeton fonctionne. On l'accepte
+  // sans rien stocker, sinon le diagnostic le plus utile du dispositif serait
+  // celui qui renvoie une erreur.
+  if (payload.kind === 'ping') {
+    return {
+      ok: true,
+      ping: true,
+      clean: {
+        track: String(payload.track || '').trim(),
+        car: String(payload.car || '').trim(),
+        driverGuid: String((payload.driver && payload.driver.guid) || '').trim()
+      }
+    };
+  }
   const track = String(payload.track || '').trim();
   if (!track) return { ok: false, error: 'circuit manquant' };
   const driver = payload.driver && typeof payload.driver === 'object' ? payload.driver : {};
@@ -179,6 +194,13 @@ class TelemetryService {
       return { ok: false, error: check.error, added: 0, duplicates: 0 };
     }
     const info = check.clean;
+    if (check.ping) {
+      // Rien n'est écrit : un ping n'est pas une mesure. On le journalise pour
+      // qu'il apparaisse dans les logs Render — c'est le point de repère qui
+      // dit « le script tourne et le réseau passe ».
+      console.log(`télémétrie: ping reçu — circuit=${info.track || '?'} voiture=${info.car || '?'} pilote=${info.driverGuid || '?'}`);
+      return { ok: true, ping: true, added: 0, duplicates: 0, sessionId: null };
+    }
     const session = await this.ensureSession(info);
     const stored = await this.store.select('lap', { session_id: session.id });
     const seen = new Set(stored.map(row => `${row.driver_guid}|${row.car}|${row.lap_number}`));

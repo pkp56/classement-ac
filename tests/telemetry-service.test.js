@@ -672,3 +672,40 @@ test('admin : « refusé » et « backend injoignable » ne se confondent pas', 
   });
   assert.equal(rawPassword.status, 401, 'le mot de passe ne circule plus comme jeton');
 });
+
+// --- diagnostic « ping » -----------------------------------------------------
+
+test('le script envoie un ping au démarrage : la chaîne est vérifiable sans rouler', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  const run = simulate({
+    callInit: true,
+    config: { url: 'https://exemple.test/api/telemetry/push', token: 'jeton', campaign: 'essai' }
+  });
+  assert.equal(run.error, null);
+  assert.equal(run.sent.length, 1, 'un seul paquet au démarrage');
+
+  const payload = JSON.parse(run.sent[0]);
+  assert.equal(payload.kind, 'ping', 'ce n\'est pas un tour : le site ne doit rien stocker');
+  assert.equal(payload.track, 'ks_monza66-junior');
+  assert.equal(payload.car, 'alfa_giulietta_spider');
+  assert.equal(payload.driver.guid, '76561198015862674');
+  assert.equal(payload.laps, undefined, 'un ping ne porte aucune mesure');
+
+  // Le pilote doit voir le résultat, sinon le diagnostic ne sert à rien.
+  assert.ok(run.messages.some(m => /Connexion au site établie/.test(m)), 'message de succès en jeu');
+});
+
+test('le ping n\'est pas un tour : il est accepté et n\'écrit rien dans la base', async () => {
+  const store = tempStore();
+  const service = new TelemetryService(store);
+  const result = await service.ingest({
+    v: 1, script: 'GDSP-TELEMETRY 1.0', kind: 'ping', campaign: 'campagne-2026-11',
+    track: 'ks_monza66-junior', car: 'alfa_giulietta_spider',
+    driver: { guid: '76561198015862674', name: 'Assassin\'s Street' }
+  });
+  assert.equal(result.ok, true, 'un ping ne doit jamais être rejeté');
+  assert.equal(result.ping, true);
+  assert.equal(result.added, 0);
+  assert.equal(store.data.lap.length, 0, 'aucune mesure inventée');
+  assert.equal(store.data.session.length, 0, 'aucune session créée pour un ping');
+});

@@ -168,6 +168,25 @@ le bloc `[SCRIPT_2]`.
 > **tel qu'il est servi** (`tests/telemetry-service.test.js`) pour que cette
 > faute ne puisse plus passer.
 
+**b bis. Le ping de démarrage.** Dès le chargement, et **sans avoir roulé un
+seul tour**, le script envoie un paquet `kind: "ping"`. Le site l'accepte sans
+rien stocker (ce n'est pas une mesure) et l'inscrit dans ses logs Render :
+
+```
+télémétrie: ping reçu — circuit=ks_monza66-junior voiture=… pilote=7656119…
+```
+
+En jeu, le message dit `Connexion au site établie (200)`. C'est le seul contrôle
+qui distingue les pannes sans faire rouler personne :
+
+| Message du ping | Cause |
+| --- | --- |
+| `Connexion au site établie (200)` | script exécuté, réseau OK, jeton accepté, base joignable |
+| `HTTP 401` | `TELEMETRY_TOKEN` du site ≠ jeton injecté dans le script |
+| `HTTP 503` | `TELEMETRY_ENABLED=0`, ou base injoignable sur Render |
+| `envoi impossible` | pas de réseau, ou `web.post` indisponible (CSP < 0.1.79) |
+| **aucun message** | le script n'a pas été téléchargé ou n'a pas démarré |
+
 **c. Vérifier sur le premier tour.** Le script affiche un message en jeu :
 
 ```

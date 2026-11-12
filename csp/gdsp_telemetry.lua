@@ -57,6 +57,7 @@ local state = {
   sentLaps = 0,
   sendErrors = 0,
   hasWeb = false,
+  pinged = false,           -- le ping de démarrage n'est envoyé qu'une fois
 }
 
 -------------------------------------------------------------------------------
@@ -72,6 +73,9 @@ local cfg = {
 
 local function log(msg)
   pcall(ac.log, '[' .. VERSION .. '] ' .. tostring(msg))
+  -- `print` part dans log.txt (le journal du jeu), `ac.log` dans le journal CSP :
+  -- les deux sont nécessaires, aucun n'est garanti selon la version.
+  pcall(print, '[' .. VERSION .. '] ' .. tostring(msg))
   if tonumber(cfg.debug) == 1 then
     pcall(ac.console, '[' .. VERSION .. '] ' .. tostring(msg))
   end
@@ -243,6 +247,20 @@ local function toJson(v)
     return '{' .. table.concat(parts, ',') .. '}'
   end
   return 'null'
+end
+
+--- Valeurs lues au démarrage, pour le diagnostic : `nil` signifie « pas lisible
+--- sur cette version de CSP », et c'est une information (jamais remplacé par 0).
+function script.readable()
+  return {
+    fuel = readFuelLiters(),
+    wear = readTyreWear(),
+    bestLapMs = firstNumber({
+      function() return car and car.bestLapTimeMs end,
+    }),
+    speedKmh = readSpeedKmh(),
+    lapCount = readLapCount(),
+  }
 end
 
 -------------------------------------------------------------------------------
@@ -488,6 +506,41 @@ function script.update(dt)
   if state.pendingCount > 0 then flush(false) end
 end
 
+--- Envoie un premier paquet dès le chargement, sans attendre un tour : il
+--- n'apporte aucune mesure, mais il prouve que la chaîne complète fonctionne
+--- (script exécuté → réseau → jeton accepté → base joignable). Sans lui, un
+--- échec silencieux ne se voit qu'au premier tour terminé, voire jamais.
+function script.ping()
+  if state.pinged or not state.hasWeb or cfg.url == '' then return end
+  state.pinged = true
+  local body = toJson({
+    v = 1,
+    script = VERSION,
+    campaign = cfg.campaign,
+    kind = 'ping',                     -- pas un tour : le site ne stocke rien
+    serverName = tostring((sim and sim.serverName) or ''),
+    track = tostring((sim and sim.trackID) or ''),
+    driver = { guid = state.driverGuid or '', name = state.driverName or '' },
+    car = state.carId or '',
+  })
+  post(body, function(err, res)
+    local status = res and tonumber(res.status) or nil
+    if err then
+      log('PING échoué : ' .. tostring(err))
+      message('Télémétrie GDSP : envoi impossible', tostring(err):sub(1, 80))
+      return
+    end
+    if status and status >= 200 and status < 300 then
+      log('PING accepté (HTTP ' .. tostring(status) .. ') · base joignable côté serveur')
+      message('Télémétrie GDSP', 'Connexion au site établie (' .. tostring(status) .. ').')
+    else
+      log('PING refusé (HTTP ' .. tostring(status) .. ') : ' .. tostring(res and res.body or ''))
+      message('Télémétrie GDSP : le site refuse', 'HTTP ' .. tostring(status) ..
+        ' · vérifier TELEMETRY_TOKEN / TELEMETRY_ENABLED sur Render')
+    end
+  end)
+end
+
 function script.__init__()
   ensureIdentity()
   local fuelOk = readFuelLiters() ~= nil
@@ -497,9 +550,11 @@ function script.__init__()
     fuelOk and 'lu' or 'NON LU',
     wearOk and 'lus' or 'NON LUS',
     transport)
-  message(VERSION, status)
-  log(status .. ' · url=' .. cfg.url .. ' · guid=' .. tostring(state.driverGuid) ..
-    ' · voiture=' .. tostring(state.carId))
+  -- Message plus long : 5 s suffisaient à le manquer pendant le chargement.
+  pcall(ac.setMessage, VERSION, status, 'info', 12)
+  print('[' .. VERSION .. '] ' .. status .. ' · url=' .. cfg.url ..
+    ' · guid=' .. tostring(state.driverGuid) .. ' · voiture=' .. tostring(state.carId))
+  script.ping()
 end
 
 function script.onCarReset()
