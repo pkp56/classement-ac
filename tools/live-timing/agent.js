@@ -61,6 +61,7 @@ const collector = watcher ? null : new LiveTimingCollector({ autoStart: true });
 if (watcher) watcher.start();
 let sending = false;
 let failures = 0;
+let idleWarned = false;
 let lastOkAt = 0;
 let stopping = false;
 
@@ -100,7 +101,21 @@ async function tick() {
   sending = true;
   try {
     const snapshot = (watcher || collector).snapshot();
-    snapshot.status = { ...snapshot.status, host: os.hostname() };
+    snapshot.status = { ...snapshot.status, host: os.hostname(), agent: 'gdsp-live-agent' };
+    // Versions déployées avant l'ajout de `agent` : elles comptaient comme
+    // « serveur en direct » un instantané pourtant vide. On n'envoie donc rien
+    // tant qu'il n'y a ni voiture ni session : inutile de faire croire au site
+    // qu'un direct est en cours.
+    const cars = Array.isArray(snapshot.cars) ? snapshot.cars.length : 0;
+    const hasSession = !!(snapshot.session && (snapshot.session.type || snapshot.session.name));
+    if (!cars && !hasSession) {
+      failures = 0;
+      if (!lastOkAt && !idleWarned) {
+        idleWarned = true;
+        console.log('· rien à envoyer pour l\'instant (aucune voiture, aucune session) — normal hors course');
+      }
+      return;
+    }
     await post(snapshot);
     failures = 0;
     if (!lastOkAt) console.log(`✓ Premier envoi accepté par ${SITE_URL}${PUSH_PATH}`);
@@ -143,7 +158,10 @@ const watchdog = setInterval(() => {
     '⚠ Aucun paquet reçu d\'acServer. Vérifie server_cfg.ini :\n' +
     `    UDP_PLUGIN_ADDRESS = 127.0.0.1:${collector.options.listenPort}\n` +
     `    UDP_PLUGIN_LOCAL_PORT = ${collector.options.pluginPort}\n` +
-    '  (les deux valeurs doivent être différentes) puis redémarre le serveur AC.'
+    '  (les deux valeurs doivent être différentes) puis redémarre le serveur AC.\n' +
+    '  Serveur lancé par Content Manager ? CM réécrit ce fichier :\n' +
+    '    node tools/live-timing/set-plugin-ports.js "chemin\\vers\\server\\cfg\\server_cfg.ini"\n' +
+    '  puis relance le serveur depuis CM.'
   );
 }, 10000);
 watchdog.unref();
