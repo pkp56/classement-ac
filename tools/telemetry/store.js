@@ -41,8 +41,7 @@ CREATE TABLE IF NOT EXISTS ${SCHEMA}.session (
   fuel_rate       NUMERIC(7,2),               -- FUEL_RATE du serveur : sans lui, rien n'est comparable
   tyre_wear_rate  NUMERIC(7,2),               -- TYRE_WEAR_RATE du serveur
   campaign        TEXT,                       -- ex. « campagne-2026-11 » (10 jours de test)
-  notes           TEXT,
-  CONSTRAINT session_unique_run UNIQUE (started_at, track, COALESCE(track_config,''))
+  notes           TEXT
 );
 
 -- Un relais = tours consécutifs d'un pilote dans une voiture, sans arrêt.
@@ -94,9 +93,17 @@ CREATE TABLE IF NOT EXISTS ${SCHEMA}.circuit_profile (
   refuel_rate_lps NUMERIC(5,3),               -- débit de ravitaillement mesuré
   tyre_change_ms  INT,                        -- durée d'un changement de gommes
   measured_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-  source          TEXT,
-  CONSTRAINT circuit_profile_unique UNIQUE (track, COALESCE(track_config,''))
+  source          TEXT
 );
+
+-- Unicité sur une expression : Postgres refuse UNIQUE (a, COALESCE(b,''))
+-- dans une contrainte de table (« syntax error at or near "(" »), il faut un index unique
+-- sur expression. C'est ce qui empêchait la création du schéma, donc toute la
+-- télémétrie, alors que la base était bien branchée.
+CREATE UNIQUE INDEX IF NOT EXISTS session_unique_run
+  ON ${SCHEMA}.session (started_at, track, COALESCE(track_config, ''));
+CREATE UNIQUE INDEX IF NOT EXISTS circuit_profile_unique
+  ON ${SCHEMA}.circuit_profile (track, COALESCE(track_config, ''));
 
 CREATE INDEX IF NOT EXISTS lap_car_idx      ON ${SCHEMA}.lap (car);
 CREATE INDEX IF NOT EXISTS lap_driver_idx   ON ${SCHEMA}.lap (driver_guid);
@@ -169,7 +176,19 @@ class PgStore {
   }
   get kind() { return this._kind; }
   async init() {
-    for (const stmt of schemaStatements()) await this.pool.query(stmt);
+    for (const stmt of schemaStatements()) {
+      try {
+        await this.pool.query(stmt);
+      } catch (err) {
+        // L'erreur brute de Postgres ne dit pas QUELLE instruction a échoué :
+        // « syntax error at or near "(" » ne laissait aucune piste. On préfixe
+        // par le début de l'instruction fautive, c'est tout ce qu'il faut pour
+        // la retrouver dans ce fichier.
+        const head = stmt.replace(/\s+/g, ' ').trim().slice(0, 90);
+        err.message = `schéma telemetry : ${err.message} — instruction « ${head}… »`;
+        throw err;
+      }
+    }
     return this;
   }
   async insert(table, row) {

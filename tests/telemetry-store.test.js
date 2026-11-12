@@ -41,6 +41,22 @@ test('le schéma crée les quatre tables attendues', () => {
   assert.ok(stmts.includes('CREATE SCHEMA IF NOT EXISTS telemetry'));
 });
 
+test('le schéma ne met aucune expression dans une contrainte UNIQUE de table', () => {
+  // Postgres refuse `CONSTRAINT x UNIQUE (a, COALESCE(b,''))` : « syntax error
+  // at or near "(" ». Le schéma échouait donc à l'initialisation, et TOUTE la
+  // télémétrie échouait alors que la base était branchée. L'unicité sur
+  // expression doit passer par un CREATE UNIQUE INDEX.
+  for (const stmt of schemaStatements()) {
+    if (/^\s*CREATE TABLE/i.test(stmt)) {
+      assert.doesNotMatch(stmt, /UNIQUE\s*\([^)]*\(/i,
+        `expression dans une contrainte UNIQUE : ${stmt.split('\n')[0]}`);
+    }
+  }
+  const stmts = schemaStatements().join('\n');
+  assert.match(stmts, /CREATE UNIQUE INDEX IF NOT EXISTS session_unique_run\s+ON telemetry\.session \(started_at, track, COALESCE\(track_config, ''\)\)/i);
+  assert.match(stmts, /CREATE UNIQUE INDEX IF NOT EXISTS circuit_profile_unique/i);
+});
+
 test('une session sans circuit est refusée (sinon rien n\'est comparable)', async () => {
   const collector = new TelemetryCollector(new FileStore(null));
   await assert.rejects(() => collector.openSession({ fuelRate: 100 }), /circuit/);
@@ -143,4 +159,19 @@ test('matrice pilote × voiture : seuls les pilotes ayant roulé TOUTES les voit
 test('une session sans FUEL_RATE / TYRE_WEAR_RATE est signalée comme incomparable', () => {
   assert.deepEqual(sessionContextMissing({ track: 'monza' }), ['FUEL_RATE du serveur', 'TYRE_WEAR_RATE du serveur']);
   assert.deepEqual(sessionContextMissing({ track: 'monza', fuel_rate: 100, tyre_wear_rate: 100 }), []);
+});
+
+test('un échec d\'initialisation nomme l\'instruction fautive', async () => {
+  const { PgStore } = require('../tools/telemetry/store');
+  const pool = {
+    async query(sql) {
+      if (/UNIQUE INDEX/i.test(sql)) throw new Error('syntax error at or near "("');
+      return { rows: [] };
+    }
+  };
+  await assert.rejects(
+    () => new PgStore(pool).init(),
+    /schéma telemetry : syntax error.*CREATE UNIQUE INDEX/i,
+    'le message doit dire QUELLE instruction a échoué'
+  );
 });
