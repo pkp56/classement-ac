@@ -55,7 +55,9 @@ function loadCampaignData(campaign, baseDir = process.cwd()) {
 function main(argv) {
   const args = parseArgs(argv.slice(2));
   const cmd = args._[0] || 'report';
-  const campaign = args.campaign || 'campagne';
+  // `demo` lit le jeu d'exemple du dépôt : sans --campaign, il doit tomber
+  // dessus tout seul (c'est la commande que le README fait lancer).
+  const campaign = args.campaign || (cmd === 'demo' ? 'demo-monza-junior' : 'campagne');
   const outDir = path.resolve(args.out || 'reports');
   const cwd = process.cwd();
 

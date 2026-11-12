@@ -837,6 +837,157 @@ app.post('/api/live/command',async(req,res)=>{
 app.get('/live-timing',(req,res)=>res.sendFile(path.join(ROOT,'live-timing.html')));
 app.get('/live-timing.html',(req,res)=>res.sendFile(path.join(ROOT,'live-timing.html')));
 
+// --- TÉLÉMÉTRIE & BoP (application séparée, schéma `telemetry`) --------------
+// Rien de ce qui suit ne lit ni n'écrit dans le championnat : ni les événements,
+// ni les classements, ni les fiches pilotes. Le schéma `telemetry` est créé par
+// tools/telemetry/store.js et n'a aucune clé étrangère hors de lui-même.
+//
+//   POST /api/telemetry/push        reçoit les tours du script CSP (jeton)
+//   GET  /api/telemetry/catalog     valeurs réellement présentes (admin)
+//   GET  /api/telemetry/summary     agrégat filtrable voiture/circuit/pilote
+//   GET  /api/telemetry/report      CSV, Markdown ou HTML     (admin)
+//   PUT  /api/telemetry/pit-profile mesures pit-lane du circuit (admin)
+//   GET  /telemetry                 page de consultation        (admin)
+//
+// Le script CSP est servi par le site lui-même : l'URL du script dans
+// csp_extra_options.ini pointe donc ici, et le jeton y est injecté.
+let telemetryService = null;
+let telemetryLoading = null;
+function telemetryToken(){return String(process.env.TELEMETRY_TOKEN||'').trim()}
+function telemetryEnabled(){
+  return String(process.env.TELEMETRY_ENABLED||'1') !== '0';
+}
+function getTelemetry(){
+  if(!telemetryService && !telemetryLoading){
+    telemetryLoading = (async()=>{
+      const { createTelemetryService } = require('./tools/telemetry/api');
+      telemetryService = await createTelemetryService();
+      return telemetryService;
+    })().catch(err=>{
+      // Un échec d'ouverture de la base ne doit jamais faire tomber le site :
+      // c'est un module annexe, le classement doit rester en ligne.
+      console.error('télémétrie: ouverture impossible —', err.message);
+      telemetryLoading = null;
+      throw err;
+    });
+  }
+  return telemetryLoading || Promise.resolve(telemetryService);
+}
+function telemetryFilters(q){
+  return {
+    car: q.car ? String(q.car) : undefined,
+    track: q.track ? String(q.track) : undefined,
+    driver: q.driver ? String(q.driver) : undefined,
+    campaign: q.campaign ? String(q.campaign) : undefined,
+    byDriver: q.byDriver === '1' || q.byDriver === 'true'
+  };
+}
+// Le script CSP est servi ici pour que le serveur AC n'ait qu'une seule URL à
+// déclarer, et pour que le jeton ne soit pas écrit en clair dans le dépôt.
+app.get('/csp/telemetry.lua',(req,res)=>{
+  res.set('Cache-Control','no-store');
+  res.type('text/plain; charset=utf-8');
+  const file=path.join(ROOT,'csp','gdsp_telemetry.lua');
+  fs.readFile(file,'utf8',(err,src)=>{
+    if(err)return res.status(404).send('-- script absent');
+    // Le site connaît sa propre adresse publique (PUBLIC_SITE_URL) : sans elle,
+    // on retombe sur l'en-tête Host de la requête, qui est justement l'adresse
+    // utilisée par le client pour télécharger le script.
+    const host=(req.get('x-forwarded-host')||req.get('host')||'').split(',')[0].trim();
+    // Le protocole vient de la requête (Derrière Render, x-forwarded-proto=https) :
+    // forcer https casserait un essai en local sur http.
+    const proto=String(req.get('x-forwarded-proto')||req.protocol||'https').split(',')[0].trim()||'https';
+    const origin=String(process.env.PUBLIC_SITE_URL||'').replace(/\/+$/,'')||(host?`${proto}://${host}`:'');
+    const injected={
+      // L'URL est déduite de la requête : le script marche donc aussi bien sur
+      // l'hébergeur qu'en local, sans paramètre à écrire à la main.
+      url:origin?origin+'/api/telemetry/push':'',
+      token:telemetryToken(),
+      campaign:String(process.env.TELEMETRY_CAMPAIGN||'campagne'),
+      intervalSec:Number(process.env.TELEMETRY_INTERVAL_SEC||5)||5
+    };
+    const head='-- GDSP télémétrie — copie servie par le site le '+new Date().toISOString().slice(0,10)+'\n';
+    res.send(head+src+`\n__GDSP_TELEMETRY__ = ${JSON.stringify(injected)}\n`);
+  });
+});
+app.post('/api/telemetry/push', async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!telemetryEnabled())return res.status(503).json({error:'Télémétrie désactivée sur ce site.'});
+  const expected=telemetryToken();
+  if(expected){
+    const given=String(req.get('X-Telemetry-Token')||req.query.token||'').trim();
+    if(!safeEqual(given,expected))return res.status(401).json({error:'Jeton de télémétrie invalide.'});
+  }else if(String(process.env.TELEMETRY_ALLOW_OPEN||'')!=='1'){
+    // Sans jeton et sans autorisation explicite, on refuse : des chiffres
+    // anonymes pourrissent un BoP sans qu'on sache d'où ils viennent.
+    return res.status(503).json({error:'TELEMETRY_TOKEN non configuré sur ce site.'});
+  }
+  try{
+    const service=await getTelemetry();
+    const result=await service.ingest(req.body);
+    if(!result.ok)return res.status(400).json(result);
+    res.json({ok:true,added:result.added,duplicates:result.duplicates,sessionId:result.sessionId});
+  }catch(e){
+    console.error('télémétrie: envoi refusé —',e.message);
+    res.status(500).json({error:e.message});
+  }
+});
+app.get('/api/telemetry/catalog', async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  try{
+    const service=await getTelemetry();
+    res.json({enabled:telemetryEnabled(),...await service.catalog()});
+  }catch(e){res.status(503).json({error:e.message})}
+});
+app.get('/api/telemetry/summary', async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  try{
+    const service=await getTelemetry();
+    const filters=telemetryFilters(req.query);
+    const summary=await service.summary(filters);
+    // Sans filtre de circuit, on montre les mesures du circuit affiché : la
+    // page a besoin du pit-lane pour calculer les arrêts.
+    const track=filters.track||(summary.cars[0]&&summary.cars[0].track)||undefined;
+    res.json({...summary,pitProfile:await service.pitProfile(track)});
+  }catch(e){res.status(503).json({error:e.message})}
+});
+app.get('/api/telemetry/report', async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  try{
+    const service=await getTelemetry();
+    const filters=telemetryFilters(req.query);
+    const report=await service.report(filters,{campaign:req.query.campaign});
+    const format=String(req.query.format||'csv').toLowerCase();
+    const base=`bop-${req.query.campaign||'telemetrie'}-${new Date().toISOString().slice(0,10)}`;
+    if(format==='html'){
+      res.set('Content-Disposition',`inline; filename="${base}.html"`);
+      return res.type('text/html; charset=utf-8').send(report.files.html);
+    }
+    if(format==='md'||format==='markdown'){
+      res.set('Content-Disposition',`attachment; filename="${base}.md"`);
+      return res.type('text/markdown; charset=utf-8').send(report.files.markdown);
+    }
+    res.set('Content-Disposition',`attachment; filename="${base}.csv"`);
+    res.type('text/csv; charset=utf-8').send(report.files.csv);
+  }catch(e){res.status(503).json({error:e.message})}
+});
+app.put('/api/telemetry/pit-profile', async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  const track=String((req.body&&req.body.track)||'').trim();
+  if(!track)return res.status(400).json({error:'Indique le circuit.'});
+  try{
+    const service=await getTelemetry();
+    const saved=await service.savePitProfile(track,req.body||{});
+    res.json({ok:true,pitProfile:saved});
+  }catch(e){res.status(400).json({error:e.message})}
+});
+app.get('/telemetry',(req,res)=>res.sendFile(path.join(ROOT,'telemetry.html')));
+app.get('/telemetry.html',(req,res)=>res.sendFile(path.join(ROOT,'telemetry.html')));
+
 app.all('/api/*', (req,res)=>proxyRequest(req,res));
 
 function tryParse(s){try{return JSON.parse(s)}catch(e){return s}}

@@ -149,6 +149,14 @@ class FileStore {
     if (!this.data[table]) throw new Error(`table inconnue : ${table}`);
     return this.data[table].filter(row => Object.keys(filter).every(k => row[k] === filter[k]));
   }
+  async update(table, id, patch) {
+    if (!this.data[table]) throw new Error(`table inconnue : ${table}`);
+    const row = this.data[table].find(r => r.id === id);
+    if (!row) return null;
+    Object.assign(row, patch);
+    this._persist();
+    return row;
+  }
   async close() { this._persist(); }
 }
 
@@ -180,6 +188,16 @@ class PgStore {
     const res = await this.pool.query(`SELECT * FROM ${SCHEMA}.${table}${where}`, keys.map(k => filter[k]));
     return res.rows;
   }
+  async update(table, id, patch) {
+    const keys = Object.keys(patch);
+    if (!keys.length) return null;
+    const sets = keys.map((k, i) => `"${k}" = $${i + 1}`).join(', ');
+    const res = await this.pool.query(
+      `UPDATE ${SCHEMA}.${table} SET ${sets} WHERE id = $${keys.length + 1} RETURNING *`,
+      [...keys.map(k => patch[k]), id]
+    );
+    return res.rows[0] || null;
+  }
   async close() { /* pool géré par l'appelant */ }
 }
 
@@ -200,7 +218,9 @@ async function openStore(options = {}) {
     await store.init();
     return store;
   }
-  const file = options.file || path.join(process.cwd(), 'data', 'telemetry-store.json');
+  // Le chemin du fichier est configurable : sur l'hébergeur, `data/` peut être
+  // un disque éphémère, et les tests doivent pouvoir travailler hors du dépôt.
+  const file = options.file || process.env.TELEMETRY_STORE_FILE || path.join(process.cwd(), 'data', 'telemetry-store.json');
   return new FileStore(file).init();
 }
 

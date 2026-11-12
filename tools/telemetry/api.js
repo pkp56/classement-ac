@@ -1,0 +1,421 @@
+'use strict';
+/*
+ * Service de télémétrie — la partie « en ligne » de l'application séparée.
+ *
+ * Il reçoit les tours envoyés par le script CSP poussé aux pilotes
+ * (`csp/gdsp_telemetry.lua` → POST /api/telemetry/push), les écrit dans le
+ * schéma `telemetry`, et répond aux questions du panneau admin :
+ *   - quelles voitures / quels circuits / quels pilotes j'ai déjà vus ;
+ *   - le tour médian, la conso et l'usure par voiture, **filtrés** ;
+ *   - le rapport BoP 20 / 30 / 45 minutes en CSV, Markdown et HTML.
+ *
+ * Règles héritées de `store.js` et `bop.js`, jamais contournées ici :
+ *   1. ce qui n'est pas mesuré reste `null` (aucune valeur inventée) ;
+ *   2. aucune requête ne sort du schéma `telemetry` : ce module ne connaît ni
+ *      le championnat, ni les événements, ni les fiches pilotes.
+ */
+
+const { openStore } = require('./store');
+const { carProfile, field } = require('./aggregate');
+const { buildReport } = require('./export');
+const { lapStats, avg } = require('./bop');
+
+const MAX_LAPS_PER_PUSH = 200;
+
+/** Nombre fini ou null (jamais 0 de complaisance). */
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function positive(v) {
+  const n = num(v);
+  return n != null && n > 0 ? n : null;
+}
+
+/**
+ * Valide un envoi du script CSP. Tolérant sur la forme (le script est le même
+ * pour tous les serveurs, il peut évoluer), strict sur l'essentiel : sans
+ * circuit, sans pilote et sans voiture, un tour n'est pas exploitable.
+ * @returns {{ok:boolean,error?:string,clean?:object}}
+ */
+function validatePush(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { ok: false, error: 'charge utile absente' };
+  }
+  const track = String(payload.track || '').trim();
+  if (!track) return { ok: false, error: 'circuit manquant' };
+  const driver = payload.driver && typeof payload.driver === 'object' ? payload.driver : {};
+  const driverGuid = String(driver.guid || payload.driverGuid || '').trim();
+  const car = String(payload.car || driver.car || '').trim();
+  const laps = Array.isArray(payload.laps) ? payload.laps : [];
+  if (!laps.length) return { ok: false, error: 'aucun tour dans l\'envoi' };
+  if (laps.length > MAX_LAPS_PER_PUSH) return { ok: false, error: 'trop de tours dans un envoi' };
+  if (!driverGuid) return { ok: false, error: 'identité pilote (guid) manquante' };
+  if (!car) return { ok: false, error: 'voiture manquante' };
+
+  const clean = [];
+  for (const raw of laps) {
+    if (!raw || typeof raw !== 'object') continue;
+    const lapMs = positive(field(raw, 'lapMs', 'lap_ms'));
+    if (!lapMs) continue;                       // un tour sans temps n'existe pas
+    // L'usure arrive par roue, en % consommé sur le tour (c'est ce que le
+    // script envoie), ou sous forme scalaire.
+    const wheels = Array.isArray(raw.wheels) ? raw.wheels.map(num)
+      : Array.isArray(raw.tyreWearPct) ? raw.tyreWearPct.map(num) : null;
+    const wheelAvg = wheels && wheels.every(v => v != null && v >= 0)
+      ? wheels.reduce((a, b) => a + b, 0) / wheels.length
+      : null;
+    const wearPctField = num(field(raw, 'tyreWearPct', 'tyre_wear_pct', 'wearPct'));
+    // Un scalaire peut être un pourcentage ou une fraction 0–1 d'origine
+    // inconnue. Les deux domaines se recouvrent entre 0,3 et 1, mais un
+    // pourcentage d'usure par tour y est courant alors qu'une fraction y serait
+    // énorme (30 % à 100 % par tour). On ne convertit donc que sous 0,2 : une
+    // fraction plausible (0,014 = 1,4 %) ne se confond jamais avec un
+    // pourcentage. Au-delà, la valeur est déjà en pourcentage.
+    const wearPct = wearPctField != null
+      ? (wearPctField > 0 && wearPctField <= 0.2 ? wearPctField * 100 : wearPctField)
+      : (wheelAvg != null ? wheelAvg : null);
+    clean.push({
+      lapNumber: num(field(raw, 'lapNumber', 'lap_number')),
+      lapMs: Math.round(lapMs),
+      cuts: Math.max(0, Math.round(num(field(raw, 'cuts')) || 0)),
+      fuelUsedL: positive(field(raw, 'fuelUsedL', 'fuel_used_l', 'fuelUsed')),
+      fuelLoadedL: positive(field(raw, 'fuelLoadedL', 'fuel_loaded_l', 'fuelLoaded')),
+      tyreWearPct: wearPct != null && wearPct > 0 ? wearPct : null,
+      // Les valeurs par roue ne sont conservées que si elles sont dans le même
+      // domaine que la moyenne (mêmes unités), sinon elles induiraient en erreur.
+      tyreWearFl: wheels && wearPctField == null ? num(wheels[0]) : null,
+      tyreWearFr: wheels && wearPctField == null ? num(wheels[1]) : null,
+      tyreWearRl: wheels && wearPctField == null ? num(wheels[2]) : null,
+      tyreWearRr: wheels && wearPctField == null ? num(wheels[3]) : null,
+      speedMaxKmh: num(field(raw, 'speedMaxKmh', 'speed_max_kmh')),
+      measured: raw.measured !== false
+    });
+  }
+  if (!clean.length) return { ok: false, error: 'aucun tour exploitable (temps manquant)' };
+
+  return {
+    ok: true,
+    clean: {
+      track,
+      trackConfig: payload.trackConfig || null,
+      sessionType: payload.sessionType || null,
+      serverName: payload.serverName || null,
+      campaign: payload.campaign || null,
+      airTempC: num(payload.airTempC),
+      roadTempC: num(payload.roadTempC),
+      grip: num(payload.grip),
+      fuelRate: num(payload.fuelRate),
+      tyreWearRate: num(payload.tyreWearRate),
+      driverGuid,
+      driverName: String(driver.name || payload.driverName || '').trim() || null,
+      car,
+      laps: clean
+    }
+  };
+}
+
+/**
+ * Service applicatif : un seul point d'entrée pour la route HTTP et les tests.
+ */
+class TelemetryService {
+  constructor(store, options = {}) {
+    this.store = store;
+    this.now = options.now || (() => new Date());
+    this.sessions = new Map();       // clé de session → ligne en base
+    this.received = { pushes: 0, laps: 0, rejected: 0 };
+  }
+
+  /** Retrouve (ou ouvre) la session correspondant au contexte envoyé. */
+  async ensureSession(info) {
+    const key = [info.track, info.trackConfig || '', info.sessionType || '', info.campaign || ''].join('|');
+    if (this.sessions.has(key)) return this.sessions.get(key);
+    // Après un redémarrage, on réutilise la session déjà en base pour ne pas
+    // fragmenter une même séance en une session par redéploiement.
+    let existing = [];
+    try {
+      existing = await this.store.select('session', { track: info.track });
+    } catch (e) { /* base vide */ }
+    const match = existing
+      .filter(row => (row.track_config || null) === (info.trackConfig || null))
+      .filter(row => (row.session_type || null) === (info.sessionType || null))
+      .filter(row => (row.campaign || null) === (info.campaign || null))
+      .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0];
+    if (match) {
+      this.sessions.set(key, match);
+      return match;
+    }
+    const row = {
+      started_at: this.now().toISOString(),
+      server_name: info.serverName,
+      track: info.track,
+      track_config: info.trackConfig,
+      session_type: info.sessionType,
+      air_temp_c: info.airTempC,
+      road_temp_c: info.roadTempC,
+      grip: info.grip,
+      weather: null,
+      fuel_rate: info.fuelRate,
+      tyre_wear_rate: info.tyreWearRate,
+      campaign: info.campaign,
+      notes: null
+    };
+    const inserted = await this.store.insert('session', row);
+    this.sessions.set(key, inserted);
+    return inserted;
+  }
+
+  /**
+   * Enregistre un envoi. Idempotent : le même tour renvoyé deux fois (le script
+   * réessaie quand le réseau tombe) n'est compté qu'une fois, grâce au numéro
+   * de tour fourni par la source.
+   * @returns {Promise<{ok:boolean, added:number, duplicates:number, sessionId?:number, error?:string}>}
+   */
+  async ingest(payload) {
+    const check = validatePush(payload);
+    if (!check.ok) {
+      this.received.rejected += 1;
+      return { ok: false, error: check.error, added: 0, duplicates: 0 };
+    }
+    const info = check.clean;
+    const session = await this.ensureSession(info);
+    const stored = await this.store.select('lap', { session_id: session.id });
+    const seen = new Set(stored.map(row => `${row.driver_guid}|${row.car}|${row.lap_number}`));
+
+    let added = 0;
+    let duplicates = 0;
+    for (const lap of info.laps) {
+      const lapNumber = lap.lapNumber;
+      if (lapNumber != null) {
+        const key = `${info.driverGuid}|${info.car}|${lapNumber}`;
+        if (seen.has(key)) { duplicates += 1; continue; }
+        seen.add(key);
+      }
+      await this.store.insert('lap', {
+        session_id: session.id,
+        stint_id: null,
+        driver_guid: info.driverGuid,
+        driver_name: info.driverName,
+        car: info.car,
+        lap_number: lapNumber,
+        lap_ms: lap.lapMs,
+        cuts: lap.cuts,
+        fuel_used_l: lap.fuelUsedL,
+        fuel_loaded_l: lap.fuelLoadedL,
+        tyre_wear_pct: lap.tyreWearPct,
+        tyre_wear_fl: lap.tyreWearFl,
+        tyre_wear_fr: lap.tyreWearFr,
+        tyre_wear_rl: lap.tyreWearRl,
+        tyre_wear_rr: lap.tyreWearRr,
+        tyre_temp_avg_c: null,
+        speed_max_kmh: lap.speedMaxKmh != null ? Math.round(lap.speedMaxKmh) : null,
+        measured: lap.measured
+      });
+      added += 1;
+    }
+    this.received.pushes += 1;
+    this.received.laps += added;
+    return { ok: true, added, duplicates, sessionId: session.id };
+  }
+
+  /** Toutes les lignes (sessions + tours), jointes en mémoire. */
+  async rows(filters = {}) {
+    const sessions = await this.store.select('session');
+    const laps = await this.store.select('lap');
+    const byId = new Map(sessions.map(s => [s.id, s]));
+    const out = [];
+    for (const lap of laps) {
+      const session = byId.get(lap.session_id);
+      if (!session) continue;
+      out.push({
+        ...lap,
+        track: session.track,
+        track_config: session.track_config,
+        session_type: session.session_type,
+        campaign: session.campaign,
+        fuel_rate: session.fuel_rate,
+        tyre_wear_rate: session.tyre_wear_rate,
+        started_at: session.started_at
+      });
+    }
+    return filterRows(out, filters);
+  }
+
+  /** Valeurs réellement présentes, pour construire les listes déroulantes. */
+  async catalog() {
+    const rows = await this.rows();
+    const uniq = key => [...new Set(rows.map(r => r[key]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'fr'));
+    return {
+      tracks: uniq('track'),
+      cars: uniq('car'),
+      drivers: uniq('driver_guid'),
+      driverNames: Object.fromEntries(rows.filter(r => r.driver_guid).map(r => [r.driver_guid, r.driver_name || r.driver_guid])),
+      campaigns: uniq('campaign'),
+      sessions: [...new Set(rows.map(r => `${r.track}|${r.session_type || ''}|${r.started_at}`))]
+    };
+  }
+
+  /**
+   * Agrégat par voiture (et par pilote quand demandé), filtrable.
+   * Les valeurs non mesurées restent `null` : la page affiche « — ».
+   */
+  async summary(filters = {}) {
+    const rows = await this.rows(filters);
+    const groups = new Map();
+    for (const row of rows) {
+      const key = filters.byDriver
+        ? `${row.car}|${row.driver_guid}`
+        : row.car;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    }
+    const cars = [];
+    const loaded = rows.map(r => num(r.fuel_loaded_l)).filter(v => v != null && v > 0);
+    for (const [key, laps] of groups) {
+      const [car, driver] = filters.byDriver ? key.split('|') : [key, null];
+      const profile = carProfile({ car, track: laps[0].track, trackConfig: laps[0].track_config }, laps);
+      const stats = lapStats(laps.map(l => ({ ms: Number(l.lap_ms) })));
+      // Capacité : le plus gros plein vu, pas une valeur devinée.
+      const fuelLoadedMax = Math.max(0, ...laps.map(l => num(l.fuel_loaded_l) || 0));
+      const wear = laps.map(l => num(l.tyre_wear_pct)).filter(v => v != null && v > 0);
+      cars.push({
+        car,
+        driver,
+        driverName: driver ? (laps[0].driver_name || driver) : null,
+        track: laps[0].track,
+        campaign: laps[0].campaign || null,
+        laps: stats.count,
+        bestLapMs: stats.best,
+        medianLapMs: stats.median,
+        stdevMs: stats.stdev,
+        fuelPerLap: profile.fuelPerLap,
+        tyreWearPerLap: avg(wear),
+        fuelCapacity: fuelLoadedMax > 0 ? fuelLoadedMax : null,
+        speedMaxKmh: profile.maxSpeedKmh,
+        measuredLaps: laps.filter(l => l.measured !== false).length,
+        cuts: laps.reduce((a, l) => a + (num(l.cuts) || 0), 0),
+        lastLapAt: laps.map(l => l.recorded_at).filter(Boolean).sort().pop() || null
+      });
+    }
+    cars.sort((a, b) => {
+      // Le classement se fait sur le tour médian : c'est la seule colonne
+      // toujours disponible, même sans mesure de conso.
+      const ma = a.medianLapMs == null ? Infinity : a.medianLapMs;
+      const mb = b.medianLapMs == null ? Infinity : b.medianLapMs;
+      if (ma !== mb) return ma - mb;
+      return String(a.car).localeCompare(String(b.car), 'fr');
+    });
+    return {
+      filters,
+      rows: rows.length,
+      cars,
+      loadedFuelMax: loaded.length ? Math.max(...loaded) : null,
+      contextRates: [...new Set(rows.map(r => `${r.fuel_rate == null ? '—' : r.fuel_rate}/${r.tyre_wear_rate == null ? '—' : r.tyre_wear_rate}`))]
+    };
+  }
+
+  /** Profil pit-lane du circuit, s'il a été mesuré (jour 4 de la campagne). */
+  async pitProfile(track) {
+    const rows = await this.store.select('circuit_profile', { track });
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      pit_lane_loss_ms: num(row.pit_lane_loss_ms),
+      refuel_rate_lps: num(row.refuel_rate_lps),
+      tyre_change_ms: num(row.tyre_change_ms),
+      source: row.source || null
+    };
+  }
+
+  /** Renseigne (ou remplace) les mesures pit-lane d'un circuit. */
+  async savePitProfile(track, profile) {
+    const existing = await this.store.select('circuit_profile', { track });
+    const row = {
+      track,
+      track_config: null,
+      pit_lane_loss_ms: positive(profile.pitLaneLossMs),
+      refuel_rate_lps: positive(profile.refuelRateLps),
+      tyre_change_ms: positive(profile.tyreChangeMs),
+      source: profile.source || 'mesure manuelle'
+    };
+    // Les deux backends savent remplacer une ligne : on corrige la mesure au
+    // lieu d'en empiler une deuxième (le schéma interdit de toute façon le
+    // doublon circuit × configuration).
+    if (existing[0]) return this.store.update('circuit_profile', existing[0].id, row);
+    try {
+      return await this.store.insert('circuit_profile', row);
+    } catch (e) {
+      // Deux admins qui enregistrent en même temps : le second met à jour.
+      const again = await this.store.select('circuit_profile', { track });
+      if (again[0]) return this.store.update('circuit_profile', again[0].id, row);
+      throw e;
+    }
+  }
+
+  /**
+   * Rapport BoP sur les données RÉELLEMENT stockées. Les voitures dont une
+   * mesure manque (conso, usure, pit-lane) sortent « incomplètes » : le rapport
+   * dit ce qui manque au lieu de combler au hasard.
+   */
+  async report(filters = {}, options = {}) {
+    const summary = await this.summary(filters);
+    const pit = await this.pitProfile(filters.track || (summary.cars[0] && summary.cars[0].track));
+    const cars = summary.cars.map(row => ({
+      car: row.car,
+      circuit: row.track,
+      driver: row.driverName || row.driver || null,
+      medianLapMs: row.medianLapMs,
+      fuelPerLap: row.fuelPerLap,
+      fuelCapacity: row.fuelCapacity,
+      tyreWearPerLap: row.tyreWearPerLap,
+      pitLaneLossMs: pit ? pit.pit_lane_loss_ms : null,
+      refuelRateLps: pit ? pit.refuel_rate_lps : null,
+      tyreChangeMs: pit ? pit.tyre_change_ms : null
+    }));
+    // Le nom de campagne ne doit pas être inventé : on prend celui demandé, ou
+    // celui des tours retenus s'ils n'en portent qu'un.
+    const campaigns = [...new Set(summary.cars.map(r => r.campaign).filter(Boolean))];
+    const report = buildReport(cars, {
+      campaign: options.campaign || filters.campaign || (campaigns.length === 1 ? campaigns[0] : 'telemetrie'),
+      matrix: options.matrix || null,
+      bestLaps: Object.fromEntries(summary.cars.map(r => [r.car, r.bestLapMs]))
+    });
+    return {
+      ...report,
+      pitProfile: pit,
+      missingPitProfile: !pit,
+      cars: cars.length,
+      laps: summary.rows
+    };
+  }
+}
+
+/** Applique les filtres voiture / circuit / pilote (et campagne, session). */
+function filterRows(rows, filters = {}) {
+  const car = filters.car ? String(filters.car) : null;
+  const track = filters.track ? String(filters.track) : null;
+  const driver = filters.driver ? String(filters.driver) : null;
+  const campaign = filters.campaign ? String(filters.campaign) : null;
+  return rows.filter(row => {
+    if (car && row.car !== car) return false;
+    if (track && row.track !== track) return false;
+    if (driver && row.driver_guid !== driver) return false;
+    if (campaign && row.campaign !== campaign) return false;
+    return true;
+  });
+}
+
+/** Ouvre le service (PostgreSQL/Neon si configuré, sinon fichier local). */
+async function createTelemetryService(options = {}) {
+  const store = options.store || await openStore(options);
+  return new TelemetryService(store, options);
+}
+
+module.exports = {
+  TelemetryService,
+  createTelemetryService,
+  validatePush,
+  filterRows,
+  MAX_LAPS_PER_PUSH
+};

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Télémétrie & BoP — GDSP</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23102a32%22 width=%22100%22 height=%22100%22/><text y=%2276%22 x=%2210%22 font-size=%2272%22 fill=%22%23d8a347%22>G</text></svg>">
+<style>
+  :root{--ink:#102a32;--ink-2:#173a45;--cream:#f4ecd8;--paper:#f8f2e4;--red:#9c3021;--gold:#cd9a42;--line:#bdb09a;--green:#3b6341;--grey:#6d726c}
+  *{box-sizing:border-box}
+  body{margin:0;background:#e9e0cb;color:var(--ink);font-family:Arial,sans-serif}
+  header{background:var(--ink);color:var(--cream);border-bottom:5px solid #a33426}
+  .top{max-width:1400px;margin:auto;display:flex;align-items:center;gap:20px;padding:12px 26px;flex-wrap:wrap}
+  .brand{font-family:Georgia,serif;font-weight:bold;font-size:19px;letter-spacing:2px;border:2px solid #e4d9c1;padding:6px 10px;text-decoration:none;color:var(--cream)}
+  .brand span{color:#d59c43}
+  .top h1{font-family:Impact,'Arial Narrow',sans-serif;font-size:20px;letter-spacing:1.4px;margin:0;font-weight:normal;text-transform:uppercase}
+  .top .meta{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:11px;letter-spacing:1.2px;color:#cfc6b0;flex-wrap:wrap}
+  .top a.nav{color:#cfc6b0;text-decoration:none;border-bottom:1px solid #57696c}
+  .page{max-width:1400px;margin:auto;padding:22px 26px 60px}
+  .panel{background:var(--paper);border:1px solid var(--line);margin-bottom:18px}
+  .panel h2{font-family:Impact,sans-serif;font-size:16px;letter-spacing:1.2px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line);text-transform:uppercase;font-weight:normal}
+  .panel .body{padding:14px 16px}
+  .note{color:#4d5b59;font-size:12.5px;line-height:1.55}
+  code{background:#e3d7bd;padding:1px 5px;font-size:12px}
+  .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .filters label{display:flex;flex-direction:column;gap:4px;font-size:10px;letter-spacing:1.1px;text-transform:uppercase;color:var(--grey);font-weight:bold}
+  select,input{font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--line);background:#fff;color:var(--ink);min-width:150px}
+  button{font:inherit;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;padding:9px 14px;border:0;background:var(--red);color:#fff;cursor:pointer}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));background:var(--paper);border:1px solid var(--line);margin-bottom:18px}
+  .kpi{padding:13px 18px;border-right:1px solid var(--line)}
+  .kpi:last-child{border-right:0}
+  .kpi .label{font-size:10px;letter-spacing:1.3px;text-transform:uppercase;color:var(--grey);font-weight:bold}
+  .kpi strong{display:block;font-family:Impact,sans-serif;font-size:23px;font-weight:normal;margin-top:3px;line-height:1.15}
+  .kpi small{color:var(--grey);font-size:11px}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:#fff}
+  thead th{background:var(--ink);color:var(--cream);font-size:10px;letter-spacing:1.1px;text-transform:uppercase;padding:8px;text-align:right;white-space:nowrap}
+  thead th:first-child,thead th:nth-child(2){text-align:left}
+  tbody td{padding:7px 8px;border-bottom:1px solid #e6dfcd;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  tbody td:first-child,tbody td:nth-child(2){text-align:left}
+  tbody tr:nth-child(even) td{background:#fdfbf5}
+  .muted{color:var(--grey)}
+  .bad{color:var(--red);font-weight:bold}
+  .ok{color:var(--green);font-weight:bold}
+  .empty{padding:22px;color:var(--grey);font-size:13px}
+  .banner{background:#f3ecd9;border:1px solid var(--line);border-left:5px solid var(--gold);padding:12px 16px;margin-bottom:16px;font-size:12.5px;line-height:1.6;color:#43514f}
+  .banner.bad{border-left-color:var(--red)}
+  .banner code{background:#e3d7bd}
+  .login{max-width:460px}
+  .login input{width:100%;margin-bottom:10px}
+  .links{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .links a{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--red);text-decoration:none;border-bottom:1px solid var(--red);padding-bottom:2px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <a class="brand" href="/">GD<span>SP</span></a>
+    <h1>Télémétrie &amp; Balance of Performance</h1>
+    <div class="meta">
+      <span id="stateText">Connexion…</span>
+      <a class="nav" href="/live-timing">Live timing</a>
+      <a class="nav" href="/">Classement</a>
+      <button class="ghost" id="logoutBtn" style="display:none">Déconnexion</button>
+    </div>
+  </div>
+</header>
+
+<div class="page">
+  <!-- Connexion : cette page lit des mesures internes, elle n'est pas publique. -->
+  <div class="panel login" id="loginPanel" style="display:none">
+    <h2>Accès direction de course</h2>
+    <div class="body">
+      <p class="note">La télémétrie sert à équilibrer les voitures des prochains événements : elle reste réservée à l'administration. Les pilotes n'ont rien à installer, c'est le serveur qui pousse le script de mesure.</p>
+      <input id="user" type="text" placeholder="Identifiant" autocomplete="username">
+      <input id="pass" type="password" placeholder="Mot de passe" autocomplete="current-password">
+      <button id="loginBtn">Entrer</button>
+      <div id="loginError" class="bad" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div id="app" style="display:none">
+    <div id="banner"></div>
+
+    <div class="panel">
+      <h2>Filtres</h2>
+      <div class="body">
+        <div class="filters">
+          <label>Voiture<select id="fCar"><option value="">Toutes</option></select></label>
+          <label>Circuit<select id="fTrack"><option value="">Tous</option></select></label>
+          <label>Pilote<select id="fDriver"><option value="">Tous</option></select></label>
+          <label>Campagne<select id="fCampaign"><option value="">Toutes</option></select></label>
+          <label>Regroupement<select id="fByDriver">
+            <option value="">Par voiture</option>
+            <option value="1">Par voiture et par pilote</option>
+          </select></label>
+          <button id="reloadBtn">Actualiser</button>
+        </div>
+        <p class="note" style="margin:10px 0 0">Les filtres portent sur des mesures réelles : une case vide (« — ») veut dire <b>non mesuré</b>, jamais zéro. C'est ce qui empêche un BoP de reposer sur des chiffres inventés.</p>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="panel">
+      <h2>Voitures mesurées</h2>
+      <div id="cars"><div class="empty">Chargement…</div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="panel">
+        <h2>Mesures pit-lane (jour 4)</h2>
+        <div class="body">
+          <p class="note">Sans ces trois valeurs, aucun temps de course n'est calculable : le rapport affichera les tours mais pas les arrêts.</p>
+          <div class="filters" style="margin-top:10px">
+            <label>Circuit<input id="pTrack" type="text" placeholder="ks_monza66-junior"></label>
+            <label>Pit-lane (s)<input id="pPit" type="number" step="0.1" min="0"></label>
+            <label>Ravitaillement (L/s)<input id="pRefuel" type="number" step="0.1" min="0"></label>
+            <label>Gommes (s)<input id="pTyre" type="number" step="0.1" min="0"></label>
+            <button id="pitBtn">Enregistrer</button>
+          </div>
+          <div id="pitState" class="note" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Rapport BoP — 20 / 30 / 45 minutes</h2>
+        <div class="body">
+          <p class="note">Trois formats, mêmes chiffres : tableur (CSV), lecture (Markdown) et impression (HTML). Le rapport simule les arrêts : une voiture rapide mais gourmande paie son ravitaillement.</p>
+          <div class="links">
+            <a href="#" id="dlCsv">Télécharger CSV</a>
+            <a href="#" id="dlMd">Télécharger Markdown</a>
+            <a href="#" id="dlHtml">Ouvrir HTML</a>
+          </div>
+          <div id="reportState" class="note" style="margin-top:12px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var STORAGE_KEY = 'gdsp_admin_token';
+  var token = localStorage.getItem(STORAGE_KEY) || '';
+  var catalog = null;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function fmtLap(ms) {
+    if (ms == null || !isFinite(ms) || ms <= 0) return '—';
+    var t = Math.round(ms), m = Math.floor(t / 60000), s = Math.floor((t % 60000) / 1000);
+    var mm = String(t % 1000).padStart(3, '0');
+    return m > 0 ? m + ':' + String(s).padStart(2, '0') + '.' + mm : s + '.' + mm;
+  }
+  function num(v, d) {
+    if (v == null || !isFinite(v)) return '—';
+    return Number(v).toFixed(d == null ? 2 : d).replace('.', ',');
+  }
+  function headers(extra) {
+    var h = Object.assign({ 'Accept': 'application/json' }, extra || {});
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    return h;
+  }
+  function query() {
+    var p = new URLSearchParams();
+    ['fCar:car', 'fTrack:track', 'fDriver:driver', 'fCampaign:campaign', 'fByDriver:byDriver'].forEach(function (pair) {
+      var parts = pair.split(':');
+      var v = $(parts[0]).value;
+      if (v) p.set(parts[1], v);
+    });
+    return p;
+  }
+  function showLogin(msg) {
+    $('loginPanel').style.display = '';
+    $('app').style.display = 'none';
+    $('logoutBtn').style.display = 'none';
+    $('loginError').textContent = msg || '';
+    $('stateText').textContent = 'Non connecté';
+  }
+  function showApp() {
+    $('loginPanel').style.display = 'none';
+    $('app').style.display = '';
+    $('logoutBtn').style.display = '';
+    $('stateText').textContent = 'Connecté · mesures en temps réel';
+  }
+
+  function fillSelect(id, values, labels) {
+    var el = $(id);
+    var current = el.value;
+    el.innerHTML = '<option value="">' + (id === 'fCar' ? 'Toutes' : id === 'fTrack' ? 'Tous' : id === 'fCampaign' ? 'Toutes' : 'Tous') + '</option>' +
+      values.map(function (v) {
+        var label = (labels && labels[v]) || v;
+        return '<option value="' + esc(v) + '"' + (v === current ? ' selected' : '') + '>' + esc(label) + '</option>';
+      }).join('');
+  }
+
+  function loadCatalog() {
+    return fetch('/api/telemetry/catalog', { cache: 'no-store', headers: headers() })
+      .then(function (r) { return r.json(); })
+      .then(function (c) {
+        catalog = c;
+        fillSelect('fCar', c.cars || []);
+        fillSelect('fTrack', c.tracks || []);
+        fillSelect('fDriver', c.drivers || [], c.driverNames || {});
+        fillSelect('fCampaign', c.campaigns || []);
+        if (!$('pTrack').value && c.tracks && c.tracks.length) $('pTrack').value = c.tracks[0];
+      });
+  }
+
+  function renderKpis(rows, summary) {
+    var cars = (summary.cars || []);
+    var withFuel = cars.filter(function (c) { return c.fuelPerLap != null; }).length;
+    var withWear = cars.filter(function (c) { return c.tyreWearPerLap != null; }).length;
+    var last = cars.map(function (c) { return c.lastLapAt; }).filter(Boolean).sort().pop();
+    // Un couple sans conso ni usure n'est pas comparable : on le dit au lieu de
+    // le compter comme une voiture de plus.
+    var comparable = cars.filter(function (c) { return c.fuelPerLap != null && c.tyreWearPerLap != null; }).length;
+    $('kpis').innerHTML = [
+      kpi('Tours mesurés', rows, 'sur les filtres actifs'),
+      kpi('Voitures comparables', comparable, cars.length + ' au total · ' + withFuel + ' avec conso · ' + withWear + ' avec usure'),
+      kpi('Pilotes', (catalog && catalog.drivers ? catalog.drivers.length : '—'), 'identités distinctes'),
+      kpi('Dernier tour', last ? new Date(last).toLocaleString('fr-FR') : '—', 'arrivée la plus récente')
+    ].join('');
+  }
+  function kpi(label, value, sub) {
+    return '<div class="kpi"><span class="label">' + esc(label) + '</span><strong>' + esc(value) + '</strong><small>' + esc(sub) + '</small></div>';
+  }
+
+  function renderCars(summary) {
+    var cars = summary.cars || [];
+    if (!cars.length) {
+      $('cars').innerHTML = '<div class="empty">Aucun tour enregistré pour ces filtres. Dès qu\'un pilote roule sur le serveur équipé du script, ses tours apparaissent ici — sans qu\'il ait installé quoi que ce soit.</div>';
+      return;
+    }
+    var html = '<table><thead><tr>' +
+      '<th>Voiture</th><th>Circuit</th><th>Tours</th><th>Meilleur</th><th>Médian</th><th>Régularité</th>' +
+      '<th>L/tour</th><th>Gomme %/tour</th><th>Réservoir</th><th>Autonomie ess.</th><th>Autonomie gomme</th><th>Vit. max</th>' +
+      '</tr></thead><tbody>';
+    cars.forEach(function (c) {
+      var fuelStint = (c.fuelPerLap && c.fuelCapacity) ? c.fuelCapacity / c.fuelPerLap : null;
+      var tyreStint = c.tyreWearPerLap ? 100 / c.tyreWearPerLap : null;
+      html += '<tr>' +
+        '<td><b>' + esc(c.car) + '</b>' + (c.driver ? ' <span class="muted">· ' + esc(c.driverName || c.driver) + '</span>' : '') + '</td>' +
+        '<td>' + esc(c.track || '—') + '</td>' +
+        '<td>' + c.laps + '</td>' +
+        '<td>' + fmtLap(c.bestLapMs) + '</td>' +
+        '<td>' + fmtLap(c.medianLapMs) + '</td>' +
+        '<td>' + (c.stdevMs != null ? num(c.stdevMs / 1000, 3) + ' s' : '—') + '</td>' +
+        '<td>' + num(c.fuelPerLap, 3) + '</td>' +
+        '<td>' + num(c.tyreWearPerLap, 2) + '</td>' +
+        '<td>' + num(c.fuelCapacity, 1) + '</td>' +
+        '<td>' + (fuelStint ? num(fuelStint, 1) + ' tr' : '—') + '</td>' +
+        '<td>' + (tyreStint ? num(tyreStint, 1) + ' tr' : '—') + '</td>' +
+        '<td>' + (c.speedMaxKmh != null ? c.speedMaxKmh : '—') + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    $('cars').innerHTML = html;
+  }
+
+  function renderBanner(summary) {
+    var missing = [];
+    var cars = summary.cars || [];
+    if (!cars.length) {
+      $('banner').innerHTML = '<div class="banner"><b>Aucune donnée encore.</b> Déclare le script dans <code>csp_extra_options.ini</code> du serveur (' +
+        '<code>[SCRIPT_2]</code> → <code>' + esc(location.origin) + '/csp/telemetry.lua</code>), puis roule quelques tours. ' +
+        'La procédure pas-à-pas est dans <code>tools/telemetry/README.md</code>.</div>';
+      return;
+    }
+    if (cars.some(function (c) { return c.fuelPerLap == null; })) missing.push('consommation (carburant)');
+    if (cars.some(function (c) { return c.tyreWearPerLap == null; })) missing.push('usure des pneus');
+    if (!summary.pitProfile) missing.push('mesures pit-lane du circuit');
+    if (!missing.length) {
+      $('banner').innerHTML = '<div class="banner"><b>Mesures complètes.</b> Le rapport peut simuler les arrêts et comparer les voitures à distance égale.</div>';
+      return;
+    }
+    $('banner').innerHTML = '<div class="banner bad"><b>Mesures incomplètes : ' + esc(missing.join(' · ')) + '.</b> ' +
+      'Les tours sont bien enregistrés (le chrono est fiable), mais un calcul de BoP sans ces valeurs comparerait des voitures sur une partie de la réalité seulement. ' +
+      'Le script CSP affiche en jeu ce qu\'il a réussi à lire : <code>Télémétrie GDSP · carburant lu · pneus lus</code>.</div>';
+  }
+
+  function refresh() {
+    var q = query().toString();
+    return Promise.all([
+      loadCatalog().catch(function () {}),
+      fetch('/api/telemetry/summary?' + q, { cache: 'no-store', headers: headers() }).then(function (r) {
+        if (r.status === 401) throw new Error('auth');
+        return r.json();
+      })
+    ]).then(function (res) {
+      var summary = res[1];
+      showApp();
+      renderBanner(summary);
+      renderKpis(summary.rows, summary);
+      renderCars(summary);
+      renderPit(summary.pitProfile);
+      renderLinks();
+    }).catch(function (e) {
+      if (e.message === 'auth') { token = ''; localStorage.removeItem(STORAGE_KEY); showLogin('Session expirée, reconnecte-toi.'); }
+      else { $('banner').innerHTML = '<div class="banner bad">Lecture impossible : ' + esc(e.message) + '</div>'; }
+    });
+  }
+
+  function renderPit(pit) {
+    if (pit) {
+      if (pit.pit_lane_loss_ms != null) $('pPit').value = (pit.pit_lane_loss_ms / 1000).toFixed(1);
+      if (pit.refuel_rate_lps != null) $('pRefuel').value = pit.refuel_rate_lps;
+      if (pit.tyre_change_ms != null) $('pTyre').value = (pit.tyre_change_ms / 1000).toFixed(1);
+      $('pitState').innerHTML = '<span class="ok">Mesures enregistrées</span> pour <b>' + esc($('pTrack').value) + '</b>.';
+    } else {
+      $('pitState').innerHTML = '<span class="bad">Aucune mesure pit-lane</span> pour ce circuit : les arrêts ne peuvent pas être simulés.';
+    }
+  }
+
+  // Les liens de téléchargement sont de simples <a href> : le navigateur n'y met
+  // aucun en-tête Authorization. On ne peut donc pas leur donner le jeton admin
+  // — et on ne veut pas le mettre dans l'URL, où il finirait dans l'historique
+  // et les journaux. On récupère donc le rapport en fetch, puis on le sauve.
+  var reportUrls = { csv: '', md: '', html: '' };
+  function renderLinks() {
+    var q = query().toString();
+    reportUrls.csv = '/api/telemetry/report?' + q + '&format=csv';
+    reportUrls.md = '/api/telemetry/report?' + q + '&format=md';
+    reportUrls.html = '/api/telemetry/report?' + q + '&format=html';
+    $('reportState').innerHTML = 'Le rapport ne contient que les mesures réelles ; les voitures dont il manque une valeur apparaissent signalées, jamais complétées.';
+  }
+  function fetchReport(kind) {
+    var url = reportUrls[kind];
+    if (!url) return;
+    $('reportState').innerHTML = 'Préparation du rapport…';
+    fetch(url, { cache: 'no-store', headers: headers() })
+      .then(function (r) {
+        if (r.status === 401) throw new Error('auth');
+        if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || ('erreur ' + r.status)); });
+        return r.blob().then(function (blob) { return { blob: blob, kind: kind }; });
+      })
+      .then(function (out) {
+        if (out.kind === 'html') { window.open(URL.createObjectURL(out.blob), '_blank'); }
+        else {
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(out.blob);
+          a.download = 'bop-' + new Date().toISOString().slice(0, 10) + '.' + out.kind;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+        $('reportState').innerHTML = 'Rapport récupéré (' + new Date().toLocaleTimeString('fr-FR') + ').';
+      })
+      .catch(function (e) {
+        if (e.message === 'auth') { token = ''; localStorage.removeItem(STORAGE_KEY); showLogin('Session expirée, reconnecte-toi.'); return; }
+        $('reportState').innerHTML = '<span class="bad">Rapport indisponible : ' + esc(e.message) + '</span>';
+      });
+  }
+
+  $('loginBtn').addEventListener('click', function () {
+    $('loginError').textContent = '';
+    fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: $('user').value, password: $('pass').value })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.j.token) throw new Error(res.j.error || 'Identifiants refusés.');
+        token = res.j.token;
+        localStorage.setItem(STORAGE_KEY, token);
+        refresh();
+      })
+      .catch(function (e) { $('loginError').textContent = e.message; });
+  });
+  $('logoutBtn').addEventListener('click', function () {
+    token = '';
+    localStorage.removeItem(STORAGE_KEY);
+    showLogin('Déconnecté.');
+  });
+  $('reloadBtn').addEventListener('click', refresh);
+  $('dlCsv').addEventListener('click', function (e) { e.preventDefault(); fetchReport('csv'); });
+  $('dlMd').addEventListener('click', function (e) { e.preventDefault(); fetchReport('md'); });
+  $('dlHtml').addEventListener('click', function (e) { e.preventDefault(); fetchReport('html'); });
+  ['fCar', 'fTrack', 'fDriver', 'fCampaign', 'fByDriver'].forEach(function (id) {
+    $(id).addEventListener('change', refresh);
+  });
+  $('pTrack').addEventListener('change', function () {
+    fetch('/api/telemetry/summary?track=' + encodeURIComponent($('pTrack').value), { cache: 'no-store', headers: headers() })
+      .then(function (r) { return r.json(); })
+      .then(function (s) { renderPit(s.pitProfile); })
+      .catch(function () {});
+  });
+  $('pitBtn').addEventListener('click', function () {
+    var body = {
+      track: $('pTrack').value,
+      pitLaneLossMs: Math.round(Number($('pPit').value) * 1000),
+      refuelRateLps: Number($('pRefuel').value),
+      tyreChangeMs: Math.round(Number($('pTyre').value) * 1000)
+    };
+    if (!body.track) { $('pitState').innerHTML = '<span class="bad">Indique le circuit.</span>'; return; }
+    fetch('/api/telemetry/pit-profile', {
+      method: 'PUT', headers: headers({ 'Content-Type': 'application/json' }), body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j.error) throw new Error(j.error);
+        $('pitState').innerHTML = '<span class="ok">Enregistré.</span> Le rapport peut maintenant simuler les arrêts.';
+        refresh();
+      })
+      .catch(function (e) { $('pitState').innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; });
+  });
+  $('pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('loginBtn').click(); });
+
+  // Au chargement : le jeton existe-t-il encore côté serveur ?
+  if (!token) { showLogin(''); return; }
+  fetch('/api/admin/verify', { headers: headers() })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('auth')); })
+    .then(function (j) { if (!j.ok) throw new Error('auth'); return refresh(); })
+    .catch(function () { token = ''; localStorage.removeItem(STORAGE_KEY); showLogin('Reconnecte-toi.'); });
+})();
+</script>
+</body>
+</html>
