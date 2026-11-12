@@ -19,7 +19,8 @@ ce dépôt, dans la même base PostgreSQL : voir [`tools/events/README.md`](tool
 - Sans `DATABASE_URL` sur ce service, les routes `/api/events*` sont laissées au
   proxy et l'ancien backend répond : le site fonctionne comme avant.
 - Avec `DATABASE_URL`, elles sont lues et écrites en local, et le backend peut
-  être éteint.
+  être éteint : l'accueil, les pages événement et le sitemap sont rendus depuis
+  la base (le repli HTTP ne sert plus qu'en cas de base absente ou en erreur).
 - Le jeton admin est un JWT de 8 h. Le mot de passe ne circule plus comme jeton.
 
 ## Développement et vérification

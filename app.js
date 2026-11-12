@@ -1018,9 +1018,50 @@ const seo = require('./seo');
 // Production origin; PUBLIC_SITE_URL can override it when migrating to a custom domain.
 const PUBLIC_SITE_URL = (process.env.PUBLIC_SITE_URL || 'https://classement-ac-1.onrender.com').replace(/\/$/, '');
 const publicJsonCache = new Map();
+/**
+ * Lecture JSON pour le rendu serveur (accueil, page événement, sitemap).
+ *
+ * En source locale, on interroge la base : le site n'a plus besoin d'un second
+ * service pour afficher son propre catalogue. La lecture HTTP vers le backend
+ * reste le repli (base non configurée, ou EVENTS_SOURCE=backend), ce qui
+ * garantit qu'une page ne disparaît jamais pendant la migration.
+ */
 async function publicJson(apiPath) {
   const cached = publicJsonCache.get(apiPath);
   if (cached && cached.until > Date.now()) return cached.value;
+  const value = eventsSource() === 'local'
+    ? await publicJsonLocal(apiPath).catch(err => {
+        // Un 404 est une réponse : l'événement n'existe pas, le backend ne le
+        // connaîtrait pas davantage. Tout le reste (pas de base, base en
+        // erreur) justifie de retomber sur l'ancien service.
+        if (err.status === 404) throw err;
+        console.warn('rendu: lecture locale impossible (' + err.message + '), repli sur le backend');
+        return publicJsonRemote(apiPath);
+      })
+    : await publicJsonRemote(apiPath);
+  publicJsonCache.set(apiPath, { value, until: Date.now() + 60000 });
+  return value;
+}
+
+/** Catalogue et fiche événement, lus directement dans la base locale. */
+async function publicJsonLocal(apiPath) {
+  const store = await getEventsStore();
+  if (!store) throw new Error('aucune base configurée');
+  const match = /^\/api\/events(?:\/([^/?]+))?/.exec(apiPath);
+  if (!match) throw new Error('route inconnue en local : ' + apiPath);
+  if (match[1]) {
+    const event = await store.get(decodeURIComponent(match[1]));
+    if (!event) {
+      const err = new Error('Not found');
+      err.status = 404;
+      throw err;
+    }
+    return event;
+  }
+  return { events: await store.list() };
+}
+
+async function publicJsonRemote(apiPath) {
   const url = new URL(apiPath, BACKEND_URL);
   const value = await new Promise((resolve,reject) => {
     const req = (url.protocol==='https:'?https:http).get(url,{timeout:10000},response=>{
@@ -1036,7 +1077,6 @@ async function publicJson(apiPath) {
     req.on('timeout',()=>req.destroy(new Error('Backend timeout')));
     req.on('error',reject);
   });
-  publicJsonCache.set(apiPath,{value,until:Date.now()+60000});
   return value;
 }
 function sendPublicPage(res, options) {

@@ -64,6 +64,25 @@ Autrement, il suffit de se reconnecter.
 Retour en arrière à tout moment : `EVENTS_SOURCE=backend` et le proxy reprend
 la main, sans redéploiement de code.
 
+## Pages publiques : rendues depuis la base
+
+L'accueil (`/`), la fiche d'un événement (`/evenements/:slug`) et le
+`sitemap.xml` sont rendus **côté serveur** : ils interrogeaient le backend en
+HTTP, ils lisent maintenant la base (`publicJson` → `publicJsonLocal`). Le cache
+de 60 s est conservé.
+
+Le repli HTTP reste en place, mais uniquement quand il a un sens :
+
+| Cas | Comportement |
+| --- | --- |
+| événement inexistant | **404** immédiat — le backend ne le connaîtrait pas davantage |
+| aucune base configurée, ou base en erreur | repli sur l'ancien service (une page ne doit pas disparaître pendant la migration) |
+| `EVENTS_SOURCE=backend` | tout repasse par l'ancien service, comme avant |
+
+Conséquence : une fois `DATABASE_URL` posée et vérifiée, `GDSP_API_URL` et
+`BACKEND_URL` peuvent être supprimées et le service `gdsp-render-backend` éteint
+sans que l'accueil, les pages événement ni le sitemap ne tombent.
+
 ## Ce qui reste proxié
 
 Les routes qui n'existent que dans l'ancien backend et qui ne sont pas des

@@ -429,3 +429,129 @@ test('openEventStore ne tente rien sans URL de base', async () => {
     process.env = saved;
   }
 });
+
+// --- pages publiques sans backend -------------------------------------------
+
+/*
+ * Le dernier kilomètre de la fusion : l'accueil, la page d'un événement et le
+ * sitemap sont rendus côté serveur. Ils interrogeaient le backend en HTTP ; ils
+ * lisent maintenant la base. Ce test lance le vrai `app.js` avec une base
+ * factice (aucun backend joignable) et vérifie que les pages sortent quand même.
+ */
+function fakeEventPool() {
+  const events = [
+    {
+      slug: 'alpha-romeo-cup', name: 'alpha romeo cup', kind: 'championship',
+      points_config: { polePoints: 1 },
+      data: { eventInfo: { briefing: 'Une manche de démonstration' }, sessions: [{ date: '2026-11-08', track: 'Spa' }] },
+      updated_at: '2026-11-08T19:36:26.904Z'
+    },
+    {
+      slug: '7-gdsp-nissan-r32', name: 'Open #7 GDSP', kind: 'archive',
+      points_config: {}, data: {}, updated_at: '2026-11-08T20:00:37.809Z'
+    }
+  ];
+  const pool = {
+    async query(sql, params = []) {
+      const s = sql.trim();
+      if (/^CREATE|^SELECT to_regclass/.test(s)) return { rows: [{ tbl: null }], rowCount: 0 };
+      if (/^SELECT championship/.test(s)) return { rows: [] };
+      if (/^SELECT slug, name, kind, points_config, updated_at/.test(s)) {
+        return { rows: events.map(e => ({ slug: e.slug, name: e.name, kind: e.kind, points_config: e.points_config, updated_at: e.updated_at })) };
+      }
+      if (/^SELECT slug, name, kind, points_config, data/.test(s)) {
+        const found = events.find(e => e.slug === params[0]);
+        return { rows: found ? [found] : [] };
+      }
+      return { rows: [], rowCount: 0 };
+    }
+  };
+  return pool;
+}
+
+test('sans backend : accueil, page événement et sitemap sortent depuis la base', async t => {
+  const http = require('node:http');
+  const { spawn } = require('node:child_process');
+  const { once } = require('node:events');
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const ROOT = path.resolve(__dirname, '..');
+
+  // Un port libre, puis on le libère pour le serveur enfant.
+  const reservation = http.createServer();
+  reservation.listen(0, '127.0.0.1');
+  await once(reservation, 'listening');
+  const port = reservation.address().port;
+  await new Promise(r => reservation.close(r));
+
+  /*
+   * Le vrai `app.js` est lancé, mais `require('pg')` est remplacé par un faux
+   * pool (préchargé via --require) : aucune connexion réseau, et le module est
+   * intercepté là où il est demandé, c'est-à-dire dans tools/events/api.js.
+   */
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gdsp-pages-'));
+  const preload = path.join(dir, 'fake-pg.js');
+  fs.writeFileSync(preload, `
+    const Module = require('module');
+    const fake = { Pool: function () { return (${fakeEventPool.toString()})(); } };
+    const load = Module._load;
+    Module._load = function (request, parent, isMain) {
+      if (request === 'pg') return fake;
+      return load.call(this, request, parent, isMain);
+    };
+  `, 'utf8');
+  const runner = path.join(dir, 'run.js');
+  fs.writeFileSync(runner, `require(${JSON.stringify(path.join(ROOT, 'app.js'))});`, 'utf8');
+
+  const child = spawn(process.execPath, ['--require', preload, runner], {
+    cwd: dir,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      BACKEND_URL: 'http://127.0.0.1:1',     // backend volontairement éteint
+      DATABASE_URL: 'postgres://faux/faux',
+      EVENTS_SOURCE: 'local',
+      LIVE_TIMING_ENABLED: '0',
+      PUBLIC_SITE_URL: 'https://gdsp.example',
+      ADMIN_PASSWORD: 'motdepasse-de-test',
+      JWT_SECRET: 'secret-de-test-suffisamment-long'
+    }
+  });
+  t.after(() => child.kill());
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('démarrage trop long')), 20000);
+    child.stdout.on('data', chunk => {
+      if (String(chunk).includes('démarré')) { clearTimeout(timer); resolve(); }
+    });
+    child.stderr.on('data', chunk => {
+      if (/Cannot find|SyntaxError/.test(String(chunk))) { clearTimeout(timer); reject(new Error(String(chunk).slice(0, 400))); }
+    });
+    child.on('exit', code => { clearTimeout(timer); reject(new Error('serveur arrêté ' + code)); });
+  });
+  const get = p => fetch(`http://127.0.0.1:${port}${p}`);
+
+  // 1. Accueil : les deux événements sont listés, avec leurs liens.
+  const home = await get('/');
+  assert.equal(home.status, 200);
+  const homeHtml = await home.text();
+  assert.match(homeHtml, /href="\/evenements\/alpha-romeo-cup"/);
+  assert.match(homeHtml, /href="\/evenements\/7-gdsp-nissan-r32"/);
+
+  // 2. Page événement rendue côté serveur, sans JavaScript.
+  const page = await get('/evenements/alpha-romeo-cup');
+  assert.equal(page.status, 200);
+  const pageHtml = await page.text();
+  assert.match(pageHtml, /alpha romeo cup/);
+  assert.match(pageHtml, /Une manche de démonstration/);
+
+  // 3. Sitemap : les URLs viennent de la base.
+  const sitemap = await get('/sitemap.xml');
+  assert.equal(sitemap.status, 200);
+  const xml = await sitemap.text();
+  assert.match(xml, /<loc>https:\/\/gdsp\.example\/evenements\/alpha-romeo-cup<\/loc>/);
+
+  // 4. Un slug inexistant reste un 404 : inutile d'interroger un backend mort.
+  const missing = await get('/evenements/inexistant-xyz');
+  assert.equal(missing.status, 404);
+});
