@@ -1,0 +1,270 @@
+{
+  "campaign": "demo-monza-junior",
+  "note": "Démonstration : chrono réel du serveur {GDSP_ Server test 1 (1:15.576). Réservoir, conso, usure et pit-lane sont des HYPOTHÈSES de démonstration, pas des mesures.",
+  "session": {
+    "track": "ks_monza66-junior",
+    "fuel_rate": 100,
+    "tyre_wear_rate": 100
+  },
+  "pitProfile": {
+    "pit_lane_loss_ms": 22000,
+    "refuel_rate_lps": 2.5,
+    "tyre_change_ms": 12000
+  },
+  "cars": [
+    {
+      "car": "alfa_giulietta_spider",
+      "circuit": "ks_monza66-junior",
+      "medianLapMs": 75576,
+      "fuelPerLap": 1.5,
+      "fuelCapacity": 45,
+      "tyreWearPerLap": 1.4,
+      "pitLaneLossMs": 22000,
+      "refuelRateLps": 2.5,
+      "tyreChangeMs": 12000
+    },
+    {
+      "car": "actk_lola_t290",
+      "circuit": "ks_monza66-junior",
+      "medianLapMs": 74902,
+      "fuelPerLap": 2.4,
+      "fuelCapacity": 30,
+      "tyreWearPerLap": 2.2,
+      "pitLaneLossMs": 22000,
+      "refuelRateLps": 2.5,
+      "tyreChangeMs": 12000
+    },
+    {
+      "car": "bmw_m3_e30",
+      "circuit": "ks_monza66-junior",
+      "medianLapMs": 76210,
+      "fuelPerLap": 1.9,
+      "fuelCapacity": 55,
+      "tyreWearPerLap": 2.8,
+      "pitLaneLossMs": 22000,
+      "refuelRateLps": 2.5,
+      "tyreChangeMs": 12000
+    }
+  ],
+  "matrix": {
+    "cars": [
+      "actk_lola_t290",
+      "alfa_giulietta_spider"
+    ],
+    "driversCommon": [
+      "76561198015862674"
+    ],
+    "cells": {
+      "76561198015862674|actk_lola_t290": {
+        "medianLapMs": 74902
+      },
+      "76561198015862674|alfa_giulietta_spider": {
+        "medianLapMs": 75576
+      }
+    },
+    "carDeltas": {
+      "actk_lola_t290": {
+        "deltaMs": 0,
+        "drivers": 1
+      },
+      "alfa_giulietta_spider": {
+        "deltaMs": 674,
+        "drivers": 1
+      }
+    }
+  },
+  "laps": [
+    {
+      "driver_guid": "76561198015862674",
+      "car": "alfa_giulietta_spider",
+      "lap_ms": 75000,
+      "fuel_used_l": 1.5,
+      "tyre_wear_pct": 1.4,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "alfa_giulietta_spider",
+      "lap_ms": 75100,
+      "fuel_used_l": 1.5,
+      "tyre_wear_pct": 1.4,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "alfa_giulietta_spider",
+      "lap_ms": 75200,
+      "fuel_used_l": 1.5,
+      "tyre_wear_pct": 1.4,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "alfa_giulietta_spider",
+      "lap_ms": 75300,
+      "fuel_used_l": 1.5,
+      "tyre_wear_pct": 1.4,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "alfa_giulietta_spider",
+      "lap_ms": 75400,
+      "fuel_used_l": 1.5,
+      "tyre_wear_pct": 1.4,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "alfa_giulietta_spider",
+      "lap_ms": 75500,
+      "fuel_used_l": 1.5,
+      "tyre_wear_pct": 1.4,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "alfa_giulietta_spider",
+      "lap_ms": 75600,
+      "fuel_used_l": 1.5,
+      "tyre_wear_pct": 1.4,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "alfa_giulietta_spider",
+      "lap_ms": 75700,
+      "fuel_used_l": 1.5,
+      "tyre_wear_pct": 1.4,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "alfa_giulietta_spider",
+      "lap_ms": 75800,
+      "fuel_used_l": 1.5,
+      "tyre_wear_pct": 1.4,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "alfa_giulietta_spider",
+      "lap_ms": 75900,
+      "fuel_used_l": 1.5,
+      "tyre_wear_pct": 1.4,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "alfa_giulietta_spider",
+      "lap_ms": 76000,
+      "fuel_used_l": 1.5,
+      "tyre_wear_pct": 1.4,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "alfa_giulietta_spider",
+      "lap_ms": 76100,
+      "fuel_used_l": 1.5,
+      "tyre_wear_pct": 1.4,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "actk_lola_t290",
+      "lap_ms": 76200,
+      "fuel_used_l": 2.4,
+      "tyre_wear_pct": 2.2,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "actk_lola_t290",
+      "lap_ms": 76300,
+      "fuel_used_l": 2.4,
+      "tyre_wear_pct": 2.2,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "actk_lola_t290",
+      "lap_ms": 76400,
+      "fuel_used_l": 2.4,
+      "tyre_wear_pct": 2.2,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "actk_lola_t290",
+      "lap_ms": 76500,
+      "fuel_used_l": 2.4,
+      "tyre_wear_pct": 2.2,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "actk_lola_t290",
+      "lap_ms": 76600,
+      "fuel_used_l": 2.4,
+      "tyre_wear_pct": 2.2,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "actk_lola_t290",
+      "lap_ms": 76700,
+      "fuel_used_l": 2.4,
+      "tyre_wear_pct": 2.2,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "actk_lola_t290",
+      "lap_ms": 76800,
+      "fuel_used_l": 2.4,
+      "tyre_wear_pct": 2.2,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "actk_lola_t290",
+      "lap_ms": 76900,
+      "fuel_used_l": 2.4,
+      "tyre_wear_pct": 2.2,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "actk_lola_t290",
+      "lap_ms": 77000,
+      "fuel_used_l": 2.4,
+      "tyre_wear_pct": 2.2,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "actk_lola_t290",
+      "lap_ms": 77100,
+      "fuel_used_l": 2.4,
+      "tyre_wear_pct": 2.2,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "actk_lola_t290",
+      "lap_ms": 77200,
+      "fuel_used_l": 2.4,
+      "tyre_wear_pct": 2.2,
+      "measured": true
+    },
+    {
+      "driver_guid": "76561198015862674",
+      "car": "actk_lola_t290",
+      "lap_ms": 77300,
+      "fuel_used_l": 2.4,
+      "tyre_wear_pct": 2.2,
+      "measured": true
+    }
+  ]
+}
