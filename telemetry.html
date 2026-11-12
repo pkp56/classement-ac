@@ -80,6 +80,7 @@
       <input id="pass" type="password" placeholder="Mot de passe" autocomplete="current-password">
       <button id="loginBtn">Entrer</button>
       <div id="loginError" class="bad" style="margin-top:10px"></div>
+      <div id="loginHint" class="note" style="margin-top:8px"></div>
     </div>
   </div>
 
@@ -306,8 +307,14 @@
       renderPit(summary.pitProfile);
       renderLinks();
     }).catch(function (e) {
-      if (e.message === 'auth') { token = ''; localStorage.removeItem(STORAGE_KEY); showLogin('Session expirée, reconnecte-toi.'); }
-      else { $('banner').innerHTML = '<div class="banner bad">Lecture impossible : ' + esc(e.message) + '</div>'; }
+      if (e.message === 'auth') {
+        token = '';
+        localStorage.removeItem(STORAGE_KEY);
+        $('loginHint').textContent = 'Ce service refuse le jeton : vérifie ADMIN_PASSWORD sur Render.';
+        showLogin('Connexion refusée par ce service.');
+      } else {
+        $('banner').innerHTML = '<div class="banner bad">Lecture impossible : ' + esc(e.message) + '</div>';
+      }
     });
   }
 
@@ -362,18 +369,31 @@
 
   $('loginBtn').addEventListener('click', function () {
     $('loginError').textContent = '';
+    $('loginHint').textContent = '';
     fetch('/api/admin/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: $('user').value, password: $('pass').value })
-    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; })
+        .then(function (j) { return { ok: r.ok, status: r.status, j: j }; });
+    })
       .then(function (res) {
-        if (!res.ok || !res.j.token) throw new Error(res.j.error || 'Identifiants refusés.');
+        if (!res.ok || !res.j.token) {
+          throw new Error(res.status === 401
+            ? 'Identifiants refusés par le serveur.'
+            : (res.j.error || ('Connexion impossible (HTTP ' + res.status + ').')));
+        }
         token = res.j.token;
         localStorage.setItem(STORAGE_KEY, token);
-        refresh();
+        // Le jeton du site et celui du backend ne sont pas forcément le même :
+        // on vérifie tout de suite, et on dit clairement lequel refuse.
+        return verifySession(res.j);
       })
-      .catch(function (e) { $('loginError').textContent = e.message; });
+      .catch(function (e) {
+        if (e.message === 'auth') return;   // déjà expliqué par verifySession
+        $('loginError').textContent = e.message;
+      });
   });
   $('logoutBtn').addEventListener('click', function () {
     token = '';
@@ -413,12 +433,57 @@
   });
   $('pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('loginBtn').click(); });
 
-  // Au chargement : le jeton existe-t-il encore côté serveur ?
+  /*
+   * Vérifie le jeton auprès de ce service, puis affiche les données.
+   *
+   * Deux refus très différents ne doivent pas produire le même écran :
+   *   - 401 → ce service ne reconnaît pas le jeton. C'est le cas quand la
+   *     connexion a été validée par le backend : le mot de passe du site n'est
+   *     alors pas celui du service. On le dit, au lieu de « reconnecte-toi » ;
+   *   - erreur réseau ou 5xx (service en cold start) → on GARDE le jeton : le
+   *     jeter obligerait à se reconnecter pour un simple réveil de 30 s.
+   */
+  function verifySession(login) {
+    var localWarning = login && login.warning;
+    return fetch('/api/admin/verify', { cache: 'no-store', headers: headers() })
+      .then(function (r) {
+        if (r.ok) {
+          return r.json().then(function (j) {
+            if (!j || !j.ok) throw new Error('auth-401');
+            $('loginHint').textContent = '';
+            return refresh();
+          });
+        }
+        if (r.status === 401) throw new Error('auth-401');
+        if (r.status === 502 || r.status === 504) throw new Error('auth-wake');
+        throw new Error('Vérification impossible (HTTP ' + r.status + ').');
+      })
+      .catch(function (e) {
+        if (e.message === 'auth-401') {
+          token = '';
+          localStorage.removeItem(STORAGE_KEY);
+          $('loginHint').textContent = localWarning
+            ? 'Le backend a validé ces identifiants, mais ce service-ci ne reconnaît pas le jeton : ' +
+              'ADMIN_PASSWORD n\'est pas défini sur ce service Render.'
+            : 'Ce service refuse le jeton (HTTP 401). Définis ADMIN_PASSWORD (et ADMIN_USERNAME) ' +
+              'sur ce même service Render : c\'est ce mot de passe qui protège la télémétrie.';
+          throw new Error('auth');
+        }
+        if (e.message === 'auth-wake') {
+          throw new Error('Le service démarre (Render à froid, ~30 s). Réessaie dans un instant.');
+        }
+        if (e instanceof TypeError) {
+          throw new Error('Service injoignable. Réessaie dans un instant.');
+        }
+        throw e;
+      });
+  }
+
+  // Au chargement : le jeton enregistré est-il toujours valable ?
   if (!token) { showLogin(''); return; }
-  fetch('/api/admin/verify', { headers: headers() })
-    .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('auth')); })
-    .then(function (j) { if (!j.ok) throw new Error('auth'); return refresh(); })
-    .catch(function () { token = ''; localStorage.removeItem(STORAGE_KEY); showLogin('Reconnecte-toi.'); });
+  verifySession(null).catch(function (e) {
+    showLogin(e.message === 'auth' ? 'Connexion refusée par ce service.' : e.message);
+  });
 })();
 </script>
 </body>

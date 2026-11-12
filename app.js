@@ -521,15 +521,26 @@ app.get('/api/global-exclusions', (_req,res)=>{
 });
 // Mise à jour (admin seulement). Vérifie soit avec le mot de passe local (MVP),
 // soit en relayant la requête vers le backend (/api/admin/verify).
-async function verifyAdmin(req){
-  if(checkAdminAuth(req)) return true;
+// Vérification détaillée : « refusé » et « backend injoignable » ne sont pas la
+// même chose. Confondre les deux fait afficher « reconnecte-toi » à un admin
+// dont les identifiants sont bons, simplement parce que le backend dormait.
+//   'ok'          → jeton accepté (mot de passe local ou backend)
+//   'denied'      → le backend a explicitement refusé (401/403)
+//   'unavailable' → pas de réponse (réseau, timeout, 5xx)
+async function verifyAdminDetail(req){
+  if(checkAdminAuth(req)) return 'ok';
+  // Sans jeton du tout, inutile d'interroger le backend : c'est un refus net.
+  if(!/^Bearer\s+\S/.test(String(req.headers.authorization||''))) return 'denied';
   try{
     const {status} = await new Promise((resolve,reject)=>{
       const target=new URL('/api/admin/verify', BACKEND_URL);
       const hdrs=Object.assign({}, req.headers);
       delete hdrs.host;delete hdrs.connection;delete hdrs.origin;delete hdrs.referer;delete hdrs['content-length'];
       const proto=target.protocol==='https:'?https:http;
-      const up=proto.request({method:'GET',hostname:target.hostname,port:target.port,path:target.pathname+target.search,headers:hdrs,timeout:8000},(upRes)=>{
+      // Même tolérance que le login : sur Render free tier, le backend peut
+      // mettre 20-30 s à sortir de veille. Un délai de 8 s faisait échouer une
+      // session pourtant valide dès que le service était froid.
+      const up=proto.request({method:'GET',hostname:target.hostname,port:target.port,path:target.pathname+target.search,headers:hdrs,timeout:60000},(upRes)=>{
         // consume body
         upRes.on('data',()=>{});
         upRes.on('end',()=>resolve({status:upRes.statusCode||0}));
@@ -538,8 +549,30 @@ async function verifyAdmin(req){
       up.on('error',reject);
       up.end();
     });
-    if(status>=200&&status<300)return true;
-  }catch(e){/* backend indisponible → échec silencieux, renverra 401 */}
+    if(status>=200&&status<300)return 'ok';
+    if(status===401||status===403)return 'denied';
+    return 'unavailable';
+  }catch(e){
+    return 'unavailable';
+  }
+}
+async function verifyAdmin(req){
+  return (await verifyAdminDetail(req)) === 'ok';
+}
+// Porte d'entrée des routes admin de la télémétrie : refuse (401) seulement si
+// le jeton est réellement rejeté ; sinon 503 avec la raison, pour que la page
+// puisse dire « le service démarre » plutôt que « reconnecte-toi ».
+async function telemetryAdmin(req,res){
+  const verdict = await verifyAdminDetail(req);
+  if(verdict==='ok') return true;
+  if(verdict==='denied'){
+    res.status(401).json({error:'Connexion administrateur requise.',code:'denied'});
+    return false;
+  }
+  res.status(503).json({
+    error:'Service d\'administration en cours de démarrage ou injoignable (Render). Réessaie dans quelques instants.',
+    code:'unavailable'
+  });
   return false;
 }
 app.put('/api/global-exclusions', async (req,res)=>{
@@ -934,7 +967,7 @@ app.post('/api/telemetry/push', async(req,res)=>{
 });
 app.get('/api/telemetry/catalog', async(req,res)=>{
   res.set('Cache-Control','no-store');
-  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  if(!(await telemetryAdmin(req,res)))return undefined;
   try{
     const service=await getTelemetry();
     res.json({enabled:telemetryEnabled(),...await service.catalog()});
@@ -942,7 +975,7 @@ app.get('/api/telemetry/catalog', async(req,res)=>{
 });
 app.get('/api/telemetry/summary', async(req,res)=>{
   res.set('Cache-Control','no-store');
-  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  if(!(await telemetryAdmin(req,res)))return undefined;
   try{
     const service=await getTelemetry();
     const filters=telemetryFilters(req.query);
@@ -955,7 +988,7 @@ app.get('/api/telemetry/summary', async(req,res)=>{
 });
 app.get('/api/telemetry/report', async(req,res)=>{
   res.set('Cache-Control','no-store');
-  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  if(!(await telemetryAdmin(req,res)))return undefined;
   try{
     const service=await getTelemetry();
     const filters=telemetryFilters(req.query);
@@ -976,7 +1009,7 @@ app.get('/api/telemetry/report', async(req,res)=>{
 });
 app.put('/api/telemetry/pit-profile', async(req,res)=>{
   res.set('Cache-Control','no-store');
-  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  if(!(await telemetryAdmin(req,res)))return undefined;
   const track=String((req.body&&req.body.track)||'').trim();
   if(!track)return res.status(400).json({error:'Indique le circuit.'});
   try{

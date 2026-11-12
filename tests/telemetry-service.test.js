@@ -568,3 +568,75 @@ test('savePitProfile corrige la mesure existante, même sur PostgreSQL', async (
   assert.equal(pool.calls.filter(c => /^UPDATE/.test(c.sql)).length, 1);
   assert.equal(pool.calls.filter(c => /^INSERT/.test(c.sql)).length, 0, 'mise à jour, pas doublon');
 });
+
+// --- diagnostic de connexion admin -------------------------------------------
+
+test('admin : « refusé » et « backend injoignable » ne se confondent pas', async t => {
+  const reservation = http.createServer();
+  reservation.listen(0, '127.0.0.1');
+  await once(reservation, 'listening');
+  const port = reservation.address().port;
+  await new Promise(r => reservation.close(r));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gdsp-tel-auth-'));
+  // BACKEND_URL pointe sur un port fermé : l'équivalent d'un backend Render
+  // endormi. C'est exactement le cas qui affichait « Reconnecte-toi. » à un
+  // administrateur dont les identifiants étaient bons.
+  const child = spawn(process.execPath, ['app.js'], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      BACKEND_URL: 'http://127.0.0.1:1',
+      LIVE_TIMING_ENABLED: '0',
+      TELEMETRY_TOKEN: 'jeton-tel',
+      ADMIN_PASSWORD: 'motdepasse-test',
+      ADMIN_USERNAME: 'gdspadmin',
+      TELEMETRY_DATABASE_URL: '',
+      TELEMETRY_STORE_FILE: path.join(dir, 'store.json')
+    }
+  });
+  t.after(() => child.kill());
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('démarrage trop long')), 15000);
+    child.stdout.on('data', chunk => {
+      if (String(chunk).includes('démarré')) { clearTimeout(timer); resolve(); }
+    });
+    child.on('exit', code => { clearTimeout(timer); reject(new Error('serveur arrêté ' + code)); });
+  });
+  const base = `http://127.0.0.1:${port}`;
+
+  // 1. Aucun jeton : refus net, jamais « service en démarrage ».
+  const anonymous = await fetch(`${base}/api/telemetry/summary`);
+  assert.equal(anonymous.status, 401);
+  assert.equal((await anonymous.json()).code, 'denied');
+
+  // 2. Jeton bidon : le backend est injoignable, on ne peut pas le déclarer
+  //    valable — mais on ne dit pas non plus que la session a expiré.
+  const bogus = await fetch(`${base}/api/telemetry/summary`, {
+    headers: { Authorization: 'Bearer pas-le-bon' }
+  });
+  assert.ok([401, 503].includes(bogus.status));
+  const bogusBody = await bogus.json();
+  assert.ok(bogusBody.code === 'denied' || bogusBody.code === 'unavailable');
+
+  // 3. Le bon mot de passe local : accepté même backend éteint. C'est le
+  //    comportement qui fait marcher la page sans backend joignable.
+  const good = await fetch(`${base}/api/telemetry/summary`, {
+    headers: { Authorization: 'Bearer motdepasse-test' }
+  });
+  assert.equal(good.status, 200, 'le mot de passe local doit suffire');
+  assert.equal((await good.json()).rows, 0);
+
+  // 4. Le login local (fallback) renvoie bien un jeton utilisable tel quel.
+  const login = await fetch(`${base}/api/admin/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'gdspadmin', password: 'motdepasse-test' })
+  });
+  const loginBody = await login.json();
+  assert.equal(login.status, 200);
+  assert.ok(loginBody.token, 'le fallback local doit fournir un jeton');
+  const afterLogin = await fetch(`${base}/api/telemetry/summary`, {
+    headers: { Authorization: 'Bearer ' + loginBody.token }
+  });
+  assert.equal(afterLogin.status, 200, 'le jeton du login doit ouvrir la télémétrie');
+});
