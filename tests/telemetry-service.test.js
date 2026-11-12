@@ -770,3 +770,41 @@ test('drawUI affiche le diagnostic à l\'écran', () => {
   assert.ok(run.ui.length > 0, 'drawUI doit écrire à l\'écran');
   assert.ok(run.ui.some(l => /GDSP-TELEMETRY/.test(l)));
 });
+
+test('l\'URL injectée par le site n\'est pas effacée par une section absente', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Cas réel en ligne : la route /csp/telemetry.lua ajoute __GDSP_TELEMETRY__,
+  // et le serveur ne déclare aucune section [SCRIPT_2] dans
+  // csp_extra_options.ini. `ac.configValues` renvoie alors le layout par défaut
+  // (url = '') : il ne doit pas écraser la valeur injectée.
+  const run = simulate({
+    callInit: true,
+    injected: { url: 'https://site.test/api/telemetry/push', token: 'j' },
+    config: { url: '', token: '', intervalSec: 0 }
+  });
+  assert.equal(run.error, null);
+  assert.equal(run.sent.length, 1, 'l\'URL injectée doit suffire à envoyer');
+  assert.ok(run.ui.some(l => /site\.test/.test(l)), 'drawUI montre l\'URL utilisée');
+});
+
+test('sans URL ni injection, le diagnostic dit d\'où vient le vide', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  const run = simulate({ callInit: true, steps: [{ dt: 0.016 }] });
+  assert.equal(run.error, null);
+  assert.equal(run.sent.length, 0);
+  assert.ok(run.ui.some(l => /url\(aucune\): MANQUANTE/.test(l)));
+});
+
+test('le script tel que servi en ligne démarre et envoie', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Texte exact du fichier + table injectée en fin de fichier, comme la route
+  // /csp/telemetry.lua le construit. Ce test aurait attrapé le bug d'ordre :
+  // la config était lue avant que la table n'existe.
+  const run = simulate({ served: true, callInit: true, steps: [{ dt: 0.016 }] });
+  assert.equal(run.error, null);
+  assert.equal(run.sent.length, 1, 'le script servi doit envoyer son ping');
+  // `sent` contient le corps POSTé, déjà sérialisé en JSON.
+  const body = typeof run.sent[0] === 'string' ? JSON.parse(run.sent[0]) : run.sent[0];
+  assert.equal(body.kind, 'ping');
+  assert.ok(run.ui.some(l => /url\(injectée\)/.test(l)));
+});
