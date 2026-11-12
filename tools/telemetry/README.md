@@ -256,6 +256,14 @@ TELEMETRY_DATABASE_URL=postgres://...
 (tables `session`, `stint`, `lap`, `circuit_profile`) est créé automatiquement
 au premier appel — aucune migration à lancer à la main.
 
+> **Piège rencontré en production.** Une contrainte d'unicité portant sur une
+> expression (`UNIQUE (started_at, track, COALESCE(track_config,''))`) est
+> refusée par Postgres : `syntax error at or near "("`. L'initialisation
+> échouait donc en entier, et les logs Render répétaient
+> `télémétrie: ouverture impossible`. L'unicité sur expression passe par un
+> `CREATE UNIQUE INDEX`, jamais par une contrainte de table — un test le
+> vérifie (`tests/telemetry-store.test.js`).
+
 Sans cette variable, un fichier JSON local sert de base (même API, sans
 dépendance) : pratique pour tester ou travailler hors ligne.
 
