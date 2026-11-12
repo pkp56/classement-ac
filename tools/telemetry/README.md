@@ -153,6 +153,21 @@ Si le script n'est pas servi par le site (copie locale, gist), il retombe sur
 `ac.configValues` : les mêmes quatre paramètres peuvent alors être passés dans
 le bloc `[SCRIPT_2]`.
 
+> **Cette table est du Lua, pas du JSON.** `{ url = "…" }` et non
+> `{"url":"…"}`. CSP compile le fichier entier : une virgule de trop ou un `:`
+> au lieu du `=` et il rejette tout, avec pour seule trace dans
+> `custom_shaders_patch.log` :
+>
+> ```
+> 🚨 Failed to parse: code:518: '}' expected near ':'
+> ⚠️ Lua: <Server Script: SCRIPT_2> failed to load
+> ```
+>
+> Aucun message en jeu, aucune donnée envoyée : c'est le pire mode de panne,
+> parce qu'il est silencieux côté pilote. Un test compile désormais le script
+> **tel qu'il est servi** (`tests/telemetry-service.test.js`) pour que cette
+> faute ne puisse plus passer.
+
 **c. Vérifier sur le premier tour.** Le script affiche un message en jeu :
 
 ```

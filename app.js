@@ -888,6 +888,21 @@ function telemetryFilters(q){
     byDriver: q.byDriver === '1' || q.byDriver === 'true'
   };
 }
+// Sérialise une table plate en LUA (et non en JSON). Les valeurs sont des
+// chaînes ou des nombres : les chaînes passent par JSON.stringify, dont
+// l'échappement est un sous-ensemble valide de celui de Lua ("…", \" \\ \n).
+function luaTable(obj){
+  const parts=[];
+  for(const key of Object.keys(obj)){
+    const value=obj[key];
+    if(value===undefined||value===null)continue;
+    const v=typeof value==='number'
+      ? (Number.isFinite(value)?String(value):'0')
+      : JSON.stringify(String(value));
+    parts.push(`${key} = ${v}`);
+  }
+  return `{ ${parts.join(', ')} }`;
+}
 // Le script CSP est servi ici pour que le serveur AC n'ait qu'une seule URL à
 // déclarer, et pour que le jeton ne soit pas écrit en clair dans le dépôt.
 app.get('/csp/telemetry.lua',(req,res)=>{
@@ -913,7 +928,11 @@ app.get('/csp/telemetry.lua',(req,res)=>{
       intervalSec:Number(process.env.TELEMETRY_INTERVAL_SEC||5)||5
     };
     const head='-- GDSP télémétrie — copie servie par le site le '+new Date().toISOString().slice(0,10)+'\n';
-    res.send(head+src+`\n__GDSP_TELEMETRY__ = ${JSON.stringify(injected)}\n`);
+    // Cette table est du LUA, pas du JSON : `{ url = "…" }`, jamais `{"url":"…"}`.
+    // Une seule faute de syntaxe ici et CSP rejette le script ENTIER
+    // (« Failed to parse … '}' expected near ':' ») : plus de télémétrie du tout,
+    // sans message d'erreur côté pilote.
+    res.send(head+src+`\n__GDSP_TELEMETRY__ = ${luaTable(injected)}\n`);
   });
 });
 app.post('/api/telemetry/push', async(req,res)=>{

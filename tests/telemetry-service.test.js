@@ -25,6 +25,24 @@ const { TelemetryService, validatePush, filterRows } = require('../tools/telemet
 
 const ROOT = path.resolve(__dirname, '..');
 
+/**
+ * Compile un texte Lua avec fengari (même interpréteur que le harnais CSP).
+ * Sert à vérifier ce que le site SERT réellement, config injectée comprise :
+ * `assert.match(txt, /__GDSP_TELEMETRY__/)` laissait passer une table en JSON,
+ * que CSP refuse en bloc (« '}' expected near ':' »).
+ * @returns {{error:string|null}}
+ */
+function spawnLuaCheck(source) {
+  const fengari = require('fengari');
+  const { lua, lauxlib, lualib, to_luastring, to_jsstring } = fengari;
+  const L = lauxlib.luaL_newstate();
+  lualib.luaL_openlibs(L);
+  if (lauxlib.luaL_loadbuffer(L, to_luastring(source), source.length, '@served') !== lua.LUA_OK) {
+    return { error: to_jsstring(lua.lua_tostring(L, -1)) };
+  }
+  return { error: null };
+}
+
 function tempStore(name = 'telemetry.json') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gdsp-tel-api-'));
   return new FileStore(path.join(dir, name));
@@ -500,6 +518,14 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
   assert.match(luaText, /__GDSP_TELEMETRY__/);
   assert.match(luaText, /\/api\/telemetry\/push/);
   assert.match(luaText, /jeton-tel/);
+
+  // 7 bis. le script TEL QU'IL EST SERVI doit être du Lua valide.
+  // Une table écrite en JSON (`{"url":"…"}`) fait tout rejeter par CSP :
+  // « Failed to parse: '}' expected near ':' » puis « <Server Script: SCRIPT_2>
+  // failed to load ». Le script ne tourne alors jamais, sans autre message.
+  assert.ok(!/__GDSP_TELEMETRY__\s*=\s*\{"/.test(luaText), 'la config injectée est une table Lua, pas du JSON');
+  const verif = spawnLuaCheck(luaText);
+  assert.equal(verif.error, null, `le script servi doit compiler : ${verif.error}`);
 
   // 8. l'API de télémétrie ne déborde pas sur le championnat
   const events = await fetch(`${base}/api/telemetry/events`, { headers: auth });
