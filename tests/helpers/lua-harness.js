@@ -177,6 +177,32 @@ function runTelemetryScript(options = {}) {
   if (lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) {
     return { sent, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
   }
+
+  // La route /csp/telemetry.lua ajoute `__GDSP_TELEMETRY__` À LA FIN du fichier
+  // servi, donc APRÈS l'exécution du corps du script. La poser avant le
+  // chargement masquerait tous les bugs d'ordre d'initialisation — c'est
+  // exactement ce qui a laissé passer une URL vide jusqu'en production.
+  if (options.injected && typeof options.injected === 'object') {
+    lua.lua_newtable(L);
+    for (const [k, v] of Object.entries(options.injected)) {
+      pushValue(L, v);
+      lua.lua_setfield(L, -2, to_luastring(k));
+    }
+    lua.lua_setglobal(L, to_luastring('__GDSP_TELEMETRY__'));
+  }
+
+  // Le script utilisé en jeu est celui que SERT le site : corps + table
+  // injectée. Les tests doivent tourner sur ce texte-là, et non sur une
+  // reconstitution approximative. `options.served` fait cette vérification.
+  if (options.served) {
+    const src = fs.readFileSync(file, 'utf8')
+      + '\n__GDSP_TELEMETRY__ = { url = "https://servi.test/api/telemetry/push", token = "t" }\n';
+    if (lauxlib.luaL_loadbuffer(L, to_luastring(src), Buffer.byteLength(src), '@servi') !== lua.LUA_OK
+        || lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) {
+      return { sent, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
+    }
+  }
+
   // CSP appelle `script.__init__` juste après le chargement : c'est là que le
   // script affiche son diagnostic « carburant lu / pneus lus ».
   if (options.callInit !== false) {

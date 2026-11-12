@@ -90,31 +90,48 @@ local function message(title, body)
   pcall(ac.setMessage, tostring(title), tostring(body or ''), 'info', 5)
 end
 
--- Valeurs par défaut éventuellement injectées par le site qui sert ce fichier
--- (route /csp/telemetry.lua) : il n'y a alors qu'une seule URL à déclarer dans
--- csp_extra_options.ini. La copie du dépôt n'en contient aucune.
-do
+-- Résolution de la configuration. ATTENTION À L'ORDRE D'EXÉCUTION : le site
+-- ajoute la table `__GDSP_TELEMETRY__` À LA FIN du fichier servi, une fois le
+-- reste déjà chargé. La lire ici, au chargement, donnait donc toujours `nil` —
+-- le script tournait avec une URL vide. C'est pour cela que tout ce bloc est
+-- dans une fonction, appelée depuis `script.init()`, quand le fichier entier a
+-- fini de s'exécuter.
+local cfgSource = 'défaut'
+local configured = false
+
+local function resolveConfig()
+  if configured then return end
+  configured = true
+
+  -- 1. Valeurs injectées par le site qui sert ce fichier (priorité haute).
   local injected = rawget(_G, '__GDSP_TELEMETRY__')
   if type(injected) == 'table' then
     for k, v in pairs(injected) do cfg[k] = v end
+    cfgSource = 'injectée'
   end
-end
 
-do
+  -- 2. Section `csp_extra_options.ini` : elle ne sert que de REPLI. CSP renvoie
+  --    le layout fourni en entier, valeurs par défaut comprises ; l'appliquer
+  --    telle quelle écraserait les valeurs injectées par des vides.
   local ok, values = pcall(ac.configValues, {
-    url = '',
-    token = '',
-    campaign = 'campagne',
-    intervalSec = 5,
-    debug = 0,
+    url = '', token = '', campaign = '', intervalSec = 0, debug = 0,
   })
   if ok and type(values) == 'table' then
-    for k, v in pairs(values) do cfg[k] = v end
+    for _, key in ipairs({ 'url', 'token', 'campaign', 'intervalSec', 'debug' }) do
+      local v = values[key]
+      local vide = (v == nil or v == '' or v == 0)
+      if not vide and (cfg[key] == nil or cfg[key] == '' or cfg[key] == 0) then
+        cfg[key] = v
+        if cfgSource ~= 'injectée' then cfgSource = 'config' end
+      end
+    end
   end
+
   cfg.url = tostring(cfg.url or '')
   cfg.token = tostring(cfg.token or '')
   cfg.campaign = tostring(cfg.campaign or 'campagne')
   cfg.intervalSec = math.max(2, tonumber(cfg.intervalSec) or 5)
+  if cfg.url == '' then cfgSource = 'aucune' end
 end
 
 -------------------------------------------------------------------------------
@@ -599,6 +616,8 @@ end
 function script.init()
   if state.started then return end
   state.started = true
+  -- À ce stade seulement, la table injectée en fin de fichier existe.
+  resolveConfig()
   ensureIdentity()
   local fuelOk = readFuelLiters() ~= nil
   local wearOk = readTyreWear() ~= nil
@@ -626,9 +645,11 @@ script.__init__ = function() script.init() end
 --- script ne s'exécute pas du tout.
 function script.drawUI()
   if state.now > 20 then return end
+  -- init n'a peut-être jamais été appelé : le diagnostic doit rester lisible.
+  pcall(resolveConfig)
   local lines = {
     'GDSP-TELEMETRY ' .. (state.pinged and 'OK' or 'attente'),
-    (cfg.url ~= '' and cfg.url or 'URL MANQUANTE'),
+    'url(' .. cfgSource .. '): ' .. (cfg.url ~= '' and cfg.url or 'MANQUANTE'),
     'web=' .. tostring(state.hasWeb) .. ' guid=' .. tostring(state.driverGuid or '?'),
   }
   for i = 1, #lines do

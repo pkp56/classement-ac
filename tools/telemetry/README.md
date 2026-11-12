@@ -187,6 +187,18 @@ qui distingue les pannes sans faire rouler personne :
 | `envoi impossible` | pas de réseau, ou `web.post` indisponible (CSP < 0.1.79) |
 | **aucun message** | le script n'a pas été téléchargé ou n'a pas démarré |
 
+### Ordre d'initialisation : le piège à connaître
+
+La route `/csp/telemetry.lua` sert le fichier **puis** ajoute la table
+`__GDSP_TELEMETRY__` à la fin. Un `rawget(_G, '__GDSP_TELEMETRY__')` exécuté au
+chargement du corps du script lit donc toujours `nil`. La configuration doit
+être résolue dans `script.init()`, quand tout le fichier a fini de s'exécuter.
+Symptôme en jeu : `url(aucune): MANQUANTE`, aucun envoi, alors que le script
+tourne.
+
+Le harnais de test reproduit cet ordre (`options.injected` est posé **après**
+le chargement, `options.served` teste le fichier + sa table comme en ligne).
+
 Le script ne reste jamais silencieux par construction : s'il n'a pas d'URL ou
 pas de `web.post`, il le dit en jeu. Et dans tous les cas, il écrit une ligne
 unique à la première image (`boucle démarrée · url=… · transport=…`) et son ping
