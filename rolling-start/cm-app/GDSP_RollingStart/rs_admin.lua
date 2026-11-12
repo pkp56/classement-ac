@@ -567,11 +567,6 @@ end
 function M.drawSettings(ctx)
   ui.text('GDSP Race Control v' .. proto.VERSION)
   ui.separator()
-  local hideB = (ctx.localPrefs.hideOnlineBanner ~= false)
-  if ui.checkbox('Masquer le bandeau basique du script serveur quand ce HUD est ouvert', hideB) then
-    ctx.localPrefs.hideOnlineBanner = not hideB
-  end
-
   local showCuts = (ctx.localPrefs.showCutsInSim ~= false)
   if ui.checkbox('Afficher le compteur cuts en jeu (dans le jeu, pas dans le menu CM)', showCuts) then
     ctx.localPrefs.showCutsInSim = not showCuts

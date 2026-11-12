@@ -4,7 +4,7 @@
 
 local M = {}
 
-M.VERSION = '1.1.1'
+M.VERSION = '1.1.2'
 M.ORDER_MAX = 48
 M.NONE = 255
 

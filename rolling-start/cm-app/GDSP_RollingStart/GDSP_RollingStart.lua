@@ -462,7 +462,7 @@ function script.update(dt)
   if bridge then
     appBeatCount = appBeatCount + 1
     bridge.appHeartbeat = appBeatCount
-    bridge.appVisible = (hudVisible and localPrefs.hideOnlineBanner) and 1 or 0
+    bridge.appVisible = 0 -- fenetre HUD supprimee : le bandeau du script n'est plus masque
     -- hideBanner (champ existant du bridge) = 1 : masquer le compteur cuts en jeu
     bridge.hideBanner = (localPrefs.showCutsInSim == false) and 1 or 0
   end
