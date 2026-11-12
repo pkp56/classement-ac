@@ -451,76 +451,37 @@ function writeGlobalExc(ids){
   fs.mkdirSync(path.dirname(GLOBAL_EXC_PATH),{recursive:true});
   fs.writeFileSync(GLOBAL_EXC_PATH, JSON.stringify(payload,null,2),'utf8');
 }
-function checkAdminAuth(req){
-  // Vérifie le Bearer token : mot de passe admin en clair (simple, pour MVP interne).
-  // Le frontend envoie adminToken qui est le mot de passe saisi (cf adminLogin).
-  const hdr=req.headers.authorization||'';
-  if(!hdr.startsWith('Bearer '))return false;
-  const token=hdr.slice(7);
-  const expected=(process.env.ADMIN_PASSWORD||'').trim();
-  if(!expected) return false; // pas d'admin configuré → endpoint protégé
-  // timing-safe compare
-  if(token.length!==expected.length) return false;
-  let diff=0; for(let i=0;i<token.length;i++) diff|=token.charCodeAt(i)^expected.charCodeAt(i);
-  return diff===0;
-}
-// Login admin : relaie systématiquement vers le backend Render.
-// Si le backend ne répond pas (timeout/erreur réseau), on retombe sur les identifiants
-// locaux (ADMIN_USERNAME/ADMIN_PASSWORD) mais AVEC UN AVERTISSEMENT : le token local ne
-// sera PAS accepté par le backend pour les écritures (POST/PUT), donc la création
-// d'événement / sauvegarde échouera tant que le backend est injoignable.
-app.post('/api/admin/login', (req,res)=>{
-  const body=JSON.stringify(req.body||{});
-  const hdrs={'Content-Type':'application/json','Content-Length':Buffer.byteLength(body)};
-  const target=new URL('/api/admin/login', BACKEND_URL);
-  const proto=target.protocol==='https:'?https:http;
-  // Timeout long (60s) : les deux services sont sur Render free tier et peuvent
-  // chacun avoir un cold start de 20-30s au premier appel.
-  const up=proto.request({method:'POST',hostname:target.hostname,port:target.port,path:target.pathname+target.search,headers:hdrs,timeout:60000},(upRes)=>{
-    const buf=[];upRes.on('data',c=>buf.push(c));upRes.on('end',()=>{
-      const payload=Buffer.concat(buf).toString('utf8');
-      // Relaye tel quel TOUTES les réponses du backend (y compris 401/5xx) :
-      // on ne retombe en fallback local QUE sur erreur réseau/timeout (ci-dessous).
-      res.writeHead(upRes.statusCode,{'Content-Type':'application/json'});
-      res.end(payload);
+// --- Événements & authentification, servis par CE service -------------------
+// L'API des événements vivait dans un service séparé (gdsp-render-backend).
+// Elle est reprise ici : même base PostgreSQL, mêmes tables, même contrat JSON.
+// Ce qui change : plus de proxy, plus de CORS, et un seul système de jetons.
+const eventsApi = require('./tools/events/api');
+let eventsStorePromise = null;
+function getEventsStore(){
+  if(!eventsStorePromise){
+    eventsStorePromise = eventsApi.openEventStore().catch(err=>{
+      // Sans base, on répond 503 sur les routes d'événements ; le proxy peut
+      // encore prendre le relais si EVENTS_SOURCE=backend.
+      console.error('événements: base indisponible —', err.message);
+      eventsStorePromise = null;
+      throw err;
     });
-  });
-  // Fallback local UNIQUEMENT si le backend ne répond pas (réseau/timeout),
-  // PAS si le backend répond 401 (identifiants incorrects).
-  up.on('timeout',()=>{up.destroy();if(!res.headersSent)fallbackLocal(req,res,true)||res.status(504).json({error:'Backend indisponible (timeout).'})});
-  up.on('error',()=>{if(!res.headersSent)fallbackLocal(req,res,true)||res.status(502).json({error:'Backend indisponible.'})});
-  up.write(body);up.end();
-});
-function fallbackLocal(req,res,warn){
-  const {username, password} = req.body||{};
-  const expectedUser=(process.env.ADMIN_USERNAME||'admin').trim();
-  const expectedPass=(process.env.ADMIN_PASSWORD||'').trim();
-  if(!expectedPass)return false;
-  if(username!==expectedUser||password!==expectedPass)return false;
-  res.set('X-Admin-Source','local-fallback');
-  res.json({
-    token: expectedPass,
-    user: expectedUser,
-    warning: warn ? 'Connecté en mode local (backend indisponible). Les sauvegardes et créations sur le serveur ne fonctionneront pas tant que la connexion au backend n\'est pas rétablie.' : undefined
-  });
-  return true;
+  }
+  return eventsStorePromise;
 }
-
-// Vérification du token admin au démarrage : accepte le secret local de secours
-// ou relaie la vérification vers le backend (tokens de production).
-app.get('/api/admin/verify', async (req,res)=>{
-  res.set('Cache-Control','no-store');
-  if(!(await verifyAdmin(req)))return res.status(401).json({ok:false});
-  res.json({ok:true,user:process.env.ADMIN_USERNAME||'Direction de course'});
-});
-
-// Lecture publique (utilisée par la page Classement GLOBAL pour tout visiteur)
-app.get('/api/global-exclusions', (_req,res)=>{
-  res.set('Cache-Control','no-store');
-  res.json({ ids: readGlobalExc() });
-});
-// Mise à jour (admin seulement). Vérifie soit avec le mot de passe local (MVP),
-// soit en relayant la requête vers le backend (/api/admin/verify).
+// 'local' (défaut) = ce service. 'backend' = ancien service, le temps de la bascule.
+function eventsSource(env){return String((env||process.env).EVENTS_SOURCE||'local').toLowerCase()==='backend'?'backend':'local'}
+function checkAdminAuth(req){
+  // Jeton = JWT HS256 signé par /api/admin/login (8 h). On ne compare plus le
+  // mot de passe en clair : un jeton du backend restait incomparable avec le
+  // mot de passe local, ce qui déconnectait un admin pourtant valide.
+  const check=eventsApi.verifyAdminToken(req.headers.authorization);
+  return check.ok;
+}
+// Connexion administrateur : locale, avec jeton JWT. L'ancien service backend
+// n'est plus interrogé pour ça — c'était la source d'un jeton incomparable avec
+// le mot de passe local (connexion réussie puis 401 partout).
+//   EVENTS_SOURCE=backend → on garde l'ancien comportement en secours.
 // Vérification détaillée : « refusé » et « backend injoignable » ne sont pas la
 // même chose. Confondre les deux fait afficher « reconnecte-toi » à un admin
 // dont les identifiants sont bons, simplement parce que le backend dormait.
@@ -531,6 +492,9 @@ async function verifyAdminDetail(req){
   if(checkAdminAuth(req)) return 'ok';
   // Sans jeton du tout, inutile d'interroger le backend : c'est un refus net.
   if(!/^Bearer\s+\S/.test(String(req.headers.authorization||''))) return 'denied';
+  // En source locale, un jeton non signé par ce service est simplement refusé :
+  // inutile de réveiller un backend qui ne sert plus les événements.
+  if(eventsSource()==='local') return 'denied';
   try{
     const {status} = await new Promise((resolve,reject)=>{
       const target=new URL('/api/admin/verify', BACKEND_URL);
@@ -565,6 +529,15 @@ async function verifyAdmin(req){
 async function telemetryAdmin(req,res){
   const verdict = await verifyAdminDetail(req);
   if(verdict==='ok') return true;
+  // Pas de base d'événements : le jeton n'a pas pu être signé localement, et
+  // il n'y a rien à lire. Autant le dire clairement, pas « reconnecte-toi ».
+  if(verdict==='denied' && !eventsApi.adminUsers().length){
+    res.status(503).json({
+      error:'Aucun compte administrateur configuré sur ce service (ADMIN_PASSWORD absent).',
+      code:'auth-not-configured'
+    });
+    return false;
+  }
   if(verdict==='denied'){
     res.status(401).json({error:'Connexion administrateur requise.',code:'denied'});
     return false;
@@ -1020,6 +993,15 @@ app.put('/api/telemetry/pit-profile', async(req,res)=>{
 });
 app.get('/telemetry',(req,res)=>res.sendFile(path.join(ROOT,'telemetry.html')));
 app.get('/telemetry.html',(req,res)=>res.sendFile(path.join(ROOT,'telemetry.html')));
+
+// --- ÉVÉNEMENTS : servis ici (EVENTS_SOURCE=local, le défaut) ---------------
+// Ces routes sont déclarées AVANT le proxy : elles gagnent. Avec
+// EVENTS_SOURCE=backend, le proxy reprend la main et l'ancien service répond —
+// c'est le retour en arrière en une variable d'environnement, sans redéploiement
+// de code.
+if(eventsSource()==='local'){
+  eventsApi.mountEventRoutes(app,{getStore:getEventsStore});
+}
 
 app.all('/api/*', (req,res)=>proxyRequest(req,res));
 
