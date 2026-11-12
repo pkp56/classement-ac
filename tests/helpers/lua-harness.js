@@ -29,7 +29,7 @@ const PRELUDE = `
 function defaultEnv(overrides = {}) {
   return {
     car: {
-      fuel: 30.5, speedKmh: 180, lapCount: 1, splinePosition: 0.5, lastLapTimeMs: 75576,
+      fuel: 30.5, speedKmh: 180, lapCount: 1, splinePosition: 0.5, previousLapTimeMs: 75576,
       driverName: "Assassin's Street", driverSteamID: '76561198015862674', id: 'alfa_giulietta_spider',
       wheels: [{ tyreWear: 1 }, { tyreWear: 1 }, { tyreWear: 0.999 }, { tyreWear: 0.999 }],
       ...(overrides.car || {})
@@ -75,6 +75,13 @@ function pushTable(L, value) {
 function runTelemetryScript(options = {}) {
   const cwd = options.cwd || path.resolve(__dirname, '..', '..');
   const env = defaultEnv(options);
+  // `noGuid` : AUCUN identifiant Steam disponible, comme sur une vraie voiture
+  // (l'API CSP n'expose ni driverGuid ni driverSteamID). Le script doit
+  // continuer à lire les tours, pas se taire.
+  if (options.noGuid) {
+    env.car.driverGuid = undefined;
+    env.car.driverSteamID = undefined;
+  }
   const sent = [];
   const messages = [];
   const ui = [];
@@ -136,6 +143,9 @@ function runTelemetryScript(options = {}) {
     const body = lua.lua_tostring(state, 3);
     const text = body ? to_jsstring(body) : '';
     sent.push(text);
+    // `silentPost` : la requête part (donc elle est comptée) mais le callback
+    // n'est JAMAIS appelé. C'est le cas réel d'un POST avalé par un proxy.
+    if (options.silentPost) return 0;
     // `failPost` simule un réseau coupé : le script doit remettre les tours en
     // attente et les renvoyer plus tard, sans doublon côté serveur.
     const shouldFail = typeof options.failPost === 'function'

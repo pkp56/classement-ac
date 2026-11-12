@@ -808,3 +808,53 @@ test('le script tel que servi en ligne démarre et envoie', () => {
   assert.equal(body.kind, 'ping');
   assert.ok(run.ui.some(l => /url\(injectée\)/.test(l)));
 });
+
+test('un callback qui ne vient jamais ne laisse pas le ping en attente', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Le POST part, aucune réponse n'arrive (proxy, pare-feu, requête avalée).
+  // Sans délai, l'état restait « attente » pour toujours, sans un mot.
+  const run = simulate({
+    served: true, callInit: true, silentPost: true,
+    steps: Array.from({ length: 60 }, () => ({ dt: 0.5 }))
+  });
+  assert.equal(run.error, null);
+  assert.ok(run.ui.some(l => /essais=/.test(l)), 'le diagnostic montre les essais');
+  assert.ok(run.messages.some(m => /pas de réponse/.test(m)),
+    'un silence de 10 s doit être annoncé, pas subi');
+});
+
+test('la requête est retentée quand le callback n\'arrive pas', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  const run = simulate({
+    served: true, callInit: true, silentPost: true,
+    steps: Array.from({ length: 60 }, () => ({ dt: 0.5 }))
+  });
+  assert.ok(run.sent.length >= 2, 'une tentative perdue doit être suivie d\'une autre');
+});
+
+test('sans identifiant Steam, le script lit quand même les tours', () => {
+  const { simulate, setCar } = require('./helpers/lua-harness');
+  // L'API CSP n'expose aucun identifiant Steam (voir SDK, common/ac_state.lua).
+  // Exiger un guid condamnait le script au silence sur toutes les voitures :
+  // c'est exactement ce que montrait « guid=? » à l'écran.
+  const run = simulate({
+    served: true, callInit: true, noGuid: true,
+    steps: [
+      { dt: 0.1 },
+      (L) => setCar(L, 'splinePosition', 0.5),
+      (L) => setCar(L, 'splinePosition', 0.98),
+      (L) => setCar(L, 'lapCount', 2),
+      (L) => setCar(L, 'splinePosition', 0.02),
+      // le tour a consommé du carburant : la mesure doit survivre au guid absent
+      (L) => setCar(L, 'fuel', 29.0),
+      ...Array.from({ length: 20 }, () => ({ dt: 0.5 }))
+    ]
+  });
+  assert.equal(run.error, null);
+  const avecTours = run.sent.map(x => JSON.parse(x)).filter(b => Array.isArray(b.laps) && b.laps.length);
+  assert.ok(avecTours.length > 0, 'un tour doit remonter même sans guid');
+  const lap = avecTours[0].laps[0];
+  assert.equal(lap.fuelUsedL, 1.5, 'la mesure reste complète malgré le guid absent');
+  assert.equal(lap.lapMs, 75576, 'le temps au tour est celui de previousLapTimeMs');
+  assert.ok(run.ui.some(l => /ABSENT/.test(l)), 'le diagnostic explique l\'absence de guid');
+});
