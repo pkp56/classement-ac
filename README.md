@@ -10,6 +10,18 @@ Site de championnat de la GDSP, servi statiquement par un petit serveur Express 
 2. Ajouter la variable d'environnement `GDSP_API_URL` pointant vers l'URL du backend déployé (`gdsp-render-backend`, par ex. `https://gdsp-lola-t290-api-xxxx.onrender.com`, sans slash final). Sans cette variable, le site fonctionne en lecture seule à partir de `data/data.json`.
 3. Redéployer. Le site sera servi sur l'URL Render fournie.
 
+## Événements et administration (depuis la fusion)
+
+L'API des événements, l'authentification et la sauvegarde du championnat étaient
+dans un service séparé (`gdsp-render-backend`). Elles sont maintenant servies par
+ce dépôt, dans la même base PostgreSQL : voir [`tools/events/README.md`](tools/events/README.md).
+
+- Sans `DATABASE_URL` sur ce service, les routes `/api/events*` sont laissées au
+  proxy et l'ancien backend répond : le site fonctionne comme avant.
+- Avec `DATABASE_URL`, elles sont lues et écrites en local, et le backend peut
+  être éteint.
+- Le jeton admin est un JWT de 8 h. Le mot de passe ne circule plus comme jeton.
+
 ## Développement et vérification
 
 - L’accueil GDSP est la page d’entrée ; les résultats s’ouvrent depuis l’onglet **Résultats**.

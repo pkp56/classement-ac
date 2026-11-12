@@ -458,8 +458,23 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
   const anonymous = await fetch(`${base}/api/telemetry/summary`);
   assert.equal(anonymous.status, 401);
 
+  // 3 bis. connexion : login local → {token} (JWT), puis verify → {ok}
+  const login = await fetch(`${base}/api/admin/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'motdepasse-test' })
+  });
+  assert.equal(login.status, 200);
+  const loginBody = await login.json();
+  assert.equal(typeof loginBody.token, 'string');
+  assert.equal(loginBody.token.split('.').length, 3, 'un JWT a trois segments');
+  assert.notEqual(loginBody.token, 'motdepasse-test', 'le mot de passe ne circule plus en clair');
+  const verify = await (await fetch(`${base}/api/admin/verify`, {
+    headers: { Authorization: 'Bearer ' + loginBody.token }
+  })).json();
+  assert.equal(verify.ok, true);
+
   // 4. lecture avec admin → les tours sont là
-  const auth = { Authorization: 'Bearer motdepasse-test' };
+  const auth = { Authorization: 'Bearer ' + loginBody.token };
   const summary = await (await fetch(`${base}/api/telemetry/summary`, { headers: auth })).json();
   assert.equal(summary.rows, 3);
   assert.equal(summary.cars[0].car, 'alfa_giulietta_spider');
@@ -473,23 +488,12 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
   const md = await (await fetch(`${base}/api/telemetry/report?format=md`, { headers: auth })).text();
   assert.match(md, /# Rapport BoP/);
 
-  // 6. la page se connecte comme le site : login → {token}, puis verify → {ok}
-  const login = await fetch(`${base}/api/admin/login`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'motdepasse-test' })
-  });
-  assert.equal(login.status, 200);
-  const loginBody = await login.json();
-  assert.equal(loginBody.token, 'motdepasse-test', 'la page lit `token` dans la réponse');
-  const verify = await (await fetch(`${base}/api/admin/verify`, { headers: auth })).json();
-  assert.equal(verify.ok, true, 'la page vérifie la session avec `ok`');
-
-  // 7. la page existe et pointe vers l'API de télémétrie
+  // 6. la page existe et pointe vers l'API de télémétrie
   const page = await fetch(`${base}/telemetry`);
   assert.equal(page.status, 200);
   assert.match(await page.text(), /api\/telemetry\/summary/);
 
-  // 8. le script CSP est servi avec ses valeurs injectées
+  // 7. le script CSP est servi avec ses valeurs injectées
   const lua = await fetch(`${base}/csp/telemetry.lua`);
   assert.equal(lua.status, 200);
   const luaText = await lua.text();
@@ -497,7 +501,7 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
   assert.match(luaText, /\/api\/telemetry\/push/);
   assert.match(luaText, /jeton-tel/);
 
-  // 9. l'API de télémétrie ne déborde pas sur le championnat
+  // 8. l'API de télémétrie ne déborde pas sur le championnat
   const events = await fetch(`${base}/api/telemetry/events`, { headers: auth });
   assert.ok(events.status === 404 || events.status === 502, 'aucune route « events » dans la télémétrie');
 });
@@ -619,24 +623,26 @@ test('admin : « refusé » et « backend injoignable » ne se confondent pas', 
   const bogusBody = await bogus.json();
   assert.ok(bogusBody.code === 'denied' || bogusBody.code === 'unavailable');
 
-  // 3. Le bon mot de passe local : accepté même backend éteint. C'est le
-  //    comportement qui fait marcher la page sans backend joignable.
-  const good = await fetch(`${base}/api/telemetry/summary`, {
-    headers: { Authorization: 'Bearer motdepasse-test' }
-  });
-  assert.equal(good.status, 200, 'le mot de passe local doit suffire');
-  assert.equal((await good.json()).rows, 0);
-
-  // 4. Le login local (fallback) renvoie bien un jeton utilisable tel quel.
+  // 3. Le login local travaille sans backend : il signe son propre jeton.
   const login = await fetch(`${base}/api/admin/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: 'gdspadmin', password: 'motdepasse-test' })
   });
+  assert.equal(login.status, 200, 'le login ne dépend plus du backend');
   const loginBody = await login.json();
-  assert.equal(login.status, 200);
-  assert.ok(loginBody.token, 'le fallback local doit fournir un jeton');
+  assert.ok(loginBody.token, 'le login doit fournir un jeton');
+  assert.equal(loginBody.warning, undefined, 'plus besoin de mode dégradé : tout est local');
+
+  // 4. Ce jeton ouvre la télémétrie, backend toujours éteint.
   const afterLogin = await fetch(`${base}/api/telemetry/summary`, {
     headers: { Authorization: 'Bearer ' + loginBody.token }
   });
   assert.equal(afterLogin.status, 200, 'le jeton du login doit ouvrir la télémétrie');
+  assert.equal((await afterLogin.json()).rows, 0);
+
+  // 5. Le mot de passe lui-même n'est plus un jeton : il ne doit plus rien ouvrir.
+  const rawPassword = await fetch(`${base}/api/telemetry/summary`, {
+    headers: { Authorization: 'Bearer motdepasse-test' }
+  });
+  assert.equal(rawPassword.status, 401, 'le mot de passe ne circule plus comme jeton');
 });
