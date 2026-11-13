@@ -175,3 +175,29 @@ test('un échec d\'initialisation nomme l\'instruction fautive', async () => {
     'le message doit dire QUELLE instruction a échoué'
   );
 });
+
+// --- voitures non identifiées (bug car.id du 13/11, corrigé) -----------------
+
+test('un identifiant « function: … » n\'est pas une voiture', () => {
+  const { plausibleCarId } = require('../tools/telemetry/aggregate');
+  assert.ok(plausibleCarId('actk_lola_t290'));
+  assert.ok(!plausibleCarId('function: 0xff'), 'tostring d\'un champ Lua');
+  assert.ok(!plausibleCarId('function:0x55b4b8e8a0'));
+  assert.ok(!plausibleCarId(''));
+  assert.ok(!plausibleCarId(null));
+});
+
+test('matrice : une voiture non identifiée reste hors comparaison', () => {
+  // Constaté sur /telemetry : l'ancienne séance enregistrée avec
+  // car = « function: 0xff » apparaissait comme une DEUXIÈME voiture — la
+  // même en réalité. Ses tours restent dans la synthèse, pas dans la matrice.
+  const laps = [
+    { driverGuid: 'A', car: 'function: 0xff', lapMs: 74902 },
+    { driverGuid: 'A', car: 'lola', lapMs: 75000 },
+    { driverGuid: 'A', car: 'alfa', lapMs: 75600 }
+  ];
+  const matrix = driverCarMatrix(laps);
+  assert.deepEqual(matrix.cars, ['alfa', 'lola']);
+  assert.deepEqual(matrix.driversCommon, ['A']);
+  assert.equal(matrix.excludedUnidentified, 1);
+});

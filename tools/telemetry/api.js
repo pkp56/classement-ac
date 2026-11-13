@@ -16,7 +16,7 @@
  */
 
 const { openStore } = require('./store');
-const { carProfile, field } = require('./aggregate');
+const { carProfile, driverCarMatrix, field, plausibleCarId } = require('./aggregate');
 const { buildReport } = require('./export');
 const { lapStats, avg } = require('./bop');
 
@@ -315,6 +315,7 @@ class TelemetryService {
       const wear = laps.map(l => num(l.tyre_wear_pct)).filter(v => v != null && v > 0);
       cars.push({
         car,
+        unidentified: !plausibleCarId(car),
         driver,
         driverName: driver ? (laps[0].driver_name || driver) : null,
         track: laps[0].track,
@@ -394,6 +395,10 @@ class TelemetryService {
    */
   async report(filters = {}, options = {}) {
     const summary = await this.summary(filters);
+    // La matrice pilote × voiture fait partie du rapport : avant, la route ne
+    // passait aucune matrice et la section affichait « aucun pilote n'a roulé
+    // dans toutes les voitures » même sans avoir essayé de la calculer.
+    const matrix = options.matrix || driverCarMatrix(await this.rows(filters));
     const pit = await this.pitProfile(filters.track || (summary.cars[0] && summary.cars[0].track));
     const cars = summary.cars.map(row => ({
       car: row.car,
@@ -412,11 +417,12 @@ class TelemetryService {
     const campaigns = [...new Set(summary.cars.map(r => r.campaign).filter(Boolean))];
     const report = buildReport(cars, {
       campaign: options.campaign || filters.campaign || (campaigns.length === 1 ? campaigns[0] : 'telemetrie'),
-      matrix: options.matrix || null,
+      matrix,
       bestLaps: Object.fromEntries(summary.cars.map(r => [r.car, r.bestLapMs]))
     });
     return {
       ...report,
+      matrix,
       pitProfile: pit,
       missingPitProfile: !pit,
       cars: cars.length,

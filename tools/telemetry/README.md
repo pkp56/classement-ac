@@ -455,6 +455,17 @@ et ce qui manque.
 
 ---
 
+## Voitures non identifiées
+
+Les séances enregistrées avant le correctif du 13/11 (bug `car.id` lu comme
+fonction) portent une « voiture » `function: 0x…` : ce n'est pas un identifiant.
+Leurs tours restent visibles (synthèse, page /telemetry avec la mention
+« non identifiée ») mais le rapport les étiquette « (voiture non identifiée) »
+et les laisse hors de la matrice pilote × voiture — comparer une voiture avec
+elle-même sous deux noms ne mesurerait rien. Le rapport calcule désormais
+toujours la matrice : une seule voiture identifiée est dite comme telle, au
+lieu d'afficher « aucun pilote n'a roulé dans toutes les voitures ».
+
 ## Limites, dites franchement
 
 1. **Le carburant et l'usure ne sortent pas du serveur dédié.** Le protocole ACSP

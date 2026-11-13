@@ -251,7 +251,7 @@
       var fuelStint = (c.fuelPerLap && c.fuelCapacity) ? c.fuelCapacity / c.fuelPerLap : null;
       var tyreStint = c.tyreWearPerLap ? 100 / c.tyreWearPerLap : null;
       html += '<tr>' +
-        '<td><b>' + esc(c.car) + '</b>' + (c.driver ? ' <span class="muted">· ' + esc(c.driverName || c.driver) + '</span>' : '') + '</td>' +
+        '<td><b>' + esc(c.car) + '</b>' + (c.unidentified ? ' <span class="muted">· non identifiée (bug corrigé)</span>' : '') + (c.driver ? ' <span class="muted">· ' + esc(c.driverName || c.driver) + '</span>' : '') + '</td>' +
         '<td>' + esc(c.track || '—') + '</td>' +
         '<td>' + c.laps + '</td>' +
         '<td>' + fmtLap(c.bestLapMs) + '</td>' +
