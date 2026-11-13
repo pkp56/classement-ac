@@ -152,6 +152,19 @@ function runTelemetryScript(options = {}) {
       ? options.failPost(sent.length, text)
       : false;
     if (lua.lua_type(state, 4) === lua.LUA_TFUNCTION) {
+      // `options.status` permet de simuler un refus (401, 503…).
+      // Même empilement que le cas nominal : callback(nil, res).
+      if (typeof options.status === 'number') {
+        lua.lua_pushvalue(state, 4);                       // callback
+        lua.lua_pushnil(state);                            // err = nil
+        lua.lua_newtable(state);                           // res
+        lua.lua_pushinteger(state, options.status);
+        lua.lua_setfield(state, -2, to_luastring('status'));
+        lua.lua_pushstring(state, to_luastring('{}'));
+        lua.lua_setfield(state, -2, to_luastring('body'));
+        lua.lua_call(state, 2, 0);
+        return 0;
+      }
       lua.lua_pushvalue(state, 4);
       if (shouldFail) lua.lua_pushstring(state, to_luastring('réseau indisponible'));
       else lua.lua_pushnil(state);
@@ -163,6 +176,24 @@ function runTelemetryScript(options = {}) {
     return 0;
   });
   lua.lua_setfield(L, -2, to_luastring('post'));
+  // Sonde GET : même comportement que le POST pour les tests.
+  lua.lua_pushjsfunction(L, (state) => {
+    if (options.silentGet) return 0;
+    lua.lua_pushvalue(state, 2);
+    if (lua.lua_isfunction(state, -1)) {
+      lua.lua_pushnil(state);
+      lua.lua_newtable(state);
+      lua.lua_pushinteger(state, 200);
+      lua.lua_setfield(state, -2, to_luastring('status'));
+      lua.lua_pushstring(state, to_luastring('ok'));
+      lua.lua_setfield(state, -2, to_luastring('body'));
+      lua.lua_call(state, 2, 0);
+    } else {
+      lua.lua_pop(state, 1);
+    }
+    return 0;
+  });
+  lua.lua_setfield(L, -2, to_luastring('get'));
   lua.lua_setglobal(L, to_luastring('web'));
   // `ui` minimal : `drawUI` sert de canal de diagnostic, il doit pouvoir être
   // appelé sans planter, même hors rendu.

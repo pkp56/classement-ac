@@ -858,3 +858,50 @@ test('sans identifiant Steam, le script lit quand même les tours', () => {
   assert.equal(lap.lapMs, 75576, 'le temps au tour est celui de previousLapTimeMs');
   assert.ok(run.ui.some(l => /ABSENT/.test(l)), 'le diagnostic explique l\'absence de guid');
 });
+
+test('le diagnostic affiche la réponse réelle du site', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // 401 : le site répond, mais refuse le jeton. C'est une information qu'il
+  // faut voir à l'écran, pas un état « en attente » indéfini.
+  const run = simulate({ served: true, callInit: true, status: 401, steps: [{ dt: 0.2 }] });
+  assert.equal(run.error, null);
+  assert.ok(run.ui.some(l => /réponse: HTTP 401/.test(l)), run.ui.join(' | '));
+  assert.ok(run.messages.some(m => / refuse/.test(m)));
+});
+
+test('la bannière reste affichée tant que le ping n\'a pas abouti', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Elle disparaissait après 20 s ; or un premier tour dure souvent plus.
+  const run = simulate({
+    served: true, callInit: true, silentPost: true,
+    steps: Array.from({ length: 100 }, () => ({ dt: 0.5 }))
+  });
+  assert.ok(run.ui.length > 0, 'le diagnostic doit rester lisible après 20 s');
+  assert.ok(run.ui.some(l => /réponse:/.test(l)), 'la réponse réelle doit être visible');
+  assert.ok(run.ui.some(l => /^sonde:/.test(l)), 'la sonde GET doit être visible');
+});
+
+test('une erreur de transport est écrite à l\'écran, mot pour mot', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Message d'erreur réel (TLS, DNS, pare-feu) : c'est lui qui dira quoi
+  // corriger. Le masquer derrière « attente » ne sert à personne.
+  const run = simulate({
+    served: true, callInit: true, failPost: () => true, steps: [{ dt: 0.5 }]
+  });
+  assert.equal(run.error, null);
+  assert.ok(run.ui.some(l => /réponse: err=réseau indisponible/.test(l)), run.ui.join(' | '));
+  assert.ok(run.messages.some(m => /envoi impossible/.test(m)));
+});
+
+test('la sonde GET distingue un blocage réseau d\'un refus du site', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Le POST ne répond pas, mais un GET sur la même origine répond : le réseau
+  // va bien, c'est la route POST qui pose problème. Sans cette sonde, on ne
+  // peut pas trancher.
+  const run = simulate({
+    served: true, callInit: true, silentPost: true, steps: [{ dt: 0.5 }, { dt: 0.5 }]
+  });
+  assert.equal(run.error, null);
+  assert.ok(run.ui.some(l => /sonde: GET HTTP 200/.test(l)), run.ui.join(' | '));
+  assert.ok(run.messages.some(m => /réseau/.test(m)));
+});
