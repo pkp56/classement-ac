@@ -72,6 +72,8 @@ local state = {
   lastAttemptAt = -1e9,     -- cadence des tentatives
   why = '',                 -- dernière raison d'un envoi impossible
   updateError = '',         -- erreur attrapée dans update/init (affichée)
+  guidSource = nil,         -- d'où vient le guid : 'config' ou 'API'
+  sendBlocked = '',         -- pourquoi les tours attendent (affiché)
   updates = 0,              -- nombre d'appels à script.update
 }
 
@@ -84,6 +86,10 @@ local cfg = {
   campaign = 'campagne',
   intervalSec = 5,
   debug = 0,
+  guid = '',           -- SteamID injecté par le site (?guid={SteamID}) ou la config
+  track = '',          -- circuit, si aucun champ sim n'est lisible
+  trackLayout = '',
+  serverName = '',
 }
 
 local function log(msg)
@@ -125,9 +131,11 @@ local function resolveConfig()
   --    telle quelle écraserait les valeurs injectées par des vides.
   local ok, values = pcall(ac.configValues, {
     url = '', token = '', campaign = '', intervalSec = 0, debug = 0,
+    guid = '', track = '', trackLayout = '', serverName = '',
   })
   if ok and type(values) == 'table' then
-    for _, key in ipairs({ 'url', 'token', 'campaign', 'intervalSec', 'debug' }) do
+    for _, key in ipairs({ 'url', 'token', 'campaign', 'intervalSec', 'debug',
+      'guid', 'track', 'trackLayout', 'serverName' }) do
       local v = values[key]
       local vide = (v == nil or v == '' or v == 0)
       if not vide and (cfg[key] == nil or cfg[key] == '' or cfg[key] == 0) then
@@ -171,6 +179,23 @@ local function readField(obj, key)
   state.fieldErrors = state.fieldErrors or {}
   state.fieldErrors[key] = true
   return nil
+end
+
+-- Circuit / serveur : la source automatique (sim) d'abord, la config ensuite
+-- (section [SCRIPT_x] de csp_extra_options.ini, lue par ac.configValues).
+-- Sur la version CSP testée, tous les champs sim candidats LÈVENT (ils
+-- s'affichent dans « champs refusés ») : la config est alors la seule source.
+local function resolveTrack()
+  return tostring(readField(sim, 'trackID') or readField(sim, 'track')
+    or readField(sim, 'trackId') or cfg.track or '')
+end
+
+local function resolveTrackLayout()
+  return tostring(readField(sim, 'trackLayout') or cfg.trackLayout or '')
+end
+
+local function resolveServerName()
+  return tostring(readField(sim, 'serverName') or cfg.serverName or '')
 end
 
 local function firstNumber(candidates)
@@ -428,6 +453,13 @@ end
 --    voiture — sans lui, un BoP mesurerait le talent et pas la voiture.
 -------------------------------------------------------------------------------
 local function ensureIdentity()
+  -- Le guid par configuration d'abord : ?guid={SteamID} dans l'URL du script
+  -- (injecté par le site) ou guid = … dans la section [SCRIPT_x]. C'est la
+  -- seule source fiable — aucun champ de `car` ne l'expose (constaté en jeu).
+  if not state.driverGuid and cfg.guid ~= '' then
+    state.driverGuid = tostring(cfg.guid)
+    state.guidSource = 'config'
+  end
   if not state.driverGuid and car then
     -- `ac.StateCar` (SDK, common/ac_state.lua) n'expose AUCUN identifiant
     -- Steam : ni driverGuid, ni driverSteamID. Lire ces champs renvoyait nil
@@ -436,7 +468,11 @@ local function ensureIdentity()
     -- l'URL du script (documentation CSP, section [SCRIPT_...]).
     for _, key in ipairs({ 'driverGuid', 'driverSteamID', 'guid', 'steamID' }) do
       local v = readField(car, key)
-      if v ~= nil and tostring(v) ~= '' then state.driverGuid = tostring(v) break end
+      if v ~= nil and tostring(v) ~= '' then
+        state.driverGuid = tostring(v)
+        state.guidSource = 'API'
+        break
+      end
     end
     if not state.driverGuid and ac.getDriverSteamID then
       local ok, v = pcall(ac.getDriverSteamID, 0)
@@ -486,9 +522,9 @@ local function buildPayload()
     v = 1,
     script = VERSION,
     campaign = cfg.campaign,
-    serverName = tostring(readField(sim, 'serverName') or ''),
-    track = tostring(readField(sim, 'trackID') or readField(sim, 'track') or ''),
-    trackConfig = tostring(readField(sim, 'trackLayout') or ''),
+    serverName = resolveServerName(),
+    track = resolveTrack(),
+    trackConfig = resolveTrackLayout(),
     sessionType = tostring(readField(sim, 'currentSessionType') or ''),
     fuelRate = tonumber(readField(sim, 'fuelRate')),
     tyreWearRate = tonumber(readField(sim, 'tyreWearRate')),
@@ -504,12 +540,30 @@ local function buildPayload()
   }
 end
 
+-- Le site refuse un tour sans pilote ni circuit (validatePush) : autant ne
+-- pas l'envoyer — mais il faut le DIRE à l'écran, sinon ce sont des tours qui
+-- disparaissent sans que personne sache pourquoi.
+local function blockSend(reason)
+  if state.sendBlocked == reason then return end
+  state.sendBlocked = reason
+  message('Télémétrie GDSP : envoi suspendu', reason)
+end
+
 local function flush(force)
   if state.pendingCount == 0 then return end
   if not force and (state.now - state.lastSendAt) < cfg.intervalSec then return end
   -- Même raison que dans completeLap : l'absence de guid ne doit pas retenir
   -- les tours indéfiniment. Seule la voiture est indispensable.
   if not state.carId then return end
+  if not state.driverGuid then
+    blockSend('guid absent — ajouter ?guid={SteamID} à l\'URL du script dans csp_extra_options.ini')
+    return
+  end
+  if resolveTrack() == '' then
+    blockSend('circuit inconnu — ajouter track = … à la section [SCRIPT_x] de csp_extra_options.ini')
+    return
+  end
+  state.sendBlocked = ''
 
   local body = toJson(buildPayload())
   local batch = state.pending
@@ -762,8 +816,8 @@ function script.ping()
     script = VERSION,
     campaign = cfg.campaign,
     kind = 'ping',                     -- pas un tour : le site ne stocke rien
-    serverName = tostring(readField(sim, 'serverName') or ''),
-    track = tostring(readField(sim, 'trackID') or readField(sim, 'track') or ''),
+    serverName = resolveServerName(),
+    track = resolveTrack(),
     driver = { guid = state.driverGuid or '', name = state.driverName or '' },
     car = state.carId or '',
   })
@@ -839,11 +893,15 @@ function script.drawUI()
   if state.now > 20 and state.pinged then return end
   -- init n'a peut-être jamais été appelé : le diagnostic doit rester lisible.
   pcall(resolveConfig)
+  local trackNow = resolveTrack()
   local lines = {
     'GDSP-TELEMETRY ' .. (state.pinged and 'OK' or 'attente'),
     'url(' .. cfgSource .. '): ' .. (cfg.url ~= '' and cfg.url or 'MANQUANTE'),
+    'circuit: ' .. (trackNow ~= '' and trackNow or '—'),
     'web=' .. tostring(state.hasWeb) ..
-      ' guid=' .. tostring(state.driverGuid or 'ABSENT (API)') ..
+      ' guid=' .. (state.driverGuid
+        and (tostring(state.driverGuid) .. ' (' .. tostring(state.guidSource or 'API') .. ')')
+        or 'ABSENT (API)') ..
       ' tours=' .. tostring(state.sentLaps) ..
       ((state.lapsWithoutGuid or 0) > 0 and (' sansguid=' .. state.lapsWithoutGuid) or ''),
     'essais=' .. tostring(state.pingAttempts) ..
@@ -860,6 +918,9 @@ function script.drawUI()
   -- ses car/sim sont des tables Lua permissives).
   if state.updateError ~= '' then
     lines[#lines + 1] = 'blocage: ' .. state.updateError:sub(1, 90)
+  end
+  if state.sendBlocked ~= '' then
+    lines[#lines + 1] = 'envoi bloqué: ' .. state.sendBlocked:sub(1, 90)
   end
   if state.fieldErrors then
     local keys = {}

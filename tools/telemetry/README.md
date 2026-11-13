@@ -235,10 +235,36 @@ appeler son callback. Le script ne devine pas : il **affiche ce qu'il reçoit**.
 | `mode: —` + `essais=N` | le POST ne part PAS : un crash entre le compteur et l'envoi |
 | `blocage: …` | erreur attrapée dans la boucle, affichée au lieu de tuer le script |
 | `champs refusés: …` | champs de `car`/`sim` qui LÈVENT sur cette version de CSP |
+| `circuit: …` / `circuit: —` | circuit qui sera envoyé avec les tours |
+| `envoi bloqué: …` | les tours attendent : guid ou circuit à configurer |
 | `réponse: aucune` + `sonde: aucune` | rien ne sort de la machine → TLS, antivirus, pare-feu |
 
 `web.timeouts(3000, 5000, 5000, 6000, 2)` est posé au démarrage : sans lui,
 WinHTTP attend 30 s en silence, ce qui ressemble à une panne.
+
+### Câbler guid et circuit (requis pour les tours)
+
+Le ping passe sans eux, mais le site refuse un tour sans pilote ni circuit.
+L'API CSP n'expose ni l'un ni l'autre (en jeu, les champs candidats de
+`car`/`sim` LÈVENT — voir `champs refusés` à l'écran). Deux lignes dans
+`csp_extra_options.ini` du serveur de jeu suffisent :
+
+```ini
+[SCRIPT_2]
+SCRIPT = 'https://classement-ac-1.onrender.com/csp/telemetry.lua?guid={SteamID}'
+REQUIRED = 0
+track = oesterreichring1979
+```
+
+- `?guid={SteamID}` : CSP substitue le SteamID du pilote avant de télécharger
+  le script ; le site l'injecte dans la config servie (valeur validée :
+  6 à 32 chiffres). C'est la source documentée, elle ne demande rien au pilote.
+- `track = …` : lu par le script via `ac.configValues` — à mettre à jour quand
+  le serveur change de circuit (les séances sont regroupées par circuit).
+  `trackLayout` et `serverName` fonctionnent pareil.
+
+Sans guid, les tours restent en attente et l'écran dit quoi configurer
+(`envoi bloqué: guid absent — …`) : plus de tour perdu sans explication.
 
 **Le piège des structures C.** `car` et `sim` sont des cdata LuaJIT bruts :
 lire un champ inexistant **lève une erreur** là où une table Lua renverrait
