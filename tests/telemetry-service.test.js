@@ -471,6 +471,24 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
   assert.equal(accepted.status, 200);
   const acceptedBody = await accepted.json();
   assert.equal(acceptedBody.added, 3);
+  assert.equal(acceptedBody.skipped, 0);
+
+  // 2 bis. doublon + tour sans temps : rien de nouveau n'entre, et la
+  // réponse le DIT (added/duplicates/skipped) — le script CSP s'appuie sur
+  // ces compteurs pour afficher la vérité en jeu au lieu de compter les envois.
+  const mixed = await fetch(`${base}/api/telemetry/push`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Telemetry-Token': 'jeton-tel' },
+    body: JSON.stringify({
+      ...pushPayload(),
+      laps: [{ lapNumber: 1, lapMs: 75576 }, { lapNumber: 10 }]
+    })
+  });
+  assert.equal(mixed.status, 200);
+  const mixedBody = await mixed.json();
+  assert.equal(mixedBody.added, 0, "le doublon n'est pas compté deux fois");
+  assert.equal(mixedBody.duplicates, 1);
+  assert.equal(mixedBody.skipped, 1, 'le tour sans temps est écarté, compté');
 
   // 3. lecture sans admin → refus
   const anonymous = await fetch(`${base}/api/telemetry/summary`);
@@ -1224,4 +1242,35 @@ test('sans guid : les tours attendent et l\'écran dit quoi configurer', () => {
   assert.ok(payloads.every(p => p.kind === 'ping'), 'aucun tour ne doit partir sans guid');
   assert.ok(run.ui.some(l => /envoi bloqué: guid absent/.test(l)), run.ui.join(' | '));
   assert.ok(run.messages.some(m => /envoi suspendu/.test(m)));
+});
+
+// --- le site confirme, le jeu affiche ---------------------------------------
+
+test('le site confirme ce qu\'il a enregistré — et le jeu l\'affiche', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Réponse {added:1} : « tours=1 » doit compter les tours ENREGISTRÉS, pas
+  // les envois. Et une confirmation visible doit apparaître une fois.
+  const run = simulate({
+    served: true, callInit: true,
+    respond: { added: 1, duplicates: 0, skipped: 0 },
+    steps: unTour()
+  });
+  assert.equal(run.error, null);
+  assert.ok(run.messages.some(m => /enregistré/.test(m) && /visible sur \/telemetry/.test(m)),
+    run.messages.join(' | '));
+  assert.ok(run.ui.some(l => /tours=1/.test(l)), run.ui.join(' | '));
+});
+
+test('envoyé mais écarté : le jeu le dit au lieu de compter un tour fantôme', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Le site écarte un tour sans temps valide : s'il répond added:0, le
+  // compteur ne doit PAS monter et l'écran doit expliquer.
+  const run = simulate({
+    served: true, callInit: true,
+    respond: { added: 0, duplicates: 0, skipped: 1 },
+    steps: unTour()
+  });
+  assert.equal(run.error, null);
+  assert.ok(run.messages.some(m => /rien enregistré/.test(m)), run.messages.join(' | '));
+  assert.ok(run.ui.some(l => /tours=0/.test(l)), run.ui.join(' | '));
 });

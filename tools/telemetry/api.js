@@ -70,10 +70,11 @@ function validatePush(payload) {
   if (!car) return { ok: false, error: 'voiture manquante' };
 
   const clean = [];
+  let skipped = 0;
   for (const raw of laps) {
     if (!raw || typeof raw !== 'object') continue;
     const lapMs = positive(field(raw, 'lapMs', 'lap_ms'));
-    if (!lapMs) continue;                       // un tour sans temps n'existe pas
+    if (!lapMs) { skipped += 1; continue; }     // un tour sans temps n'existe pas
     // L'usure arrive par roue, en % consommé sur le tour (c'est ce que le
     // script envoie), ou sous forme scalaire.
     const wheels = Array.isArray(raw.wheels) ? raw.wheels.map(num)
@@ -112,6 +113,7 @@ function validatePush(payload) {
 
   return {
     ok: true,
+    skipped,          // tours écartés (temps manquant) : le client l'affiche
     clean: {
       track,
       trackConfig: payload.trackConfig || null,
@@ -238,7 +240,7 @@ class TelemetryService {
     }
     this.received.pushes += 1;
     this.received.laps += added;
-    return { ok: true, added, duplicates, sessionId: session.id };
+    return { ok: true, added, duplicates, skipped: check.skipped || 0, sessionId: session.id };
   }
 
   /** Toutes les lignes (sessions + tours), jointes en mémoire. */

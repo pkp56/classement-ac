@@ -213,6 +213,12 @@ function runTelemetryScript(options = {}) {
       lua.lua_newtable(state);
       lua.lua_pushinteger(state, shouldFail ? 0 : 200);
       lua.lua_setfield(state, -2, to_luastring('status'));
+      // `options.respond` : corps JSON de la réponse (added, duplicates…),
+      // pour tester la lecture côté script de ce que le site a enregistré.
+      if (options.respond && !shouldFail) {
+        lua.lua_pushstring(state, to_luastring(JSON.stringify(options.respond)));
+        lua.lua_setfield(state, -2, to_luastring('body'));
+      }
       lua.lua_call(state, 2, 0);
     }
     return 0;

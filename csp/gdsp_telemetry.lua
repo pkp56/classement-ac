@@ -74,6 +74,7 @@ local state = {
   updateError = '',         -- erreur attrapée dans update/init (affichée)
   guidSource = nil,         -- d'où vient le guid : 'config' ou 'API'
   sendBlocked = '',         -- pourquoi les tours attendent (affiché)
+  lapConfirmed = false,     -- la première confirmation d'enregistrement est passée
   updates = 0,              -- nombre d'appels à script.update
 }
 
@@ -572,7 +573,7 @@ local function flush(force)
   state.pendingCount = 0
   state.lastSendAt = state.now
 
-  post(body, function(err)
+  post(body, function(err, res)
     if err then
       state.sendErrors = state.sendErrors + 1
       -- On remet les tours en attente : rien ne doit être perdu parce que le
@@ -593,8 +594,31 @@ local function flush(force)
       return
     end
     state.sendErrors = 0
-    state.sentLaps = state.sentLaps + count
-    log(string.format('%d tour(s) envoyé(s) — total %d', count, state.sentLaps))
+    -- Le site dit ce qu'il a RÉELLEMENT enregistré : c'est lui qui sait si
+    -- un tour sans temps valide a été écarté. Compter les envois ferait
+    -- mentir « tours=N » quand le serveur refuse des tours.
+    local added = count
+    local duplicates = 0
+    if res and type(res.body) == 'string' then
+      added = tonumber(res.body:match('"added"%s*:%s*(%-?%d+)')) or count
+      duplicates = tonumber(res.body:match('"duplicates"%s*:%s*(%-?%d+)')) or 0
+    end
+    state.sentLaps = state.sentLaps + added
+    log(string.format('%d tour(s) enregistré(s) — total %d', added, state.sentLaps))
+    -- Confirmation visible une fois, puis à chaque anomalie : un envoi sans
+    -- effet doit se voir à l'écran, pas seulement sur le site.
+    if not state.lapConfirmed or (count > 0 and added == 0 and duplicates == 0) then
+      state.lapConfirmed = true
+      if added > 0 then
+        message('Télémétrie GDSP',
+          string.format('%d tour(s) enregistré(s) — visible sur /telemetry.', added))
+      elseif duplicates > 0 then
+        message('Télémétrie GDSP', 'Tours déjà enregistrés — doublons ignorés.')
+      else
+        message('Télémétrie GDSP : rien enregistré',
+          string.format('%d tour(s) envoyé(s) mais écarté(s) — temps de tour illisible ? (voir « champs refusés »)', count))
+      end
+    end
   end)
 end
 

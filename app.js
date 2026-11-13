@@ -973,7 +973,7 @@ app.post('/api/telemetry/push', express.text({type:()=>true,limit:'10mb'}), asyn
     const service=await getTelemetry();
     const result=await service.ingest(payload);
     if(!result.ok)return res.status(400).json(result);
-    res.json({ok:true,added:result.added,duplicates:result.duplicates,sessionId:result.sessionId});
+    res.json({ok:true,added:result.added,duplicates:result.duplicates,skipped:result.skipped||0,sessionId:result.sessionId});
   }catch(e){
     console.error('télémétrie: envoi refusé —',e.message);
     // Base muette : indisponibilité temporaire, pas un bug du payload.
