@@ -44,6 +44,12 @@ CREATE TABLE IF NOT EXISTS ${SCHEMA}.session (
   notes           TEXT
 );
 
+-- Clé de séance fournie par le script CSP : deux courses sur le même circuit
+-- ne doivent pas fusionner — les tours 1-2-3 de la seconde étaient comptés
+-- comme doublons de la première (« 3 tours » puis « rien », constaté en jeu).
+-- Ajout sans perte : les lignes déjà en base gardent NULL.
+ALTER TABLE ${SCHEMA}.session ADD COLUMN IF NOT EXISTS session_key TEXT;
+
 -- Un relais = tours consécutifs d'un pilote dans une voiture, sans arrêt.
 CREATE TABLE IF NOT EXISTS ${SCHEMA}.stint (
   id              BIGSERIAL PRIMARY KEY,

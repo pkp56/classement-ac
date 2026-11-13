@@ -116,6 +116,7 @@ function validatePush(payload) {
     skipped,          // tours écartés (temps manquant) : le client l'affiche
     clean: {
       track,
+      sessionKey: String(payload.sessionKey || '').trim().slice(0, 64) || null,
       trackConfig: payload.trackConfig || null,
       sessionType: payload.sessionType || null,
       serverName: payload.serverName || null,
@@ -146,18 +147,26 @@ class TelemetryService {
 
   /** Retrouve (ou ouvre) la session correspondant au contexte envoyé. */
   async ensureSession(info) {
-    const key = [info.track, info.trackConfig || '', info.sessionType || '', info.campaign || ''].join('|');
+    // Avec une clé de séance (fournie par le script CSP), chaque course est
+    // une session à part : les tours 1-2-3 d'une NOUVELLE course ne sont pas
+    // des doublons de la précédente. Sans clé (ancien script, ping), on
+    // regroupe comme avant par circuit/config/type/campagne.
+    const key = info.sessionKey
+      ? 'key:' + info.sessionKey
+      : [info.track, info.trackConfig || '', info.sessionType || '', info.campaign || ''].join('|');
     if (this.sessions.has(key)) return this.sessions.get(key);
-    // Après un redémarrage, on réutilise la session déjà en base pour ne pas
-    // fragmenter une même séance en une session par redéploiement.
     let existing = [];
     try {
-      existing = await this.store.select('session', { track: info.track });
+      existing = info.sessionKey
+        ? await this.store.select('session', { session_key: info.sessionKey })
+        : await this.store.select('session', { track: info.track });
     } catch (e) { /* base vide */ }
     const match = existing
-      .filter(row => (row.track_config || null) === (info.trackConfig || null))
-      .filter(row => (row.session_type || null) === (info.sessionType || null))
-      .filter(row => (row.campaign || null) === (info.campaign || null))
+      .filter(row => info.sessionKey
+        ? true
+        : (row.track_config || null) === (info.trackConfig || null)
+          && (row.session_type || null) === (info.sessionType || null)
+          && (row.campaign || null) === (info.campaign || null))
       .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0];
     if (match) {
       this.sessions.set(key, match);
@@ -165,6 +174,7 @@ class TelemetryService {
     }
     const row = {
       started_at: this.now().toISOString(),
+      session_key: info.sessionKey || null,
       server_name: info.serverName,
       track: info.track,
       track_config: info.trackConfig,

@@ -1296,3 +1296,79 @@ test('la bannière réapparaît à chaque tour bouclé, avec le compteur brut', 
     'le compteur brut doit s\'afficher au tour bouclé, après la fenêtre des 20 s');
   assert.ok(run.ui.some(l => /tours=1/.test(l)), 'le tour est enregistré');
 });
+
+// --- deux courses ne fusionnent plus -----------------------------------------
+
+test('deux courses, même circuit : les tours de la seconde ne sont pas des doublons', async () => {
+  const { TelemetryService } = require('../tools/telemetry/api');
+  // Constaté en jeu : 3 tours enregistrés à la première course, puis « rien »
+  // à la seconde — mêmes tours 1-2-3, même pilote, même voiture : la séance
+  // fusionnait et tout était compté doublon. La clé de séance l'isole.
+  const store = tempStore();
+  const svc = new TelemetryService(store);
+  const r1 = await svc.ingest({ ...pushPayload(), sessionKey: 'seance-A' });
+  const r2 = await svc.ingest({ ...pushPayload(), sessionKey: 'seance-B' });
+  assert.equal(r1.added, 3);
+  assert.equal(r2.added, 3, 'une nouvelle séance repart de zéro');
+  const rows = await svc.rows({});
+  assert.equal(rows.length, 6);
+});
+
+test('un renvoi réseau reste un doublon dans la MÊME séance', async () => {
+  const { TelemetryService } = require('../tools/telemetry/api');
+  const store = tempStore();
+  const svc = new TelemetryService(store);
+  await svc.ingest({ ...pushPayload(), sessionKey: 'seance-A' });
+  const retry = await svc.ingest({ ...pushPayload(), sessionKey: 'seance-A' });
+  assert.equal(retry.added, 0);
+  assert.equal(retry.duplicates, 3, 'le renvoi du même paquet ne double pas les tours');
+});
+
+test('sans clé de séance, le regroupement historique tient toujours', async () => {
+  const { TelemetryService } = require('../tools/telemetry/api');
+  const store = tempStore();
+  const svc = new TelemetryService(store);
+  await svc.ingest(pushPayload());
+  const again = await svc.ingest(pushPayload());
+  assert.equal(again.added, 0);
+  assert.equal(again.duplicates, 3);
+});
+
+test('chaque exécution du script porte une clé de séance stable', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  const run = simulate({ served: true, callInit: true, steps: unTour() });
+  assert.equal(run.error, null);
+  const payloads = run.sent.map(t => JSON.parse(t));
+  assert.ok(payloads.length >= 2, 'ping puis tour');
+  assert.ok(payloads.every(p => typeof p.sessionKey === 'string' && p.sessionKey.length >= 3));
+  const keys = new Set(payloads.map(p => p.sessionKey));
+  assert.equal(keys.size, 1, 'la clé ne change pas entre le ping et les tours');
+});
+
+test('car.id en fonction : on l\'appelle, jamais de « function: 0x… » en base', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Sur la version CSP testée, car.id est une fonction : la voiture
+  // enregistrée était « function: 0x… » (visible sur /telemetry).
+  const run = simulate({
+    served: true, callInit: true, carIdIsFunction: true, steps: unTour()
+  });
+  assert.equal(run.error, null);
+  const payloads = run.sent.map(t => JSON.parse(t));
+  assert.ok(payloads.length >= 1);
+  assert.ok(payloads.every(p => p.car === 'alfa_giulietta_spider'),
+    'la voiture doit être lidentifiant réel, pas un pointeur : ' + JSON.stringify(payloads.map(p => p.car)));
+});
+
+test('la réponse du dernier envoi de tours s\'affiche aussi', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Le ping réussit (1er POST), l'envoi de tours échoue (2e) : c'est LUI qui
+  // doit s'afficher — avant, « réponse: aucune » après un envoi de tours
+  // faisait croire au silence.
+  const run = simulate({
+    served: true, callInit: true,
+    failPost: (n) => n === 2,
+    steps: unTour()
+  });
+  assert.equal(run.error, null);
+  assert.ok(run.ui.some(l => /réponse: err=réseau indisponible/.test(l)), run.ui.join(' | '));
+});
