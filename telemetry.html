@@ -112,6 +112,15 @@
       <div id="cars"><div class="empty">Chargement…</div></div>
     </div>
 
+    <div class="panel">
+      <h2>Séances enregistrées — corriger ou supprimer</h2>
+      <p class="note">Le circuit est maintenant lu dans le jeu (ac.getTrackID). Les séances enregistrées
+      avant ce correctif portent peut-être un circuit périmé (config restée sur l'ancienne piste) :
+      corrige-le ici — ou supprime l'essai. Les tours et mesures ne sont jamais modifiés, seulement
+      l'étiquette de la séance.</p>
+      <div id="sessions"><div class="empty">Chargement…</div></div>
+    </div>
+
     <div class="grid2">
       <div class="panel">
         <h2>Mesures pit-lane (jour 4)</h2>
@@ -290,10 +299,65 @@
       'Le script CSP affiche en jeu ce qu\'il a réussi à lire : <code>Télémétrie GDSP · carburant lu · pneus lus</code>.</div>';
   }
 
+  function loadSessions() {
+    return fetch('/api/telemetry/sessions', { cache: 'no-store', headers: headers() })
+      .then(function (r) { return r.ok ? r.json() : { sessions: null }; })
+      .then(function (j) { renderSessions(j && j.sessions); })
+      .catch(function () { renderSessions(null); });
+  }
+  function renderSessions(list) {
+    var box = $('sessions');
+    if (!Array.isArray(list)) { box.innerHTML = '<div class="empty">Liste indisponible.</div>'; return; }
+    if (!list.length) { box.innerHTML = '<div class="empty">Aucune séance enregistrée pour l\'instant.</div>'; return; }
+    var html = '<table><thead><tr><th>Début</th><th>Circuit</th><th>Type</th><th>Campagne</th>' +
+      '<th>Serveur</th><th>Tours</th><th>Pilotes</th><th></th></tr></thead><tbody>';
+    list.forEach(function (row) {
+      var debut = row.startedAt ? new Date(row.startedAt).toLocaleString('fr-FR') : '—';
+      html += '<tr data-id="' + row.id + '">' +
+        '<td>' + esc(debut) + '</td>' +
+        '<td><b>' + esc(row.track) + '</b>' + (row.trackConfig ? ' <span class="muted">· ' + esc(row.trackConfig) + '</span>' : '') + '</td>' +
+        '<td>' + esc(row.sessionType || '—') + '</td>' +
+        '<td>' + esc(row.campaign || '—') + '</td>' +
+        '<td>' + esc(row.serverName || '—') + '</td>' +
+        '<td>' + row.laps + '</td>' +
+        '<td>' + row.drivers + '</td>' +
+        '<td><button class="ghost act-edit" title="Corriger le circuit, le type, la campagne…">Corriger</button> ' +
+        '<button class="ghost act-del" title="Supprimer la séance et ses tours">Supprimer</button></td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    box.innerHTML = html;
+  }
+  function sessionEditRow(row) {
+    var tr = document.createElement('tr');
+    tr.className = 'edit-row';
+    tr.innerHTML = '<td colspan="8"><div class="filters" style="grid-template-columns:repeat(3,1fr)">' +
+      '<label>Circuit<input data-k="track" type="text" value="' + esc(row.track || '') + '" placeholder="oesterreichring1979"></label>' +
+      '<label>Config<input data-k="trackConfig" type="text" value="' + esc(row.trackConfig || '') + '" placeholder="(vide si aucune)"></label>' +
+      '<label>Type<input data-k="sessionType" type="text" value="' + esc(row.sessionType || '') + '" placeholder="practice / qualify / race"></label>' +
+      '<label>Campagne<input data-k="campaign" type="text" value="' + esc(row.campaign || '') + '"></label>' +
+      '<label>Serveur<input data-k="serverName" type="text" value="' + esc(row.serverName || '') + '"></label>' +
+      '<label>Notes<input data-k="notes" type="text" value="' + esc(row.notes || '') + '"></label>' +
+      '</div><div style="margin-top:8px"><button class="act-save">Enregistrer</button> ' +
+      '<button class="ghost act-cancel">Annuler</button> <span class="note"></span></div></td>';
+    return tr;
+  }
+  function patchSession(id, body, noteEl) {
+    return fetch('/api/telemetry/sessions/' + id, {
+      method: 'PATCH', headers: headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.j && res.j.error || 'HTTP erreur');
+        return res;
+      });
+  }
+
   function refresh() {
     var q = query().toString();
     return Promise.all([
       loadCatalog().catch(function () {}),
+      loadSessions(),
       fetch('/api/telemetry/summary?' + q, { cache: 'no-store', headers: headers() }).then(function (r) {
         if (r.status === 401) throw new Error('auth');
         return r.json();
@@ -401,6 +465,57 @@
     showLogin('Déconnecté.');
   });
   $('reloadBtn').addEventListener('click', refresh);
+  // Gestion des séances : corriger / supprimer, sans recharger la page.
+  $('sessions').addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    var tr = btn.closest('tr');
+    if (!tr) return;
+    // Ligne d'édition (sans data-id) : ses propres boutons.
+    if (tr.className === 'edit-row') {
+      if (btn.classList.contains('act-cancel')) { tr.parentNode.removeChild(tr); return; }
+      if (btn.classList.contains('act-save')) {
+        var body = {};
+        tr.querySelectorAll('input[data-k]').forEach(function (input) { body[input.getAttribute('data-k')] = input.value; });
+        var note = tr.querySelector('.note');
+        var main = tr.previousSibling;
+        var mainId = main && main.getAttribute ? main.getAttribute('data-id') : null;
+        if (!mainId) return;
+        patchSession(mainId, body, note)
+          .then(function () { refresh(); })
+          .catch(function (err) { if (note) note.textContent = err.message; });
+      }
+      return;
+    }
+    // Ligne de séance (avec data-id).
+    var id = tr.getAttribute('data-id');
+    if (!id) return;
+    if (btn.classList.contains('act-del')) {
+      var cells = tr.querySelectorAll('td');
+      var label = (cells[1] ? cells[1].textContent : '') + ' — ' + (cells[0] ? cells[0].textContent : '');
+      if (!window.confirm('Supprimer définitivement la séance ' + label.trim() + ' et TOUS ses tours ?')) return;
+      fetch('/api/telemetry/sessions/' + id, { method: 'DELETE', headers: headers() })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) throw new Error(res.j && res.j.error || 'refusé');
+          refresh();
+        })
+        .catch(function (err) { window.alert('Suppression impossible : ' + err.message); });
+      return;
+    }
+    if (btn.classList.contains('act-edit')) {
+      if (tr.nextSibling && tr.nextSibling.className === 'edit-row') tr.parentNode.removeChild(tr.nextSibling);
+      else {
+        fetch('/api/telemetry/sessions', { cache: 'no-store', headers: headers() })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            var row = (j.sessions || []).find(function (x) { return String(x.id) === String(id); });
+            if (row) tr.insertAdjacentElement('afterend', sessionEditRow(row));
+          });
+      }
+      return;
+    }
+  });
   $('dlCsv').addEventListener('click', function (e) { e.preventDefault(); fetchReport('csv'); });
   $('dlMd').addEventListener('click', function (e) { e.preventDefault(); fetchReport('md'); });
   $('dlHtml').addEventListener('click', function (e) { e.preventDefault(); fetchReport('html'); });

@@ -472,6 +472,27 @@ et ce qui manque.
 
 ---
 
+## Corriger ou supprimer une séance
+
+Le circuit est lu dans le jeu depuis `ac.getTrackID` (voir la recette
+ci-dessous), mais les séances enregistrées AVANT ce correctif portent
+peut-être un circuit périmé (config restée sur l'ancienne piste). La page
+`/telemetry` a un panneau **« Séances enregistrées — corriger ou
+supprimer »** :
+
+* **Corriger** : circuit, config, type, campagne, serveur, notes — les tours
+  et les mesures ne sont jamais touchés, seulement l'étiquette de la séance
+  (champs nommés, liste blanche côté serveur) ;
+* **Supprimer** : la séance ET ses tours/relais (confirmation demandée).
+
+API (admin) : `GET /api/telemetry/sessions`, `PATCH /api/telemetry/sessions/:id`,
+`DELETE /api/telemetry/sessions/:id`.
+
+À l'écran, la ligne `circuit: … (jeu)` ou `(config)` dit d'où vient le nom :
+si une capture montre `(config)` alors que le serveur a changé de piste, la
+section `[SCRIPT_x]` (ou `?track=` dans l'URL) est périmée — mais avec un CSP
+récent, le jeu gagne toujours.
+
 ## Voitures non identifiées
 
 Les séances enregistrées avant le correctif du 13/11 (bug `car.id` lu comme

@@ -1480,3 +1480,75 @@ test('les vrais noms de champs ac.StateSim passent dans le paquet', () => {
   assert.equal(lapPush.roadTempC, 31);
   assert.ok(lapPush.grip == null, 'plus de lecture trackGrip inventée');
 });
+
+// --- gestion des séances : corriger le circuit, supprimer un essai -----------
+
+test('listSessions : compte tours et pilotes, la plus récente d\'abord', async () => {
+  const service = new TelemetryService(tempStore());
+  await service.ingest({ ...pushPayload(), sessionKey: 'A' });
+  await service.ingest({ ...pushPayload(), sessionKey: 'B', car: 'actk_lola_t290' });
+  const sessions = await service.listSessions();
+  assert.equal(sessions.length, 2);
+  for (const s of sessions) {
+    assert.equal(s.laps, 3);
+    assert.equal(s.drivers, 1);
+    assert.equal(s.cars, 1);
+    assert.ok(s.track);
+  }
+  // La plus récente d'abord : started_at décroissant.
+  assert.ok(String(sessions[0].startedAt) >= String(sessions[1].startedAt));
+});
+
+test('updateSession : corrige un circuit mal enregistré, champs nommés seulement', async () => {
+  const service = new TelemetryService(tempStore());
+  const r = await service.ingest({ ...pushPayload(), sessionKey: 'avant' });
+  const id = r.sessionId;
+  // Le cas réel : la config servait un circuit périmé avant la lecture jeu.
+  const fixed = await service.updateSession(id, { track: 'shuto_revival_project_bo' });
+  assert.equal(fixed.ok, true);
+  assert.equal(fixed.session.track, 'shuto_revival_project_bo');
+  // Les tours suivent : le site regroupe par le circuit de la séance.
+  const rows = await service.rows({});
+  assert.ok(rows.every(l => l.track === 'shuto_revival_project_bo'));
+  // Un champ hors liste blanche ne passe pas (jamais de mise à jour sauvage).
+  const sneaky = await service.updateSession(id, { started_at: '2000-01-01' });
+  assert.equal(sneaky.ok, false, 'champ hors liste refusé');
+  assert.equal((await service.updateSession(id, { track: '' })).ok, false, 'circuit vide refusé');
+  assert.equal((await service.updateSession(999, { track: 'x' })).ok, false, 'séance inconnue');
+});
+
+test('deleteSession : supprime la séance ET ses tours, pas les autres', async () => {
+  const service = new TelemetryService(tempStore());
+  const a = await service.ingest({ ...pushPayload(), sessionKey: 'A' });
+  const b = await service.ingest({ ...pushPayload(), sessionKey: 'B' });
+  const del = await service.deleteSession(a.sessionId);
+  assert.equal(del.ok, true);
+  const rows = await service.rows({});
+  assert.equal(rows.length, 3, 'il ne reste que la séance B');
+  const sessions = await service.listSessions();
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].id, b.sessionId);
+  // Le cache mémoire ne doit pas ressusciter la séance supprimée.
+  const again = await service.ingest({ ...pushPayload(), sessionKey: 'A' });
+  const after = await service.listSessions();
+  assert.equal(after.length, 2, 'une NOUVELLE séance A repart proprement');
+  assert.notEqual(again.sessionId, a.sessionId);
+  assert.equal((await service.deleteSession(999)).ok, false);
+});
+
+test('la ligne circuit dit SA source : jeu (ac.getTrackID) ou config', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Diagnostic du « mauvais circuit » : la capture suivante dira immédiatement
+  // si le nom vient du jeu ou d'une config périmée.
+  const jeu = simulate({ served: true, callInit: true, steps: [{ dt: 0.5 }] });
+  assert.equal(jeu.error, null);
+  assert.ok(jeu.ui.some(l => /circuit: ks_monza66-junior \(jeu\)/.test(l)), jeu.ui.join(' | '));
+  const config = simulate({
+    served: true, callInit: true, noAcApi: true,
+    config: { track: 'oesterreichring1979' },
+    missingSim: ['trackID', 'track', 'trackId'],
+    steps: [{ dt: 0.5 }]
+  });
+  assert.equal(config.error, null);
+  assert.ok(config.ui.some(l => /circuit: oesterreichring1979 \(config\)/.test(l)), config.ui.join(' | '));
+});

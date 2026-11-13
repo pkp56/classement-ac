@@ -145,6 +145,29 @@ Notes pratiques :
 * Render peut mettre le service en veille : au réveil, la page repart dès
   l'envoi suivant (l'agent réessaie automatiquement).
 
+## 1 quater. Historique persistant
+
+Le direct ne survit pas à un redémarrage du site — et une fois la séance
+finie, il ne restait rien. **Chaque séance vue par le site est maintenant
+conservée** (agent push, UDP local ou source HTTP) :
+
+* identité (serveur, circuit, type, début/fin), nombre de pilotes ;
+* **classement final complet** (positions, tours, écarts, meilleur tour) ;
+* meilleurs tours et fil d'événements (150 derniers).
+
+Sur la page `/live-timing`, le panneau **« Historique des séances »** liste
+les séances les plus récentes ; « Ouvrir » rejoue le classement conservé
+(bandeau « Archives »), « Retour au direct » revient au flux temps réel.
+
+Stockage : PostgreSQL (`LIVE_DATABASE_URL`, sinon `DATABASE_URL`, table
+`gdsp_live_sessions`) ou fichier `data/live-history.json` en local. Une
+capture rejouée (`LIVE_MIRROR_FILE`) n'entre **jamais** dans l'historique :
+seules les vraies séances comptent. `LIVE_HISTORY_FILE=off` coupe
+l'historique.
+
+API publique : `GET /api/live/sessions` (liste), `GET /api/live/sessions?id=…`
+(détail avec classement).
+
 ## 2. Configuration du serveur AC
 
 Dans `server_cfg.ini`, section `[SERVER]` :
