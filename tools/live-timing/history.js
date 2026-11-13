@@ -68,7 +68,15 @@ class LiveHistoryRecorder {
       if (snap.status && snap.status.mode === 'mirror') return;
       const server = snap.server;
       const cars = Array.isArray(snap.cars) ? snap.cars : [];
-      const hasContent = String(server.name || '') !== '' || String(server.track || '') !== '' || cars.length > 0;
+      // N'ouvre une séance que sur du contenu RÉEL : un circuit connu, un type
+      // de séance, ou des pilotes connectés. Les tout premiers envois d'un
+      // agent (label par défaut, zéro voiture, rien encore reçu d'acServer)
+      // créaient une « séance fantôme » vide dans l'historique à chaque
+      // démarrage.
+      const connected = cars.filter(c => c.connected !== false).length;
+      const hasContent = String(server.track || '') !== ''
+        || (snap.session && String(snap.session.type || '') !== '')
+        || connected > 0;
       if (!hasContent) return;
       const signature = sessionSignature(snap);
       const at = new Date(nowMs).toISOString();

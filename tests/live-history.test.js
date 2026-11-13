@@ -161,3 +161,21 @@ test('routes : un push entre dans l\'historique, lisible par /api/live/sessions'
   const missing = await fetch(`${base}/api/live/sessions?id=999`);
   assert.equal(missing.status, 404);
 });
+
+test("l'amorçage de l'agent (rien reçu d'acServer) n'ouvre pas de séance fantôme", async () => {
+  const store = tmpHistory();
+  const rec = new LiveHistoryRecorder(store, { writeIntervalMs: 0 });
+  const t0 = Date.parse('2026-11-14T20:00:00Z');
+  // Premier envoi : label par défaut, ni circuit, ni type, ni pilote.
+  await rec.record({
+    server: { name: 'Serveur Assetto Corsa', track: null },
+    session: { type: null }, cars: [], events: [],
+    status: { mode: 'push', status: 'live' }
+  }, t0);
+  assert.equal((await store.list()).length, 0, 'pas de séance fantôme');
+  // Puis la vraie séance arrive : une seule ligne, la bonne.
+  await rec.record(snap(), t0 + 1000);
+  const list = await store.list();
+  assert.equal(list.length, 1);
+  assert.equal(list[0].track, 'oesterreichring1979');
+});
