@@ -1154,7 +1154,7 @@ test('champs refusés par la structure C : le POST part quand même', () => {
   // partait jamais, le compteur d'essais montait seul et le mode restait
   // vide — le harnais, avec ses tables permissives, ne pouvait rien voir.
   const run = simulate({
-    served: true, callInit: true,
+    served: true, callInit: true, noAcApi: true,
     missingSim: ['serverName', 'trackID'],
     missingCar: ['driverGuid', 'driverSteamID', 'guid', 'steamID'],
     steps: [{ dt: 0.5 }, { dt: 0.5 }]
@@ -1191,7 +1191,7 @@ test('config [SCRIPT_x] : track et guid passent quand sim/car refusent tout', ()
   // [SCRIPT_x] de csp_extra_options.ini (track = …, guid = {SteamID}) est la
   // source documentée : elle doit traverser jusqu'aux paquets.
   const run = simulate({
-    served: true, callInit: true,
+    served: true, callInit: true, noAcApi: true,
     config: { track: 'oesterreichring1979', guid: '76561198157550304' },
     missingSim: ['serverName', 'trackID', 'track'],
     missingCar: ['driverGuid', 'driverSteamID', 'guid', 'steamID'],
@@ -1411,4 +1411,72 @@ test('une seule voiture identifiée : la matrice le dit au lieu d\'accuser les p
   const report = await service.report({});
   assert.equal(report.matrix.cars.length, 1);
   assert.match(report.files.html, /Une seule voiture identifiée/);
+});
+
+// --- le circuit vient du JEU : ac.getTrackID (SDK CSP) -----------------------
+
+test('le circuit vient de ac.getTrackID, même quand sim refuse tout', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Le SDK est formel : ac.StateSim n'a AUCUN champ circuit — sim.trackID et
+  // sim.track levaient à chaque envoi (visibles dans « champs refusés »).
+  // La vraie source est ac.getTrackID() : nom du dossier content/tracks.
+  const run = simulate({
+    served: true, callInit: true,
+    api: { trackID: 'oesterreichring1979', layout: '', serverName: 'GDSP Test' },
+    missingSim: ['serverName', 'trackID', 'track', 'trackId', 'trackLayout'],
+    steps: [{ dt: 0.5 }, { dt: 0.5 }]
+  });
+  assert.equal(run.error, null);
+  const payloads = run.sent.map(t => JSON.parse(t));
+  assert.ok(payloads.length >= 1, 'le ping est parti');
+  assert.ok(payloads.every(p => p.track === 'oesterreichring1979'),
+    'tous les paquets portent le circuit lu dans le jeu : ' + JSON.stringify(payloads.map(p => p.track)));
+  assert.ok(payloads.every(p => p.serverName === 'GDSP Test'), 'ac.getServerName aussi');
+  assert.ok(run.ui.some(l => /circuit: oesterreichring1979/.test(l)), run.ui.join(' | '));
+  assert.ok(!run.ui.some(l => /champs refusés: .*trackID/.test(l)),
+    'sim.trackID n\'est même plus lu quand l\'API répond : plus de bruit');
+});
+
+test('l\'API du jeu gagne sur la config périmée', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Le point d'attention opérationnel : ?track= dans l'URL (ou la section
+  // [SCRIPT_x]) devient STALE si le serveur change de circuit. Le jeu doit
+  // gagner — sinon les tours d'une nouvelle piste s'enregistrent sous
+  // l'ancienne.
+  const run = simulate({
+    served: true, callInit: true,
+    config: { track: 'vieux_circuit' },
+    api: { trackID: 'nouveau_circuit' },
+    steps: [{ dt: 0.5 }, { dt: 0.5 }]
+  });
+  assert.equal(run.error, null);
+  const payloads = run.sent.map(t => JSON.parse(t));
+  assert.ok(payloads.length >= 1);
+  assert.ok(payloads.every(p => p.track === 'nouveau_circuit'),
+    JSON.stringify(payloads.map(p => p.track)));
+});
+
+test('les vrais noms de champs ac.StateSim passent dans le paquet', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // SDK : fuelConsumptionRate / tyreConsumptionRate (plage 0…1) et
+  // raceSessionType (enum). Nos anciens noms (fuelRate, currentSessionType)
+  // levaient — d'où des sessions sans contexte comparable.
+  const run = simulate({
+    served: true, callInit: true,
+    sim: {
+      fuelConsumptionRate: 1, tyreConsumptionRate: 1, raceSessionType: 3,
+      ambientTemperature: 26, roadTemperature: 31
+    },
+    steps: unTour()
+  });
+  assert.equal(run.error, null);
+  const payloads = run.sent.map(t => JSON.parse(t));
+  const lapPush = payloads.find(p => Array.isArray(p.laps) && p.laps.length);
+  assert.ok(lapPush, 'les tours sont partis');
+  assert.equal(lapPush.sessionType, 'race', 'enum traduit par ac.SessionType');
+  assert.equal(lapPush.fuelRate, 1);
+  assert.equal(lapPush.tyreWearRate, 1);
+  assert.equal(lapPush.airTempC, 26);
+  assert.equal(lapPush.roadTempC, 31);
+  assert.ok(lapPush.grip == null, 'plus de lecture trackGrip inventée');
 });

@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS ${SCHEMA}.session (
   road_temp_c     NUMERIC(4,1),
   grip            NUMERIC(5,3),
   weather         TEXT,
-  fuel_rate       NUMERIC(7,2),               -- FUEL_RATE du serveur : sans lui, rien n'est comparable
-  tyre_wear_rate  NUMERIC(7,2),               -- TYRE_WEAR_RATE du serveur
+  fuel_rate       NUMERIC(7,2),               -- multiplicateur conso du jeu (FUEL_RATE serveur, lu en 0…1) : sans lui, rien n'est comparable
+  tyre_wear_rate  NUMERIC(7,2),               -- multiplicateur usure (TYRE_WEAR_RATE serveur, lu en 0…1)
   campaign        TEXT,                       -- ex. « campagne-2026-11 » (10 jours de test)
   notes           TEXT
 );
