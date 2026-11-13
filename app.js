@@ -927,6 +927,18 @@ app.get('/csp/telemetry.lua',(req,res)=>{
       campaign:String(process.env.TELEMETRY_CAMPAIGN||'campagne'),
       intervalSec:Number(process.env.TELEMETRY_INTERVAL_SEC||5)||5
     };
+    // Guid du pilote : illisible dans l'API CSP (en jeu, TOUS les champs
+    // candidats de car/sim lèvent — voir « champs refusés » à l'écran). La
+    // substitution documentée {SteamID} dans l'URL du script est la source
+    // fiable : le serveur de jeu écrit
+    //   SCRIPT = '…/csp/telemetry.lua?guid={SteamID}'
+    // et CSP remplace avant de télécharger. Le circuit peut passer par là
+    // aussi. Valeurs strictement validées avant injection : rien d'arbitraire
+    // ne doit entrer dans le script servi.
+    const qGuid=String(req.query.guid||'').trim();
+    if(/^\d{6,32}$/.test(qGuid))injected.guid=qGuid;
+    const qTrack=String(req.query.track||'').trim();
+    if(/^[a-zA-Z0-9_-]{1,64}$/.test(qTrack))injected.track=qTrack;
     const head='-- GDSP télémétrie — copie servie par le site le '+new Date().toISOString().slice(0,10)+'\n';
     // Cette table est du LUA, pas du JSON : `{ url = "…" }`, jamais `{"url":"…"}`.
     // Une seule faute de syntaxe ici et CSP rejette le script ENTIER

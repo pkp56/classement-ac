@@ -527,6 +527,20 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
   const verif = spawnLuaCheck(luaText);
   assert.equal(verif.error, null, `le script servi doit compiler : ${verif.error}`);
 
+  // 7 ter. guid et circuit peuvent passer par l'URL du script : le serveur de
+  // jeu écrit SCRIPT = '…/csp/telemetry.lua?guid={SteamID}' (substitution
+  // documentée par CSP) et, éventuellement, track = …. Le site les injecte
+  // dans la config servie — valeurs validées, rien d'arbitraire ne passe.
+  const luaCfg = await fetch(`${base}/csp/telemetry.lua?guid=76561198157550304&track=ks_monza66-junior`);
+  const cfgText = await luaCfg.text();
+  assert.match(cfgText, /__GDSP_TELEMETRY__ = \{[^\n]*guid = "76561198157550304"/, 'guid injecté');
+  assert.match(cfgText, /__GDSP_TELEMETRY__ = \{[^\n]*track = "ks_monza66-junior"/, 'circuit injecté');
+  assert.equal(spawnLuaCheck(cfgText).error, null, 'le script avec guid reste du Lua valide');
+  const luaBad = await fetch(`${base}/csp/telemetry.lua?guid=abc&track=..%2F..%2Fetc`);
+  const badText = await luaBad.text();
+  assert.ok(!/__GDSP_TELEMETRY__ = \{[^\n]*guid =/.test(badText), 'un guid invalide n\'est pas injecté');
+  assert.ok(!/__GDSP_TELEMETRY__ = \{[^\n]*track =/.test(badText), 'un circuit invalide n\'est pas injecté');
+
   // 8. l'API de télémétrie ne déborde pas sur le championnat
   const events = await fetch(`${base}/api/telemetry/events`, { headers: auth });
   assert.ok(events.status === 404 || events.status === 502, 'aucune route « events » dans la télémétrie');
@@ -832,13 +846,16 @@ test('la requête est retentée quand le callback n\'arrive pas', () => {
   assert.ok(run.sent.length >= 2, 'une tentative perdue doit être suivie d\'une autre');
 });
 
-test('sans identifiant Steam, le script lit quand même les tours', () => {
+test('sans identifiant Steam API, le guid configuré fait remonter les tours', () => {
   const { simulate, setCar } = require('./helpers/lua-harness');
-  // L'API CSP n'expose aucun identifiant Steam (voir SDK, common/ac_state.lua).
-  // Exiger un guid condamnait le script au silence sur toutes les voitures :
-  // c'est exactement ce que montrait « guid=? » à l'écran.
+  // L'API CSP n'expose aucun identifiant Steam (voir SDK, common/ac_state.lua ;
+  // en jeu, les champs candidats LÈVENT même). Le guid vient de la
+  // configuration — ?guid={SteamID} dans l'URL du script, injecté par le
+  // site — et la mesure doit rester complète. Sans guid, les tours attendent
+  // (test séparé) : le site les refuserait de toute façon.
   const run = simulate({
     served: true, callInit: true, noGuid: true,
+    config: { guid: '76561198157550304' },
     steps: [
       { dt: 0.1 },
       (L) => setCar(L, 'splinePosition', 0.5),
@@ -852,11 +869,12 @@ test('sans identifiant Steam, le script lit quand même les tours', () => {
   });
   assert.equal(run.error, null);
   const avecTours = run.sent.map(x => JSON.parse(x)).filter(b => Array.isArray(b.laps) && b.laps.length);
-  assert.ok(avecTours.length > 0, 'un tour doit remonter même sans guid');
+  assert.ok(avecTours.length > 0, 'un tour doit remonter avec le guid de la config');
+  assert.equal(avecTours[0].driver.guid, '76561198157550304');
   const lap = avecTours[0].laps[0];
-  assert.equal(lap.fuelUsedL, 1.5, 'la mesure reste complète malgré le guid absent');
+  assert.equal(lap.fuelUsedL, 1.5, 'la mesure reste complète');
   assert.equal(lap.lapMs, 75576, 'le temps au tour est celui de previousLapTimeMs');
-  assert.ok(run.ui.some(l => /ABSENT/.test(l)), 'le diagnostic explique l\'absence de guid');
+  assert.ok(run.ui.some(l => /guid=76561198157550304 \(config\)/.test(l)), run.ui.join(' | '));
 });
 
 test('le diagnostic affiche la réponse réelle du site', () => {
@@ -1144,4 +1162,66 @@ test('une erreur dans la boucle s\'affiche au lieu de tuer le script', () => {
   assert.equal(run.error, null, 'le harnais ne doit pas voir l\'erreur brute');
   assert.ok(run.ui.length > 0, 'la bannière doit rester dessinée');
   assert.ok(run.ui.some(l => /blocage: .*ping volontairement cassé/.test(l)), run.ui.join(' | '));
+});
+
+// --- guid et circuit par configuration : la chaîne complète des tours -------
+
+test('config [SCRIPT_x] : track et guid passent quand sim/car refusent tout', () => {
+  const { simulate, setCar } = require('./helpers/lua-harness');
+  // En jeu (capture réelle) : OK au ping, mais aucun champ sim/car ne donne
+  // le circuit ni le SteamID — le site refuserait les tours. La section
+  // [SCRIPT_x] de csp_extra_options.ini (track = …, guid = {SteamID}) est la
+  // source documentée : elle doit traverser jusqu'aux paquets.
+  const run = simulate({
+    served: true, callInit: true,
+    config: { track: 'oesterreichring1979', guid: '76561198157550304' },
+    missingSim: ['serverName', 'trackID', 'track'],
+    missingCar: ['driverGuid', 'driverSteamID', 'guid', 'steamID'],
+    steps: [
+      0.1,
+      (L) => setCar(L, 'fuel', 29.0),
+      (L) => setCar(L, 'wheels', [
+        { tyreWear: 0.986 }, { tyreWear: 0.986 }, { tyreWear: 0.985 }, { tyreWear: 0.985 }
+      ]),
+      0.1,
+      (L) => setCar(L, 'lapCount', 2),
+      0.1,
+      ...Array.from({ length: 20 }, () => 0.1)
+    ]
+  });
+  assert.equal(run.error, null);
+  const payloads = run.sent.map(t => JSON.parse(t));
+  const ping = payloads.find(p => p.kind === 'ping');
+  assert.ok(ping, 'le ping est parti');
+  assert.equal(ping.track, 'oesterreichring1979');
+  assert.equal(ping.driver.guid, '76561198157550304');
+  const lapPush = payloads.find(p => Array.isArray(p.laps) && p.laps.length);
+  assert.ok(lapPush, 'le tour doit être envoyé avec guid et circuit de la config');
+  assert.equal(lapPush.track, 'oesterreichring1979');
+  assert.equal(lapPush.driver.guid, '76561198157550304');
+  assert.ok(run.ui.some(l => /circuit: oesterreichring1979/.test(l)), run.ui.join(' | '));
+  assert.ok(run.ui.some(l => /guid=76561198157550304 \(config\)/.test(l)), run.ui.join(' | '));
+});
+
+test('sans guid : les tours attendent et l\'écran dit quoi configurer', () => {
+  const { simulate, setCar } = require('./helpers/lua-harness');
+  // Le ping passe (OK), mais le site refuse les tours sans guid. Le script
+  // ne doit pas les envoyer pour rien : il les garde et AFFICHE la raison —
+  // sinon ce sont des tours qui disparaissent sans explication.
+  const run = simulate({
+    served: true, callInit: true, noGuid: true,
+    steps: [
+      0.1,
+      (L) => setCar(L, 'fuel', 29.0),
+      0.1,
+      (L) => setCar(L, 'lapCount', 2),
+      0.1,
+      ...Array.from({ length: 20 }, () => 0.1)
+    ]
+  });
+  assert.equal(run.error, null);
+  const payloads = run.sent.map(t => JSON.parse(t));
+  assert.ok(payloads.every(p => p.kind === 'ping'), 'aucun tour ne doit partir sans guid');
+  assert.ok(run.ui.some(l => /envoi bloqué: guid absent/.test(l)), run.ui.join(' | '));
+  assert.ok(run.messages.some(m => /envoi suspendu/.test(m)));
 });
