@@ -160,6 +160,16 @@ function runTelemetryScript(options = {}) {
 
   pushTable(L, env.car);
   installStrictStruct(L, options.missingCar);
+  // `carIdIsFunction` : car.id est une FONCTION (constaté en jeu sur cette
+  // version de CSP) — le script doit l'appeler, pas la transformer en
+  // « function: 0x… ».
+  if (options.carIdIsFunction) {
+    lua.lua_pushjsfunction(L, (state) => {
+      lua.lua_pushstring(state, to_luastring(env.car.id));
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring('id'));
+  }
   lua.lua_setglobal(L, to_luastring('car'));
   pushTable(L, env.sim);
   installStrictStruct(L, options.missingSim);

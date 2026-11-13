@@ -76,6 +76,7 @@ local state = {
   sendBlocked = '',         -- pourquoi les tours attendent (affiché)
   lapConfirmed = false,     -- la première confirmation d'enregistrement est passée
   lastLapAt = -1e9,         -- dernier tour DÉTECTÉ (la bannière réapparaît)
+  sessionKey = nil,         -- identité de cette exécution, côté site
   updates = 0,              -- nombre d'appels à script.update
 }
 
@@ -200,6 +201,42 @@ local function resolveServerName()
   return tostring(readField(sim, 'serverName') or cfg.serverName or '')
 end
 
+--- Clé de séance, stable pour toute la vie du script. Le site regroupe les
+--- tours PAR SÉANCE : sans clé, deux courses sur le même circuit fusionnaient
+--- et les tours 1-2-3 de la seconde étaient refusés comme doublons de la
+--- première (constaté : « 3 tours » enregistrés puis « rien »).
+local function sessionKey()
+  if state.sessionKey then return state.sessionKey end
+  local sid = readField(sim, 'sessionID')
+  if sid ~= nil and tostring(sid) ~= '' then
+    state.sessionKey = 'sim:' .. tostring(sid)
+  else
+    local ok, t = pcall(os.time)
+    if ok and type(t) == 'number' then
+      state.sessionKey = 't:' .. tostring(t) .. ':' .. tostring(math.random(100000, 999999))
+    else
+      state.sessionKey = 'r:' .. tostring(math.random(1, 1073741824))
+    end
+  end
+  return state.sessionKey
+end
+
+-- Certains champs sont des FONCTIONS sur cette version de CSP (constaté en
+-- jeu : car.id, enregistré comme « function: 0x… »). On appelle, et on
+-- n'accepte qu'une chaîne ou un nombre — jamais un tostring de fonction.
+local function readValue(obj, key)
+  local v = readField(obj, key)
+  if type(v) == 'function' then
+    local ok, r = pcall(v, obj)
+    if ok and (type(r) == 'string' or type(r) == 'number') then return r end
+    ok, r = pcall(v)
+    if ok and (type(r) == 'string' or type(r) == 'number') then return r end
+    return nil
+  end
+  if type(v) == 'string' or type(v) == 'number' then return v end
+  return nil
+end
+
 local function firstNumber(candidates)
   for i = 1, #candidates do
     local ok, v = pcall(candidates[i])
@@ -261,29 +298,30 @@ local function readSpeedKmh()
   })
 end
 
+-- Ces lectures passent par readField : un champ qui LÈVE apparaît dans
+-- « champs refusés » au lieu de disparaître dans un nil anonyme — c'est ce
+-- qui a caché « compteur: — » pendant que la détection tenait sur la spline.
 local function readLapCount()
-  return firstNumber({
-    function() return car and car.lapCount end,
-    function() return car and car.lapsCount end,
-  })
+  local v = readField(car, 'lapCount')
+  if type(v) ~= 'number' then v = readField(car, 'lapsCount') end
+  if type(v) == 'number' then return v end
+  return nil
 end
 
 local function readSpline()
-  return firstNumber({
-    function() return car and car.splinePosition end,
-  })
+  local v = readField(car, 'splinePosition')
+  if type(v) == 'number' then return v end
+  return nil
 end
 
 local function readLastLapMs()
-  local ms = firstNumber({
-    -- `previousLapTimeMs` est le nom RÉEL dans ac.StateCar (SDK,
-    -- common/ac_state.lua). `lastLapTimeMs` existe dans le harnais de test mais
-    -- pas forcément en jeu : vérifié, le SDK n'expose que previousLapTimeMs.
-    function() return car and car.previousLapTimeMs end,
-    function() return car and car.lastLapTimeMs end,
-    function() return car and car.lastLapMs end,
-  })
-  return ms and ms > 1000 and ms or nil
+  -- `previousLapTimeMs` est le nom RÉEL dans ac.StateCar (SDK,
+  -- common/ac_state.lua) ; les autres sont des replis.
+  for _, key in ipairs({ 'previousLapTimeMs', 'lastLapTimeMs', 'lastLapMs' }) do
+    local v = readField(car, key)
+    if type(v) == 'number' and v > 1000 then return v end
+  end
+  return nil
 end
 
 -------------------------------------------------------------------------------
@@ -469,7 +507,7 @@ local function ensureIdentity()
     -- passent par csp_extra_options.ini, qui sait substituer {SteamID} dans
     -- l'URL du script (documentation CSP, section [SCRIPT_...]).
     for _, key in ipairs({ 'driverGuid', 'driverSteamID', 'guid', 'steamID' }) do
-      local v = readField(car, key)
+      local v = readValue(car, key)
       if v ~= nil and tostring(v) ~= '' then
         state.driverGuid = tostring(v)
         state.guidSource = 'API'
@@ -493,7 +531,7 @@ local function ensureIdentity()
     end
   end
   if not state.driverName and car then
-    local v = readField(car, 'driverName')
+    local v = readValue(car, 'driverName')
     if v == nil and ac.getDriverName then
       local ok, name = pcall(ac.getDriverName, 0)
       if ok then v = name end
@@ -501,7 +539,9 @@ local function ensureIdentity()
     if v ~= nil then state.driverName = tostring(v) end
   end
   if not state.carId and car then
-    local v = readField(car, 'id')
+    -- `car.id` est une FONCTION sur la version testée : sans l'appeler, la
+    -- « voiture » enregistrée était « function: 0x… » (visible sur /telemetry).
+    local v = readValue(car, 'id')
     if v == nil and ac.getCarID then
       local ok, id = pcall(ac.getCarID, 0)
       if ok then v = id end
@@ -526,6 +566,7 @@ local function buildPayload()
     campaign = cfg.campaign,
     serverName = resolveServerName(),
     track = resolveTrack(),
+    sessionKey = sessionKey(),
     trackConfig = resolveTrackLayout(),
     sessionType = tostring(readField(sim, 'currentSessionType') or ''),
     fuelRate = tonumber(readField(sim, 'fuelRate')),
@@ -575,6 +616,11 @@ local function flush(force)
   state.lastSendAt = state.now
 
   post(body, function(err, res)
+    -- Même règle que le ping : la réponse du site s'affiche, mot pour mot.
+    -- Sinon « réponse: aucune » après un envoi de tours réussi laissait
+    -- croire à un silence.
+    local status = res and tonumber(res.status) or nil
+    state.lastResponse = err and ('err=' .. tostring(err)) or ('HTTP ' .. tostring(status))
     if err then
       state.sendErrors = state.sendErrors + 1
       -- On remet les tours en attente : rien ne doit être perdu parce que le
@@ -847,6 +893,7 @@ function script.ping()
     kind = 'ping',                     -- pas un tour : le site ne stocke rien
     serverName = resolveServerName(),
     track = resolveTrack(),
+    sessionKey = sessionKey(),
     driver = { guid = state.driverGuid or '', name = state.driverName or '' },
     car = state.carId or '',
   })

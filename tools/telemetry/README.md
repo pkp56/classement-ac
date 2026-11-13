@@ -237,8 +237,9 @@ appeler son callback. Le script ne devine pas : il **affiche ce qu'il reçoit**.
 | `champs refusés: …` | champs de `car`/`sim` qui LÈVENT sur cette version de CSP |
 | `circuit: …` / `circuit: —` | circuit qui sera envoyé avec les tours |
 | `compteur: N · spline: X` | valeurs BRUTES de la voiture ; si le compteur ne monte pas en franchissant la ligne, la détection de tour est en cause |
+| `séance: xxxxx` | clé de séance de CETTE exécution : chaque course part sur une session neuve, les tours d'une seconde course ne sont plus des doublons de la première |
 | `envoi bloqué: …` | les tours attendent : guid ou circuit à configurer |
-| `tours=N` | tours **enregistrés** par le site (pas seulement envoyés) |
+| `tours=N` | tours **enregistrés** par le site (pas seulement envoyés) ; `réponse:` affiche aussi la réponse du DERNIER envoi de tours, plus seulement celle du ping |
 | message « N tour(s) enregistré(s) » | confirmation visible au premier envoi effectif |
 | message « rien enregistré » | envoi parti : le site a tout écarter (temps illisible ?) |
 | `réponse: aucune` + `sonde: aucune` | rien ne sort de la machine → TLS, antivirus, pare-feu |
