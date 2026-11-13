@@ -237,6 +237,9 @@ appeler son callback. Le script ne devine pas : il **affiche ce qu'il reçoit**.
 | `champs refusés: …` | champs de `car`/`sim` qui LÈVENT sur cette version de CSP |
 | `circuit: …` / `circuit: —` | circuit qui sera envoyé avec les tours |
 | `envoi bloqué: …` | les tours attendent : guid ou circuit à configurer |
+| `tours=N` | tours **enregistrés** par le site (pas seulement envoyés) |
+| message « N tour(s) enregistré(s) » | confirmation visible au premier envoi effectif |
+| message « rien enregistré » | envoi parti : le site a tout écarter (temps illisible ?) |
 | `réponse: aucune` + `sonde: aucune` | rien ne sort de la machine → TLS, antivirus, pare-feu |
 
 `web.timeouts(3000, 5000, 5000, 6000, 2)` est posé au démarrage : sans lui,
