@@ -235,7 +235,7 @@ appeler son callback. Le script ne devine pas : il **affiche ce qu'il reçoit**.
 | `mode: —` + `essais=N` | le POST ne part PAS : un crash entre le compteur et l'envoi |
 | `blocage: …` | erreur attrapée dans la boucle, affichée au lieu de tuer le script |
 | `champs refusés: …` | champs de `car`/`sim` qui LÈVENT sur cette version de CSP |
-| `circuit: …` / `circuit: —` | circuit qui sera envoyé avec les tours |
+| `circuit: …` / `circuit: —` | circuit qui sera envoyé avec les tours — lu via `ac.getTrackID()` (le jeu), repli config sinon |
 | `compteur: N · spline: X` | valeurs BRUTES de la voiture ; si le compteur ne monte pas en franchissant la ligne, la détection de tour est en cause |
 | `séance: xxxxx` | clé de séance de CETTE exécution : chaque course part sur une session neuve, les tours d'une seconde course ne sont plus des doublons de la première |
 | `envoi bloqué: …` | les tours attendent : guid ou circuit à configurer |
@@ -247,26 +247,35 @@ appeler son callback. Le script ne devine pas : il **affiche ce qu'il reçoit**.
 `web.timeouts(3000, 5000, 5000, 6000, 2)` est posé au démarrage : sans lui,
 WinHTTP attend 30 s en silence, ce qui ressemble à une panne.
 
-### Câbler guid et circuit (requis pour les tours)
+### Câbler guid (requis) et circuit (automatique)
 
 Le ping passe sans eux, mais le site refuse un tour sans pilote ni circuit.
-L'API CSP n'expose ni l'un ni l'autre (en jeu, les champs candidats de
-`car`/`sim` LÈVENT — voir `champs refusés` à l'écran). Deux lignes dans
-`csp_extra_options.ini` du serveur de jeu suffisent :
+
+**Le circuit est lu dans le jeu** : le SDK CSP est formel, `ac.StateSim` n'a
+aucun champ circuit (`sim.trackID` levait à chaque envoi) — la vraie source
+est `ac.getTrackID()`, qui renvoie le nom du dossier `content/tracks`
+(`oesterreichring1979`, exactement le format du site). Le script l'appelle en
+priorité, puis `ac.getTrackLayout()` et `ac.getServerName()`. **Changer de
+circuit sur le serveur ne demande plus rien** : le nom suit le jeu, même si
+l'URL du script est restée sur l'ancien circuit.
+
+L'identité du pilote, elle, n'est pas exposée par l'API (les champs candidats
+de `car` lèvent) : une ligne dans `csp_extra_options.ini` du serveur de jeu
+suffit :
 
 ```ini
 [SCRIPT_2]
 SCRIPT = 'https://classement-ac-1.onrender.com/csp/telemetry.lua?guid={SteamID}'
 REQUIRED = 0
-track = oesterreichring1979
 ```
 
 - `?guid={SteamID}` : CSP substitue le SteamID du pilote avant de télécharger
   le script ; le site l'injecte dans la config servie (valeur validée :
   6 à 32 chiffres). C'est la source documentée, elle ne demande rien au pilote.
-- `track = …` : lu par le script via `ac.configValues` — à mettre à jour quand
-  le serveur change de circuit (les séances sont regroupées par circuit).
-  `trackLayout` et `serverName` fonctionnent pareil.
+- `track = …` (ou `?track=…` dans l'URL) reste un REPLI pour les CSP sans
+  `ac.getTrackID()` : lu via `ac.configValues`, il doit alors être mis à jour
+  quand le serveur change de circuit. `trackLayout` et `serverName`
+  fonctionnent pareil.
 
 Sans guid, les tours restent en attente et l'écran dit quoi configurer
 (`envoi bloqué: guid absent — …`) : plus de tour perdu sans explication.
@@ -282,6 +291,14 @@ POST ne partait jamais, le compteur d'essais montait seul et le mode restait
 vide. Toutes les lectures passent désormais par `readField` (pcall), et les
 noms refusés s'affichent (`champs refusés:`). `update` et `init` sont
 protégés : une erreur s'affiche (`blocage:`) au lieu de tuer la boucle.
+
+**Les vrais noms de champs** (SDK `ac.StateSim`) : `fuelConsumptionRate` et
+`tyreConsumptionRate` (plage 0…1 — pas le `FUEL_RATE` brut du serveur),
+`raceSessionType` (enum, traduit via `ac.SessionType`), `ambientTemperature`,
+`roadTemperature`. Nos anciens noms (`fuelRate`, `currentSessionType`,
+`trackGrip`…) n'existent pas : ils levaient à chaque envoi. Le contexte de
+séance (rates) remonte donc maintenant rempli, ce qui rend les sessions
+comparables entre elles.
 
 Le POST existe en deux variantes, essayées en alternance jusqu'à ce qu'une
 réponde : « nu » (aucun en-tête custom, jeton dans l'URL — même silhouette que

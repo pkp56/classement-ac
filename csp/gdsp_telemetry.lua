@@ -19,8 +19,8 @@
 --     qu'il faut transmettre : elle dit exactement quoi corriger.
 --
 -- Contrat d'envoi (POST <url>) :
---   { v, script, campaign, serverName, track, trackConfig, sessionType,
---     fuelRate, tyreWearRate, airTempC, roadTempC, grip,
+--   { v, script, campaign, serverName, track, sessionKey, trackConfig,
+--     sessionType, fuelRate, tyreWearRate, airTempC, roadTempC,
 --     driver:{guid,name}, car,
 --     laps:[ { lapNumber, lapMs, fuelUsedL, fuelLoadedL,
 --              tyreWearPct:[fl,fr,rl,rr], speedMaxKmh } ] }
@@ -184,21 +184,35 @@ local function readField(obj, key)
   return nil
 end
 
--- Circuit / serveur : la source automatique (sim) d'abord, la config ensuite
--- (section [SCRIPT_x] de csp_extra_options.ini, lue par ac.configValues).
--- Sur la version CSP testée, tous les champs sim candidats LÈVENT (ils
--- s'affichent dans « champs refusés ») : la config est alors la seule source.
+-- Appel protégé d'une fonction de l'API CSP : renvoie une chaîne non vide,
+-- ou nil (fonction absente d'une version plus ancienne, erreur, vide).
+local function acCallString(name)
+  local fn = type(ac) == 'table' and ac[name] or nil
+  if type(fn) ~= 'function' then return nil end
+  local ok, r = pcall(fn)
+  if ok and type(r) == 'string' and r ~= '' then return r end
+  return nil
+end
+
+-- Circuit / serveur : l'API DÉDIÉE de CSP d'abord (ac.getTrackID renvoie le
+-- nom du dossier dans content/tracks — « oesterreichring1979 », exactement
+-- le format du site), puis les champs sim (replis pour les vieux CSP), puis
+-- la config (URL ?track=… ou section [SCRIPT_x]). Le circuit est donc lu
+-- dans le jeu même si l'URL du script n'est pas à jour.
 local function resolveTrack()
-  return tostring(readField(sim, 'trackID') or readField(sim, 'track')
-    or readField(sim, 'trackId') or cfg.track or '')
+  return acCallString('getTrackID') or acCallString('getTrackId')
+    or tostring(readField(sim, 'trackID') or readField(sim, 'track')
+      or readField(sim, 'trackId') or cfg.track or '')
 end
 
 local function resolveTrackLayout()
-  return tostring(readField(sim, 'trackLayout') or cfg.trackLayout or '')
+  return acCallString('getTrackLayout')
+    or tostring(readField(sim, 'trackLayout') or cfg.trackLayout or '')
 end
 
 local function resolveServerName()
-  return tostring(readField(sim, 'serverName') or cfg.serverName or '')
+  return acCallString('getServerName')
+    or tostring(readField(sim, 'serverName') or cfg.serverName or '')
 end
 
 --- Clé de séance, stable pour toute la vie du script. Le site regroupe les
@@ -207,16 +221,13 @@ end
 --- première (constaté : « 3 tours » enregistrés puis « rien »).
 local function sessionKey()
   if state.sessionKey then return state.sessionKey end
-  local sid = readField(sim, 'sessionID')
-  if sid ~= nil and tostring(sid) ~= '' then
-    state.sessionKey = 'sim:' .. tostring(sid)
+  -- Pas d'identifiant de séance fiable dans ac.StateSim : une clé par
+  -- exécution du script (horodatage + aléa) isole chaque course.
+  local ok, t = pcall(os.time)
+  if ok and type(t) == 'number' then
+    state.sessionKey = 't:' .. tostring(t) .. ':' .. tostring(math.random(100000, 999999))
   else
-    local ok, t = pcall(os.time)
-    if ok and type(t) == 'number' then
-      state.sessionKey = 't:' .. tostring(t) .. ':' .. tostring(math.random(100000, 999999))
-    else
-      state.sessionKey = 'r:' .. tostring(math.random(1, 1073741824))
-    end
+    state.sessionKey = 'r:' .. tostring(math.random(1, 1073741824))
   end
   return state.sessionKey
 end
@@ -556,6 +567,25 @@ local function identityKnown()
   return state.driverGuid ~= nil and state.carId ~= nil
 end
 
+--- Type de séance : l'enum StateSim se lit parfois en numérique, ac.SessionType
+--- donne le nom documenté (1 = practice…). Rien d'inventé : la table vient de
+--- CSP, et sans elle on garde la valeur brute.
+local function resolveSessionType()
+  local t = readField(sim, 'raceSessionType') or readField(sim, 'currentSessionType')
+  if t == nil then return '' end
+  local name = tostring(t)
+  local n = tonumber(name)
+  if n then
+    local st = type(ac) == 'table' and ac.SessionType or nil
+    if type(st) == 'table' then
+      for key, v in pairs(st) do
+        if v == n then return string.lower(key) end
+      end
+    end
+  end
+  return name
+end
+
 -------------------------------------------------------------------------------
 -- 7. Envoi groupé.
 -------------------------------------------------------------------------------
@@ -568,12 +598,16 @@ local function buildPayload()
     track = resolveTrack(),
     sessionKey = sessionKey(),
     trackConfig = resolveTrackLayout(),
-    sessionType = tostring(readField(sim, 'currentSessionType') or ''),
-    fuelRate = tonumber(readField(sim, 'fuelRate')),
-    tyreWearRate = tonumber(readField(sim, 'tyreWearRate')),
+    -- Vrais noms de ac.StateSim (SDK) : fuelConsumptionRate/tyreConsumptionRate
+    -- (plage 0…1, pas le FUEL_RATE du serveur) et raceSessionType. Les anciens
+    -- noms restent en repli ; `trackGrip` n'existe pas dans StateSim — sa
+    -- lecture levait à chaque envoi (bruit « champs refusés »), la colonne
+    -- reste « — » côté site, jamais inventée.
+    sessionType = resolveSessionType(),
+    fuelRate = tonumber(readField(sim, 'fuelConsumptionRate') or readField(sim, 'fuelRate')),
+    tyreWearRate = tonumber(readField(sim, 'tyreConsumptionRate') or readField(sim, 'tyreWearRate')),
     airTempC = tonumber(readField(sim, 'ambientTemperature')),
     roadTempC = tonumber(readField(sim, 'roadTemperature')),
-    grip = tonumber(readField(sim, 'trackGrip')),
     driver = {
       guid = state.driverGuid or '',
       name = state.driverName or '',

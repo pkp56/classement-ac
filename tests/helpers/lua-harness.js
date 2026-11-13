@@ -38,6 +38,13 @@ function defaultEnv(overrides = {}) {
       serverName: '{GDSP_ Server test 1', trackID: 'ks_monza66-junior', trackLayout: 'junior',
       currentSessionType: 'practice', fuelRate: 100, tyreWearRate: 100,
       ...(overrides.sim || {})
+    },
+    // Ce que l'API `ac` dédiée renvoie dans un CSP moderne : ac.getTrackID()
+    // retourne le nom du dossier content/tracks (la VRAIE source du circuit,
+    // les champs sim.track* n'existent pas dans ac.StateSim).
+    api: {
+      trackID: 'ks_monza66-junior', layout: 'junior', serverName: '{GDSP_ Server test 1',
+      ...(overrides.api || {})
     }
   };
 }
@@ -156,6 +163,32 @@ function runTelemetryScript(options = {}) {
     return 1;
   });
   lua.lua_setfield(L, -2, to_luastring('getCarID'));
+  // API circuit/serveur (CSP moderne) : ac.getTrackID/getTrackLayout/
+  // getServerName. `options.api` règle ce qu'elles renvoient (chaîne vide =
+  // absente) ; `options.noAcApi` ne les enregistre PAS du tout — un CSP plus
+  // ancien où le repli sim/config doit prendre le relais.
+  if (!options.noAcApi) {
+    const apiGet = (value) => (state) => {
+      if (value == null || value === '') return 0;
+      lua.lua_pushstring(state, to_luastring(String(value)));
+      return 1;
+    };
+    lua.lua_pushjsfunction(L, apiGet(env.api.trackID));
+    lua.lua_setfield(L, -2, to_luastring('getTrackID'));
+    lua.lua_pushjsfunction(L, apiGet(env.api.layout));
+    lua.lua_setfield(L, -2, to_luastring('getTrackLayout'));
+    lua.lua_pushjsfunction(L, apiGet(env.api.serverName));
+    lua.lua_setfield(L, -2, to_luastring('getServerName'));
+  }
+  // ac.SessionType : la table documentée (Practice = 1, etc.), pour traduire
+  // les enums numériques de sim.raceSessionType.
+  lua.lua_createtable(L, 0, 8);
+  for (const [name, value] of Object.entries(
+    { Undefined: 0, Practice: 1, Qualify: 2, Race: 3, Hotlap: 4, TimeAttack: 5, Drift: 6, Drag: 7 })) {
+    lua.lua_pushnumber(L, value);
+    lua.lua_setfield(L, -2, to_luastring(name));
+  }
+  lua.lua_setfield(L, -2, to_luastring('SessionType'));
   lua.lua_setglobal(L, to_luastring('ac'));
 
   pushTable(L, env.car);
