@@ -77,6 +77,7 @@ local state = {
   lapConfirmed = false,     -- la première confirmation d'enregistrement est passée
   lastLapAt = -1e9,         -- dernier tour DÉTECTÉ (la bannière réapparaît)
   sessionKey = nil,         -- identité de cette exécution, côté site
+  trackSource = nil,        -- d'où vient le circuit : « jeu » (ac.getTrackID) ou « config »
   updates = 0,              -- nombre d'appels à script.update
 }
 
@@ -200,9 +201,14 @@ end
 -- la config (URL ?track=… ou section [SCRIPT_x]). Le circuit est donc lu
 -- dans le jeu même si l'URL du script n'est pas à jour.
 local function resolveTrack()
-  return acCallString('getTrackID') or acCallString('getTrackId')
-    or tostring(readField(sim, 'trackID') or readField(sim, 'track')
-      or readField(sim, 'trackId') or cfg.track or '')
+  local fromGame = acCallString('getTrackID') or acCallString('getTrackId')
+  if fromGame then
+    state.trackSource = 'jeu'
+    return fromGame
+  end
+  state.trackSource = 'config'
+  return tostring(readField(sim, 'trackID') or readField(sim, 'track')
+    or readField(sim, 'trackId') or cfg.track or '')
 end
 
 local function resolveTrackLayout()
@@ -1008,7 +1014,7 @@ function script.drawUI()
   local lines = {
     'GDSP-TELEMETRY ' .. (state.pinged and 'OK' or 'attente'),
     'url(' .. cfgSource .. '): ' .. (cfg.url ~= '' and cfg.url or 'MANQUANTE'),
-    'circuit: ' .. (trackNow ~= '' and trackNow or '—'),
+    'circuit: ' .. (trackNow ~= '' and (trackNow .. ' (' .. tostring(state.trackSource or '?') .. ')') or '—'),
     'web=' .. tostring(state.hasWeb) ..
       ' guid=' .. (state.driverGuid
         and (tostring(state.driverGuid) .. ' (' .. tostring(state.guidSource or 'API') .. ')')

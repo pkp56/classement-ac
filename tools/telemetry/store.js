@@ -170,6 +170,22 @@ class FileStore {
     this._persist();
     return row;
   }
+  async delete(table, id) {
+    if (!this.data[table]) throw new Error(`table inconnue : ${table}`);
+    const before = this.data[table].length;
+    this.data[table] = this.data[table].filter(r => r.id !== id);
+    this._persist();
+    return this.data[table].length < before;
+  }
+  async deleteWhere(table, filter = {}) {
+    if (!this.data[table]) throw new Error(`table inconnue : ${table}`);
+    const before = this.data[table].length;
+    this.data[table] = this.data[table].filter(
+      row => !Object.keys(filter).every(k => row[k] === filter[k])
+    );
+    this._persist();
+    return before - this.data[table].length;
+  }
   async close() { this._persist(); }
 }
 
@@ -222,6 +238,17 @@ class PgStore {
       [...keys.map(k => patch[k]), id]
     );
     return res.rows[0] || null;
+  }
+  async delete(table, id) {
+    const res = await this.pool.query(`DELETE FROM ${SCHEMA}.${table} WHERE id = $1`, [id]);
+    return (res.rowCount || 0) > 0;
+  }
+  async deleteWhere(table, filter = {}) {
+    const keys = Object.keys(filter);
+    if (!keys.length) return 0;   // jamais de DELETE sans condition
+    const where = keys.map((k, i) => `"${k}" = $${i + 1}`).join(' AND ');
+    const res = await this.pool.query(`DELETE FROM ${SCHEMA}.${table} WHERE ${where}`, keys.map(k => filter[k]));
+    return res.rowCount || 0;
   }
   async close() { /* pool géré par l'appelant */ }
 }

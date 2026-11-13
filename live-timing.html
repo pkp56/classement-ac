@@ -126,6 +126,16 @@
       </div>
     </div>
   </div>
+
+  <div class="panel" style="margin-top:18px" id="historyPanel">
+    <h3>Historique des séances <span class="tag">persistant</span></h3>
+    <div style="padding:10px 16px">
+      <p class="note" style="margin:0 0 10px">Chaque séance vue par le site est conservée (agent, UDP ou source HTTP) :
+      le direct ne survit pas à un redémarrage, l'historique oui. Clique pour revoir le classement d'une séance passée.</p>
+      <div id="history"><div class="empty">Chargement…</div></div>
+      <div id="historyBanner" style="display:none;margin-top:12px"></div>
+    </div>
+  </div>
 </div>
 <script>
 (function () {
@@ -341,12 +351,74 @@
     }).join('');
     sel.style.display = '';
   }
+  // --- historique persistant -------------------------------------------------
+  var viewingHistory = false;
+  function fmtWhen(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  }
+  function loadHistory() {
+    fetch('/api/live/sessions?limit=30', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { renderHistory(j); })
+      .catch(function () { $('history').innerHTML = '<div class="empty">Historique indisponible.</div>'; });
+  }
+  function renderHistory(j) {
+    if (!j || !j.history) { $('history').innerHTML = '<div class="empty">Historique non actif sur ce site.</div>'; return; }
+    var list = j.sessions || [];
+    if (!list.length) { $('history').innerHTML = '<div class="empty">Aucune séance conservée pour l\'instant — la première qui passe sera gardée.</div>'; return; }
+    var html = '<table style="width:100%;font-size:13px"><thead><tr><th>Début</th><th>Serveur</th><th>Circuit</th>' +
+      '<th>Type</th><th>Pilotes</th><th>Dernière vue</th><th></th></tr></thead><tbody>';
+    list.forEach(function (row) {
+      html += '<tr>' +
+        '<td>' + esc(fmtWhen(row.started_at)) + '</td>' +
+        '<td>' + esc(row.server_name || '—') + '</td>' +
+        '<td><b>' + esc(row.track || '—') + '</b>' + (row.track_config ? ' <span style="opacity:.6">· ' + esc(row.track_config) + '</span>' : '') + '</td>' +
+        '<td>' + esc(row.session_type || '—') + '</td>' +
+        '<td>' + (row.drivers == null ? '—' : row.drivers) + '</td>' +
+        '<td>' + esc(fmtWhen(row.last_seen_at)) + (row.ended_at ? ' <span style="opacity:.6">(finie)</span>' : '') + '</td>' +
+        '<td><button class="hopen" data-id="' + row.id + '" style="font:inherit;padding:3px 10px;cursor:pointer">Ouvrir</button></td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    $('history').innerHTML = html;
+  }
+  function openHistory(id) {
+    fetch('/api/live/sessions?id=' + encodeURIComponent(id), { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !j.session) throw new Error('séance inconnue');
+        viewingHistory = true;
+        var row = j.session;
+        render(row.snapshot || {});
+        $('historyBanner').style.display = '';
+        $('historyBanner').innerHTML =
+          '<b>Archives — séance du ' + esc(fmtWhen(row.started_at)) + '</b> · ' +
+          esc(row.server_name || 'serveur inconnu') + ' · ' + esc(row.track || 'circuit inconnu') +
+          ' <button id="backLive" style="font:inherit;padding:3px 10px;cursor:pointer;margin-left:10px">Retour au direct</button>';
+        $('backLive').addEventListener('click', backToLive);
+        try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+      })
+      .catch(function (e) { $('historyBanner').style.display = ''; $('historyBanner').textContent = 'Séance introuvable (' + e.message + ').'; });
+  }
+  function backToLive() {
+    viewingHistory = false;
+    $('historyBanner').style.display = 'none';
+    lastSnapshotAt = 0;
+    fetch(statusUrl()).then(function (r) { return r.json(); }).then(render).catch(function () {});
+  }
+  $('history').addEventListener('click', function (e) {
+    var btn = e.target.closest('button.hopen');
+    if (btn) openHistory(btn.getAttribute('data-id'));
+  });
+
   function connect() {
     if (socket) { try { socket.close(); } catch (e) {} }
     var es = new EventSource(streamUrl());
     socket = es;
     es.addEventListener('snapshot', function (ev) {
       lastSnapshotAt = Date.now();
+      if (viewingHistory) return;   // les archives restent affichées tant qu'on les regarde
       try { render(JSON.parse(ev.data)); } catch (e) { console.error(e); }
     });
     es.addEventListener('log', function (ev) {
@@ -368,6 +440,7 @@
   // Filet de sécurité : si aucun événement SSE depuis 4 s (proxy qui bufferise,
   // onglet réveillé…), on rafraîchit par requête simple.
   setInterval(function () {
+    if (viewingHistory) return;
     if (Date.now() - lastSnapshotAt < 4000) return;
     fetch(statusUrl()).then(function (r) { return r.json(); }).then(function (d) {
       lastSnapshotAt = Date.now();
@@ -393,6 +466,7 @@
   }).catch(function () {});
   fetch(statusUrl()).then(function (r) { return r.json(); }).then(render).catch(function () {});
   connect();
+  loadHistory();
   $('sourceSelect').addEventListener('change', function () {
     activeSource = this.value;
     var url = new URL(location.href);

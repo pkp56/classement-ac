@@ -191,3 +191,6 @@ reports/
 data/telemetry-store.json
 # Jeu de démonstration, régénérable par `node tools/telemetry/demo-seed.js --write`
 data/telemetry/demo-store.json
+
+# Historique live généré à l'exécution ( Render utilise PostgreSQL)
+data/live-history.json

@@ -388,6 +388,86 @@ class TelemetryService {
     }
   }
 
+  // --- gestion des données (page /telemetry, admin) -------------------------
+  //
+  // Le mauvais circuit enregistré (config périmée avant la lecture jeu) ne
+  // se corrige pas en attendant : la page permet de MODIFIER la séance ou de
+  // la SUPPRIMER. Rien n'est inventé — on édite ce qui est stocké, champs
+  // nommés, valeurs validées.
+
+  /** Liste les séances avec leur activité, la plus récente d'abord. */
+  async listSessions() {
+    const sessions = await this.store.select('session');
+    const laps = await this.store.select('lap');
+    const bySession = new Map();
+    for (const lap of laps) {
+      if (!bySession.has(lap.session_id)) bySession.set(lap.session_id, []);
+      bySession.get(lap.session_id).push(lap);
+    }
+    return sessions
+      .map(row => {
+        const group = bySession.get(row.id) || [];
+        return {
+          id: row.id,
+          startedAt: row.started_at,
+          endedAt: row.ended_at,
+          serverName: row.server_name,
+          track: row.track,
+          trackConfig: row.track_config,
+          sessionType: row.session_type,
+          campaign: row.campaign,
+          sessionKey: row.session_key,
+          notes: row.notes,
+          laps: group.length,
+          drivers: [...new Set(group.map(l => l.driver_guid))].length,
+          cars: [...new Set(group.map(l => l.car))].length,
+          lastLapAt: group.map(l => l.recorded_at).filter(Boolean).sort().pop() || null
+        };
+      })
+      .sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')));
+  }
+
+  /** Champs modifiables d'une séance : tout sauf les mesures elles-mêmes. */
+  async updateSession(id, patch = {}) {
+    const clean = {};
+    const str = (v) => String(v == null ? '' : v).trim().slice(0, 120);
+    if ('track' in patch) {
+      const track = str(patch.track);
+      if (!track) return { ok: false, error: 'circuit manquant' };
+      clean.track = track;
+    }
+    for (const [key, column] of [
+      ['trackConfig', 'track_config'], ['sessionType', 'session_type'],
+      ['campaign', 'campaign'], ['serverName', 'server_name'], ['notes', 'notes']
+    ]) {
+      if (key in patch) {
+        const v = str(patch[key]);
+        clean[column] = v || null;
+      }
+    }
+    if (!Object.keys(clean).length) return { ok: false, error: 'rien à modifier' };
+    const row = await this.store.update('session', Number(id), clean);
+    if (!row) return { ok: false, error: 'séance inconnue' };
+    return { ok: true, session: row };
+  }
+
+  /** Supprime une séance ET ses tours/relais : les orphelins ne servent rien. */
+  async deleteSession(id) {
+    const numeric = Number(id);
+    if (!Number.isInteger(numeric) || numeric <= 0) return { ok: false, error: 'séance inconnue' };
+    const sessions = await this.store.select('session', { id: numeric });
+    if (!sessions.length) return { ok: false, error: 'séance inconnue' };
+    await this.store.deleteWhere('lap', { session_id: numeric });
+    await this.store.deleteWhere('stint', { session_id: numeric });
+    await this.store.delete('session', numeric);
+    // Cache mémoire : une entrée groupée ou à clé qui pointe vers la séance
+    // supprimée ferait « ressusciter » un id inexistant au prochain envoi.
+    for (const [k, v] of this.sessions) {
+      if (v && v.id === numeric) this.sessions.delete(k);
+    }
+    return { ok: true, deleted: numeric };
+  }
+
   /**
    * Rapport BoP sur les données RÉELLEMENT stockées. Les voitures dont une
    * mesure manque (conso, usure, pit-lane) sortent « incomplètes » : le rapport

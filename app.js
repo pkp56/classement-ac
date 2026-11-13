@@ -736,6 +736,43 @@ function broadcastLive(event,payload){
   const frame='event: '+event+'\ndata: '+JSON.stringify(payload)+'\n\n';
   for(const res of liveClients){try{res.write(frame)}catch(e){/* client parti */}}
 }
+// Historique persistant : chaque séance vue (agent push, UDP, source HTTP)
+// est conservée en base — le direct ne survit pas à un redémarrage, l'historique
+// oui. Le miroir (capture rejouée) n'est jamais enregistré.
+let liveHistory=null,liveRecorder=null;
+async function getLiveHistory(){
+  if(!liveHistory){
+    try{
+      const {openLiveHistory}=require('./tools/live-timing/history');
+      liveHistory=await openLiveHistory();
+    }catch(e){
+      console.error('live-history: indisponible —',e.message);
+      liveHistory=false;
+    }
+  }
+  return liveHistory||null;
+}
+async function getLiveRecorder(){
+  if(!liveRecorder){
+    const store=await getLiveHistory();
+    if(!store)return null;
+    const {LiveHistoryRecorder}=require('./tools/live-timing/history');
+    liveRecorder=new LiveHistoryRecorder(store,{writeIntervalMs:10000});
+  }
+  return liveRecorder;
+}
+async function recordLiveHistory(snap){
+  try{
+    const recorder=await getLiveRecorder();
+    if(recorder)await recorder.record(snap);
+  }catch(e){/* l'historique ne casse jamais le direct */}
+}
+if(liveTimingEnabled()){
+  setInterval(()=>{
+    if(!liveTimingEnabled())return;
+    try{recordLiveHistory(liveSnapshot())}catch(e){/* silence */}
+  },10000).unref();
+}
 // Priorité : source HTTP demandée > agent qui pousse > écoute UDP locale.
 function resolveLiveSource(param){
   const list=getLiveHttpSources();
@@ -807,7 +844,23 @@ app.post('/api/live/push',(req,res)=>{
   const result=getLivePush().publish(req.body);
   if(!result.ok)return res.status(400).json({error:result.error});
   broadcastLive('snapshot',getLivePush().current());
+  recordLiveHistory(getLivePush().current());
   res.json({ok:true,at:new Date(result.at).toISOString()});
+});
+// Historique des séances : lecture publique (comme le direct), la plus
+// récente d'abord. ?id= renvoie la séance complète (classement, fil).
+app.get('/api/live/sessions', async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  try{
+    const store=await getLiveHistory();
+    if(!store)return res.json({sessions:[],history:false});
+    if(req.query.id!=null&&req.query.id!==''){
+      const row=await store.get(req.query.id);
+      if(!row)return res.status(404).json({error:'séance inconnue'});
+      return res.json({session:row});
+    }
+    res.json({sessions:await store.list(Number(req.query.limit)||50),history:true});
+  }catch(e){res.status(503).json({error:e.message})}
 });
 app.get('/api/live/stream',(req,res)=>{
   if(!liveTimingEnabled())return res.status(503).end();
@@ -1020,6 +1073,37 @@ app.get('/api/telemetry/report', async(req,res)=>{
     }
     res.set('Content-Disposition',`attachment; filename="${base}.csv"`);
     res.type('text/csv; charset=utf-8').send(report.files.csv);
+  }catch(e){res.status(503).json({error:e.message})}
+});
+// Gestion des séances enregistrées (page /telemetry) : corriger un circuit
+// mal enregistré (config périmée avant la lecture jeu), nettoyer un essai
+// raté. Admin uniquement : ces mains là touchent aux données de tout le monde.
+app.get('/api/telemetry/sessions', async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await telemetryAdmin(req,res)))return undefined;
+  try{
+    const service=await getTelemetry();
+    res.json({sessions:await service.listSessions()});
+  }catch(e){res.status(503).json({error:e.message})}
+});
+app.patch('/api/telemetry/sessions/:id', async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await telemetryAdmin(req,res)))return undefined;
+  try{
+    const service=await getTelemetry();
+    const result=await service.updateSession(req.params.id,req.body||{});
+    if(!result.ok)return res.status(400).json({error:result.error});
+    res.json(result);
+  }catch(e){res.status(503).json({error:e.message})}
+});
+app.delete('/api/telemetry/sessions/:id', async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await telemetryAdmin(req,res)))return undefined;
+  try{
+    const service=await getTelemetry();
+    const result=await service.deleteSession(req.params.id);
+    if(!result.ok)return res.status(404).json({error:result.error});
+    res.json(result);
   }catch(e){res.status(503).json({error:e.message})}
 });
 app.put('/api/telemetry/pit-profile', async(req,res)=>{
