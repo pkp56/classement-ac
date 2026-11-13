@@ -83,13 +83,14 @@ function runTelemetryScript(options = {}) {
     env.car.driverSteamID = undefined;
   }
   const sent = [];
+  const posts = [];
   const messages = [];
   const ui = [];
   const L = lauxlib.luaL_newstate();
   lualib.luaL_openlibs(L);
 
   if (lauxlib.luaL_dostring(L, to_luastring(PRELUDE)) !== lua.LUA_OK) {
-    return { sent, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
+    return { sent, posts, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
   }
 
   // `ac` : uniquement les fonctions utilisées par le script.
@@ -137,12 +138,26 @@ function runTelemetryScript(options = {}) {
   pushTable(L, env.sim);
   lua.lua_setglobal(L, to_luastring('sim'));
 
-  // `web.post(url, headers, body, callback)` → succès immédiat, sans réseau.
+  // `web.post` → succès immédiat, sans réseau. Deux formes acceptées, comme
+  // dans CSP : (url, en-têtes, corps, callback) et (url, corps, callback).
+  // Chaque appel est enregistré dans `posts` (URL, en-têtes présents) pour
+  // vérifier QUEL mode de transport le script a réellement utilisé.
   lua.lua_newtable(L);
   lua.lua_pushjsfunction(L, (state) => {
-    const body = lua.lua_tostring(state, 3);
+    const hasHeaders = lua.lua_type(state, 2) === lua.LUA_TTABLE;
+    const bodyIdx = hasHeaders ? 3 : 2;
+    const cbIdx = hasHeaders ? 4 : 3;
+    const body = lua.lua_tostring(state, bodyIdx);
     const text = body ? to_jsstring(body) : '';
+    const url = lua.lua_tostring(state, 1);
+    posts.push({ url: url ? to_jsstring(url) : '', hasHeaders, body: text });
     sent.push(text);
+    // `options.rejectNu` / `options.rejectHeaders` : la variante correspondante
+    // lève (version de CSP qui la refuse), pour tester le repli immédiat.
+    if ((options.rejectNu && !hasHeaders) || (options.rejectHeaders && hasHeaders)) {
+      lua.lua_pushstring(state, to_luastring('variante refusée par cette version'));
+      return lua.lua_error(state);
+    }
     // `silentPost` : la requête part (donc elle est comptée) mais le callback
     // n'est JAMAIS appelé. C'est le cas réel d'un POST avalé par un proxy.
     if (options.silentPost) return 0;
@@ -151,13 +166,13 @@ function runTelemetryScript(options = {}) {
     const shouldFail = typeof options.failPost === 'function'
       ? options.failPost(sent.length, text)
       : false;
-    if (lua.lua_type(state, 4) === lua.LUA_TFUNCTION) {
+    if (lua.lua_type(state, cbIdx) === lua.LUA_TFUNCTION) {
       // `options.status` permet de simuler un refus (401, 503…).
       // Même empilement que le cas nominal : callback(nil, res).
       if (typeof options.status === 'number') {
-        lua.lua_pushvalue(state, 4);                       // callback
-        lua.lua_pushnil(state);                            // err = nil
-        lua.lua_newtable(state);                           // res
+        lua.lua_pushvalue(state, cbIdx);                  // callback
+        lua.lua_pushnil(state);                           // err = nil
+        lua.lua_newtable(state);                          // res
         lua.lua_pushinteger(state, options.status);
         lua.lua_setfield(state, -2, to_luastring('status'));
         lua.lua_pushstring(state, to_luastring('{}'));
@@ -165,7 +180,7 @@ function runTelemetryScript(options = {}) {
         lua.lua_call(state, 2, 0);
         return 0;
       }
-      lua.lua_pushvalue(state, 4);
+      lua.lua_pushvalue(state, cbIdx);
       if (shouldFail) lua.lua_pushstring(state, to_luastring('réseau indisponible'));
       else lua.lua_pushnil(state);
       lua.lua_newtable(state);
@@ -213,10 +228,10 @@ function runTelemetryScript(options = {}) {
   const file = path.join(cwd, 'csp', 'gdsp_telemetry.lua');
   if (!fs.existsSync(file)) return { sent, messages, error: 'csp/gdsp_telemetry.lua absent', L: null };
   if (lauxlib.luaL_loadfile(L, to_luastring(file)) !== lua.LUA_OK) {
-    return { sent, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
+    return { sent, posts, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
   }
   if (lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) {
-    return { sent, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
+    return { sent, posts, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
   }
 
   // La route /csp/telemetry.lua ajoute `__GDSP_TELEMETRY__` À LA FIN du fichier
@@ -240,7 +255,7 @@ function runTelemetryScript(options = {}) {
       + '\n__GDSP_TELEMETRY__ = { url = "https://servi.test/api/telemetry/push", token = "t" }\n';
     if (lauxlib.luaL_loadbuffer(L, to_luastring(src), Buffer.byteLength(src), '@servi') !== lua.LUA_OK
         || lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) {
-      return { sent, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
+      return { sent, posts, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
     }
   }
 
@@ -252,13 +267,13 @@ function runTelemetryScript(options = {}) {
     if (lua.lua_isfunction(L, -1)) {
       lua.lua_remove(L, -2);
       if (lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) {
-        return { sent, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
+        return { sent, posts, messages, ui, error: to_jsstring(lua.lua_tostring(L, -1)), L: null };
       }
     } else {
       lua.lua_pop(L, 2);
     }
   }
-  return { sent, messages, ui, error: null, L };
+  return { sent, posts, messages, ui, error: null, L };
 }
 
 /**

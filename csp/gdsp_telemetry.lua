@@ -66,6 +66,9 @@ local state = {
   probed = false,           -- sonde GET déjà lancée
   probe = 'sonde en attente', -- résultat de la sonde GET
   pingAttempts = 0,         -- tentatives de ping (le réseau peut être en retard)
+  transport = nil,          -- mode d'envoi verrouillé après la première réponse
+  mode = '',                -- mode de la tentative en cours (affiché)
+  transportLocked = false,  -- un mode a-t-il déjà livré une réponse
   lastAttemptAt = -1e9,     -- cadence des tentatives
   why = '',                 -- dernière raison d'un envoi impossible
   updates = 0,              -- nombre d'appels à script.update
@@ -136,7 +139,10 @@ local function resolveConfig()
   -- Délais courts : par défaut WinHTTP attend 30 s en réception. En cas de
   -- blocage TLS, cela se traduisait par un silence de 30 s sans aucun message.
   if type(web) == 'table' and type(web.timeouts) == 'function' then
-    pcall(web.timeouts, 3000, 5000, 5000, 6000, 2)
+    -- 8 requêtes simultanées au lieu de 2 : la limite par défaut est globale
+    -- au jeu (météo, apps, autres scripts du serveur…). Deux slots pris
+    -- ailleurs laissaient nos POST en file d'attente, sans erreur ni réponse.
+    pcall(web.timeouts, 3000, 5000, 5000, 6000, 8)
   end
   cfg.url = tostring(cfg.url or '')
   cfg.token = tostring(cfg.token or '')
@@ -317,6 +323,28 @@ local function detectWeb()
 end
 detectWeb()
 
+-- Jeton sûr pour une URL (les jetons hexadécimaux passent tels quels).
+local function encodeQuery(v)
+  return (tostring(v):gsub('[^%w%-_%.%~]', function(c)
+    return string.format('%%%02X', string.byte(c))
+  end))
+end
+
+local function telemetryHeaders()
+  local headers = {
+    ['Content-Type'] = 'application/json',
+    ['User-Agent'] = VERSION,
+  }
+  if cfg.token ~= '' then headers['X-Telemetry-Token'] = cfg.token end
+  return headers
+end
+
+local function urlWithToken()
+  if cfg.token == '' then return cfg.url end
+  return cfg.url .. (cfg.url:find('?', 1, true) and '&' or '?')
+    .. 'token=' .. encodeQuery(cfg.token)
+end
+
 local function post(body, callback)
   if not state.hasWeb then
     callback('Transport HTTP indisponible dans ce type de script CSP', nil)
@@ -332,25 +360,47 @@ local function post(body, callback)
     state.inflight = false
     callback(err, res)
   end
+  -- Appelé par CSP (et par CSP seul) : si ce point est atteint, le mode de
+  -- transport courant traverse la couche web. On le verrouille pour tous
+  -- les envois suivants, tours compris.
+  local function libFinish(err, res)
+    state.transport = state.mode
+    state.transportLocked = true
+    finish(err, res)
+  end
   state.inflight = true
   state.inflightSince = state.now
   state.lastResponse = ''
-  local headers = {
-    ['Content-Type'] = 'application/json',
-    ['User-Agent'] = VERSION,
+  -- Deux façons d'appeler web.post, au choix de CSP :
+  --   « nu » : (url, corps, callback), aucun en-tête custom, jeton dans
+  --            l'URL. Même silhouette que le GET de la sonde, qui passe.
+  --   « en-têtes » : (url, en-têtes, corps, callback) avec Content-Type,
+  --            User-Agent et jeton d'en-tête.
+  -- Constat en jeu : le GET répond, le POST habillé reste muet. Tant qu'aucun
+  -- mode n'a obtenu de réponse, on ALTERNE à chaque essai ; le premier qui
+  -- répond devient le mode permanent. La ligne « mode: » à l'écran dit lequel.
+  local variants = {
+    ['nu'] = function() return pcall(web.post, urlWithToken(), body, libFinish) end,
+    ['en-têtes'] = function() return pcall(web.post, cfg.url, telemetryHeaders(), body, libFinish) end,
   }
-  if cfg.token ~= '' then headers['X-Telemetry-Token'] = cfg.token end
-  state.lastError = ''
-  local ok, err = pcall(web.post, cfg.url, headers, body, finish)
+  if not state.transportLocked then
+    -- Tant qu'aucune variante n'a livré de réponse, on essaie l'autre à
+    -- chaque essai : le mode visible à l'écran alterne jusqu'à ce qu'une
+    -- des deux réponde (et se verrouille dans libFinish).
+    state.transport = (state.pingAttempts % 2 == 1) and 'nu' or 'en-têtes'
+  end
+  state.mode = state.transport
+  local ok, err = variants[state.transport]()
   if not ok then
-    -- Certaines versions n'acceptent que (url, data, callback) : on retente
-    -- sans les en-têtes avant d'abandonner.
-    state.lastError = 'entêtes refusées: ' .. tostring(err)
-    local ok2, err2 = pcall(web.post, cfg.url, body, finish)
-    if not ok2 then
-      state.lastError = 'web.post: ' .. tostring(err2)
-      finish(tostring(err), nil)
-    end
+    -- La variante est refusée par cette version de CSP : l'autre, tout de
+    -- suite, dans le même essai.
+    state.mode = (state.transport == 'nu') and 'en-têtes' or 'nu'
+    ok, err = variants[state.mode]()
+  end
+  state.lastError = ''
+  if not ok then
+    state.lastError = 'web.post(' .. state.mode .. '): ' .. tostring(err)
+    finish(tostring(err), nil)
   end
 end
 
@@ -765,6 +815,8 @@ function script.drawUI()
       ((state.lapsWithoutGuid or 0) > 0 and (' sansguid=' .. state.lapsWithoutGuid) or ''),
     'essais=' .. tostring(state.pingAttempts) ..
       (state.inflight and (' · en vol ' .. string.format('%.0f', state.now - state.inflightSince) .. 's') or ''),
+    'mode: ' .. (state.mode ~= '' and state.mode or '—') ..
+      (state.transportLocked and ' (fixé)' or ' (alternance)'),
     -- La ligne qui compte : ce que le transport a RÉPONDU, mot pour mot.
     'réponse: ' .. (state.lastResponse ~= '' and state.lastResponse
       or (state.lastError ~= '' and state.lastError or 'aucune')),

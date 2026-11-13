@@ -230,11 +230,19 @@ appeler son callback. Le script ne devine pas : il **affiche ce qu'il reçoit**.
 | `réponse: HTTP 200` | chaîne complète |
 | `réponse: HTTP 401/503` | le site répond et refuse (jeton, `TELEMETRY_ENABLED`) |
 | `réponse: err=…` | erreur de transport, mot pour mot (TLS, DNS, pare-feu) |
-| `réponse: aucune` + `sonde: GET HTTP 200` | le GET passe, pas le POST → côté site/proxy |
+| `réponse: aucune` + `sonde: GET HTTP 200` | le GET passe, pas le POST → en-têtes du POST ou proxy |
+| `mode: nu` / `mode: en-têtes` | variante de `web.post` de l'essai en cours ; `(fixé)` dès qu'une a répondu |
 | `réponse: aucune` + `sonde: aucune` | rien ne sort de la machine → TLS, antivirus, pare-feu |
 
 `web.timeouts(3000, 5000, 5000, 6000, 2)` est posé au démarrage : sans lui,
 WinHTTP attend 30 s en silence, ce qui ressemble à une panne.
+
+Le POST existe en deux variantes, essayées en alternance jusqu'à ce qu'une
+réponde : « nu » (aucun en-tête custom, jeton dans l'URL — même silhouette que
+le GET qui passe) et « en-têtes » (Content-Type, User-Agent, jeton d'en-tête).
+La limite globale de requêtes simultanées est par ailleurs relevée de 2 à 8 :
+elle est partagée avec tout le reste du jeu, et deux slots occupés ailleurs
+laissaient nos POST en file d'attente sans erreur ni réponse.
 
 Côté serveur, la même règle s'applique : `pg` attend **indéfiniment** par
 défaut (`connectionTimeoutMillis = 0`). Une base endormie ou injoignable
