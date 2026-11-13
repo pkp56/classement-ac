@@ -71,6 +71,7 @@ local state = {
   transportLocked = false,  -- un mode a-t-il déjà livré une réponse
   lastAttemptAt = -1e9,     -- cadence des tentatives
   why = '',                 -- dernière raison d'un envoi impossible
+  updateError = '',         -- erreur attrapée dans update/init (affichée)
   updates = 0,              -- nombre d'appels à script.update
 }
 
@@ -155,6 +156,23 @@ end
 -- 3. Accès tolérant à l'état de la voiture.
 --    `car` est fourni par le script en ligne (ac.getCar(0)).
 -------------------------------------------------------------------------------
+--- Lecture d'un champ de `car` ou `sim`. Ces objets sont des structures C
+--- brutes côté CSP (cdata LuaJIT) : lire un champ qui n'existe pas LÈVE une
+--- erreur — une table Lua aurait renvoyé nil. C'est ce qui tuait le ping en
+--- production : `sim.serverName` levait dans toJson, AVANT l'appel à web.post,
+--- et le POST ne partait jamais (compteur d'essais alone, mode vide).
+--- Chaque lecture passe donc par pcall, et le nom des champs refusés est
+--- conservé pour l'écran : c'est le seul moyen de savoir ce que cette
+--- version de CSP n'expose pas.
+local function readField(obj, key)
+  if obj == nil then return nil end
+  local ok, v = pcall(function() return obj[key] end)
+  if ok then return v end
+  state.fieldErrors = state.fieldErrors or {}
+  state.fieldErrors[key] = true
+  return nil
+end
+
 local function firstNumber(candidates)
   for i = 1, #candidates do
     local ok, v = pcall(candidates[i])
@@ -416,9 +434,8 @@ local function ensureIdentity()
     -- en silence, d'où un guid éternellement vide. Les identifiants réels
     -- passent par csp_extra_options.ini, qui sait substituer {SteamID} dans
     -- l'URL du script (documentation CSP, section [SCRIPT_...]).
-    local candidates = { car.driverGuid, car.driverSteamID, car.guid, car.steamID }
-    for i = 1, #candidates do
-      local v = candidates[i]
+    for _, key in ipairs({ 'driverGuid', 'driverSteamID', 'guid', 'steamID' }) do
+      local v = readField(car, key)
       if v ~= nil and tostring(v) ~= '' then state.driverGuid = tostring(v) break end
     end
     if not state.driverGuid and ac.getDriverSteamID then
@@ -438,7 +455,7 @@ local function ensureIdentity()
     end
   end
   if not state.driverName and car then
-    local v = car.driverName
+    local v = readField(car, 'driverName')
     if v == nil and ac.getDriverName then
       local ok, name = pcall(ac.getDriverName, 0)
       if ok then v = name end
@@ -446,7 +463,7 @@ local function ensureIdentity()
     if v ~= nil then state.driverName = tostring(v) end
   end
   if not state.carId and car then
-    local v = car.id
+    local v = readField(car, 'id')
     if v == nil and ac.getCarID then
       local ok, id = pcall(ac.getCarID, 0)
       if ok then v = id end
@@ -469,15 +486,15 @@ local function buildPayload()
     v = 1,
     script = VERSION,
     campaign = cfg.campaign,
-    serverName = tostring((sim and sim.serverName) or ''),
-    track = tostring((sim and sim.trackID) or ''),
-    trackConfig = tostring((sim and sim.trackLayout) or ''),
-    sessionType = tostring((sim and sim.currentSessionType) or ''),
-    fuelRate = tonumber(sim and sim.fuelRate),
-    tyreWearRate = tonumber(sim and sim.tyreWearRate),
-    airTempC = tonumber(sim and sim.ambientTemperature),
-    roadTempC = tonumber(sim and sim.roadTemperature),
-    grip = tonumber(sim and sim.trackGrip),
+    serverName = tostring(readField(sim, 'serverName') or ''),
+    track = tostring(readField(sim, 'trackID') or readField(sim, 'track') or ''),
+    trackConfig = tostring(readField(sim, 'trackLayout') or ''),
+    sessionType = tostring(readField(sim, 'currentSessionType') or ''),
+    fuelRate = tonumber(readField(sim, 'fuelRate')),
+    tyreWearRate = tonumber(readField(sim, 'tyreWearRate')),
+    airTempC = tonumber(readField(sim, 'ambientTemperature')),
+    roadTempC = tonumber(readField(sim, 'roadTemperature')),
+    grip = tonumber(readField(sim, 'trackGrip')),
     driver = {
       guid = state.driverGuid or '',
       name = state.driverName or '',
@@ -603,7 +620,7 @@ end
 -------------------------------------------------------------------------------
 -- 9. Boucle principale.
 -------------------------------------------------------------------------------
-function script.update(dt)
+local function updateStep(dt)
   state.now = state.now + (tonumber(dt) or 0)
   state.updates = state.updates + 1
 
@@ -683,6 +700,17 @@ function script.update(dt)
   if state.pendingCount > 0 then flush(false) end
 end
 
+function script.update(dt)
+  -- Une erreur dans la boucle ne doit plus jamais tuer le script en silence :
+  -- elle est attrapée et affichée (ligne « blocage: »).
+  local ok, err = pcall(updateStep, dt)
+  if not ok then
+    state.updateError = tostring(err)
+  else
+    state.updateError = ''
+  end
+end
+
 --- Envoie un premier paquet dès le chargement, sans attendre un tour : il
 --- n'apporte aucune mesure, mais il prouve que la chaîne complète fonctionne
 --- (script exécuté → réseau → jeton accepté → base joignable). Sans lui, un
@@ -734,8 +762,8 @@ function script.ping()
     script = VERSION,
     campaign = cfg.campaign,
     kind = 'ping',                     -- pas un tour : le site ne stocke rien
-    serverName = tostring((sim and sim.serverName) or ''),
-    track = tostring((sim and sim.trackID) or ''),
+    serverName = tostring(readField(sim, 'serverName') or ''),
+    track = tostring(readField(sim, 'trackID') or readField(sim, 'track') or ''),
     driver = { guid = state.driverGuid or '', name = state.driverName or '' },
     car = state.carId or '',
   })
@@ -769,7 +797,7 @@ function script.ping()
   end)
 end
 
-function script.init()
+local function initStep()
   if state.started then return end
   state.started = true
   -- À ce stade seulement, la table injectée en fin de fichier existe.
@@ -787,6 +815,11 @@ function script.init()
   print('[' .. VERSION .. '] ' .. status .. ' · url=' .. cfg.url ..
     ' · guid=' .. tostring(state.driverGuid) .. ' · voiture=' .. tostring(state.carId))
   script.ping()
+end
+
+function script.init()
+  local ok, err = pcall(initStep)
+  if not ok then state.updateError = 'init: ' .. tostring(err) end
 end
 
 -- `__init__` est conservé en plus de `init` : selon que CSP résout le hook de
@@ -822,6 +855,20 @@ function script.drawUI()
       or (state.lastError ~= '' and state.lastError or 'aucune')),
     'sonde: ' .. tostring(state.probe),
   }
+  -- Une erreur attrapée dans la boucle s'affiche : sans cela, un crash
+  -- répété dans update restait invisible (le harnais ne peut pas le voir,
+  -- ses car/sim sont des tables Lua permissives).
+  if state.updateError ~= '' then
+    lines[#lines + 1] = 'blocage: ' .. state.updateError:sub(1, 90)
+  end
+  if state.fieldErrors then
+    local keys = {}
+    for k in pairs(state.fieldErrors) do keys[#keys + 1] = k end
+    if #keys > 0 then
+      table.sort(keys)
+      lines[#lines + 1] = 'champs refusés: ' .. table.concat(keys, ', ')
+    end
+  end
   for i = 1, #lines do
     -- pcall autour de l'appel ET de l'accès à `ui` : si l'objet n'existe pas,
     -- `ui.text` lèverait avant même d'entrer dans pcall.

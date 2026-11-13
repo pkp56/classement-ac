@@ -232,10 +232,21 @@ appeler son callback. Le script ne devine pas : il **affiche ce qu'il reçoit**.
 | `réponse: err=…` | erreur de transport, mot pour mot (TLS, DNS, pare-feu) |
 | `réponse: aucune` + `sonde: GET HTTP 200` | le GET passe, pas le POST → en-têtes du POST ou proxy |
 | `mode: nu` / `mode: en-têtes` | variante de `web.post` de l'essai en cours ; `(fixé)` dès qu'une a répondu |
+| `mode: —` + `essais=N` | le POST ne part PAS : un crash entre le compteur et l'envoi |
+| `blocage: …` | erreur attrapée dans la boucle, affichée au lieu de tuer le script |
+| `champs refusés: …` | champs de `car`/`sim` qui LÈVENT sur cette version de CSP |
 | `réponse: aucune` + `sonde: aucune` | rien ne sort de la machine → TLS, antivirus, pare-feu |
 
 `web.timeouts(3000, 5000, 5000, 6000, 2)` est posé au démarrage : sans lui,
 WinHTTP attend 30 s en silence, ce qui ressemble à une panne.
+
+**Le piège des structures C.** `car` et `sim` sont des cdata LuaJIT bruts :
+lire un champ inexistant **lève une erreur** là où une table Lua renverrait
+`nil`. `sim.serverName` levait dans le ping, AVANT l'appel à `web.post` — le
+POST ne partait jamais, le compteur d'essais montait seul et le mode restait
+vide. Toutes les lectures passent désormais par `readField` (pcall), et les
+noms refusés s'affichent (`champs refusés:`). `update` et `init` sont
+protégés : une erreur s'affiche (`blocage:`) au lieu de tuer la boucle.
 
 Le POST existe en deux variantes, essayées en alternance jusqu'à ce qu'une
 réponde : « nu » (aucun en-tête custom, jeton dans l'URL — même silhouette que

@@ -1107,3 +1107,41 @@ test('HTTP : le POST sans Content-Type JSON est accepté (mode nu de CSP)', asyn
   });
   assert.equal(vide.status, 400);
 });
+
+// --- le bug de production : champs qui LÈVENT sur les structures C ----------
+
+test('champs refusés par la structure C : le POST part quand même', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Reproduction exacte du bug vu en jeu : `car` et `sim` sont des cdata
+  // LuaJIT chez CSP, lire un champ inexistant LÈVE (une table Lua renvoie
+  // nil). `sim.serverName` levait dans le ping AVANT web.post : le POST ne
+  // partait jamais, le compteur d'essais montait seul et le mode restait
+  // vide — le harnais, avec ses tables permissives, ne pouvait rien voir.
+  const run = simulate({
+    served: true, callInit: true,
+    missingSim: ['serverName', 'trackID'],
+    missingCar: ['driverGuid', 'driverSteamID', 'guid', 'steamID'],
+    steps: [{ dt: 0.5 }, { dt: 0.5 }]
+  });
+  assert.equal(run.error, null);
+  assert.ok(run.posts.length >= 1, 'le POST doit partir malgré les champs refusés');
+  assert.ok(run.ui.some(l => /mode: nu/.test(l)), run.ui.join(' | '));
+  assert.ok(run.ui.some(l => /réponse: HTTP 200/.test(l)), run.ui.join(' | '));
+  assert.ok(run.ui.some(l => /champs refusés: .*serverName.*trackID/.test(l)), run.ui.join(' | '));
+});
+
+test('une erreur dans la boucle s\'affiche au lieu de tuer le script', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // On casse volontairement le ping : update doit ATTRAPER l'erreur et
+  // l'afficher (« blocage: »), la bannière continue d'être dessinée. Avant,
+  // une erreur dans la boucle tuait le script en silence — drawUI seul
+  // survivait, sur un état figé qui ne disait rien de la cause.
+  const run = simulate({
+    served: true, callInit: true,
+    beforeSteps: "script.ping = function() error('ping volontairement cassé') end",
+    steps: [{ dt: 0.5 }, { dt: 0.5 }]
+  });
+  assert.equal(run.error, null, 'le harnais ne doit pas voir l\'erreur brute');
+  assert.ok(run.ui.length > 0, 'la bannière doit rester dessinée');
+  assert.ok(run.ui.some(l => /blocage: .*ping volontairement cassé/.test(l)), run.ui.join(' | '));
+});
