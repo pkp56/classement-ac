@@ -63,6 +63,8 @@ local state = {
   inflightSince = -1e9,     -- quand elle est partie (détection du callback perdu)
   lastError = '',           -- dernière erreur d'envoi, affichée en jeu
   lastResponse = '',        -- dernière réponse reçue (code HTTP)
+  probed = false,           -- sonde GET déjà lancée
+  probe = 'sonde en attente', -- résultat de la sonde GET
   pingAttempts = 0,         -- tentatives de ping (le réseau peut être en retard)
   lastAttemptAt = -1e9,     -- cadence des tentatives
   why = '',                 -- dernière raison d'un envoi impossible
@@ -131,6 +133,11 @@ local function resolveConfig()
     end
   end
 
+  -- Délais courts : par défaut WinHTTP attend 30 s en réception. En cas de
+  -- blocage TLS, cela se traduisait par un silence de 30 s sans aucun message.
+  if type(web) == 'table' and type(web.timeouts) == 'function' then
+    pcall(web.timeouts, 3000, 5000, 5000, 6000, 2)
+  end
   cfg.url = tostring(cfg.url or '')
   cfg.token = tostring(cfg.token or '')
   cfg.campaign = tostring(cfg.campaign or 'campagne')
@@ -654,6 +661,23 @@ function script.ping()
   state.why = ''
   state.pingAttempts = state.pingAttempts + 1
   state.lastAttemptAt = state.now
+  -- Sonde une seule fois : un GET tout simple sur la même origine. Si lui
+  -- répond et pas le POST, le problème est côté site ; si aucun ne répond, il
+  -- est dans le transport (TLS, pare-feu, proxy).
+  if not state.probed then
+    state.probed = true
+    local base = cfg.url:gsub('/api/telemetry/push$', '')
+    if base ~= cfg.url and type(web) == 'table' and type(web.get) == 'function' then
+      local done = false
+      pcall(web.get, base .. '/healthz', function(err, res)
+        if done then return end
+        done = true
+        state.probe = err and ('GET err=' .. tostring(err))
+          or ('GET HTTP ' .. tostring(res and res.status))
+        message('Télémétrie GDSP : réseau', state.probe)
+      end)
+    end
+  end
   if state.pingAttempts > 60 then return end   -- on abandonne après ~1 min d'images
   local body = toJson({
     v = 1,
@@ -667,12 +691,19 @@ function script.ping()
   })
   post(body, function(err, res)
     local status = res and tonumber(res.status) or nil
+    -- Toute réponse, même mauvaise, est une preuve que le réseau fonctionne :
+    -- on la garde pour le diagnostic affiché à l'écran.
+    state.lastResponse = err and ('err=' .. tostring(err)) or ('HTTP ' .. tostring(status))
+    if res and res.certificate ~= nil then
+      state.lastResponse = state.lastResponse .. ' cert=oui'
+    end
     if err then
       -- Échec réseau : on réessaiera. On ne parle qu'aux première et dixième
       -- tentatives, pour ne pas noyer le joueur de messages.
+      state.lastError = tostring(err)
       if state.pingAttempts == 1 or state.pingAttempts % 10 == 0 then
         log('PING échoué (' .. state.pingAttempts .. '×) : ' .. tostring(err))
-        message('Télémétrie GDSP : envoi impossible', tostring(err):sub(1, 80))
+        message('Télémétrie GDSP : envoi impossible', tostring(err):sub(1, 90))
       end
       return
     end
@@ -719,7 +750,10 @@ script.__init__ = function() script.init() end
 --- est le seul canal dont on soit sûr. Si lui aussi reste muet, c'est que le
 --- script ne s'exécute pas du tout.
 function script.drawUI()
-  if state.now > 20 then return end
+  -- Affichée 20 s au démarrage, PUIS tant que le ping n'a pas abouti : un
+  -- premier tour prend souvent plus de 20 s, et c'est justement le moment où
+  -- le diagnostic est le plus utile.
+  if state.now > 20 and state.pinged then return end
   -- init n'a peut-être jamais été appelé : le diagnostic doit rester lisible.
   pcall(resolveConfig)
   local lines = {
@@ -730,8 +764,11 @@ function script.drawUI()
       ' tours=' .. tostring(state.sentLaps) ..
       ((state.lapsWithoutGuid or 0) > 0 and (' sansguid=' .. state.lapsWithoutGuid) or ''),
     'essais=' .. tostring(state.pingAttempts) ..
-      (state.inflight and ' · en vol' or '') ..
-      (state.lastError ~= '' and (' · ' .. state.lastError) or ''),
+      (state.inflight and (' · en vol ' .. string.format('%.0f', state.now - state.inflightSince) .. 's') or ''),
+    -- La ligne qui compte : ce que le transport a RÉPONDU, mot pour mot.
+    'réponse: ' .. (state.lastResponse ~= '' and state.lastResponse
+      or (state.lastError ~= '' and state.lastError or 'aucune')),
+    'sonde: ' .. tostring(state.probe),
   }
   for i = 1, #lines do
     -- pcall autour de l'appel ET de l'accès à `ui` : si l'objet n'existe pas,

@@ -220,6 +220,22 @@ Deux autres corrections du même ordre :
 - `web.post` peut ne jamais appeler son callback : un délai de 10 s déclare
   l'envoi perdu, affiche « pas de réponse » et retente.
 
+### Quand le POST ne répond pas
+
+`web.post` peut partir (le compteur `essais` monte à l'écran) sans jamais
+appeler son callback. Le script ne devine pas : il **affiche ce qu'il reçoit**.
+
+| Ligne à l'écran | Signification |
+| --- | --- |
+| `réponse: HTTP 200` | chaîne complète |
+| `réponse: HTTP 401/503` | le site répond et refuse (jeton, `TELEMETRY_ENABLED`) |
+| `réponse: err=…` | erreur de transport, mot pour mot (TLS, DNS, pare-feu) |
+| `réponse: aucune` + `sonde: GET HTTP 200` | le GET passe, pas le POST → côté site/proxy |
+| `réponse: aucune` + `sonde: aucune` | rien ne sort de la machine → TLS, antivirus, pare-feu |
+
+`web.timeouts(3000, 5000, 5000, 6000, 2)` est posé au démarrage : sans lui,
+WinHTTP attend 30 s en silence, ce qui ressemble à une panne.
+
 Le script ne reste jamais silencieux par construction : s'il n'a pas d'URL ou
 pas de `web.post`, il le dit en jeu. Et dans tous les cas, il écrit une ligne
 unique à la première image (`boucle démarrée · url=… · transport=…`) et son ping
