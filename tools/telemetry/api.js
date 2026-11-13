@@ -428,9 +428,34 @@ function filterRows(rows, filters = {}) {
   });
 }
 
-/** Ouvre le service (PostgreSQL/Neon si configuré, sinon fichier local). */
+/**
+ * Ouvre le service (PostgreSQL/Neon si configuré, sinon fichier local).
+ * L'ouverture est bornée dans le temps : une base muette doit produire une
+ * erreur exploitable, pas une promesse qui ne se résout jamais. Sans cette
+ * borne, la route POST restait pendante à vie et le script CSP voyait
+ * « aucune réponse » — alors que le réseau allait parfaitement bien.
+ */
 async function createTelemetryService(options = {}) {
-  const store = options.store || await openStore(options);
+  let store;
+  if (options.store) {
+    store = options.store;
+  } else {
+    const timeoutMs = options.openTimeoutMs != null ? options.openTimeoutMs : 10000;
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const err = new Error(
+          `ouverture de la base de télémétrie sans réponse après ${timeoutMs} ms (base endormie ou injoignable ?)`);
+        err.code = 'GDSP_TELEMETRY_TIMEOUT';
+        reject(err);
+      }, timeoutMs);
+    });
+    try {
+      store = await Promise.race([openStore(options), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
   return new TelemetryService(store, options);
 }
 

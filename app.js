@@ -954,7 +954,8 @@ app.post('/api/telemetry/push', async(req,res)=>{
     res.json({ok:true,added:result.added,duplicates:result.duplicates,sessionId:result.sessionId});
   }catch(e){
     console.error('télémétrie: envoi refusé —',e.message);
-    res.status(500).json({error:e.message});
+    // Base muette : indisponibilité temporaire, pas un bug du payload.
+    res.status(e.code==='GDSP_TELEMETRY_TIMEOUT'?503:500).json({error:e.message});
   }
 });
 app.get('/api/telemetry/catalog', async(req,res)=>{
