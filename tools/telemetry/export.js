@@ -13,6 +13,7 @@
  */
 
 const { compareCars, fmtLap, fmtDelta } = require('./bop');
+const { plausibleCarId } = require('./aggregate');
 
 const DURATIONS = [20, 30, 45];
 
@@ -22,6 +23,15 @@ function num(v, decimals = 2) {
   return Number(v).toFixed(decimals).replace('.', ',');
 }
 
+/**
+ * Libellé de voiture dans le rapport : un identifiant hérité du bug car.id
+ * (`function: 0x…`) ne désigne aucune voiture — on le dit au lieu de le
+ * présenter comme un modèle.
+ */
+function carLabel(row) {
+  return row && row.unidentified ? '(voiture non identifiée)' : row && row.car;
+}
+
 /** Construit les lignes du rapport (une par voiture). */
 function buildRows(cars, opts = {}) {
   const durations = opts.durationsMin || DURATIONS;
@@ -29,7 +39,8 @@ function buildRows(cars, opts = {}) {
   for (const row of compareCars(cars, durations)) {
     if (!row.model || !row.model.ok) {
       rows.push({
-        car: row.car, circuit: row.circuit, driver: row.driver,
+        car: row.car, unidentified: !plausibleCarId(row.car),
+        circuit: row.circuit, driver: row.driver,
         incomplete: true,
         missing: (row.model && row.model.missing) || [],
         medianLapMs: null, bestLapMs: opts.bestLaps ? opts.bestLaps[row.car] : null
@@ -39,6 +50,7 @@ function buildRows(cars, opts = {}) {
     const m = row.model;
     const out = {
       car: row.car,
+      unidentified: !plausibleCarId(row.car),
       circuit: row.circuit || null,
       driver: row.driver || null,
       medianLapMs: m.medianLapMs,
@@ -99,13 +111,13 @@ for (const min of DURATIONS) {
 
 function rowToArray(row) {
   if (row.incomplete) {
-    const base = [row.car, row.circuit || '—', row.driver || '—'];
+    const base = [carLabel(row), row.circuit || '—', row.driver || '—'];
     base.push(fmtLap(row.bestLapMs), '—', '—', '—', '—', '—', '—', '—', '—', '—', '—');
     for (let i = 0; i < DURATIONS.length; i++) base.push('—', '—', '—', '—', 'données incomplètes');
     return base;
   }
   const base = [
-    row.car,
+    carLabel(row),
     row.circuit || '—',
     row.driver || '—',
     fmtLap(row.bestLapMs),
@@ -167,10 +179,10 @@ function toMarkdown(rows, matrix = null, meta = {}) {
   out.push('| --- | --- | --- | --- | --- | --- | --- |');
   for (const r of rows) {
     if (r.incomplete) {
-      out.push(`| ${mdEscape(r.car)} | ${mdEscape(r.circuit)} | — | — | — | — | — |`);
+      out.push(`| ${mdEscape(carLabel(r))} | ${mdEscape(r.circuit)} | — | — | — | — | — |`);
       continue;
     }
-    out.push(`| ${mdEscape(r.car)} | ${mdEscape(r.circuit)} | ${fmtLap(r.medianLapMs)} | ${num(r.fuelPerLap)} | ${num(r.tyreWearPerLap)} | ${num(r.fuelStintLaps, 1)} tours | ${num(r.tyreStintLaps, 1)} tours |`);
+    out.push(`| ${mdEscape(carLabel(r))} | ${mdEscape(r.circuit)} | ${fmtLap(r.medianLapMs)} | ${num(r.fuelPerLap)} | ${num(r.tyreWearPerLap)} | ${num(r.fuelStintLaps, 1)} tours | ${num(r.tyreStintLaps, 1)} tours |`);
   }
   out.push('');
   out.push('## Temps de course simulés');
@@ -182,15 +194,18 @@ function toMarkdown(rows, matrix = null, meta = {}) {
     out.push('| --- | --- | --- | --- | --- | --- |');
     for (const r of rows) {
       const d = r.byDuration && r.byDuration[min];
-      if (!d) { out.push(`| ${mdEscape(r.car)} | — | — | — | — | — |`); continue; }
-      out.push(`| ${mdEscape(r.car)} | ${d.refLaps} | ${d.stops} | ${num(d.stopTimeMs / 1000, 1)} s | ${fmtLap(d.raceTimeMs)} | ${fmtDelta(d.deltaToBestMs)} |`);
+      if (!d) { out.push(`| ${mdEscape(carLabel(r))} | — | — | — | — | — |`); continue; }
+      out.push(`| ${mdEscape(carLabel(r))} | ${d.refLaps} | ${d.stops} | ${num(d.stopTimeMs / 1000, 1)} s | ${fmtLap(d.raceTimeMs)} | ${fmtDelta(d.deltaToBestMs)} |`);
     }
   }
   if (matrix) {
     out.push('');
     out.push('## Matrice pilote × voiture (tour médian)');
     out.push('');
-    if (!matrix.driversCommon.length) {
+    if (matrix.cars.length < 2) {
+      out.push('_Une seule voiture identifiée : la comparaison entre voitures attendra');
+      out.push('la deuxième._');
+    } else if (!matrix.driversCommon.length) {
       out.push('_Aucun pilote n\'a roulé dans toutes les voitures comparées : la comparaison');
       out.push('entre voitures n\'est pas encore possible sans mélanger le talent du pilote');
       out.push('et la performance de la voiture._');
@@ -211,6 +226,10 @@ function toMarkdown(rows, matrix = null, meta = {}) {
         const d = matrix.carDeltas[car];
         out.push(`| ${mdEscape(car)} | ${fmtDelta(d.deltaMs)} (${d.drivers} pilote${d.drivers > 1 ? 's' : ''}) |`);
       }
+    }
+    if (matrix.excludedUnidentified) {
+      out.push('');
+      out.push(`_${matrix.excludedUnidentified} voiture${matrix.excludedUnidentified > 1 ? 's' : ''} non identifiée${matrix.excludedUnidentified > 1 ? 's' : ''} (identifiant illisible, bug corrigé depuis) : tours conservés dans la synthèse, hors comparaison._`);
     }
   }
   out.push('');
@@ -234,7 +253,7 @@ function toHtml(rows, matrix = null, meta = {}) {
   const cell = (v, cls = '') => `<td${cls ? ` class="${cls}"` : ''}>${esc(v)}</td>`;
   const carRows = rows.map(r => {
     if (r.incomplete) {
-      return `<tr><td class="car">${esc(r.car)}</td>${cell(r.circuit)}<td colspan="10" class="warn">données incomplètes : ${esc((r.missing || []).join(', '))}</td></tr>`;
+      return `<tr><td class="car">${esc(carLabel(r))}</td>${cell(r.circuit)}<td colspan="10" class="warn">données incomplètes : ${esc((r.missing || []).join(', '))}</td></tr>`;
     }
     const stops = durations.map(min => {
       const d = r.byDuration[min];
@@ -247,7 +266,7 @@ function toHtml(rows, matrix = null, meta = {}) {
       return `<td class="num ${cls}">${esc(fmtLap(d.raceTimeMs))}<span class="sub">${esc(fmtDelta(d.deltaToBestMs))}</span></td>`;
     }).join('');
     return `<tr>
-      <td class="car">${esc(r.car)}</td>
+      <td class="car">${esc(carLabel(r))}</td>
       <td>${esc(r.circuit || '—')}</td>
       <td class="num">${esc(fmtLap(r.bestLapMs))}</td>
       <td class="num">${esc(fmtLap(r.medianLapMs))}</td>
@@ -260,7 +279,13 @@ function toHtml(rows, matrix = null, meta = {}) {
     </tr>`;
   }).join('\n');
 
-  const matrixHtml = matrix && matrix.driversCommon.length
+  const matrixNote = matrix && matrix.excludedUnidentified
+    ? `<p class="note">${matrix.excludedUnidentified} voiture${matrix.excludedUnidentified > 1 ? 's' : ''} non identifiée${matrix.excludedUnidentified > 1 ? 's' : ''} (identifiant illisible, bug corrigé depuis) : tours conservés dans la synthèse, hors comparaison.</p>` : '';
+  const matrixHtml = !matrix
+    ? ''
+    : matrix.cars.length < 2
+    ? `<h2>Matrice pilote × voiture</h2><p class="warn">Une seule voiture identifiée : la comparaison entre voitures attendra la deuxième.</p>${matrixNote}`
+    : matrix.driversCommon.length
     ? `<h2>Matrice pilote × voiture</h2>
        <p class="note">Comparaison à pilote constant : le delta ne mesure que la voiture.</p>
        <table class="bop">
@@ -274,8 +299,8 @@ function toHtml(rows, matrix = null, meta = {}) {
        </table>
        <table class="bop small"><thead><tr><th>Voiture</th><th>Delta moyen à pilote constant</th></tr></thead><tbody>
        ${matrix.cars.map(car => `<tr><td>${esc(car)}</td><td class="num">${esc(fmtDelta(matrix.carDeltas[car].deltaMs))}</td></tr>`).join('')}
-       </tbody></table>`
-    : `<h2>Matrice pilote × voiture</h2><p class="warn">Aucun pilote n'a roulé dans toutes les voitures comparées : la comparaison entre voitures n'est pas encore possible sans confondre le pilote et la voiture.</p>`;
+       </tbody></table>${matrixNote}`
+    : `<h2>Matrice pilote × voiture</h2><p class="warn">Aucun pilote n'a roulé dans toutes les voitures comparées : la comparaison entre voitures n'est pas encore possible sans confondre le pilote et la voiture.</p>${matrixNote}`;
 
   return `<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8">

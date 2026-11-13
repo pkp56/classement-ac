@@ -69,6 +69,17 @@ function carProfile(sessionInfo, laps) {
 }
 
 /**
+ * Un identifiant de voiture doit désigner une voiture. `function: 0x…` est le
+ * tostring d'un champ Lua (bug car.id du 13/11, corrigé) : ces tours restent
+ * visibles dans la synthèse, mais aucune comparaison entre voitures ne peut
+ * s'appuyer dessus — ça comparerait une voiture avec elle-même.
+ */
+function plausibleCarId(car) {
+  const s = String(car == null ? '' : car).trim();
+  return !!s && !/^function\s*:/i.test(s);
+}
+
+/**
  * Matrice pilote × voiture sur un circuit : la seule base honnête pour un BoP
  * multi-voitures. Chaque cellule est le tour médian du pilote dans la voiture.
  *
@@ -76,8 +87,12 @@ function carProfile(sessionInfo, laps) {
  *            cells:Object, carDeltas:Object, driversCommon:string[]}}
  */
 function driverCarMatrix(laps) {
-  const clean = (laps || []).filter(l => l.measured !== false
+  const all = (laps || []).filter(l => l.measured !== false
     && field(l, 'driver_guid', 'driverGuid') && field(l, 'car'));
+  const excludedUnidentified = [...new Set(all
+    .filter(l => !plausibleCarId(field(l, 'car')))
+    .map(l => field(l, 'car')))].length;
+  const clean = all.filter(l => plausibleCarId(field(l, 'car')));
   const groups = groupBy(clean, l => `${field(l, 'driver_guid', 'driverGuid')}|${field(l, 'car')}`);
   const cells = {};
   const drivers = new Set();
@@ -125,7 +140,8 @@ function driverCarMatrix(laps) {
     cars: carList,
     driversCommon,
     cells,
-    carDeltas
+    carDeltas,
+    excludedUnidentified
   };
 }
 
@@ -139,4 +155,4 @@ function sessionContextMissing(session) {
   return missing;
 }
 
-module.exports = { groupBy, carProfile, driverCarMatrix, sessionContextMissing, field };
+module.exports = { groupBy, carProfile, driverCarMatrix, sessionContextMissing, field, plausibleCarId };

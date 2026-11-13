@@ -1372,3 +1372,43 @@ test('la réponse du dernier envoi de tours s\'affiche aussi', () => {
   assert.equal(run.error, null);
   assert.ok(run.ui.some(l => /réponse: err=réseau indisponible/.test(l)), run.ui.join(' | '));
 });
+
+// --- rapport : matrice calculée, voitures non identifiées étiquetées ---------
+
+test('le rapport calcule la matrice pilote × voiture (la route n\'en passait aucune)', async () => {
+  // Avant : service.report() laissait matrix à null et la section affichait
+  // « aucun pilote n'a roulé dans toutes les voitures » sans avoir essayé.
+  const service = new TelemetryService(tempStore());
+  await service.ingest(pushPayload());
+  await service.ingest(pushPayload({ car: 'actk_lola_t290' }));
+  const report = await service.report({});
+  assert.ok(report.matrix, 'la matrice doit être calculée');
+  assert.deepEqual(report.matrix.cars.sort(), ['actk_lola_t290', 'alfa_giulietta_spider']);
+  assert.equal(report.matrix.driversCommon.length, 1, 'le même pilote a roulé les deux voitures');
+  assert.match(report.files.html, /Delta moyen à pilote constant/);
+  assert.match(report.files.markdown, /Matrice pilote × voiture/);
+});
+
+test('une voiture « function: 0x… » est étiquetée, pas présentée comme un modèle', async () => {
+  const service = new TelemetryService(tempStore());
+  // Séance du 13/11 (bug car.id) puis séance corrigée : même pilote, même
+  // voiture réelle — le rapport ne doit pas les comparer comme deux voitures.
+  await service.ingest(pushPayload({ car: 'function: 0xff', sessionKey: 'avant' }));
+  await service.ingest(pushPayload({ car: 'actk_lola_t290', sessionKey: 'apres' }));
+  const report = await service.report({});
+  assert.match(report.files.html, /\(voiture non identifiée\)/);
+  assert.match(report.files.csv, /\(voiture non identifiée\)/);
+  assert.match(report.files.markdown, /\(voiture non identifiée\)/);
+  assert.deepEqual(report.matrix.cars, ['actk_lola_t290'], 'seule la voiture identifiée est comparable');
+  assert.equal(report.matrix.excludedUnidentified, 1);
+  assert.match(report.files.html, /hors comparaison/);
+  assert.ok(!report.files.html.includes('function: 0xff'), 'le pointeur Lua ne doit plus apparaître comme un nom de voiture');
+});
+
+test('une seule voiture identifiée : la matrice le dit au lieu d\'accuser les pilotes', async () => {
+  const service = new TelemetryService(tempStore());
+  await service.ingest(pushPayload());
+  const report = await service.report({});
+  assert.equal(report.matrix.cars.length, 1);
+  assert.match(report.files.html, /Une seule voiture identifiée/);
+});
