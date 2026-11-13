@@ -236,6 +236,14 @@ appeler son callback. Le script ne devine pas : il **affiche ce qu'il reçoit**.
 `web.timeouts(3000, 5000, 5000, 6000, 2)` est posé au démarrage : sans lui,
 WinHTTP attend 30 s en silence, ce qui ressemble à une panne.
 
+Côté serveur, la même règle s'applique : `pg` attend **indéfiniment** par
+défaut (`connectionTimeoutMillis = 0`). Une base endormie ou injoignable
+laissait donc le POST sans réponse à vie — alors que `/healthz` répondait. Le
+pool est désormais borné (connexion 5 s, requête 8 s) et l'ouverture du service
+l'est aussi (10 s) : la route renvoie un **503 explicite** dont le message dit
+si la base est endormie ou injoignable, et l'ouverture sera retentée à la
+prochaine requête au lieu de rester bloquée pour toute la vie du processus.
+
 Le script ne reste jamais silencieux par construction : s'il n'a pas d'URL ou
 pas de `web.post`, il le dit en jeu. Et dans tous les cas, il écrit une ligne
 unique à la première image (`boucle démarrée · url=… · transport=…`) et son ping

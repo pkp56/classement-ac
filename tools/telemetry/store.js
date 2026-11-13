@@ -225,6 +225,24 @@ class PgStore {
  * `pg` est requis à la demande pour que le mode fichier n'impose aucune
  * dépendance (tests, poste sans base).
  */
+/**
+ * Configuration du pool Postgres. Les délais bornés ne sont pas un réglage
+ * fin : sans eux, `pg` attend indéfiniment (`connectionTimeoutMillis` vaut 0
+ * par défaut). Constaté en production : une base qui ne répond pas laissait
+ * le POST /api/telemetry/push pendait à jamais — aucune réponse, aucun log,
+ * alors que le GET /healthz répondait.
+ */
+function poolConfig(url) {
+  return {
+    connectionString: url,
+    ssl: url.includes('localhost') ? false : { rejectUnauthorized: false },
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000,
+    query_timeout: 8000,
+    statement_timeout: 8000
+  };
+}
+
 async function openStore(options = {}) {
   const url = options.databaseUrl || process.env.TELEMETRY_DATABASE_URL || '';
   if (url) {
@@ -232,7 +250,7 @@ async function openStore(options = {}) {
     try { pg = require('pg'); } catch (e) {
       throw new Error("Le module 'pg' est requis pour PostgreSQL. Installe-le ('npm i pg') ou retire TELEMETRY_DATABASE_URL.");
     }
-    const pool = options.pool || new pg.Pool({ connectionString: url, ssl: url.includes('localhost') ? false : { rejectUnauthorized: false } });
+    const pool = options.pool || new pg.Pool(poolConfig(url));
     const store = new PgStore(pool);
     await store.init();
     return store;
@@ -249,5 +267,6 @@ module.exports = {
   schemaStatements,
   FileStore,
   PgStore,
+  poolConfig,
   openStore
 };

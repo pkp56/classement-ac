@@ -905,3 +905,111 @@ test('la sonde GET distingue un blocage réseau d\'un refus du site', () => {
   assert.ok(run.ui.some(l => /sonde: GET HTTP 200/.test(l)), run.ui.join(' | '));
   assert.ok(run.messages.some(m => /réseau/.test(m)));
 });
+
+// --- une base muette doit produire une erreur, jamais un silence ------------
+// Constat de production : le GET /healthz répondait, mais le POST
+// /api/telemetry/push ne renvoyait RIEN — ni statut, ni log. Cause : `pg`
+// attend indéfiniment par défaut (connectionTimeoutMillis = 0) et la promesse
+// d'ouverture ne se résolvait jamais.
+
+test('le pool Postgres est borné dans le temps', () => {
+  const { poolConfig } = require('../tools/telemetry/store');
+  const cfg = poolConfig('postgres://user:pass@db.example.com:5432/telemetry');
+  assert.ok(cfg.connectionTimeoutMillis > 0, 'connectionTimeoutMillis doit être borné');
+  assert.ok(cfg.query_timeout > 0, 'query_timeout doit être borné');
+  assert.ok(cfg.statement_timeout > 0, 'statement_timeout doit être borné');
+  assert.deepStrictEqual(cfg.ssl, { rejectUnauthorized: false });
+  const local = poolConfig('postgres://localhost:5432/telemetry');
+  assert.strictEqual(local.ssl, false, 'localhost reste sans SSL');
+});
+
+test('une base muette rejette au bout du délai, pas jamais', async () => {
+  const { createTelemetryService } = require('../tools/telemetry/api');
+  // Un pool dont aucune requête ne répond : exactement le symptôme vu en jeu.
+  const hungPool = { query: () => new Promise(() => {}) };
+  await assert.rejects(
+    createTelemetryService({
+      databaseUrl: 'postgres://user:pass@db.example.com:5432/telemetry',
+      pool: hungPool,
+      openTimeoutMs: 25
+    }),
+    e => e.code === 'GDSP_TELEMETRY_TIMEOUT' && /sans réponse après 25 ms/.test(e.message)
+  );
+});
+
+test('une base qui répond n\'est pas pénalisée par la borne', async () => {
+  const { createTelemetryService } = require('../tools/telemetry/api');
+  const store = {
+    kind: 'test',
+    init: async () => store,
+    insert: async (t, row) => row,
+    select: async () => [],
+    update: async () => null,
+    close: async () => {}
+  };
+  const svc = await createTelemetryService({ store, openTimeoutMs: 25 });
+  assert.ok(svc, 'le service doit s\'ouvrir normalement');
+});
+
+test('HTTP : une base muette donne une réponse (503/500), jamais un silence', async t => {
+  // Reproduction exacte du symptôme vu en jeu : le GET /healthz répond, mais
+  // le POST /api/telemetry/push ne renvoyait RIEN. Un serveur TCP qui accepte
+  // la connexion sans jamais parler, c'est une base « endormie ». Avant les
+  // délais bornés, la requête restait pendante à vie.
+  const net = require('node:net');
+  const mute = net.createServer(socket => { /* accepté, jamais de réponse */ });
+  mute.listen(0, '127.0.0.1');
+  await once(mute, 'listening');
+  const dbPort = mute.address().port;
+  t.after(() => mute.close());
+
+  const reservation = http.createServer();
+  reservation.listen(0, '127.0.0.1');
+  await once(reservation, 'listening');
+  const port = reservation.address().port;
+  await new Promise(r => reservation.close(r));
+
+  const child = spawn(process.execPath, ['app.js'], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      BACKEND_URL: 'http://127.0.0.1:1',
+      LIVE_TIMING_ENABLED: '0',
+      TELEMETRY_TOKEN: 'jeton-tel',
+      ADMIN_PASSWORD: 'motdepasse-test',
+      ADMIN_USERNAME: 'admin',
+      TELEMETRY_DATABASE_URL: `postgres://gdsp:gdsp@127.0.0.1:${dbPort}/gdsp`,
+      TELEMETRY_STORE_FILE: '/dev/null'
+    }
+  });
+  t.after(() => child.kill());
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('démarrage trop long')), 15000);
+    child.stdout.on('data', chunk => {
+      if (String(chunk).includes('démarré')) { clearTimeout(timer); resolve(); }
+    });
+    child.on('exit', code => { clearTimeout(timer); reject(new Error('serveur arrêté ' + code)); });
+  });
+
+  const started = Date.now();
+  const replied = await Promise.race([
+    fetch(`http://127.0.0.1:${port}/api/telemetry/push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Telemetry-Token': 'jeton-tel' },
+      body: JSON.stringify({
+        kind: 'ping', v: 1, script: 'GDSP-TELEMETRY 1.0',
+        track: 'ks_monza66-junior', car: 'alfa_giulietta_spider',
+        driver: { guid: '76561198015862674', name: 'Test' }
+      })
+    }),
+    new Promise((_, reject) => setTimeout(
+      () => reject(new Error('AUCUNE RÉPONSE en 20 s — régression du silence')), 20000))
+  ]);
+  const elapsed = Date.now() - started;
+  assert.ok([500, 503].includes(replied.status),
+    `statut inattendu : ${replied.status} (après ${elapsed} ms)`);
+  assert.ok(elapsed < 15000, `réponse trop lente : ${elapsed} ms`);
+  const body = await replied.json();
+  assert.ok(body.error && body.error.length > 0, 'le refus doit expliquer la cause');
+});
