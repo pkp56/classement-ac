@@ -42,6 +42,31 @@ function defaultEnv(overrides = {}) {
   };
 }
 
+/**
+ * Transforme une table Lua fraîchement poussée en « structure C » hostile :
+ * les clés listées sont supprimées et toute lecture d'une clé absente LÈVE
+ * une erreur — le comportement exact des cdata LuaJIT de CSP (`car`, `sim`),
+ * là où une table Lua renvoie silencieusement nil. Sans cette simulation, le
+ * harnais ne peut pas reproduire le bug de production où `sim.serverName`
+ * levait dans le ping, AVANT l'appel à web.post.
+ */
+function installStrictStruct(L, missing) {
+  if (!Array.isArray(missing) || missing.length === 0) return;
+  for (const key of missing) {
+    lua.lua_pushnil(L);
+    lua.lua_setfield(L, -2, to_luastring(key));
+  }
+  lua.lua_createtable(L, 0, 1);
+  lua.lua_pushjsfunction(L, (st) => {
+    const key = lua.lua_tostring(st, 2);
+    const name = key ? to_jsstring(key) : '?';
+    lua.lua_pushstring(st, to_luastring(`'${name}' is not a member of the struct`));
+    return lua.lua_error(st);
+  });
+  lua.lua_setfield(L, -2, to_luastring('__index'));
+  lua.lua_setmetatable(L, -2);
+}
+
 /** Pousse une valeur JS simple (nombre, chaîne, table, tableau) en Lua. */
 function pushValue(L, v) {
   if (typeof v === 'number') return lua.lua_pushnumber(L, v);
@@ -134,8 +159,10 @@ function runTelemetryScript(options = {}) {
   lua.lua_setglobal(L, to_luastring('ac'));
 
   pushTable(L, env.car);
+  installStrictStruct(L, options.missingCar);
   lua.lua_setglobal(L, to_luastring('car'));
   pushTable(L, env.sim);
+  installStrictStruct(L, options.missingSim);
   lua.lua_setglobal(L, to_luastring('sim'));
 
   // `web.post` → succès immédiat, sans réseau. Deux formes acceptées, comme
@@ -261,6 +288,14 @@ function runTelemetryScript(options = {}) {
 
   // CSP appelle `script.__init__` juste après le chargement : c'est là que le
   // script affiche son diagnostic « carburant lu / pneus lus ».
+  // `beforeSteps` : code Lua exécuté après le chargement du script mais
+  // AVANT son init — pour casser volontairement quelque chose (un hook, une
+  // globale) et vérifier que le script SURVIT et l'AFFICHE.
+  if (options.beforeSteps) {
+    if (lauxlib.luaL_dostring(L, to_luastring(options.beforeSteps)) !== lua.LUA_OK) {
+      return { sent, posts, messages, ui, error: 'beforeSteps: ' + to_jsstring(lua.lua_tostring(L, -1)), L: null };
+    }
+  }
   if (options.callInit !== false) {
     lua.lua_getglobal(L, to_luastring('script'));
     lua.lua_getfield(L, -1, to_luastring('__init__'));
