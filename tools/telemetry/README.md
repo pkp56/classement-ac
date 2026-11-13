@@ -236,6 +236,7 @@ appeler son callback. Le script ne devine pas : il **affiche ce qu'il reçoit**.
 | `blocage: …` | erreur attrapée dans la boucle, affichée au lieu de tuer le script |
 | `champs refusés: …` | champs de `car`/`sim` qui LÈVENT sur cette version de CSP |
 | `circuit: …` / `circuit: —` | circuit qui sera envoyé avec les tours |
+| `compteur: N · spline: X` | valeurs BRUTES de la voiture ; si le compteur ne monte pas en franchissant la ligne, la détection de tour est en cause |
 | `envoi bloqué: …` | les tours attendent : guid ou circuit à configurer |
 | `tours=N` | tours **enregistrés** par le site (pas seulement envoyés) |
 | message « N tour(s) enregistré(s) » | confirmation visible au premier envoi effectif |
@@ -268,6 +269,10 @@ track = oesterreichring1979
 
 Sans guid, les tours restent en attente et l'écran dit quoi configurer
 (`envoi bloqué: guid absent — …`) : plus de tour perdu sans explication.
+
+La bannière s'affiche 20 s au démarrage, puis **réapparaît 15 s à chaque tour
+bouclé** : au moment de franchir la ligne (minute 2 ou 3), celle des 20 s a
+disparu depuis longtemps — c'est pourtant là que tout se lit.
 
 **Le piège des structures C.** `car` et `sim` sont des cdata LuaJIT bruts :
 lire un champ inexistant **lève une erreur** là où une table Lua renverrait

@@ -75,6 +75,7 @@ local state = {
   guidSource = nil,         -- d'où vient le guid : 'config' ou 'API'
   sendBlocked = '',         -- pourquoi les tours attendent (affiché)
   lapConfirmed = false,     -- la première confirmation d'enregistrement est passée
+  lastLapAt = -1e9,         -- dernier tour DÉTECTÉ (la bannière réapparaît)
   updates = 0,              -- nombre d'appels à script.update
 }
 
@@ -642,6 +643,10 @@ local function wearDeltaPct(startWear, endWear)
 end
 
 local function completeLap(lapNumber)
+  -- La bannière réapparaît à chaque tour bouclé : c'est le seul moment où
+  -- le joueur peut lire compteur, tours enregistrés et anomalies — le reste
+  -- du temps, elle serait du bruit.
+  state.lastLapAt = state.now
   -- NE JETTE PLUS le tour quand l'identité manque. C'était le verrou le plus
   -- coûteux : sans guid, CHAQUE tour partait à la poubelle, en silence (le
   -- message partait dans un log inaccessible aux scripts en ligne). Le guid ne
@@ -911,10 +916,11 @@ script.__init__ = function() script.init() end
 --- est le seul canal dont on soit sûr. Si lui aussi reste muet, c'est que le
 --- script ne s'exécute pas du tout.
 function script.drawUI()
-  -- Affichée 20 s au démarrage, PUIS tant que le ping n'a pas abouti : un
-  -- premier tour prend souvent plus de 20 s, et c'est justement le moment où
-  -- le diagnostic est le plus utile.
-  if state.now > 20 and state.pinged then return end
+  -- Affichée 20 s au démarrage, PUIS tant que le ping n'a pas abouti, PUIS
+  -- 15 s à chaque tour bouclé : au moment de franchir la ligne (minute 2 ou
+  -- 3), la bannière des 20 s a disparu depuis longtemps — c'est pourtant là
+  -- que compteur, tours enregistrés et anomalies se lisent.
+  if state.now > 20 and state.pinged and (state.now - state.lastLapAt) > 15 then return end
   -- init n'a peut-être jamais été appelé : le diagnostic doit rester lisible.
   pcall(resolveConfig)
   local trackNow = resolveTrack()
@@ -930,6 +936,11 @@ function script.drawUI()
       ((state.lapsWithoutGuid or 0) > 0 and (' sansguid=' .. state.lapsWithoutGuid) or ''),
     'essais=' .. tostring(state.pingAttempts) ..
       (state.inflight and (' · en vol ' .. string.format('%.0f', state.now - state.inflightSince) .. 's') or ''),
+    -- Compteur BRUT de la voiture : s'il ne monte pas en franchissant la
+    -- ligne, la détection de tour elle-même est en cause — c'est la première
+    -- chose à vérifier quand « tours= » reste à 0.
+    'compteur: ' .. tostring(readLapCount() or '—') ..
+      ' · spline: ' .. tostring(readSpline() and string.format('%.2f', readSpline()) or '—'),
     'mode: ' .. (state.mode ~= '' and state.mode or '—') ..
       (state.transportLocked and ' (fixé)' or ' (alternance)'),
     -- La ligne qui compte : ce que le transport a RÉPONDU, mot pour mot.

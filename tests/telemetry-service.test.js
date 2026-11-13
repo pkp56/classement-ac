@@ -1274,3 +1274,25 @@ test('envoyé mais écarté : le jeu le dit au lieu de compter un tour fantôme'
   assert.ok(run.messages.some(m => /rien enregistré/.test(m)), run.messages.join(' | '));
   assert.ok(run.ui.some(l => /tours=0/.test(l)), run.ui.join(' | '));
 });
+
+test('la bannière réapparaît à chaque tour bouclé, avec le compteur brut', () => {
+  const { simulate, setCar } = require('./helpers/lua-harness');
+  // Les 20 premières secondes passées, la bannière disparaissait — donc au
+  // moment de franchir la ligne (minute 2+), plus RIEN ne s'affichait. Elle
+  // doit réapparaître 15 s après chaque tour, avec le compteur de la voiture :
+  // s'il ne monte pas en passant la ligne, c'est la détection qui est en cause.
+  const run = simulate({
+    served: true, callInit: true,
+    steps: [
+      0.1,
+      ...Array.from({ length: 30 }, () => 1),     // 30 s : fenêtre des 20 s dépassée
+      (L) => setCar(L, 'lapCount', 2),            // la ligne est franchie à t≈30 s
+      0.2,
+      ...Array.from({ length: 10 }, () => 0.1)
+    ]
+  });
+  assert.equal(run.error, null);
+  assert.ok(run.ui.some(l => /compteur: 2/.test(l)),
+    'le compteur brut doit s\'afficher au tour bouclé, après la fenêtre des 20 s');
+  assert.ok(run.ui.some(l => /tours=1/.test(l)), 'le tour est enregistré');
+});
