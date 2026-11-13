@@ -935,7 +935,7 @@ app.get('/csp/telemetry.lua',(req,res)=>{
     res.send(head+src+`\n__GDSP_TELEMETRY__ = ${luaTable(injected)}\n`);
   });
 });
-app.post('/api/telemetry/push', async(req,res)=>{
+app.post('/api/telemetry/push', express.text({type:()=>true,limit:'10mb'}), async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!telemetryEnabled())return res.status(503).json({error:'Télémétrie désactivée sur ce site.'});
   const expected=telemetryToken();
@@ -947,9 +947,19 @@ app.post('/api/telemetry/push', async(req,res)=>{
     // anonymes pourrissent un BoP sans qu'on sache d'où ils viennent.
     return res.status(503).json({error:'TELEMETRY_TOKEN non configuré sur ce site.'});
   }
+  // Le POST « nu » de CSP part sans AUCUN en-tête custom : pas de
+  // Content-Type JSON, le corps arrive ici en texte brut et on le décode
+  // soi-même. (Avec Content-Type JSON, express.json() a déjà consommé le
+  // corps — drapeau _body — et ce middleware ne rejoue rien.)
+  let payload=req.body;
+  if(typeof payload==='string'){
+    const raw=payload.replace(/^\uFEFF/,'').trim();
+    if(!raw)return res.status(400).json({error:'corps absent'});
+    try{payload=JSON.parse(raw)}catch(e){return res.status(400).json({error:'corps JSON illisible'})}
+  }
   try{
     const service=await getTelemetry();
-    const result=await service.ingest(req.body);
+    const result=await service.ingest(payload);
     if(!result.ok)return res.status(400).json(result);
     res.json({ok:true,added:result.added,duplicates:result.duplicates,sessionId:result.sessionId});
   }catch(e){

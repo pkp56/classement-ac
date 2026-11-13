@@ -1013,3 +1013,97 @@ test('HTTP : une base muette donne une réponse (503/500), jamais un silence', a
   const body = await replied.json();
   assert.ok(body.error && body.error.length > 0, 'le refus doit expliquer la cause');
 });
+
+// --- deux variantes de web.post, une seule doit livrer une réponse -----------
+
+test('le POST « nu » porte le jeton dans l\'URL et se verrouille dès qu\'il répond', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Le GET de la sonde passe en jeu ; le POST habillé reste muet. Le mode
+  // « nu » (aucun en-tête custom, jeton dans l'URL) a la même silhouette que
+  // ce GET qui passe : c'est lui qu'on essaie en premier.
+  const run = simulate({ served: true, callInit: true, steps: [{ dt: 0.5 }] });
+  assert.equal(run.error, null);
+  assert.ok(run.posts.length >= 1, 'un POST au moins est parti');
+  assert.equal(run.posts[0].hasHeaders, false, 'premier essai sans en-têtes');
+  assert.match(run.posts[0].url, /[?&]token=/, 'jeton dans l\'URL');
+  assert.ok(run.ui.some(l => /mode: nu \(fixé\)/.test(l)), run.ui.join(' | '));
+  assert.ok(run.ui.some(l => /réponse: HTTP 200/.test(l)));
+});
+
+test('sans réponse, le mode alterne : nu, puis en-têtes', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // 15 s simulées : essai 1 muet, watchdog à 10 s, essai 2 deux secondes
+  // plus tard. Le mode de l'essai 2 doit être l'AUTRE variante.
+  const run = simulate({
+    served: true, callInit: true, silentPost: true,
+    steps: Array.from({ length: 30 }, () => ({ dt: 0.5 }))
+  });
+  assert.equal(run.error, null);
+  const modes = run.posts.map(p => (p.hasHeaders ? 'en-têtes' : 'nu'));
+  assert.deepEqual(modes, ['nu', 'en-têtes'], `modes vus : ${modes.join(', ')}`);
+  assert.ok(run.ui.some(l => /mode: en-têtes/.test(l)), run.ui.join(' | '));
+});
+
+test('une variante refusée par CSP bascule sur l\'autre dans le même essai', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  // Cette version de CSP refuse l'appel à 3 arguments : le repli doit être
+  // immédiat (même essai), sans perdre l'envoi ni le compteur.
+  const run = simulate({ served: true, callInit: true, rejectNu: true, steps: [{ dt: 0.5 }] });
+  assert.equal(run.error, null);
+  assert.ok(run.posts.some(p => p.hasHeaders === true), 'repli sur la variante en-têtes');
+  assert.ok(run.ui.some(l => /mode: en-têtes \(fixé\)/.test(l)), run.ui.join(' | '));
+  assert.ok(run.ui.some(l => /réponse: HTTP 200/.test(l)));
+});
+
+test('HTTP : le POST sans Content-Type JSON est accepté (mode nu de CSP)', async t => {
+  // Le mode « nu » n'envoie AUCUN en-tête custom : le corps JSON arrive en
+  // texte brut. La route doit le décoder elle-même au lieu de le rejeter.
+  const reservation = http.createServer();
+  reservation.listen(0, '127.0.0.1');
+  await once(reservation, 'listening');
+  const port = reservation.address().port;
+  await new Promise(r => reservation.close(r));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gdsp-tel-nu-'));
+  const child = spawn(process.execPath, ['app.js'], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      BACKEND_URL: 'http://127.0.0.1:1',
+      LIVE_TIMING_ENABLED: '0',
+      TELEMETRY_TOKEN: 'jeton-tel',
+      ADMIN_PASSWORD: 'motdepasse-test',
+      ADMIN_USERNAME: 'admin',
+      TELEMETRY_DATABASE_URL: '',
+      TELEMETRY_STORE_FILE: path.join(dir, 'store.json')
+    }
+  });
+  t.after(() => child.kill());
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('démarrage trop long')), 15000);
+    child.stdout.on('data', chunk => {
+      if (String(chunk).includes('démarré')) { clearTimeout(timer); resolve(); }
+    });
+    child.on('exit', code => { clearTimeout(timer); reject(new Error('serveur arrêté ' + code)); });
+  });
+  const base = `http://127.0.0.1:${port}`;
+
+  // 1. jeton dans l'URL (mode nu : aucun en-tête), corps en texte brut.
+  const nu = await fetch(`${base}/api/telemetry/push?token=jeton-tel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(pushPayload())
+  });
+  assert.equal(nu.status, 200, `statut inattendu : ${nu.status}`);
+  const out = await nu.json();
+  assert.equal(out.ok, true);
+  assert.ok(out.added >= 1, 'les tours du corps texte doivent être enregistrés');
+
+  // 2. corps vide → refus explicite, pas de crash.
+  const vide = await fetch(`${base}/api/telemetry/push?token=jeton-tel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: ''
+  });
+  assert.equal(vide.status, 400);
+});
