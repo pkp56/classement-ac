@@ -341,6 +341,42 @@ local function readLastLapMs()
   return nil
 end
 
+local function readBestLapMs()
+  local v = readField(car, 'bestLapTimeMs')
+  if type(v) == 'number' and v > 1000 then return v end
+  return nil
+end
+
+-- CSP expose les secteurs du pilote local dans car.lastSplits / bestSplits,
+-- indexés de 0 à N-1. On copie vers une table Lua 1-indexée pour l'envoyer en
+-- JSON. Un tableau incomplet reste absent : aucun secteur n'est estimé.
+local function readSectorTimes(fieldName)
+  local source = readField(car, fieldName)
+  if source == nil then return nil end
+
+  local count = nil
+  local marks = readField(sim, 'lapSplits')
+  if marks ~= nil then
+    local ok, n = pcall(function() return #marks end)
+    if ok and type(n) == 'number' and n > 0 then count = n end
+  end
+  if not count then
+    local ok, n = pcall(function() return #source end)
+    if ok and type(n) == 'number' and n > 0 then count = n end
+  end
+  if not count or count < 2 or count > 8 then return nil end
+
+  local out = {}
+  for i = 0, count - 1 do
+    local ok, value = pcall(function() return source[i] end)
+    if not ok or type(value) ~= 'number' or value <= 0 or value > 600000 then
+      return nil
+    end
+    out[#out + 1] = math.floor(value + 0.5)
+  end
+  return #out == count and out or nil
+end
+
 -------------------------------------------------------------------------------
 -- 4. Encodage JSON minimal — aucune dépendance, JSON strict.
 -------------------------------------------------------------------------------
@@ -751,7 +787,19 @@ local function completeLap(lapNumber)
   local lap = { lapNumber = lapNumber }
 
   local lapMs = readLastLapMs()
+  local bestLapMs = readBestLapMs()
+  local lastSectorsMs = readSectorTimes('lastSplits')
+  local bestSectorsMs = readSectorTimes('bestSplits')
   if lapMs then lap.lapMs = math.floor(lapMs + 0.5) end
+  if bestLapMs then lap.bestLapMs = math.floor(bestLapMs + 0.5) end
+  if lastSectorsMs then lap.lastSectorsMs = lastSectorsMs end
+  if bestSectorsMs then lap.bestSectorsMs = bestSectorsMs end
+  -- Les secteurs du tour record sont connus sans ambiguïté quand le dernier
+  -- tour vient d'égaler le meilleur temps CSP. Sinon on garde séparément les
+  -- meilleurs secteurs personnels (qui alimentent le potentiel).
+  if lapMs and bestLapMs and lastSectorsMs and math.abs(lapMs - bestLapMs) <= 2 then
+    lap.bestLapSectorsMs = lastSectorsMs
+  end
   if state.currentLapSpeedMax > 1 then
     lap.speedMaxKmh = math.floor(state.currentLapSpeedMax + 0.5)
   end

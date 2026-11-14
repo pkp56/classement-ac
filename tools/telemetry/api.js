@@ -33,6 +33,45 @@ function positive(v) {
   return n != null && n > 0 ? n : null;
 }
 
+/** Secteurs réellement mesurés en millisecondes ; les trous restent null. */
+function sectorTimes(value) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 8) return null;
+  const out = value.map(v => {
+    const ms = positive(v);
+    return ms != null && ms <= 600000 ? Math.round(ms) : null;
+  });
+  return out.some(v => v != null) ? out : null;
+}
+
+function normalizeServerName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+}
+
+function normalizeTrackId(value) {
+  const parts = String(value || '').replace(/\\/g, '/').split('/').filter(part => part && part !== '..');
+  return String(parts[parts.length - 1] || value || '').trim().toLocaleLowerCase();
+}
+
+function normalizeCarId(value) {
+  return String(value || '').trim().toLocaleLowerCase();
+}
+
+function mergeBestSectors(previous, current) {
+  if (!current) return previous || null;
+  if (!previous || previous.length !== current.length) return current;
+  return current.map((ms, i) => {
+    const old = previous[i];
+    if (ms == null) return old == null ? null : old;
+    if (old == null) return ms;
+    return Math.min(ms, old);
+  });
+}
+
+function sumSectors(sectors) {
+  if (!Array.isArray(sectors) || !sectors.length || sectors.some(ms => !(ms > 0))) return null;
+  return sectors.reduce((sum, ms) => sum + ms, 0);
+}
+
 /**
  * Valide un envoi du script CSP. Tolérant sur la forme (le script est le même
  * pour tous les serveurs, il peut évoluer), strict sur l'essentiel : sans
@@ -106,6 +145,10 @@ function validatePush(payload) {
       tyreWearRl: wheels && wearPctField == null ? num(wheels[2]) : null,
       tyreWearRr: wheels && wearPctField == null ? num(wheels[3]) : null,
       speedMaxKmh: num(field(raw, 'speedMaxKmh', 'speed_max_kmh')),
+      bestLapMs: positive(field(raw, 'bestLapMs', 'best_lap_ms')),
+      lastSectorsMs: sectorTimes(field(raw, 'lastSectorsMs', 'last_sectors_ms')),
+      bestLapSectorsMs: sectorTimes(field(raw, 'bestLapSectorsMs', 'best_lap_sectors_ms')),
+      bestSectorsMs: sectorTimes(field(raw, 'bestSectorsMs', 'best_sectors_ms')),
       measured: raw.measured !== false
     });
   }
@@ -119,7 +162,7 @@ function validatePush(payload) {
       sessionKey: String(payload.sessionKey || '').trim().slice(0, 64) || null,
       trackConfig: payload.trackConfig || null,
       sessionType: payload.sessionType || null,
-      serverName: payload.serverName || null,
+      serverName: String(payload.serverName || '').trim().slice(0, 120) || null,
       campaign: payload.campaign || null,
       airTempC: num(payload.airTempC),
       roadTempC: num(payload.roadTempC),
@@ -142,7 +185,107 @@ class TelemetryService {
     this.store = store;
     this.now = options.now || (() => new Date());
     this.sessions = new Map();       // clé de session → ligne en base
+    this.liveSectors = new Map();    // mémoire RAM par serveur/circuit/pilote/voiture
     this.received = { pushes: 0, laps: 0, rejected: 0 };
+  }
+
+  rememberLiveSectors(info) {
+    if (!info.serverName || !info.track || !info.driverName || !info.driverGuid || !info.car) return;
+    const serverKey = normalizeServerName(info.serverName);
+    const trackKey = normalizeTrackId(info.track);
+    const carKey = normalizeCarId(info.car);
+    // Mémoire par combo serveur/circuit/pilote/voiture : les courses suivantes
+    // du même combo mettent à jour la même entrée, sans mélanger deux voitures.
+    const key = JSON.stringify([serverKey, trackKey, info.driverGuid, carKey]);
+    const now = Date.now();
+    let record = this.liveSectors.get(key) || null;
+    if (record && record.sessionKey !== info.sessionKey) {
+      // Nouvelle séance pour ce combo : conserver les meilleurs temps mesurés,
+      // mais ne pas présenter le dernier tour de la séance précédente comme
+      // celui de la nouvelle.
+      record = {
+        ...record,
+        serverName: info.serverName,
+        track: info.track,
+        sessionType: info.sessionType,
+        sessionKey: info.sessionKey,
+        driverName: info.driverName,
+        car: info.car,
+        lastLapMs: null,
+        lastSectorsMs: null
+      };
+    }
+
+    for (const lap of info.laps) {
+      const previous = record;
+      const previousBestLapMs = (previous && previous.bestLapMs) || null;
+      let bestLapMs = previousBestLapMs;
+      if (lap.bestLapMs) bestLapMs = bestLapMs ? Math.min(bestLapMs, lap.bestLapMs) : lap.bestLapMs;
+      const lapIsBest = lap.cuts === 0 && (!bestLapMs || lap.lapMs < bestLapMs);
+      if (lapIsBest) bestLapMs = lap.lapMs;
+      const bestLapChanged = bestLapMs != null && (previousBestLapMs == null || bestLapMs < previousBestLapMs);
+      let bestLapSectorsMs = (previous && previous.bestLapSectorsMs) || null;
+      const bestLapSectorsMatch = !!lap.bestLapSectorsMs && (
+        (lap.bestLapMs != null && lap.bestLapMs === bestLapMs) ||
+        (lap.cuts === 0 && lap.lapMs === bestLapMs)
+      );
+      if (bestLapChanged) {
+        // Le chrono record vient de changer : n'hériter des secteurs précédents
+        // que s'ils accompagnent bien ce nouveau record.
+        bestLapSectorsMs = bestLapSectorsMatch ? lap.bestLapSectorsMs : null;
+        if (!bestLapSectorsMs && lap.cuts === 0 && lap.lastSectorsMs && lap.lapMs === bestLapMs) {
+          bestLapSectorsMs = lap.lastSectorsMs;
+        }
+      } else if (!bestLapSectorsMs && bestLapSectorsMatch) {
+        // Comble un secteur record jusque-là indisponible, sans remplacer un
+        // meilleur tour historique par le meilleur d'une séance plus lente.
+        bestLapSectorsMs = lap.bestLapSectorsMs;
+      }
+      record = {
+        serverName: info.serverName,
+        track: info.track,
+        sessionType: info.sessionType,
+        sessionKey: info.sessionKey,
+        driverGuid: info.driverGuid,
+        driverName: info.driverName,
+        car: info.car,
+        lastLapMs: lap.lapMs,
+        lastSectorsMs: lap.lastSectorsMs || null,
+        bestLapMs,
+        bestLapSectorsMs,
+        bestSectorsMs: mergeBestSectors(previous && previous.bestSectorsMs, lap.bestSectorsMs),
+        receivedAt: now
+      };
+    }
+    if (record) this.liveSectors.set(key, record);
+  }
+
+  liveSectorTimes(filters = {}) {
+    const wantedServer = normalizeServerName(filters.serverName);
+    const wantedTrack = normalizeTrackId(filters.track);
+    const out = [];
+    for (const entry of this.liveSectors.values()) {
+      if (wantedServer && normalizeServerName(entry.serverName) !== wantedServer) continue;
+      if (wantedTrack && normalizeTrackId(entry.track) !== wantedTrack) continue;
+      out.push({
+        serverName: entry.serverName,
+        track: entry.track,
+        sessionType: entry.sessionType,
+        driverName: entry.driverName,
+        car: entry.car,
+        lastLapMs: entry.lastLapMs,
+        lastSectorsMs: entry.lastSectorsMs,
+        bestLapMs: entry.bestLapMs,
+        bestLapSectorsMs: entry.bestLapSectorsMs,
+        bestSectorsMs: entry.bestSectorsMs,
+        potentialLapMs: sumSectors(entry.bestSectorsMs),
+        updatedAt: new Date(entry.receivedAt).toISOString()
+      });
+    }
+    return out.sort((a, b) => {
+      const driverOrder = String(a.driverName).localeCompare(String(b.driverName), 'fr');
+      return driverOrder || String(a.car).localeCompare(String(b.car), 'fr');
+    });
   }
 
   /** Retrouve (ou ouvre) la session correspondant au contexte envoyé. */
@@ -214,6 +357,7 @@ class TelemetryService {
       return { ok: true, ping: true, added: 0, duplicates: 0, sessionId: null };
     }
     const session = await this.ensureSession(info);
+    this.rememberLiveSectors(info);
     const stored = await this.store.select('lap', { session_id: session.id });
     const seen = new Set(stored.map(row => `${row.driver_guid}|${row.car}|${row.lap_number}`));
 

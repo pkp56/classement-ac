@@ -941,6 +941,22 @@ function telemetryFilters(q){
     byDriver: q.byDriver === '1' || q.byDriver === 'true'
   };
 }
+// Secteurs publics du direct : seules les valeurs CSP de ce serveur/circuit
+// sont renvoyées. Les identifiants Steam ne quittent jamais le service.
+app.get('/api/live/sectors',(req,res)=>{
+  res.set('Cache-Control','no-store');
+  const serverName=String(req.query.serverName||'').trim().slice(0,120);
+  const track=String(req.query.track||'').trim().slice(0,160);
+  if(!serverName||!track||!telemetryService||typeof telemetryService.liveSectorTimes!=='function'){
+    return res.json({drivers:[]});
+  }
+  try{
+    res.json({drivers:telemetryService.liveSectorTimes({serverName,track})});
+  }catch(e){
+    console.error('live-timing: lecture des secteurs impossible —',e.message);
+    res.json({drivers:[]});
+  }
+});
 // Sérialise une table plate en LUA (et non en JSON). Les valeurs sont des
 // chaînes ou des nombres : les chaînes passent par JSON.stringify, dont
 // l'échappement est un sous-ensemble valide de celui de Lua ("…", \" \\ \n).

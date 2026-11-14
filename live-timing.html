@@ -68,6 +68,16 @@
   .bestlap li{counter-increment:b;display:flex;gap:8px;padding:5px 14px;font-size:12px;border-bottom:1px dotted #ded2b8}
   .bestlap li::before{content:counter(b) '.';color:var(--grey);min-width:16px;font-variant-numeric:tabular-nums}
   .bestlap li b{margin-left:auto;font-variant-numeric:tabular-nums}
+  .best-racer{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .best-racer small{font-size:9px;color:var(--grey);white-space:normal;line-height:1.35}
+  .timing-hint{padding:8px 14px;font-size:11px;line-height:1.45;color:#59625d;border-bottom:1px solid #e0d6bf}
+  td.lap-cell,td.potential-cell{min-width:145px}
+  .time-main{display:block;font-weight:bold;font-variant-numeric:tabular-nums}
+  .sector-chips{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end;margin-top:3px;white-space:normal}
+  .sector-chip{display:inline-flex;gap:3px;align-items:center;padding:2px 4px;background:#eee4d0;color:#805b35;font-size:9px;line-height:1.15;border-radius:2px;font-variant-numeric:tabular-nums}
+  .sector-chip i{font-style:normal;font-weight:bold;color:#55625b}
+  .sector-chip.pb{background:#dfeddb;color:#2f6b39}
+  .sector-empty{display:block;margin-top:3px;color:#8b887f;font-size:9px;font-weight:normal}
   .diag{font-size:11.5px;padding:10px 14px;color:#43514f;line-height:1.6;border-top:1px solid var(--line);background:#efe6d1}
   .diag b{color:var(--ink)}
   .empty{padding:26px;text-align:center;color:var(--grey);font-size:13px}
@@ -109,6 +119,7 @@
   <div class="grid">
     <div class="panel">
       <h3>Classement en direct <span class="tag" id="rowCount">0 voiture</span></h3>
+      <div class="timing-hint">Le potentiel = somme des meilleurs secteurs personnels (données CSP). Secteurs visibles après un tour bouclé et l'envoi du script de télémétrie.</div>
       <div id="standings"><div class="empty">En attente des données du serveur…</div></div>
     </div>
     <div>
@@ -143,6 +154,10 @@
   var last = null;
   var socket = null;
   var siteConfig = null;
+  var sectorRows = [];
+  var sectorContext = '';
+  var sectorLastFetchAt = 0;
+  var sectorRequestInFlight = false;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -196,6 +211,7 @@
 
     renderStandings(d);
     renderBest(d);
+    maybeLoadSectorTimes(d);
     renderFeed(d);
     renderDiag(d);
     renderCaptureNote(st);
@@ -262,38 +278,157 @@
     $('copyCmd').textContent = pushOn ? 'Copier les deux lignes INI' : 'Copier la config serveur';
   }
 
+  function formatTimingMs(ms) {
+    ms = Number(ms);
+    if (!isFinite(ms) || ms <= 0) return '—';
+    var total = Math.round(ms);
+    var minutes = Math.floor(total / 60000);
+    var seconds = Math.floor((total % 60000) / 1000);
+    var millis = String(total % 1000).padStart(3, '0');
+    return minutes ? minutes + ':' + String(seconds).padStart(2, '0') + '.' + millis : seconds + '.' + millis;
+  }
+  function normalizeDriverName(name) {
+    return String(name || '').trim().toLocaleLowerCase();
+  }
+  function normalizeCarId(car) {
+    return String(car || '').trim().toLocaleLowerCase();
+  }
+  function sectorRecordFor(name, car) {
+    var status = last && last.status ? last.status.status : '';
+    if (viewingHistory || (status && status !== 'live' && status !== 'http')) return null;
+    var wanted = normalizeDriverName(name);
+    var wantedCar = normalizeCarId(car);
+    if (!wanted || !wantedCar) return null;
+    var matches = sectorRows.filter(function (r) {
+      return normalizeDriverName(r.driverName) === wanted && normalizeCarId(r.car) === wantedCar;
+    });
+    // Un nom/voiture partagé entre plusieurs GUID n'identifie pas un pilote
+    // avec certitude : on préfère laisser vide plutôt que mal attribuer.
+    return matches.length === 1 ? matches[0] : null;
+  }
+  function bestLapTimeFor(car, timing) {
+    var candidates = [car && car.bestLapMs, timing && timing.bestLapMs].map(Number).filter(function (ms) {
+      return isFinite(ms) && ms > 0;
+    });
+    return candidates.length ? Math.min.apply(Math, candidates) : null;
+  }
+  function bestLapLabel(car, timing) {
+    var ms = bestLapTimeFor(car, timing);
+    return ms != null ? formatTimingMs(ms) : (car && car.bestLap) || '—';
+  }
+  function sumSectorTimes(values) {
+    if (!Array.isArray(values) || !values.length || values.some(function (v) { return !(Number(v) > 0); })) return null;
+    return values.reduce(function (sum, v) { return sum + Number(v); }, 0);
+  }
+  function renderSectorChips(values, bestValues) {
+    if (!Array.isArray(values) || !values.length || !values.some(function (v) { return Number(v) > 0; })) return '';
+    return '<span class="sector-chips">' + values.map(function (ms, i) {
+      var isBest = Number(ms) > 0 && Array.isArray(bestValues) && Number(bestValues[i]) > 0 && Math.abs(Number(ms) - Number(bestValues[i])) <= 1;
+      return '<span class="sector-chip' + (isBest ? ' pb' : '') + '"><i>S' + (i + 1) + '</i> ' + esc(formatTimingMs(ms)) + '</span>';
+    }).join('') + '</span>';
+  }
+  function sectorText(values) {
+    if (!Array.isArray(values) || !values.length || !values.some(function (v) { return Number(v) > 0; })) return '';
+    return values.map(function (ms, i) { return 'S' + (i + 1) + ' ' + formatTimingMs(ms); }).join(' · ');
+  }
+
+  function maybeLoadSectorTimes(d) {
+    if (viewingHistory) return;
+    var status = d && d.status ? d.status.status : '';
+    if (status && status !== 'live' && status !== 'http') return;
+    var server = d && d.server ? d.server : {};
+    var serverName = String(server.name || '').trim();
+    var track = String(server.track || '').trim();
+    if (!serverName || !track) return;
+    var context = serverName + '|' + track;
+    if (context !== sectorContext) {
+      sectorContext = context;
+      sectorRows = [];
+      sectorLastFetchAt = 0;
+    }
+    if (sectorRequestInFlight || Date.now() - sectorLastFetchAt < 5000) return;
+    sectorLastFetchAt = Date.now();
+    sectorRequestInFlight = true;
+    var params = new URLSearchParams({ serverName: serverName, track: track });
+    fetch('/api/live/sectors?' + params.toString(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : { drivers: [] }; })
+      .then(function (j) {
+        if (context !== sectorContext) return;
+        sectorRows = Array.isArray(j.drivers) ? j.drivers : [];
+        if (last && !viewingHistory) {
+          renderStandings(last);
+          renderBest(last);
+        }
+      })
+      .catch(function () { sectorRows = []; })
+      .finally(function () { sectorRequestInFlight = false; });
+  }
+
   function renderStandings(d) {
-    var cars = d.cars || [];
+    var cars = Array.isArray(d.cars) ? d.cars : [];
     $('rowCount').textContent = cars.length + (cars.length > 1 ? ' voitures' : ' voiture');
     if (!cars.length) {
       $('standings').innerHTML = '<div class="empty">Aucune voiture connectée pour le moment.</div>';
       return;
     }
-    var bestId = (d.bestLaps && d.bestLaps[0]) ? d.bestLaps[0].name : null;
-    var html = '<table><thead><tr><th>#</th><th>Pilote</th><th>Tours</th><th>Écart</th><th>Interv.</th><th>Dernier</th><th>Meilleur</th><th>Vit.</th></tr></thead><tbody>';
+    var fastestLapMs = cars.reduce(function (fastest, c) {
+      var ms = bestLapTimeFor(c, sectorRecordFor(c.name, c.model));
+      return ms != null && ms < fastest ? ms : fastest;
+    }, Infinity);
+    var html = '<table><thead><tr><th>#</th><th>Pilote</th><th>Tours</th><th>Écart</th><th>Interv.</th><th>Dernier</th><th>Meilleur tour</th><th>Potentiel</th><th>Vit.</th></tr></thead><tbody>';
     cars.forEach(function (c) {
-      var cls = [c.inPit ? 'pit' : '', c.connected ? '' : 'off', (d.bestLaps[0] && d.bestLaps[0].name === c.name) ? 'best' : ''].join(' ').trim();
+      var timing = sectorRecordFor(c.name, c.model);
+      var bestSectors = timing && timing.bestSectorsMs;
+      var currentBestLapMs = bestLapTimeFor(c, timing);
+      var cls = [c.inPit ? 'pit' : '', c.connected ? '' : 'off', currentBestLapMs === fastestLapMs ? 'best' : ''].join(' ').trim();
+      var bestLap = bestLapLabel(c, timing);
+      var lastLap = c.lastLap || (timing && timing.lastLapMs ? formatTimingMs(timing.lastLapMs) : '—');
+      var potentialMs = timing && timing.potentialLapMs != null ? timing.potentialLapMs : sumSectorTimes(bestSectors);
+      var potential = potentialMs != null ? formatTimingMs(potentialMs) : '—';
       html += '<tr class="' + cls + '">' +
-        '<td class="pos">' + c.position + '</td>' +
+        '<td class="pos">' + (c.position == null ? '—' : c.position) + '</td>' +
         '<td><span class="drv"><b>' + esc(c.name) + '</b><span>' + esc(c.team || c.model || '') + '</span></span></td>' +
         '<td>' + (c.laps || 0) + '</td>' +
         '<td>' + esc(c.gap === 'leader' ? '—' : c.gap) + '</td>' +
-        '<td class="muted">' + esc(c.position === 1 ? '' : c.interval) + '</td>' +
-        '<td>' + esc(c.lastLap || '—') + (c.lastLapCuts ? ' <span class="muted">c</span>' : '') + '</td>' +
-        '<td>' + esc(c.bestLap || '—') + '</td>' +
+        '<td class="muted">' + esc(c.position === 1 ? '' : c.interval || '') + '</td>' +
+        '<td class="lap-cell"><span class="time-main">' + esc(lastLap) + (c.lastLapCuts ? ' c' : '') + '</span>' +
+          renderSectorChips(timing && timing.lastSectorsMs, bestSectors) + '</td>' +
+        '<td class="lap-cell"><span class="time-main">' + esc(bestLap) + '</span>' +
+          renderSectorChips(timing && timing.bestLapSectorsMs, bestSectors) + '</td>' +
+        '<td class="potential-cell"><span class="time-main">' + esc(potential) + '</span>' +
+          renderSectorChips(bestSectors, bestSectors) + '</td>' +
         '<td>' + (c.speedKmh != null ? c.speedKmh : '—') + '</td>' +
         '</tr>';
     });
     html += '</tbody></table>';
     $('standings').innerHTML = html;
-    void bestId;
   }
 
   function renderBest(d) {
-    var list = d.bestLaps || [];
+    var cars = Array.isArray(d.cars) ? d.cars : [];
+    if (!cars.length && Array.isArray(d.bestLaps)) {
+      cars = d.bestLaps.map(function (lap) {
+        return { name: lap.name, team: lap.team, model: lap.model || '', bestLap: lap.bestLap, bestLapMs: lap.bestLapMs };
+      });
+    }
+    var list = cars.map(function (car) {
+      var timing = sectorRecordFor(car.name, car.model);
+      var bestLapMs = bestLapTimeFor(car, timing);
+      return { car: car, timing: timing, bestLapMs: bestLapMs, bestLap: bestLapLabel(car, timing) };
+    }).filter(function (row) { return row.bestLapMs != null; })
+      .sort(function (a, b) { return a.bestLapMs - b.bestLapMs; });
     if (!list.length) { $('bestLaps').innerHTML = '<div class="empty">Pas encore de tour bouclé.</div>'; return; }
-    $('bestLaps').innerHTML = '<ol>' + list.slice(0, 8).map(function (r) {
-      return '<li><span>' + esc(r.name) + '</span><b>' + esc(r.bestLap) + '</b></li>';
+    $('bestLaps').innerHTML = '<ol>' + list.slice(0, 8).map(function (row) {
+      var car = row.car;
+      var timing = row.timing;
+      var details = [];
+      if (car.model) details.push(car.model);
+      if (timing && timing.potentialLapMs != null) details.push('Potentiel ' + formatTimingMs(timing.potentialLapMs));
+      var sectorDetails = timing && sectorText(timing.bestSectorsMs);
+      if (sectorDetails) details.push(sectorDetails);
+      return '<li><span class="best-racer"><span>' + esc(car.name) + '</span>' +
+        (details.length ? '<small>' + esc(details.join(' · ')) + '</small>' : '') +
+        '</span><b>' + esc(row.bestLap) + '</b></li>';
     }).join('') + '</ol>';
   }
 
@@ -405,6 +540,9 @@
     viewingHistory = false;
     $('historyBanner').style.display = 'none';
     lastSnapshotAt = 0;
+    sectorRows = [];
+    sectorContext = '';
+    sectorLastFetchAt = 0;
     fetch(statusUrl()).then(function (r) { return r.json(); }).then(render).catch(function () {});
   }
   $('history').addEventListener('click', function (e) {
