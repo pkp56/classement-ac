@@ -360,10 +360,17 @@
       loadSessions(),
       fetch('/api/telemetry/summary?' + q, { cache: 'no-store', headers: headers() }).then(function (r) {
         if (r.status === 401) throw new Error('auth');
-        return r.json();
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok) throw new Error(j.error || ('Lecture impossible (HTTP ' + r.status + ').'));
+          if (!j || !Array.isArray(j.cars)) throw new Error('Réponse télémétrie incomplète.');
+          return j;
+        });
       })
     ]).then(function (res) {
-      var summary = res[1];
+      // Promise.all suit l'ordre [catalogue, séances, résumé]. loadSessions()
+      // ne renvoie rien : prendre res[1] faisait lire `undefined.cars` et
+      // laissait le tableau « Voitures mesurées » bloqué sur Chargement…
+      var summary = res[2];
       showApp();
       renderBanner(summary);
       renderKpis(summary.rows, summary);
@@ -378,6 +385,7 @@
         showLogin('Connexion refusée par ce service.');
       } else {
         $('banner').innerHTML = '<div class="banner bad">Lecture impossible : ' + esc(e.message) + '</div>';
+        $('cars').innerHTML = '<div class="empty">Données indisponibles pour le moment.</div>';
       }
     });
   }

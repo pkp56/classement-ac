@@ -96,6 +96,26 @@ test('un tour sans temps est écarté, les autres passent', () => {
   assert.equal(check.clean.laps[0].lapNumber, 3);
 });
 
+test('les temps de secteurs CSP sont validés sans compléter les valeurs manquantes', () => {
+  const checked = validatePush(pushPayload({
+    laps: [{
+      lapNumber: 4,
+      lapMs: 114621,
+      bestLapMs: 114621,
+      lastSectorsMs: [26169, 62356, 26096],
+      bestLapSectorsMs: [26169, 62356, 26096],
+      bestSectorsMs: [26000, 62000, 25900]
+    }]
+  }));
+  assert.equal(checked.ok, true);
+  assert.deepEqual(checked.clean.laps[0].lastSectorsMs, [26169, 62356, 26096]);
+  assert.equal(checked.clean.laps[0].bestLapMs, 114621);
+  assert.deepEqual(checked.clean.laps[0].bestSectorsMs, [26000, 62000, 25900]);
+
+  const noSectors = validatePush(pushPayload({ laps: [{ lapNumber: 5, lapMs: 114000 }] }));
+  assert.equal(noSectors.clean.laps[0].bestSectorsMs, null, 'aucun secteur absent n’est estimé');
+});
+
 test("l'usure par roue est convertie en usure moyenne par tour ; une valeur absente reste nulle", () => {
   const withWear = validatePush(pushPayload()).clean.laps[0];
   assert.ok(Math.abs(withWear.tyreWearPct - (1.3 + 1.35 + 1.45 + 1.5) / 4) < 1e-9);
@@ -137,6 +157,124 @@ test('un même tour renvoyé deux fois n\'est enregistré qu\'une fois', async (
   assert.equal(again.added, 0);
   assert.equal(again.duplicates, 3);
   assert.equal((await service.rows()).length, 3);
+});
+
+test('les secteurs live sont associés au pilote, au serveur et au circuit, avec potentiel mesuré', async () => {
+  const service = new TelemetryService(tempStore());
+  await service.ingest(pushPayload({
+    serverName: 'GDSP Test Race Control',
+    track: 'csp/2144/../ted_zolder67_reworked-revival_coccievents',
+    sessionKey: 'run-sector-1',
+    driver: { guid: '76561198000000001', name: 'Elouan' },
+    laps: [{
+      lapNumber: 1,
+      lapMs: 114621,
+      bestLapMs: 114621,
+      lastSectorsMs: [26169, 62356, 26096],
+      bestLapSectorsMs: [26169, 62356, 26096],
+      bestSectorsMs: [26000, 62000, 25900]
+    }]
+  }));
+  const live = service.liveSectorTimes({
+    serverName: 'gdsp test race control',
+    track: 'ted_zolder67_reworked-revival_coccievents'
+  });
+  assert.equal(live.length, 1);
+  assert.equal(live[0].driverName, 'Elouan');
+  assert.equal(live[0].bestLapMs, 114621);
+  assert.deepEqual(live[0].bestLapSectorsMs, [26169, 62356, 26096]);
+  assert.deepEqual(live[0].bestSectorsMs, [26000, 62000, 25900]);
+  assert.equal(live[0].potentialLapMs, 113900);
+  assert.equal(live[0].driverGuid, undefined, 'le GUID privé ne sort pas de l’API live');
+  assert.equal(service.liveSectorTimes({ serverName: 'Autre serveur', track: 'ted_zolder67_reworked-revival_coccievents' }).length, 0);
+});
+
+test('les secteurs du dernier tour absents restent absents, sans effacer les meilleurs mesurés', async () => {
+  const service = new TelemetryService(tempStore());
+  const base = {
+    serverName: 'GDSP Test Race Control',
+    track: 'ks_monza66-junior',
+    sessionKey: 'run-last-sector-1',
+    driver: { guid: '76561198000000002', name: 'Pilote secteur' }
+  };
+  await service.ingest(pushPayload({
+    ...base,
+    laps: [{
+      lapNumber: 1, lapMs: 75576, bestLapMs: 75576,
+      lastSectorsMs: [25000, 30000, 20576],
+      bestLapSectorsMs: [25000, 30000, 20576],
+      bestSectorsMs: [24900, 29900, 20000]
+    }]
+  }));
+  await service.ingest(pushPayload({
+    ...base,
+    laps: [{ lapNumber: 2, lapMs: 75400, bestLapMs: 75400 }]
+  }));
+  const live = service.liveSectorTimes({ serverName: base.serverName, track: base.track });
+  assert.equal(live.length, 1);
+  assert.equal(live[0].lastSectorsMs, null, 'les secteurs du tour courant ne sont pas repris du tour précédent');
+  assert.equal(live[0].bestLapMs, 75400);
+  assert.equal(live[0].bestLapSectorsMs, null, 'le tour record change sans réutiliser les secteurs du record précédent');
+  assert.deepEqual(live[0].bestSectorsMs, [24900, 29900, 20000], 'les meilleurs secteurs personnels restent mesurés');
+  assert.equal(live[0].potentialLapMs, 74800);
+});
+
+test('la mémoire live réutilise le combo pilote/voiture/circuit entre les séances', async () => {
+  const service = new TelemetryService(tempStore());
+  const base = {
+    serverName: 'GDSP Test Race Control',
+    track: 'ks_monza66-junior',
+    driver: { guid: '76561198000000003', name: 'Pilote mémoire' }
+  };
+  await service.ingest(pushPayload({
+    ...base,
+    sessionKey: 'combo-run-1',
+    car: 'alfa_giulietta_spider',
+    laps: [{
+      lapNumber: 1, lapMs: 75576, bestLapMs: 75576,
+      lastSectorsMs: [25000, 30000, 20576],
+      bestLapSectorsMs: [25000, 30000, 20576],
+      bestSectorsMs: [24900, 29900, 20000]
+    }]
+  }));
+  await service.ingest(pushPayload({
+    ...base,
+    sessionKey: 'combo-run-2',
+    car: 'alfa_giulietta_spider',
+    laps: [{
+      lapNumber: 1, lapMs: 76000, bestLapMs: 76000,
+      lastSectorsMs: [25100, 30500, 20400],
+      bestLapSectorsMs: [25100, 30500, 20400],
+      bestSectorsMs: [24800, 30000, 19900]
+    }]
+  }));
+  let live = service.liveSectorTimes({ serverName: base.serverName, track: base.track });
+  assert.equal(live.length, 1, 'la nouvelle séance actualise la même entrée');
+  assert.equal(live[0].car, 'alfa_giulietta_spider');
+  assert.equal(live[0].lastLapMs, 76000);
+  assert.deepEqual(live[0].lastSectorsMs, [25100, 30500, 20400]);
+  assert.equal(live[0].bestLapMs, 75576, 'un tour plus lent ne remplace pas le record conservé');
+  assert.deepEqual(live[0].bestLapSectorsMs, [25000, 30000, 20576], 'les secteurs restent associés à leur meilleur tour');
+  assert.deepEqual(live[0].bestSectorsMs, [24800, 29900, 19900]);
+  assert.equal(live[0].potentialLapMs, 74600);
+
+  await service.ingest(pushPayload({
+    ...base,
+    sessionKey: 'combo-run-bmw',
+    car: 'bmw_m3_e30',
+    laps: [{
+      lapNumber: 1, lapMs: 78000, bestLapMs: 78000,
+      lastSectorsMs: [26000, 31000, 21000],
+      bestLapSectorsMs: [26000, 31000, 21000],
+      bestSectorsMs: [25900, 30900, 20900]
+    }]
+  }));
+  live = service.liveSectorTimes({ serverName: base.serverName, track: base.track });
+  assert.equal(live.length, 2, 'une autre voiture forme une entrée distincte');
+  assert.deepEqual(live.map(row => row.car).sort(), ['alfa_giulietta_spider', 'bmw_m3_e30']);
+  for (const record of service.liveSectors.values()) record.receivedAt = Date.now() - 24 * 60 * 60 * 1000;
+  assert.equal(service.liveSectorTimes({ serverName: base.serverName, track: base.track }).length, 2,
+    'les combos restent en mémoire au-delà de 30 minutes, jusqu’au redémarrage du service');
 });
 
 test('deux envois successifs alimentent la même session (pas de session par redémarrage)', async () => {
@@ -344,6 +482,19 @@ test('le script CSP se charge, annonce ce qu il lit et envoie un JSON valide', (
   assert.ok(Math.abs(check.clean.laps[0].tyreWearPct - 1.4) < 0.01);
 });
 
+test('le script CSP envoie les secteurs du tour record et les meilleurs secteurs mesurés', () => {
+  const result = simulate({
+    beforeSteps: 'sim.lapSplits = {0.3, 0.7, 1}; car.lastSplits = {[0] = 26000, [1] = 30000, [2] = 19576}; car.bestSplits = {[0] = 25900, [1] = 29800, [2] = 19100}; car.bestLapTimeMs = 75576',
+    steps: unTour()
+  });
+  assert.equal(result.error, null);
+  const lap = JSON.parse(result.sent[0]).laps[0];
+  assert.equal(lap.bestLapMs, 75576);
+  assert.deepEqual(lap.lastSectorsMs, [26000, 30000, 19576]);
+  assert.deepEqual(lap.bestLapSectorsMs, [26000, 30000, 19576]);
+  assert.deepEqual(lap.bestSectorsMs, [25900, 29800, 19100]);
+});
+
 test('si CSP n\'expose ni carburant ni usure, le script le dit et n\'invente rien', () => {
   const result = simulate({
     steps: unTour(),
@@ -466,12 +617,35 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
   const accepted = await fetch(`${base}/api/telemetry/push`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Telemetry-Token': 'jeton-tel' },
-    body: JSON.stringify(pushPayload())
+    body: JSON.stringify(pushPayload({
+      serverName: 'GDSP Test Race Control',
+      sessionKey: 'live-sector-http',
+      laps: [
+        {
+          lapNumber: 1, lapMs: 75576, fuelUsedL: 1.504, fuelLoadedL: 45, tyreWearPct: [1.3, 1.35, 1.45, 1.5], speedMaxKmh: 187,
+          bestLapMs: 75576, lastSectorsMs: [25000, 30000, 20576],
+          bestLapSectorsMs: [25000, 30000, 20576], bestSectorsMs: [24900, 29900, 20000]
+        },
+        { lapNumber: 2, lapMs: 75780, fuelUsedL: 1.498, fuelLoadedL: 43.5, tyreWearPct: [1.32, 1.33, 1.44, 1.49], speedMaxKmh: 189 },
+        { lapNumber: 3, lapMs: 75410, fuelUsedL: 1.501, fuelLoadedL: 42, tyreWearPct: [1.31, 1.34, 1.43, 1.48], speedMaxKmh: 188 }
+      ]
+    }))
   });
   assert.equal(accepted.status, 200);
   const acceptedBody = await accepted.json();
   assert.equal(acceptedBody.added, 3);
   assert.equal(acceptedBody.skipped, 0);
+
+  // Les meilleurs secteurs sont lisibles sans jeton, mais seulement pour ce
+  // serveur/circuit et sans exposer le GUID Steam.
+  const sectorResponse = await fetch(`${base}/api/live/sectors?serverName=${encodeURIComponent('GDSP Test Race Control')}&track=ks_monza66-junior`);
+  assert.equal(sectorResponse.status, 200);
+  const sectorBody = await sectorResponse.json();
+  assert.equal(sectorBody.drivers.length, 1);
+  assert.equal(sectorBody.drivers[0].driverName, "Assassin's Street");
+  assert.equal(sectorBody.drivers[0].potentialLapMs, 74800);
+  assert.equal(sectorBody.drivers[0].bestLapSectorsMs, null, 'le meilleur chrono a changé mais ses secteurs ne sont pas mesurés');
+  assert.equal(sectorBody.drivers[0].driverGuid, undefined);
 
   // 2 bis. doublon + tour sans temps : rien de nouveau n'entre, et la
   // réponse le DIT (added/duplicates/skipped) — le script CSP s'appuie sur
@@ -527,7 +701,9 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
   // 6. la page existe et pointe vers l'API de télémétrie
   const page = await fetch(`${base}/telemetry`);
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /api\/telemetry\/summary/);
+  const telemetryPage = await page.text();
+  assert.match(telemetryPage, /api\/telemetry\/summary/);
+  assert.match(telemetryPage, /var summary = res\[2\]/, 'le tableau doit consommer le troisième résultat (résumé), pas la liste de séances');
 
   // 7. le script CSP est servi avec ses valeurs injectées
   const lua = await fetch(`${base}/csp/telemetry.lua`);

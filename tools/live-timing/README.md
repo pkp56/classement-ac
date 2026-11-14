@@ -252,8 +252,18 @@ Ouvre `/live-timing` : le classement se remplit en quelques secondes.
   normalisée) et du meilleur tour de référence, comme le font stracker ou
   ptracker. Ils sont donc justes à quelques dixièmes, pas au millième.
   La colonne est marquée « estimé » dans le JSON (`gapEstimated`).
-* **Pas de temps partiels par secteur.** Le plugin n'envoie pas les secteurs ;
-  il faudrait une app cliente (ptracker) pour ça.
+* **Les secteurs viennent du script CSP client, pas du plugin UDP.** Le protocole
+  ACSP seul ne transmet pas les secteurs. Quand le script en ligne GDSP est
+  chargé sur le PC d'un pilote, il envoie après chaque tour ses secteurs du
+  dernier tour, ceux du meilleur tour et ses meilleurs secteurs personnels.
+  La page affiche alors le potentiel comme la somme mesurée de ces meilleurs
+  secteurs. La mémoire est indexée par serveur, circuit, pilote et voiture : si
+  le pilote relance ce même combo, ses records mesurés sont conservés et
+  actualisés ; les données du dernier tour sont, elles, réinitialisées au
+  changement de séance. Cette mémoire vit jusqu'au redémarrage du service, sans
+  écriture dans l'historique ni en base. Sans script CSP, avant le premier tour
+  bouclé, ou si la version CSP ne fournit pas les tableaux de splits, les champs
+  restent « — » (jamais estimés).
 * **Les stands sont déduits** d'une vitesse quasi nulle pendant plus de 4 s
   (le protocole n'envoie pas d'événement « entrée aux stands »).
 * **La page est en `noindex`** : elle n'a de sens que sur la machine qui héberge

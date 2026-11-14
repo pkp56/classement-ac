@@ -47,6 +47,7 @@ Le rapport simule les trois formats demandés : **20, 30 et 45 minutes**.
 | --- | --- | --- |
 | temps, tours, écarts, vitesse max | UDP du serveur (plugin ACSP) | oui |
 | consommation, usure pneus, vitesse max | script CSP `csp/gdsp_telemetry.lua`, poussé par le serveur | oui, une fois le script déclaré sur le serveur |
+| secteurs du dernier tour, secteurs du tour record, meilleurs secteurs personnels | script CSP côté pilote `csp/gdsp_telemetry.lua` (`car.lastSplits` / `car.bestSplits`), affichés sur `/live-timing` | direct après un tour bouclé ; mémoire serveur par pilote/voiture/circuit jusqu'au redémarrage, non inclus au rapport BoP |
 | pit-lane, débit de ravitaillement, changement de gommes | mesure dédiée (jour 4), saisie dans `/telemetry` | oui |
 
 **Règle absolue** : une valeur qui n'a pas été mesurée reste `null`. Elle
