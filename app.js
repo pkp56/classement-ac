@@ -4,6 +4,7 @@
 // (ou GDSP_API_URL) si tu redéploies le backend ailleurs.
 
 const express = require('express');
+const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -11,6 +12,9 @@ const https = require('https');
 
 const app = express();
 app.disable('x-powered-by');
+// Réduit le volume des réponses texte/JSON, y compris le flux live (SSE).
+// Les clients SSE sont flushés à chaque événement plus bas pour ne pas retarder l'affichage.
+app.use(compression());
 
 const PORT = Number(process.env.PORT || 10000);
 const BACKEND_URL = (process.env.BACKEND_URL || process.env.GDSP_API_URL || 'https://gdsp-render-backend.onrender.com').replace(/\/+$/,'');
@@ -734,7 +738,7 @@ function getLiveTiming(){
 }
 function broadcastLive(event,payload){
   const frame='event: '+event+'\ndata: '+JSON.stringify(payload)+'\n\n';
-  for(const res of liveClients){try{res.write(frame)}catch(e){/* client parti */}}
+  for(const res of liveClients){try{res.write(frame);if(typeof res.flush==='function')res.flush()}catch(e){/* client parti */}}
 }
 // Historique persistant : chaque séance vue (agent push, UDP, source HTTP)
 // est conservée en base — le direct ne survit pas à un redémarrage, l'historique
@@ -871,7 +875,7 @@ app.get('/api/live/stream',(req,res)=>{
     'X-Accel-Buffering':'no'
   });
   res.write('retry: 3000\n\n');
-  const push=()=>{try{res.write('event: snapshot\ndata: '+JSON.stringify(liveSnapshot(req.query.source))+'\n\n')}catch(e){/* client parti */}};
+  const push=()=>{try{res.write('event: snapshot\ndata: '+JSON.stringify(liveSnapshot(req.query.source))+'\n\n');if(typeof res.flush==='function')res.flush()}catch(e){/* client parti */}};
   push();
   const timer=setInterval(push,1000);
   liveClients.add(res);

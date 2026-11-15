@@ -2,6 +2,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const { gzipSync } = require('node:zlib');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const { once } = require('node:events');
@@ -109,6 +110,22 @@ test('HTTP : jeton obligatoire, mise à jour puis lecture par /api/live/status',
   assert.equal(status.status.mode, 'push');
   assert.equal(status.status.status, 'live');
   assert.equal(status.cars[0].name, 'Kami_Kaze31');
+
+  const largeSnapshot = snapshot({
+    cars: Array.from({ length: 40 }, (_, carId) => ({ carId, name: `Pilote ${carId}` })),
+    bestLaps: []
+  });
+  const compressed = await fetch(`${base}/api/live/push`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json', 'content-encoding': 'gzip',
+      'x-live-token': 'jeton-test'
+    },
+    body: gzipSync(Buffer.from(JSON.stringify(largeSnapshot)))
+  });
+  assert.equal(compressed.status, 200, 'le site doit décompresser les instantanés gzip de l\'agent');
+  const compressedStatus = await (await fetch(`${base}/api/live/status`)).json();
+  assert.equal(compressedStatus.cars.length, 40);
 
   // Les commandes admin ne peuvent pas viser un PC distant.
   const cmd = await fetch(`${base}/api/live/command`, {

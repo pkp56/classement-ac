@@ -31,6 +31,7 @@ const os = require('os');
 const path = require('path');
 const { LiveTimingCollector } = require('./collector');
 const { RemoteHttpSource } = require('./http-source');
+const { encodeJsonPayload } = require('./payload');
 
 function envInt(name, fallback) {
   const v = Number(process.env[name]);
@@ -69,17 +70,20 @@ function post(payload) {
   return new Promise((resolve, reject) => {
     let target;
     try { target = new URL(SITE_URL + PUSH_PATH); } catch (e) { return reject(new Error('SITE_URL invalide')); }
-    const body = Buffer.from(JSON.stringify(payload), 'utf8');
+    const encoded = encodeJsonPayload(payload);
+    const body = encoded.body;
+    const headers = {
+      'Content-Type': 'application/json',
+      'Content-Length': body.length,
+      'X-Live-Token': PUSH_TOKEN,
+      'User-Agent': 'GDSP-LiveAgent/1.0'
+    };
+    if (encoded.encoding) headers['Content-Encoding'] = encoded.encoding;
     const proto = target.protocol === 'https:' ? https : http;
     const req = proto.request(target, {
       method: 'POST',
       timeout: 15000,
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': body.length,
-        'X-Live-Token': PUSH_TOKEN,
-        'User-Agent': 'GDSP-LiveAgent/1.0'
-      }
+      headers
     }, res => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
