@@ -367,9 +367,10 @@ Connexion avec le compte administrateur habituel du site, puis :
   rapide au tour, voiture la plus rapide en course ;
 - **tableau par voiture × circuit × layout** : tour médian, L/tour, gomme %/tour,
   réservoir, autonomies essence et gomme, vitesse max et échantillons pit-lane ;
-- **profil pit-lane** : médiane des passages automatiquement détectés au limiteur
-  80 km/h (sauf valeur manuelle explicite), plus débit de ravitaillement et temps
-  de changement de gommes saisis par l'administrateur ;
+- **profil pit-lane** : circuit/configuration détecté automatiquement depuis la
+  dernière séance reçue; médiane des passages de toutes les voitures au limiteur
+  80 km/h (sauf valeur manuelle explicite), car le temps appartient au circuit,
+  pas au modèle de voiture. Débit et changement de gommes restent administrables ;
 - **rapport** téléchargeable en CSV, Markdown et HTML.
 
 Chaque cellule non mesurée affiche « — » : c'est une information, pas un zéro.

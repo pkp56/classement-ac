@@ -401,6 +401,31 @@ test('les passages détectés donnent une médiane pit-lane par circuit/layout',
   assert.equal(configured.automatic_pit_lane_loss_ms, 18600, 'les échantillons auto restent consultables');
 });
 
+test('le temps pit-lane est commun à toutes les voitures du même circuit/layout', async () => {
+  const service = new TelemetryService(tempStore());
+  const track = 'ted_zolder67_reworked';
+  const trackConfig = 'revival';
+  await service.ingest(pushPayload({
+    car: 'car_alpha', track, trackConfig, sessionKey: 'pit-shared-alpha',
+    laps: [{ lapNumber: 1, lapMs: 120000, pitLaneMs: 18000 }]
+  }));
+  await service.ingest(pushPayload({
+    car: 'car_beta', track, trackConfig, sessionKey: 'pit-shared-beta',
+    laps: [{ lapNumber: 1, lapMs: 110000, pitLaneMs: 22000 }]
+  }));
+
+  const summary = await service.summary({ track, trackConfig });
+  assert.equal(summary.cars.length, 2);
+  for (const car of summary.cars) {
+    assert.equal(car.pitLaneLossMs, 20000, 'la médiane des deux voitures est partagée');
+    assert.equal(car.pitLaneSamples, 2, 'le compteur compte les passages, pas les tours de cette voiture');
+    assert.equal(car.pitLaneSource, 'mesure automatique (limiteur 80 km/h)');
+  }
+  const filtered = await service.summary({ car: 'car_alpha', track, trackConfig });
+  assert.equal(filtered.cars[0].pitLaneLossMs, 20000, 'le filtre voiture ne ramène pas le temps à son seul passage');
+  assert.equal(filtered.cars[0].pitLaneSamples, 2);
+});
+
 test('les filtres voiture / circuit / pilote portent sur les bonnes lignes', async () => {
   const service = new TelemetryService(tempStore());
   await service.ingest(pushPayload());
@@ -871,6 +896,28 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
   assert.equal(summary.rows, 3);
   assert.equal(summary.cars[0].car, 'alfa_giulietta_spider');
   assert.equal(summary.cars[0].medianLapMs, 75576);
+  assert.equal(summary.pitContext.track, 'ks_monza66-junior');
+  assert.equal(summary.pitContext.trackConfig, 'junior');
+  assert.equal(summary.pitContext.source, 'derniere-seance');
+
+  // Le circuit automatique suit la séance la plus récemment reçue, sans
+  // sélectionner par erreur le premier temps médian du tableau.
+  await new Promise(resolve => setTimeout(resolve, 5));
+  const otherTrackPush = await fetch(`${base}/api/telemetry/push`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Telemetry-Token': 'jeton-tel' },
+    body: JSON.stringify(pushPayload({
+      track: 'ks_brands_hatch', trackConfig: 'indy', sessionKey: 'live-track-auto',
+      laps: [{ lapNumber: 1, lapMs: 51000, fuelUsedL: 1.1, pitLaneMs: 24000 }]
+    }))
+  });
+  assert.equal(otherTrackPush.status, 200);
+  const autoSummary = await (await fetch(`${base}/api/telemetry/summary`, { headers: auth })).json();
+  assert.equal(autoSummary.pitContext.track, 'ks_brands_hatch');
+  assert.equal(autoSummary.pitContext.trackConfig, 'indy');
+  const explicitSummary = await (await fetch(`${base}/api/telemetry/summary?track=ks_monza66-junior`, { headers: auth })).json();
+  assert.equal(explicitSummary.pitContext.track, 'ks_monza66-junior', 'un filtre explicite garde la priorité');
+  assert.equal(explicitSummary.pitContext.trackConfig, 'junior');
 
   // 5. rapport CSV et Markdown
   const csv = await fetch(`${base}/api/telemetry/report?format=csv`, { headers: auth });
@@ -1855,6 +1902,14 @@ test('listSessions : compte tours et pilotes, la plus récente d\'abord', async 
   }
   // La plus récente d'abord : started_at décroissant.
   assert.ok(String(sessions[0].startedAt) >= String(sessions[1].startedAt));
+});
+
+test('listSessions trie aussi les dates PostgreSQL de type Date chronologiquement', async () => {
+  const store = new FileStore(null);
+  await store.insert('session', { started_at: new Date('2026-06-01T12:00:00Z'), track: 'juin' });
+  await store.insert('session', { started_at: new Date('2026-10-01T12:00:00Z'), track: 'octobre' });
+  const sessions = await new TelemetryService(store).listSessions();
+  assert.deepEqual(sessions.map(session => session.track), ['octobre', 'juin']);
 });
 
 test('updateSession : corrige un circuit mal enregistré, champs nommés seulement', async () => {
