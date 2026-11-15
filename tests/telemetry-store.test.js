@@ -39,6 +39,8 @@ test('le schéma crée les quatre tables attendues', () => {
     assert.match(stmts, new RegExp(`CREATE TABLE IF NOT EXISTS telemetry\\.${table}`, 'i'));
   }
   assert.ok(stmts.includes('CREATE SCHEMA IF NOT EXISTS telemetry'));
+  assert.match(stmts, /ALTER TABLE telemetry\.lap ADD COLUMN IF NOT EXISTS pit_lane_ms INT/i,
+    'les bases existantes reçoivent la colonne de mesure automatique');
 });
 
 test('le schéma ne met aucune expression dans une contrainte UNIQUE de table', () => {

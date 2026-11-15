@@ -48,7 +48,16 @@ Le rapport simule les trois formats demandés : **20, 30 et 45 minutes**.
 | temps, tours, écarts, vitesse max | UDP du serveur (plugin ACSP) | oui |
 | consommation, usure pneus, vitesse max | script CSP `csp/gdsp_telemetry.lua`, poussé par le serveur | oui, une fois le script déclaré sur le serveur |
 | secteurs du dernier tour, secteurs du tour record, meilleurs secteurs personnels | script CSP côté pilote `csp/gdsp_telemetry.lua` (`car.lastSplits` / `car.bestSplits`), affichés sur `/live-timing` | direct après un tour bouclé ; mémoire serveur par pilote/voiture/circuit jusqu'au redémarrage, non inclus au rapport BoP |
-| pit-lane, débit de ravitaillement, changement de gommes | mesure dédiée (jour 4), saisie dans `/telemetry` | oui |
+| pit-lane | mesure auto CSP : plateau 78–82 km/h continu, puis sortie >84 km/h; temps de roulage seulement, arrêt au box exclu | oui |
+| débit de ravitaillement, changement de gommes | mesure dédiée, saisie dans `/telemetry` | oui |
+
+**Limite de la mesure pit-lane** : faute d'un indicateur CSP de position dans
+la voie des stands, le script reconnaît un plateau de vitesse proche du limiteur
+80 km/h (78–82 km/h pendant au moins 2,5 s), puis sa libération au-dessus de
+84 km/h. Un passage bref à 80 ne suffit pas; un arrêt au box reste dans le même
+passage mais son temps immobile est exclu pour ne pas doubler le service. C'est
+un détecteur heuristique : un plateau similaire sur la piste peut produire un
+faux positif; chaque valeur et son nombre d'échantillons sont affichés.
 
 **Règle absolue** : une valeur qui n'a pas été mesurée reste `null`. Elle
 n'entre jamais dans un calcul de BoP. Un tour sans mesure de conso compte pour
@@ -356,11 +365,11 @@ Connexion avec le compte administrateur habituel du site, puis :
   pilote (même voiture, plusieurs pilotes) ;
 - **quatre indicateurs** : tours mesurés, voitures comparables, voiture la plus
   rapide au tour, voiture la plus rapide en course ;
-- **tableau par voiture** : tour médian, L/tour, gomme %/tour, réservoir,
-  autonomies essence et gomme, vitesse max ;
-- **mesures pit-lane** du circuit (sans elles, aucun temps de course n'est
-  calculable) : temps de traversée des stands, débit de ravitaillement, temps
-  de changement de gommes ;
+- **tableau par voiture × circuit × layout** : tour médian, L/tour, gomme %/tour,
+  réservoir, autonomies essence et gomme, vitesse max et échantillons pit-lane ;
+- **profil pit-lane** : médiane des passages automatiquement détectés au limiteur
+  80 km/h (sauf valeur manuelle explicite), plus débit de ravitaillement et temps
+  de changement de gommes saisis par l'administrateur ;
 - **rapport** téléchargeable en CSV, Markdown et HTML.
 
 Chaque cellule non mesurée affiche « — » : c'est une information, pas un zéro.

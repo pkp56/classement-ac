@@ -936,6 +936,7 @@ function telemetryFilters(q){
   return {
     car: q.car ? String(q.car) : undefined,
     track: q.track ? String(q.track) : undefined,
+    trackConfig: q.trackConfig ? String(q.trackConfig) : undefined,
     driver: q.driver ? String(q.driver) : undefined,
     campaign: q.campaign ? String(q.campaign) : undefined,
     byDriver: q.byDriver === '1' || q.byDriver === 'true'
@@ -1067,7 +1068,8 @@ app.get('/api/telemetry/summary', async(req,res)=>{
     // Sans filtre de circuit, on montre les mesures du circuit affiché : la
     // page a besoin du pit-lane pour calculer les arrêts.
     const track=filters.track||(summary.cars[0]&&summary.cars[0].track)||undefined;
-    res.json({...summary,pitProfile:await service.pitProfile(track)});
+    const trackConfig=filters.trackConfig||(summary.cars[0]&&summary.cars[0].trackConfig)||undefined;
+    res.json({...summary,pitProfile:await service.pitProfile(track,trackConfig)});
   }catch(e){res.status(503).json({error:e.message})}
 });
 app.get('/api/telemetry/report', async(req,res)=>{

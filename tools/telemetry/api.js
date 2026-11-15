@@ -145,6 +145,12 @@ function validatePush(payload) {
       tyreWearRl: wheels && wearPctField == null ? num(wheels[2]) : null,
       tyreWearRr: wheels && wearPctField == null ? num(wheels[3]) : null,
       speedMaxKmh: num(field(raw, 'speedMaxKmh', 'speed_max_kmh')),
+      // Durée mesurée par le script CSP entre le plateau du limiteur à 80 et
+      // sa sortie. Pas de valeur par défaut : sans passage détecté, c'est null.
+      pitLaneMs: (() => {
+        const ms = positive(field(raw, 'pitLaneMs', 'pit_lane_ms'));
+        return ms != null && ms <= 600000 ? Math.round(ms) : null;
+      })(),
       bestLapMs: positive(field(raw, 'bestLapMs', 'best_lap_ms')),
       lastSectorsMs: sectorTimes(field(raw, 'lastSectorsMs', 'last_sectors_ms')),
       bestLapSectorsMs: sectorTimes(field(raw, 'bestLapSectorsMs', 'best_lap_sectors_ms')),
@@ -388,6 +394,7 @@ class TelemetryService {
         tyre_wear_rr: lap.tyreWearRr,
         tyre_temp_avg_c: null,
         speed_max_kmh: lap.speedMaxKmh != null ? Math.round(lap.speedMaxKmh) : null,
+        pit_lane_ms: lap.pitLaneMs,
         measured: lap.measured
       });
       added += 1;
@@ -435,25 +442,31 @@ class TelemetryService {
   }
 
   /**
-   * Agrégat par voiture (et par pilote quand demandé), filtrable.
+   * Agrégat par voiture × circuit × layout (et par pilote quand demandé).
    * Les valeurs non mesurées restent `null` : la page affiche « — ».
    */
   async summary(filters = {}) {
     const rows = await this.rows(filters);
     const groups = new Map();
     for (const row of rows) {
-      const key = filters.byDriver
-        ? `${row.car}|${row.driver_guid}`
-        : row.car;
+      // Une voiture ne doit jamais agréger des tours de circuits ou layouts
+      // différents : sinon la médiane, la consommation et l'usure deviennent
+      // des mélanges impossibles à interpréter.
+      const key = JSON.stringify([
+        row.car || '', row.track || '', row.track_config || null,
+        filters.byDriver ? (row.driver_guid || '') : null
+      ]);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(row);
     }
     const cars = [];
     const loaded = rows.map(r => num(r.fuel_loaded_l)).filter(v => v != null && v > 0);
     for (const [key, laps] of groups) {
-      const [car, driver] = filters.byDriver ? key.split('|') : [key, null];
-      const profile = carProfile({ car, track: laps[0].track, trackConfig: laps[0].track_config }, laps);
+      const [car, track, trackConfig, driver] = JSON.parse(key);
+      const profile = carProfile({ car, track, trackConfig }, laps);
       const stats = lapStats(laps.map(l => ({ ms: Number(l.lap_ms) })));
+      const pitStats = lapStats(laps.filter(l => l.measured !== false)
+        .map(l => ({ ms: num(l.pit_lane_ms) })));
       // Capacité : le plus gros plein vu, pas une valeur devinée.
       const fuelLoadedMax = Math.max(0, ...laps.map(l => num(l.fuel_loaded_l) || 0));
       const wear = laps.map(l => num(l.tyre_wear_pct)).filter(v => v != null && v > 0);
@@ -462,7 +475,8 @@ class TelemetryService {
         unidentified: !plausibleCarId(car),
         driver,
         driverName: driver ? (laps[0].driver_name || driver) : null,
-        track: laps[0].track,
+        track,
+        trackConfig,
         campaign: laps[0].campaign || null,
         laps: stats.count,
         bestLapMs: stats.best,
@@ -472,6 +486,8 @@ class TelemetryService {
         tyreWearPerLap: avg(wear),
         fuelCapacity: fuelLoadedMax > 0 ? fuelLoadedMax : null,
         speedMaxKmh: profile.maxSpeedKmh,
+        pitLaneLossMs: pitStats.median,
+        pitLaneSamples: pitStats.count,
         measuredLaps: laps.filter(l => l.measured !== false).length,
         cuts: laps.reduce((a, l) => a + (num(l.cuts) || 0), 0),
         lastLapAt: laps.map(l => l.recorded_at).filter(Boolean).sort().pop() || null
@@ -483,7 +499,10 @@ class TelemetryService {
       const ma = a.medianLapMs == null ? Infinity : a.medianLapMs;
       const mb = b.medianLapMs == null ? Infinity : b.medianLapMs;
       if (ma !== mb) return ma - mb;
-      return String(a.car).localeCompare(String(b.car), 'fr');
+      const carOrder = String(a.car).localeCompare(String(b.car), 'fr');
+      if (carOrder) return carOrder;
+      const trackOrder = String(a.track).localeCompare(String(b.track), 'fr');
+      return trackOrder || String(a.trackConfig || '').localeCompare(String(b.trackConfig || ''), 'fr');
     });
     return {
       filters,
@@ -494,25 +513,47 @@ class TelemetryService {
     };
   }
 
-  /** Profil pit-lane du circuit, s'il a été mesuré (jour 4 de la campagne). */
-  async pitProfile(track) {
-    const rows = await this.store.select('circuit_profile', { track });
-    const row = rows[0];
-    if (!row) return null;
+  /**
+   * Profil pit-lane : une saisie admin garde la priorité ; à défaut, la médiane
+   * des passages réellement détectés au limiteur 80 km/h sert de mesure auto.
+   */
+  async pitProfile(track, trackConfig = null) {
+    if (!track) return null;
+    const profiles = await this.store.select('circuit_profile', { track });
+    const exact = profiles.find(row => (row.track_config || null) === (trackConfig || null));
+    const generic = profiles.find(row => !row.track_config);
+    const row = exact || generic || null;
+
+    const rows = (await this.rows({ track })).filter(lap =>
+      (lap.track_config || null) === (trackConfig || null) && lap.measured !== false);
+    const pitSamples = rows.map(lap => num(lap.pit_lane_ms)).filter(ms => ms != null && ms > 0);
+    const automaticPitLaneMs = lapStats(pitSamples).median;
+    const manualPitLaneMs = row ? positive(row.pit_lane_loss_ms) : null;
+    if (!row && automaticPitLaneMs == null) return null;
+
     return {
-      pit_lane_loss_ms: num(row.pit_lane_loss_ms),
-      refuel_rate_lps: num(row.refuel_rate_lps),
-      tyre_change_ms: num(row.tyre_change_ms),
-      source: row.source || null
+      pit_lane_loss_ms: manualPitLaneMs != null ? manualPitLaneMs : automaticPitLaneMs,
+      manual_pit_lane_loss_ms: manualPitLaneMs,
+      automatic_pit_lane_loss_ms: automaticPitLaneMs,
+      pit_lane_samples: pitSamples.length,
+      refuel_rate_lps: row ? num(row.refuel_rate_lps) : null,
+      tyre_change_ms: row ? num(row.tyre_change_ms) : null,
+      source: manualPitLaneMs != null
+        ? (row.source || 'mesure manuelle')
+        : automaticPitLaneMs != null
+          ? 'mesure automatique (limiteur 80 km/h)'
+          : (row && row.source) || null
     };
   }
 
   /** Renseigne (ou remplace) les mesures pit-lane d'un circuit. */
   async savePitProfile(track, profile) {
-    const existing = await this.store.select('circuit_profile', { track });
+    const trackConfig = String(profile.trackConfig || '').trim() || null;
+    const profiles = await this.store.select('circuit_profile', { track });
+    const existing = profiles.find(row => (row.track_config || null) === trackConfig);
     const row = {
       track,
-      track_config: null,
+      track_config: trackConfig,
       pit_lane_loss_ms: positive(profile.pitLaneLossMs),
       refuel_rate_lps: positive(profile.refuelRateLps),
       tyre_change_ms: positive(profile.tyreChangeMs),
@@ -521,13 +562,14 @@ class TelemetryService {
     // Les deux backends savent remplacer une ligne : on corrige la mesure au
     // lieu d'en empiler une deuxième (le schéma interdit de toute façon le
     // doublon circuit × configuration).
-    if (existing[0]) return this.store.update('circuit_profile', existing[0].id, row);
+    if (existing) return this.store.update('circuit_profile', existing.id, row);
     try {
       return await this.store.insert('circuit_profile', row);
     } catch (e) {
       // Deux admins qui enregistrent en même temps : le second met à jour.
       const again = await this.store.select('circuit_profile', { track });
-      if (again[0]) return this.store.update('circuit_profile', again[0].id, row);
+      const duplicate = again.find(item => (item.track_config || null) === trackConfig);
+      if (duplicate) return this.store.update('circuit_profile', duplicate.id, row);
       throw e;
     }
   }
@@ -622,33 +664,66 @@ class TelemetryService {
     // La matrice pilote × voiture fait partie du rapport : avant, la route ne
     // passait aucune matrice et la section affichait « aucun pilote n'a roulé
     // dans toutes les voitures » même sans avoir essayé de la calculer.
-    const matrix = options.matrix || driverCarMatrix(await this.rows(filters));
-    const pit = await this.pitProfile(filters.track || (summary.cars[0] && summary.cars[0].track));
-    const cars = summary.cars.map(row => ({
-      car: row.car,
-      circuit: row.track,
-      driver: row.driverName || row.driver || null,
-      medianLapMs: row.medianLapMs,
-      fuelPerLap: row.fuelPerLap,
-      fuelCapacity: row.fuelCapacity,
-      tyreWearPerLap: row.tyreWearPerLap,
-      pitLaneLossMs: pit ? pit.pit_lane_loss_ms : null,
-      refuelRateLps: pit ? pit.refuel_rate_lps : null,
-      tyreChangeMs: pit ? pit.tyre_change_ms : null
-    }));
+    const contexts = new Map();
+    for (const row of summary.cars) {
+      const key = JSON.stringify([row.track || '', row.trackConfig || null]);
+      if (!contexts.has(key)) contexts.set(key, { track: row.track, trackConfig: row.trackConfig || null });
+    }
+    const pitEntries = await Promise.all([...contexts].map(async ([key, context]) => [
+      key, await this.pitProfile(context.track, context.trackConfig)
+    ]));
+    const pitByContext = new Map(pitEntries);
+    const cars = summary.cars.map(row => {
+      const pit = pitByContext.get(JSON.stringify([row.track || '', row.trackConfig || null]));
+      return {
+        car: row.car,
+        circuit: row.track,
+        circuitConfig: row.trackConfig,
+        driver: row.driverName || row.driver || null,
+        medianLapMs: row.medianLapMs,
+        fuelPerLap: row.fuelPerLap,
+        fuelCapacity: row.fuelCapacity,
+        tyreWearPerLap: row.tyreWearPerLap,
+        pitLaneLossMs: pit ? pit.pit_lane_loss_ms : row.pitLaneLossMs,
+        refuelRateLps: pit ? pit.refuel_rate_lps : null,
+        tyreChangeMs: pit ? pit.tyre_change_ms : null
+      };
+    });
+
+    // Une matrice n'est comparable que sur un seul circuit/layout. Ne jamais
+    // réunir par erreur des chronos de Zolder et d'Österreichring dans un delta.
+    const allRows = await this.rows(filters);
+    const onlyContext = contexts.size <= 1 ? [...contexts.values()][0] : null;
+    const matrixRows = onlyContext
+      ? allRows.filter(row => row.track === onlyContext.track
+        && (row.track_config || null) === (onlyContext.trackConfig || null))
+      : [];
+    const matrix = options.matrix || (contexts.size <= 1 ? driverCarMatrix(matrixRows) : null);
+
+    let pit = null;
+    if (filters.track) {
+      const context = [...contexts.values()].find(item => item.track === filters.track);
+      pit = await this.pitProfile(filters.track, filters.trackConfig || (context && context.trackConfig));
+    } else if (contexts.size === 1) {
+      pit = pitByContext.values().next().value || null;
+    }
     // Le nom de campagne ne doit pas être inventé : on prend celui demandé, ou
     // celui des tours retenus s'ils n'en portent qu'un.
     const campaigns = [...new Set(summary.cars.map(r => r.campaign).filter(Boolean))];
     const report = buildReport(cars, {
       campaign: options.campaign || filters.campaign || (campaigns.length === 1 ? campaigns[0] : 'telemetrie'),
       matrix,
-      bestLaps: Object.fromEntries(summary.cars.map(r => [r.car, r.bestLapMs]))
+      bestLaps: Object.fromEntries(summary.cars.map(row => [
+        JSON.stringify([row.car, row.track || null, row.trackConfig || null]), row.bestLapMs
+      ]))
     });
+    const missingPitProfile = cars.length === 0 || cars.some(row => row.pitLaneLossMs == null
+      || row.refuelRateLps == null || row.tyreChangeMs == null);
     return {
       ...report,
       matrix,
       pitProfile: pit,
-      missingPitProfile: !pit,
+      missingPitProfile,
       cars: cars.length,
       laps: summary.rows
     };
@@ -659,11 +734,13 @@ class TelemetryService {
 function filterRows(rows, filters = {}) {
   const car = filters.car ? String(filters.car) : null;
   const track = filters.track ? String(filters.track) : null;
+  const trackConfig = filters.trackConfig ? String(filters.trackConfig) : null;
   const driver = filters.driver ? String(filters.driver) : null;
   const campaign = filters.campaign ? String(filters.campaign) : null;
   return rows.filter(row => {
     if (car && row.car !== car) return false;
     if (track && row.track !== track) return false;
+    if (trackConfig && (row.track_config || null) !== trackConfig) return false;
     if (driver && row.driver_guid !== driver) return false;
     if (campaign && row.campaign !== campaign) return false;
     return true;

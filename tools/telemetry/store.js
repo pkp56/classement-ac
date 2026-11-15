@@ -86,9 +86,13 @@ CREATE TABLE IF NOT EXISTS ${SCHEMA}.lap (
   tyre_wear_rr    NUMERIC(5,2),
   tyre_temp_avg_c NUMERIC(5,1),
   speed_max_kmh   INT,
+  pit_lane_ms     INT,                        -- roulage détecté entre plateau limiteur 80 et sortie
   measured        BOOLEAN NOT NULL DEFAULT FALSE,  -- false = estimé (n'entre pas dans un BoP)
   recorded_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Migration sans perte pour les bases télémétrie déjà initialisées.
+ALTER TABLE ${SCHEMA}.lap ADD COLUMN IF NOT EXISTS pit_lane_ms INT;
 
 -- Mesures de contexte uniques par circuit (faites une fois, réutilisées).
 CREATE TABLE IF NOT EXISTS ${SCHEMA}.circuit_profile (

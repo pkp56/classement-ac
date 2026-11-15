@@ -32,7 +32,18 @@ function carLabel(row) {
   return row && row.unidentified ? '(voiture non identifiée)' : row && row.car;
 }
 
-/** Construit les lignes du rapport (une par voiture). */
+function circuitLabel(row) {
+  if (!row || !row.circuit) return '—';
+  return row.circuitConfig ? `${row.circuit} · ${row.circuitConfig}` : row.circuit;
+}
+
+function bestLapFor(row, bestLaps) {
+  if (!bestLaps) return null;
+  const key = JSON.stringify([row.car, row.circuit || null, row.circuitConfig || null]);
+  return bestLaps[key] != null ? bestLaps[key] : (bestLaps[row.car] ?? null);
+}
+
+/** Construit les lignes du rapport (une par voiture et circuit/layout). */
 function buildRows(cars, opts = {}) {
   const durations = opts.durationsMin || DURATIONS;
   const rows = [];
@@ -40,10 +51,10 @@ function buildRows(cars, opts = {}) {
     if (!row.model || !row.model.ok) {
       rows.push({
         car: row.car, unidentified: !plausibleCarId(row.car),
-        circuit: row.circuit, driver: row.driver,
+        circuit: row.circuit, circuitConfig: row.circuitConfig, driver: row.driver,
         incomplete: true,
         missing: (row.model && row.model.missing) || [],
-        medianLapMs: null, bestLapMs: opts.bestLaps ? opts.bestLaps[row.car] : null
+        medianLapMs: null, bestLapMs: bestLapFor(row, opts.bestLaps)
       });
       continue;
     }
@@ -52,9 +63,10 @@ function buildRows(cars, opts = {}) {
       car: row.car,
       unidentified: !plausibleCarId(row.car),
       circuit: row.circuit || null,
+      circuitConfig: row.circuitConfig || null,
       driver: row.driver || null,
       medianLapMs: m.medianLapMs,
-      bestLapMs: opts.bestLaps && opts.bestLaps[row.car] != null ? opts.bestLaps[row.car] : null,
+      bestLapMs: bestLapFor(row, opts.bestLaps),
       fuelPerLap: m.fuelPerLap,
       tyreWearPerLap: m.tyreWearPerLap,
       fuelCapacity: m.fuelCapacity,
@@ -111,14 +123,14 @@ for (const min of DURATIONS) {
 
 function rowToArray(row) {
   if (row.incomplete) {
-    const base = [carLabel(row), row.circuit || '—', row.driver || '—'];
+    const base = [carLabel(row), circuitLabel(row), row.driver || '—'];
     base.push(fmtLap(row.bestLapMs), '—', '—', '—', '—', '—', '—', '—', '—', '—', '—');
     for (let i = 0; i < DURATIONS.length; i++) base.push('—', '—', '—', '—', 'données incomplètes');
     return base;
   }
   const base = [
     carLabel(row),
-    row.circuit || '—',
+    circuitLabel(row),
     row.driver || '—',
     fmtLap(row.bestLapMs),
     fmtLap(row.medianLapMs),
@@ -154,7 +166,7 @@ function csvEscape(v) {
 function toCsv(rows, meta = {}) {
   const lines = [];
   lines.push(csvEscape(`Rapport BoP GDSP — ${meta.campaign || 'campagne'} — généré le ${meta.generatedAt || new Date().toISOString()}`));
-  lines.push(csvEscape(`Circuits : ${[...new Set(rows.map(r => r.circuit).filter(Boolean))].join(', ') || '—'}`));
+  lines.push(csvEscape(`Circuits : ${[...new Set(rows.filter(r => r.circuit).map(circuitLabel))].join(', ') || '—'}`));
   lines.push(csvEscape('Mesures réelles uniquement ; toute valeur estimée est exclue du calcul.'));
   lines.push('');
   lines.push(HEADER.map(csvEscape).join(';'));
@@ -179,10 +191,10 @@ function toMarkdown(rows, matrix = null, meta = {}) {
   out.push('| --- | --- | --- | --- | --- | --- | --- |');
   for (const r of rows) {
     if (r.incomplete) {
-      out.push(`| ${mdEscape(carLabel(r))} | ${mdEscape(r.circuit)} | — | — | — | — | — |`);
+      out.push(`| ${mdEscape(carLabel(r))} | ${mdEscape(circuitLabel(r))} | — | — | — | — | — |`);
       continue;
     }
-    out.push(`| ${mdEscape(carLabel(r))} | ${mdEscape(r.circuit)} | ${fmtLap(r.medianLapMs)} | ${num(r.fuelPerLap)} | ${num(r.tyreWearPerLap)} | ${num(r.fuelStintLaps, 1)} tours | ${num(r.tyreStintLaps, 1)} tours |`);
+    out.push(`| ${mdEscape(carLabel(r))} | ${mdEscape(circuitLabel(r))} | ${fmtLap(r.medianLapMs)} | ${num(r.fuelPerLap)} | ${num(r.tyreWearPerLap)} | ${num(r.fuelStintLaps, 1)} tours | ${num(r.tyreStintLaps, 1)} tours |`);
   }
   out.push('');
   out.push('## Temps de course simulés');
@@ -253,7 +265,7 @@ function toHtml(rows, matrix = null, meta = {}) {
   const cell = (v, cls = '') => `<td${cls ? ` class="${cls}"` : ''}>${esc(v)}</td>`;
   const carRows = rows.map(r => {
     if (r.incomplete) {
-      return `<tr><td class="car">${esc(carLabel(r))}</td>${cell(r.circuit)}<td colspan="10" class="warn">données incomplètes : ${esc((r.missing || []).join(', '))}</td></tr>`;
+      return `<tr><td class="car">${esc(carLabel(r))}</td>${cell(circuitLabel(r))}<td colspan="10" class="warn">données incomplètes : ${esc((r.missing || []).join(', '))}</td></tr>`;
     }
     const stops = durations.map(min => {
       const d = r.byDuration[min];
@@ -267,7 +279,7 @@ function toHtml(rows, matrix = null, meta = {}) {
     }).join('');
     return `<tr>
       <td class="car">${esc(carLabel(r))}</td>
-      <td>${esc(r.circuit || '—')}</td>
+      <td>${esc(circuitLabel(r))}</td>
       <td class="num">${esc(fmtLap(r.bestLapMs))}</td>
       <td class="num">${esc(fmtLap(r.medianLapMs))}</td>
       <td class="num">${esc(num(r.fuelPerLap))}</td>

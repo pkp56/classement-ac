@@ -136,6 +136,19 @@ test('compareCars marque les voitures incomplètes au lieu de les noter', () => 
   assert.ok(ok.fixed[20].raceTimeMs > 0);
 });
 
+test('compareCars ne compare pas la distance entre deux circuits différents', () => {
+  const zolder = { ...CAR_FAST_THIRSTY, car: 'lola', circuit: 'ted_zolder67_reworked', circuitConfig: 'revival' };
+  const austria = { ...CAR_SLOW_FRUGAL, car: 'alfa', circuit: 'oesterreichring1979', circuitConfig: 'chicane' };
+  const rows = compareCars([zolder, austria], [20]);
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every(row => row.fixed[20].deltaToBestMs === 0),
+    'chaque circuit a son propre vainqueur et sa propre distance de référence');
+  for (const row of rows) {
+    assert.equal(row.fixed[20].refLaps, row.byDuration[20].laps,
+      'une voiture seule n’est pas comparée aux tours d’une autre piste');
+  }
+});
+
 test('fmtLap : format chrono lisible', () => {
   assert.equal(fmtLap(75576), '1:15.576');
   assert.equal(fmtLap(9000), '9.000');

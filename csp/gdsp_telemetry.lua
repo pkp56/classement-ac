@@ -23,7 +23,7 @@
 --     sessionType, fuelRate, tyreWearRate, airTempC, roadTempC,
 --     driver:{guid,name}, car,
 --     laps:[ { lapNumber, lapMs, fuelUsedL, fuelLoadedL,
---              tyreWearPct:[fl,fr,rl,rr], speedMaxKmh } ] }
+--              tyreWearPct:[fl,fr,rl,rr], speedMaxKmh, pitLaneMs } ] }
 --   `tyreWearPct` est l'usure CONSOMMÉE pendant le tour, par roue, en %. Le
 --   site fait la moyenne des quatre roues (c'est cette moyenne qui entre dans
 --   le calcul d'autonomie gomme).
@@ -31,9 +31,20 @@
 --
 -- Dépendance : CSP 0.1.79+ (online scripts).
 
-local VERSION = 'GDSP-TELEMETRY 1.0'
+local VERSION = 'GDSP-TELEMETRY 1.1'
 local WHEELS = 4
 local MAX_BUFFER = 120      -- tours en attente avant de jeter les plus anciens
+-- Sans indicateur pit-lane CSP fiable, on reconnaît le plateau du limiteur
+-- 80 km/h, puis sa libération. Un bref passage à cette vitesse sur piste ne
+-- suffit pas : il faut un plateau continu, une sortie au-dessus de 84 km/h,
+-- et au moins 4 s de roulage mesuré.
+local PIT_LIMIT_MIN_KMH = 78
+local PIT_LIMIT_MAX_KMH = 82
+local PIT_LIMIT_CONFIRM_MS = 2500
+local PIT_EXIT_KMH = 84
+local PIT_EXIT_CONFIRM_MS = 400
+local PIT_MIN_LANE_MS = 4000
+local PIT_STOP_KMH = 5
 
 -------------------------------------------------------------------------------
 -- 1. État local (déclaré tôt : les fonctions ci-dessous le capturent).
@@ -51,6 +62,11 @@ local state = {
   lastSpline = nil,
   splineWraps = 0,
   currentLapSpeedMax = 0,
+  pitCandidateMs = 0,
+  pitLaneActive = false,
+  pitLaneMs = 0,
+  pitExitMs = 0,
+  pendingPitLaneMs = {},
   pending = {},
   pendingCount = 0,
   lastSendAt = -1e9,
@@ -764,6 +780,61 @@ local function wearDeltaPct(startWear, endWear)
   return out
 end
 
+--- Mesure le temps roulé entre le plateau du limiteur à 80 km/h et sa sortie.
+--- Le CSP ne fournit pas d'indicateur pit-lane exploitable ici : c'est donc une
+--- détection heuristique et non une position exacte sur la voie. Les arrêts au
+--- stand ne sont pas comptés (le ravitaillement/changement de pneus est saisi
+--- séparément dans le profil de circuit).
+local function resetPitLaneDetection()
+  state.pitCandidateMs = 0
+  state.pitLaneActive = false
+  state.pitLaneMs = 0
+  state.pitExitMs = 0
+end
+
+local function updatePitLane(speedKmh, dt)
+  local frameMs = math.max(0, tonumber(dt) or 0) * 1000
+  if not speedKmh or frameMs <= 0 then return end
+
+  if not state.pitLaneActive then
+    if speedKmh >= PIT_LIMIT_MIN_KMH and speedKmh <= PIT_LIMIT_MAX_KMH then
+      state.pitCandidateMs = state.pitCandidateMs + frameMs
+      if state.pitCandidateMs >= PIT_LIMIT_CONFIRM_MS then
+        state.pitLaneActive = true
+        state.pitLaneMs = state.pitCandidateMs
+        state.pitExitMs = 0
+      end
+    else
+      state.pitCandidateMs = 0
+    end
+    return
+  end
+
+  -- Une voiture immobile au box reste dans le même passage, mais le temps de
+  -- service n'entre pas dans le temps de roulage pit-lane (pas de double compte
+  -- avec le ravitaillement et les pneus).
+  if speedKmh <= PIT_STOP_KMH then
+    state.pitExitMs = 0
+    return
+  end
+
+  if speedKmh > PIT_EXIT_KMH then
+    state.pitExitMs = state.pitExitMs + frameMs
+    if state.pitExitMs >= PIT_EXIT_CONFIRM_MS then
+      if state.pitLaneMs >= PIT_MIN_LANE_MS then
+        local measuredMs = math.floor(state.pitLaneMs + 0.5)
+        state.pendingPitLaneMs[#state.pendingPitLaneMs + 1] = measuredMs
+        log(string.format('passage pit-lane détecté au limiteur 80 : %.1f s', measuredMs / 1000))
+      end
+      resetPitLaneDetection()
+    end
+    return
+  end
+
+  state.pitExitMs = 0
+  state.pitLaneMs = state.pitLaneMs + frameMs
+end
+
 local function completeLap(lapNumber)
   -- La bannière réapparaît à chaque tour bouclé : c'est le seul moment où
   -- le joueur peut lire compteur, tours enregistrés et anomalies — le reste
@@ -790,7 +861,15 @@ local function completeLap(lapNumber)
   local bestLapMs = readBestLapMs()
   local lastSectorsMs = readSectorTimes('lastSplits')
   local bestSectorsMs = readSectorTimes('bestSplits')
-  if lapMs then lap.lapMs = math.floor(lapMs + 0.5) end
+  if lapMs then
+    lap.lapMs = math.floor(lapMs + 0.5)
+    -- Le passage peut s'être terminé avant ou pendant ce tour. On joint une
+    -- mesure en attente au prochain tour complet exploitable, sans modifier
+    -- son chrono; un tour sans temps ne consomme pas l'échantillon.
+    if #state.pendingPitLaneMs > 0 then
+      lap.pitLaneMs = table.remove(state.pendingPitLaneMs, 1)
+    end
+  end
   if bestLapMs then lap.bestLapMs = math.floor(bestLapMs + 0.5) end
   if lastSectorsMs then lap.lastSectorsMs = lastSectorsMs end
   if bestSectorsMs then lap.bestSectorsMs = bestSectorsMs end
@@ -828,10 +907,11 @@ local function completeLap(lapNumber)
   state.pendingCount = state.pendingCount + 1
   state.pending[state.pendingCount] = lap
 
-  log(string.format('tour %s : %s ms%s%s',
+  log(string.format('tour %s : %s ms%s%s%s',
     tostring(lap.lapNumber), tostring(lap.lapMs or '—'),
     lap.fuelUsedL and string.format(' · %.3f L', lap.fuelUsedL) or ' · conso ?',
-    lap.tyreWearPct and ' · usure' or ' · usure ?'))
+    lap.tyreWearPct and ' · usure' or ' · usure ?',
+    lap.pitLaneMs and string.format(' · pit-lane %.1f s', lap.pitLaneMs / 1000) or ''))
 end
 
 -------------------------------------------------------------------------------
@@ -877,6 +957,7 @@ local function updateStep(dt)
 
   local speed = readSpeedKmh()
   if speed and speed > state.currentLapSpeedMax then state.currentLapSpeedMax = speed end
+  updatePitLane(speed, dt)
 
   -- Détection de tour : le compteur de la voiture est la source fiable ; à
   -- défaut, le passage de 0,99 → 0,01 sur la ligne d'arrivée.
@@ -1076,6 +1157,9 @@ function script.drawUI()
     -- chose à vérifier quand « tours= » reste à 0.
     'compteur: ' .. tostring(readLapCount() or '—') ..
       ' · spline: ' .. tostring(readSpline() and string.format('%.2f', readSpline()) or '—'),
+    'pit-lane: ' .. (state.pitLaneActive
+      and string.format('plateau 80 confirmé · %.1f s', state.pitLaneMs / 1000)
+      or (#state.pendingPitLaneMs > 0 and 'mesure prête pour le prochain tour' or 'en attente du plateau 80')),
     'mode: ' .. (state.mode ~= '' and state.mode or '—') ..
       (state.transportLocked and ' (fixé)' or ' (alternance)'),
     -- La ligne qui compte : ce que le transport a RÉPONDU, mot pour mot.
@@ -1108,6 +1192,8 @@ function script.drawUI()
 end
 
 function script.onCarReset()
+  -- Une remise en piste rendrait ambiguë une mesure pit-lane en cours.
+  resetPitLaneDetection()
   -- Sortie des stands ou remise en piste : les niveaux repartent de zéro, et
   -- le tour en cours ne doit pas être compté comme une consommation.
   state.lapStartFuel = readFuelLiters()

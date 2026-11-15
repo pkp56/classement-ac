@@ -236,24 +236,40 @@ function compareCars(cars, durationsMin = [20, 30, 45]) {
     for (const min of durationsMin) {
       byDuration[min] = model.ok ? lapsInTime(model, min * 60000) : { ok: false, missing: model.missing };
     }
-    return { car: car.car, circuit: car.circuit || null, driver: car.driver || null, model, byDuration, fixed: {} };
+    return {
+      car: car.car,
+      circuit: car.circuit || null,
+      circuitConfig: car.circuitConfig || null,
+      driver: car.driver || null,
+      model, byDuration, fixed: {}
+    };
   });
 
-  for (const min of durationsMin) {
-    const runnable = rows.filter(r => r.byDuration[min] && r.byDuration[min].ok);
-    if (!runnable.length) continue;
-    // Distance de référence = celle de la voiture qui boucle le plus de tours.
-    const refLaps = Math.max(...runnable.map(r => r.byDuration[min].laps));
-    if (!refLaps) continue;
-    for (const r of runnable) {
-      const fixed = timeForLaps(r.model, refLaps);
-      r.fixed[min] = fixed;
-    }
-    const best = Math.min(...runnable.map(r => r.fixed[min].raceTimeMs));
-    for (const r of runnable) {
-      r.fixed[min].deltaToBestMs = r.fixed[min].raceTimeMs - best;
-      r.fixed[min].refLaps = refLaps;
-      r.fixed[min].lapsInTime = r.byDuration[min].laps;
+  // Les courses de circuits/layouts différents n'ont pas de distance de
+  // référence commune : chacune est comparée uniquement à ses propres voitures.
+  const contexts = new Map();
+  for (const row of rows) {
+    const key = JSON.stringify([row.circuit, row.circuitConfig]);
+    if (!contexts.has(key)) contexts.set(key, []);
+    contexts.get(key).push(row);
+  }
+  for (const contextRows of contexts.values()) {
+    for (const min of durationsMin) {
+      const runnable = contextRows.filter(r => r.byDuration[min] && r.byDuration[min].ok);
+      if (!runnable.length) continue;
+      // Distance de référence = celle de la voiture qui boucle le plus de tours.
+      const refLaps = Math.max(...runnable.map(r => r.byDuration[min].laps));
+      if (!refLaps) continue;
+      for (const r of runnable) {
+        const fixed = timeForLaps(r.model, refLaps);
+        r.fixed[min] = fixed;
+      }
+      const best = Math.min(...runnable.map(r => r.fixed[min].raceTimeMs));
+      for (const r of runnable) {
+        r.fixed[min].deltaToBestMs = r.fixed[min].raceTimeMs - best;
+        r.fixed[min].refLaps = refLaps;
+        r.fixed[min].lapsInTime = r.byDuration[min].laps;
+      }
     }
   }
   return rows;

@@ -109,6 +109,7 @@
 
     <div class="panel">
       <h2>Voitures mesurées</h2>
+      <p class="note">Chaque ligne agrège une voiture sur un seul circuit et une seule configuration. Les anciens tours d’une autre piste restent visibles séparément, sans fausser les statistiques du circuit courant.</p>
       <div id="cars"><div class="empty">Chargement…</div></div>
     </div>
 
@@ -125,7 +126,8 @@
       <div class="panel">
         <h2>Mesures pit-lane (jour 4)</h2>
         <div class="body">
-          <p class="note">Sans ces trois valeurs, aucun temps de course n'est calculable : le rapport affichera les tours mais pas les arrêts.</p>
+          <p class="note">Le script CSP détecte un plateau continu à 78–82 km/h, puis sa sortie au-dessus de 84 km/h. Il enregistre la durée de roulage détectée au tour suivant; l'arrêt au box est exclu. C'est un indice basé sur le limiteur 80 km/h, pas une position exacte sur la pit-lane: un plateau similaire en piste peut donner un faux positif.</p>
+          <p class="note">La médiane des passages détectés fournit automatiquement le temps pit-lane si aucune valeur manuelle n'est enregistrée. Le ravitaillement et le changement de gommes restent à saisir ici.</p>
           <div class="filters" style="margin-top:10px">
             <label>Circuit<input id="pTrack" type="text" placeholder="ks_monza66-junior"></label>
             <label>Pit-lane (s)<input id="pPit" type="number" step="0.1" min="0"></label>
@@ -254,14 +256,14 @@
     }
     var html = '<table><thead><tr>' +
       '<th>Voiture</th><th>Circuit</th><th>Tours</th><th>Meilleur</th><th>Médian</th><th>Régularité</th>' +
-      '<th>L/tour</th><th>Gomme %/tour</th><th>Réservoir</th><th>Autonomie ess.</th><th>Autonomie gomme</th><th>Vit. max</th>' +
+      '<th>L/tour</th><th>Gomme %/tour</th><th>Réservoir</th><th>Autonomie ess.</th><th>Autonomie gomme</th><th>Vit. max</th><th>Pit-lane mesuré</th>' +
       '</tr></thead><tbody>';
     cars.forEach(function (c) {
       var fuelStint = (c.fuelPerLap && c.fuelCapacity) ? c.fuelCapacity / c.fuelPerLap : null;
       var tyreStint = c.tyreWearPerLap ? 100 / c.tyreWearPerLap : null;
       html += '<tr>' +
         '<td><b>' + esc(c.car) + '</b>' + (c.unidentified ? ' <span class="muted">· non identifiée (bug corrigé)</span>' : '') + (c.driver ? ' <span class="muted">· ' + esc(c.driverName || c.driver) + '</span>' : '') + '</td>' +
-        '<td>' + esc(c.track || '—') + '</td>' +
+        '<td>' + esc(c.track || '—') + (c.trackConfig ? ' <span class="muted">· ' + esc(c.trackConfig) + '</span>' : '') + '</td>' +
         '<td>' + c.laps + '</td>' +
         '<td>' + fmtLap(c.bestLapMs) + '</td>' +
         '<td>' + fmtLap(c.medianLapMs) + '</td>' +
@@ -272,6 +274,9 @@
         '<td>' + (fuelStint ? num(fuelStint, 1) + ' tr' : '—') + '</td>' +
         '<td>' + (tyreStint ? num(tyreStint, 1) + ' tr' : '—') + '</td>' +
         '<td>' + (c.speedMaxKmh != null ? c.speedMaxKmh : '—') + '</td>' +
+        '<td>' + (c.pitLaneLossMs != null
+          ? num(c.pitLaneLossMs / 1000, 1) + ' s' + (c.pitLaneSamples ? ' <span class="muted">· ' + c.pitLaneSamples + ' passage(s)</span>' : '')
+          : '—') + '</td>' +
         '</tr>';
     });
     html += '</tbody></table>';
@@ -395,9 +400,22 @@
       if (pit.pit_lane_loss_ms != null) $('pPit').value = (pit.pit_lane_loss_ms / 1000).toFixed(1);
       if (pit.refuel_rate_lps != null) $('pRefuel').value = pit.refuel_rate_lps;
       if (pit.tyre_change_ms != null) $('pTyre').value = (pit.tyre_change_ms / 1000).toFixed(1);
-      $('pitState').innerHTML = '<span class="ok">Mesures enregistrées</span> pour <b>' + esc($('pTrack').value) + '</b>.';
+      var message = pit.manual_pit_lane_loss_ms != null
+        ? '<span class="ok">Profil enregistré</span>'
+        : pit.automatic_pit_lane_loss_ms != null
+          ? '<span class="ok">Temps pit-lane mesuré automatiquement</span>'
+          : '<span class="ok">Profil partiel enregistré</span>';
+      if (pit.automatic_pit_lane_loss_ms != null) {
+        message += ' · médiane ' + num(pit.automatic_pit_lane_loss_ms / 1000, 1) + ' s sur '
+          + pit.pit_lane_samples + ' passage(s) au limiteur 80 km/h';
+      }
+      message += ' pour <b>' + esc($('pTrack').value) + '</b>.';
+      if (pit.refuel_rate_lps == null || pit.tyre_change_ms == null) {
+        message += ' Débit d’essence et changement de gommes encore manquants.';
+      }
+      $('pitState').innerHTML = message;
     } else {
-      $('pitState').innerHTML = '<span class="bad">Aucune mesure pit-lane</span> pour ce circuit : les arrêts ne peuvent pas être simulés.';
+      $('pitState').innerHTML = '<span class="bad">Aucune mesure pit-lane</span> pour ce circuit : un passage détecté ou une saisie manuelle est nécessaire.';
     }
   }
 
