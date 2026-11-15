@@ -72,8 +72,8 @@ const date=x=>new Date(x).toLocaleDateString('fr-FR',{day:'numeric',month:'long'
 function signed(x){return x===null||x===undefined||!isFinite(x)?'—':`${x>0?'+':''}${Number(x).toFixed(1)}`}
 function track(x){return ({'mt-tremblant_69':'Mont-Tremblant','riverside':'Riverside','sebring_90s':'Sebring','mid_ohio':'Mid-Ohio'})[x]||x}
 // Level badge images (circular pin style, one car per GDSP championship/open)
-const LVL_BADGES={1:'/assets/lvl1-elite.png',2:'/assets/lvl2-confirme.png',3:'/assets/lvl3-inter.png',4:'/assets/lvl4-debut.png'};
-function levelBadge(level,size){const src=LVL_BADGES[level];return src?`<img class="lvl-badge" src="${src}?v=26" alt="Niveau ${level}" width="${size}" height="${size}" loading="lazy" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-block;vertical-align:middle">`:`<span class="tag lvl lvl-${level}">${level}</span>`}
+const LVL_BADGES={1:{webp:'/assets/lvl1-elite.webp',png:'/assets/lvl1-elite.png'},2:{webp:'/assets/lvl2-confirme.webp',png:'/assets/lvl2-confirme.png'},3:{webp:'/assets/lvl3-inter.webp',png:'/assets/lvl3-inter.png'},4:{webp:'/assets/lvl4-debut.webp',png:'/assets/lvl4-debut.png'}};
+function levelBadge(level,size){const badge=LVL_BADGES[level];return badge?`<picture style="width:${size}px;height:${size}px;display:inline-block;vertical-align:middle"><source type="image/webp" srcset="${badge.webp}?v=27"><img class="lvl-badge" src="${badge.png}?v=26" alt="Niveau ${level}" width="${size}" height="${size}" loading="lazy" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-block;vertical-align:middle"></picture>`:`<span class="tag lvl lvl-${level}">${level}</span>`}
 const PROFILE_TIPS={
   regularite:`<b>Régularité (Race Consistency)</b><br>Écart moyen entre chaque tour et le <b>meilleur tour</b> du pilote sur la course (en secondes).<br>Le 1<sup>er</sup> tour et les tours aux stands / lents (&gt; 21 s plus lent que le meilleur tour) sont exclus.<br>Plus l'écart moyen est petit, plus le score est élevé.<br><i>Méthode iRacing — best minus average non-best.</i>`,
   regulariteGlobal:`<b>Rythme (Race Consistency)</b><br>Écart moyen entre chaque tour et le <b>meilleur tour</b> du pilote sur chaque course (1<sup>er</sup> tour et tours &gt; +21 s exclus), moyenné par week-end et comparé au plateau.<br>Plus l'écart moyen est petit, plus le score est élevé.<br>Pondération récente : demi-vie 90 jours.`,
@@ -571,6 +571,7 @@ function hub(){
     /* HERO LAYOUT — 65 / 35 ratio */
     .hero.hub-hero{
       background:#132d35 url('/hero-gdsp.jpg?v=1') center/cover!important;
+      background:#132d35 image-set(url('/hero-gdsp.webp?v=2') type('image/webp'),url('/hero-gdsp.jpg?v=1') type('image/jpeg')) center/cover!important;
       position:relative;min-height:560px;
       grid-template-columns:65% 35%!important;
       overflow:hidden;color:#f7ecd5;

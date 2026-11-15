@@ -8,7 +8,8 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23102a32%22 width=%22100%22 height=%22100%22/><text y=%2276%22 x=%2210%22 font-size=%2272%22 fill=%22%23d8a347%22>G</text></svg>">
 <link rel="stylesheet" href="/assets/pilot-grid.css?v=1">
 <style>
-:root{--ink:#102a32;--cream:#f4ecd8;--red:#9c3021;--gold:#cd9a42;--line:#bdb09a}
+:root{--ink:#102a32;--cream:#f4ecd8;--red:#9c3021;--gold:#cd9a42;--line:#bdb09a;--intro-image:url('/intro.png')}
+@supports (background-image:image-set(url('/intro.webp') type('image/webp'))){:root{--intro-image:image-set(url('/intro.webp') type('image/webp'),url('/intro.png') type('image/png'))}}
 *{box-sizing:border-box}
 body{margin:0;background:#e9e0cb;color:var(--ink);font-family:Arial,sans-serif}
 header{background:#102a32;color:#f4ecd8;border-bottom:5px solid #a33426}
@@ -54,7 +55,7 @@ h3{font-size:21px;margin:8px 0}
 .hero h1{font-size:clamp(32px,4.4vw,58px);line-height:1;margin:10px 0}
 .hero h1 em{color:#d8a347;font-style:normal}
 .hero p{line-height:1.6;color:#d1cbbd;max-width:500px}
-.hero-image{background:linear-gradient(90deg,#132d35 0%,#132d35cc 15%,#132d3555 30%,transparent 42%),url('/intro.png') center/cover}
+.hero-image{background:linear-gradient(90deg,#132d35 0%,#132d35cc 15%,#132d3555 30%,transparent 42%),var(--intro-image) center/cover}
 .btn{display:inline-block;background:#ac3928;color:white;border:0;padding:14px 20px;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;font-weight:bold;cursor:pointer;text-decoration:none}
 .btn.secondary{background:transparent;border:1px solid #b7a688;color:var(--ink)}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);background:#f8f2e4;border:1px solid var(--line);margin-top:20px}
@@ -123,7 +124,7 @@ code{background:#e6dcc3;padding:2px 5px}
 @media(max-width:800px){
   .top{gap:15px;padding:14px;flex-wrap:wrap}.right{display:none}nav{gap:12px}
   .page{padding:24px 16px 50px}.hero{grid-template-columns:1fr}.hero-text{padding:30px}
-  .hero-image{min-height:170px;background-image:linear-gradient(180deg,#132d35,transparent),url('/intro.png')}
+  .hero-image{min-height:170px;background-image:linear-gradient(180deg,#132d35,transparent),var(--intro-image)}
   .stats{grid-template-columns:repeat(2,1fr)}.grid,.cardlist{grid-template-columns:1fr}
   .stat{border-bottom:1px solid var(--line)}
 }

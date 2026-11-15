@@ -131,8 +131,13 @@ direct » et l'âge de la capture. L'agent reste la seule façon d'avoir du dire
 
 Notes pratiques :
 
-* L'agent envoie **une photo par seconde** (~10 à 40 Ko) : quelques Mo par
-  session, largement dans les quotas Render.
+* L'agent envoie **une photo par seconde**. Les instantanés JSON de plus de
+  1 Kio partent en gzip (les petits restent bruts) : fréquence et contenu ne
+  changent pas. Le poids varie selon les voitures et les événements ; à titre
+  de calcul, 10 à 40 Ko bruts par seconde feraient 36 à 144 Mo par heure avant
+  compression — le trafic réel doit être mesuré, pas déduit de cette estimation.
+* Le site compresse aussi les réponses texte et le flux SSE, avec un flush à
+  chaque événement pour conserver l'affichage direct à la seconde.
 * Le PC n'ouvre **aucun port** : c'est une simple requête HTTPS sortante.
 * `PUSH_INTERVAL_MS=2000` réduit la fréquence (et la charge) si besoin.
 * **Veille d'un serveur dont tu n'as pas la main** : lance l'agent avec
