@@ -1041,6 +1041,13 @@ app.post('/api/telemetry/push', express.text({type:()=>true,limit:'10mb'}), asyn
   }
   try{
     const service=await getTelemetry();
+    // Canal de retour CSP : le client envoie un battement authentifié toutes
+    // les quelques secondes. Le serveur peut ainsi remettre une commande à
+    // UNE session de jeu précise, sans exposer le jeton admin au script.
+    if(payload && payload.kind==='measurement-poll'){
+      const command=await service.pollPitMeasurement(payload);
+      return res.type('text/plain; charset=utf-8').send(command);
+    }
     const result=await service.ingest(payload);
     if(!result.ok)return res.status(400).json(result);
     res.json({ok:true,added:result.added,duplicates:result.duplicates,skipped:result.skipped||0,sessionId:result.sessionId});
@@ -1157,6 +1164,34 @@ app.put('/api/telemetry/pit-profile', async(req,res)=>{
     const saved=await service.savePitProfile(track,req.body||{});
     res.json({ok:true,pitProfile:saved});
   }catch(e){res.status(400).json({error:e.message})}
+});
+app.get('/api/telemetry/measurement-clients', async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await telemetryAdmin(req,res)))return undefined;
+  try{
+    const service=await getTelemetry();
+    res.json({clients:service.measurementClientList()});
+  }catch(e){res.status(503).json({error:e.message})}
+});
+app.post('/api/telemetry/measurements', async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await telemetryAdmin(req,res)))return undefined;
+  try{
+    const service=await getTelemetry();
+    const result=service.startPitMeasurement(req.body||{});
+    if(!result.ok)return res.status(400).json({error:result.error});
+    res.status(202).json(result);
+  }catch(e){res.status(503).json({error:e.message})}
+});
+app.get('/api/telemetry/measurements/:id', async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await telemetryAdmin(req,res)))return undefined;
+  try{
+    const service=await getTelemetry();
+    const measurement=service.pitMeasurement(req.params.id);
+    if(!measurement)return res.status(404).json({error:'Mesure inconnue.'});
+    res.json({measurement});
+  }catch(e){res.status(503).json({error:e.message})}
 });
 app.get('/telemetry',(req,res)=>res.sendFile(path.join(ROOT,'telemetry.html')));
 app.get('/telemetry.html',(req,res)=>res.sendFile(path.join(ROOT,'telemetry.html')));

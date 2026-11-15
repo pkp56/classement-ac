@@ -56,9 +56,16 @@
   .pit-fields label{display:flex;flex-direction:column;gap:4px;font-size:10px;letter-spacing:1.1px;text-transform:uppercase;color:var(--grey);font-weight:bold;min-width:0}
   .pit-fields input,.pit-fields select{width:100%;min-width:0}
   .pit-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+  .pit-measure{border-top:1px solid var(--line);margin-top:16px;padding-top:14px}
+  .pit-measure h3{font-family:Impact,sans-serif;font-size:14px;letter-spacing:1px;text-transform:uppercase;font-weight:normal;margin:0 0 6px}
+  .measure-fields{display:grid;grid-template-columns:minmax(260px,2fr) minmax(150px,1fr);gap:10px;align-items:end;margin:10px 0}
+  .measure-fields label{display:flex;flex-direction:column;gap:4px;font-size:10px;letter-spacing:1.1px;text-transform:uppercase;color:var(--grey);font-weight:bold;min-width:0}
+  .measure-fields input,.measure-fields select{width:100%;min-width:0}
+  .pit-measure-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .measure-state{margin-top:10px;min-height:20px}
   .pit-state{margin-top:10px}
   @media(max-width:1000px){.pit-fields{grid-template-columns:repeat(3,minmax(0,1fr))}}
-  @media(max-width:620px){.pit-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:620px){.pit-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.measure-fields{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -130,8 +137,8 @@
     <div class="panel">
       <h2>Mesures pit-lane (jour 4)</h2>
       <div class="body">
-        <p class="note">Le circuit est détecté depuis la dernière séance envoyée par CSP. Le profil pit-lane est propre au circuit et à sa configuration, mais partagé par toutes les voitures : on regroupe leurs passages et on utilise la médiane.</p>
-        <p class="note">Le script reconnaît un plateau continu à 78–82 km/h, puis sa sortie au-dessus de 84 km/h. Il mesure le roulage au tour suivant et exclut l’arrêt au box. C’est une détection heuristique, pas une position GPS : un plateau similaire sur la piste peut donner un faux positif. Le ravitaillement et le changement de gommes restent à saisir.</p>
+        <p class="note">Le circuit est détecté depuis la dernière séance envoyée par CSP. Le profil est propre au circuit/configuration, partagé par toutes les voitures; les mesures automatiques complètent les valeurs absentes sans remplacer une saisie manuelle prioritaire. Les champs ci-dessous servent aux corrections manuelles; les mesures CSP restent affichées séparément.</p>
+        <p class="note">Le script reconnaît un plateau continu à 78–82 km/h, puis sa sortie au-dessus de 84 km/h. Le roulage de pit-lane et le service arrêté sont mesurés séparément; un plateau similaire sur la piste peut toutefois donner un faux positif.</p>
         <div class="pit-fields">
           <label>Circuit<input id="pTrack" type="text" list="pitTrackOptions" placeholder="Détecté automatiquement"></label>
           <label>Configuration<select id="pTrackConfig"><option value="">Sans configuration (générique)</option></select></label>
@@ -142,6 +149,20 @@
             <button id="pitBtn">Enregistrer</button>
             <button id="pitAutoBtn" class="ghost" type="button">Suivre le dernier circuit</button>
           </div>
+        </div>
+        <div class="pit-measure">
+          <h3>Mesure guidée depuis le jeu</h3>
+          <p class="note">Choisis une session CSP connectée, puis lance la procédure. Le serveur transmet la demande uniquement à ce client : un tour avant, service au box, sortie au limiteur et un tour après. Pour un plein partiel, saisis le volume à ajouter (15 L par défaut); le débit n’est enregistré que si le CSP confirme réellement ce volume et sa durée. Pour les pneus, le CSP doit détecter le retour à neuf des gommes.</p>
+          <div class="measure-fields">
+            <label>Session de jeu<select id="pitMeasureClient"><option value="">Recherche des sessions CSP…</option></select></label>
+            <label>Quantité à ravitailler (L)<input id="pitMeasureLiters" type="number" min="0.1" max="200" step="0.1" value="15"></label>
+          </div>
+          <div id="pitMeasurementClientsState" class="note measure-state" aria-live="polite">Recherche des sessions CSP connectées…</div>
+          <div class="pit-measure-actions">
+            <button id="measureTyreBtn" type="button" disabled>Changement de pneus</button>
+            <button id="measureRefuelBtn" type="button" disabled>Ravitaillement</button>
+          </div>
+          <div id="pitMeasurementState" class="note measure-state" aria-live="polite">Recherche d’une session de jeu avec le script CSP actif…</div>
         </div>
         <datalist id="pitTrackOptions"></datalist>
         <div id="pitDetectionStatus" class="note pit-state" aria-live="polite"></div>
@@ -174,6 +195,11 @@
   var pitFormDirty = false;
   var pitSessions = [];
   var refreshTimer = null;
+  var measurementTimer = null;
+  var measurementClients = [];
+  var activeMeasurementId = '';
+  var activeMeasurementStatus = null;
+  var measurementBusy = false;
 
   function $(id) { return document.getElementById(id); }
   function esc(v) {
@@ -207,6 +233,7 @@
   }
   function showLogin(msg) {
     if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    if (measurementTimer) { clearInterval(measurementTimer); measurementTimer = null; }
     $('loginPanel').style.display = '';
     $('app').style.display = 'none';
     $('logoutBtn').style.display = 'none';
@@ -219,6 +246,8 @@
     $('logoutBtn').style.display = '';
     $('stateText').textContent = 'Connecté · actualisation automatique 60 s';
     if (!refreshTimer) refreshTimer = window.setInterval(refresh, 60000);
+    if (!measurementTimer) measurementTimer = window.setInterval(refreshMeasurementState, 3000);
+    refreshMeasurementState();
   }
 
   function fillSelect(id, values, labels) {
@@ -506,9 +535,9 @@
   function renderPit(pit, context) {
     var track = context && context.track || $('pTrack').value.trim();
     var config = context && context.trackConfig || $('pTrackConfig').value;
-    $('pPit').value = pit && pit.pit_lane_loss_ms != null ? (pit.pit_lane_loss_ms / 1000).toFixed(1) : '';
-    $('pRefuel').value = pit && pit.refuel_rate_lps != null ? pit.refuel_rate_lps : '';
-    $('pTyre').value = pit && pit.tyre_change_ms != null ? (pit.tyre_change_ms / 1000).toFixed(1) : '';
+    $('pPit').value = pit && pit.manual_pit_lane_loss_ms != null ? (pit.manual_pit_lane_loss_ms / 1000).toFixed(1) : '';
+    $('pRefuel').value = pit && pit.manual_refuel_rate_lps != null ? pit.manual_refuel_rate_lps : '';
+    $('pTyre').value = pit && pit.manual_tyre_change_ms != null ? (pit.manual_tyre_change_ms / 1000).toFixed(1) : '';
     if (pit) {
       var message = pit.manual_pit_lane_loss_ms != null
         ? '<span class="ok">Valeur pit-lane manuelle prioritaire</span>'
@@ -519,14 +548,217 @@
         message += ' · médiane ' + num(pit.automatic_pit_lane_loss_ms / 1000, 1) + ' s sur '
           + pit.pit_lane_samples + ' passage(s), toutes voitures confondues';
       }
-      message += ' pour <b>' + esc(track || '—') + '</b>' + (config ? ' · ' + esc(config) : '') + '.';
-      if (pit.refuel_rate_lps == null || pit.tyre_change_ms == null) {
-        message += ' Débit d’essence et changement de gommes encore manquants.';
+      if (pit.refuel_rate_lps != null) {
+        message += ' · débit ' + num(pit.refuel_rate_lps, 3) + ' L/s ('
+          + (pit.manual_refuel_rate_lps != null ? 'saisie manuelle prioritaire' : 'mesure CSP') + ')';
+        if (pit.manual_refuel_rate_lps != null && pit.automatic_refuel_rate_lps != null) {
+          message += ' · mesure CSP ' + num(pit.automatic_refuel_rate_lps, 3) + ' L/s';
+        }
       }
+      if (pit.tyre_change_ms != null) {
+        message += ' · pneus ' + num(pit.tyre_change_ms / 1000, 2) + ' s ('
+          + (pit.manual_tyre_change_ms != null ? 'saisie manuelle prioritaire' : 'mesure CSP') + ')';
+        if (pit.manual_tyre_change_ms != null && pit.automatic_tyre_change_ms != null) {
+          message += ' · mesure CSP ' + num(pit.automatic_tyre_change_ms / 1000, 2) + ' s';
+        }
+      }
+      message += ' pour <b>' + esc(track || '—') + '</b>' + (config ? ' · ' + esc(config) : '') + '.';
+      var missingService = [];
+      if (pit.refuel_rate_lps == null) missingService.push('débit d’essence');
+      if (pit.tyre_change_ms == null) missingService.push('changement de gommes');
+      if (missingService.length) message += ' Mesure manquante : ' + missingService.join(' et ') + '.';
       $('pitState').innerHTML = message;
     } else {
       $('pitState').innerHTML = '<span class="bad">Aucune mesure pit-lane</span> pour ce contexte : un passage détecté ou une saisie manuelle est nécessaire.';
     }
+  }
+
+  function measurementIsActive(measurement) {
+    return !!measurement && (measurement.status === 'queued' || measurement.status === 'running');
+  }
+  function selectedMeasurementClient() {
+    var key = $('pitMeasureClient').value;
+    return measurementClients.find(function (client) { return client.sessionKey === key; }) || null;
+  }
+  function updateMeasurementButtons() {
+    var ready = !!selectedMeasurementClient() && !measurementBusy
+      && !measurementIsActive(activeMeasurementStatus);
+    var liters = Number($('pitMeasureLiters').value);
+    $('measureTyreBtn').disabled = !ready;
+    $('measureRefuelBtn').disabled = !ready || !isFinite(liters) || liters < 0.1 || liters > 200;
+  }
+  function renderMeasurementClients(clients) {
+    measurementClients = Array.isArray(clients) ? clients : [];
+    var select = $('pitMeasureClient');
+    var previous = select.value;
+    var chosen = measurementClients.some(function (client) { return client.sessionKey === previous })
+      ? previous : '';
+    if (!chosen) {
+      var track = $('pTrack').value.trim();
+      var config = $('pTrackConfig').value || null;
+      var matching = measurementClients.find(function (client) {
+        return client.track === track && (client.trackConfig || null) === config;
+      });
+      if (matching) chosen = matching.sessionKey;
+      else if (measurementClients.length === 1) chosen = measurementClients[0].sessionKey;
+    }
+    select.innerHTML = '<option value="">' + (measurementClients.length ? 'Choisir une session CSP…' : 'Aucune session connectée') + '</option>' +
+      measurementClients.map(function (client) {
+        var person = client.driverName || client.driverGuid || 'Pilote';
+        var car = client.car ? ' · ' + client.car : '';
+        var context = client.track + (client.trackConfig ? ' · ' + client.trackConfig : '');
+        var server = client.serverName ? ' — ' + client.serverName : '';
+        return '<option value="' + esc(client.sessionKey) + '">' + esc(person + car + ' · ' + context + server) + '</option>';
+      }).join('');
+    select.value = chosen;
+    $('pitMeasurementClientsState').textContent = measurementClients.length
+      ? measurementClients.length + ' session(s) CSP active(s) — présence actualisée toutes les 3 s.'
+      : 'Aucune session CSP connectée. Ouvre le jeu sur le serveur équipé du script; la session apparaîtra sous quelques secondes.';
+    updateMeasurementButtons();
+  }
+  function applyMeasurementContext(measurement) {
+    if (!measurement || !measurement.track || pitFormDirty) return;
+    pitAutoMode = false;
+    $('pTrack').value = measurement.track;
+    fillPitConfigOptions(measurement.track, measurement.trackConfig || '');
+    setManualPitContextStatus();
+    loadPitProfileForSelected();
+  }
+  function renderPitMeasurement(measurement) {
+    var previousStatus = activeMeasurementStatus && activeMeasurementStatus.status;
+    activeMeasurementStatus = measurement || null;
+    var box = $('pitMeasurementState');
+    if (measurement && measurement.status === 'completed' && previousStatus !== 'completed' && !pitFormDirty) {
+      loadPitProfileForSelected();
+    }
+    if (!measurement) {
+      box.textContent = measurementClients.length
+        ? 'Prêt : sélectionne la session de jeu à mesurer.'
+        : 'En attente d’une session de jeu avec le script CSP actif…';
+      updateMeasurementButtons();
+      return;
+    }
+    if (measurement.status === 'completed') {
+      if (measurement.type === 'tyre') {
+        box.innerHTML = '<span class="ok">Mesure enregistrée :</span> service pneus '
+          + num(measurement.result && measurement.result.serviceDurationMs / 1000, 2) + ' s · roulage pit-lane '
+          + num(measurement.pitLaneDurationMs / 1000, 1) + ' s sur '
+          + '<b>' + esc(measurement.track) + '</b>'
+          + (measurement.trackConfig ? ' · ' + esc(measurement.trackConfig) : ' · configuration générique') + '.';
+      } else {
+        var result = measurement.result || {};
+        box.innerHTML = '<span class="ok">Mesure enregistrée :</span> '
+          + num(result.fuelAddedL, 2) + ' L · service ' + num(result.serviceDurationMs / 1000, 2) + ' s · roulage pit-lane '
+          + num(measurement.pitLaneDurationMs / 1000, 1) + ' s · débit '
+          + num(result.refuelRateLps, 3) + ' L/s sur <b>' + esc(measurement.track) + '</b>'
+          + (measurement.trackConfig ? ' · ' + esc(measurement.trackConfig) : ' · configuration générique') + '.';
+      }
+    } else if (measurement.status === 'failed' || measurement.status === 'cancelled') {
+      box.innerHTML = '<span class="bad">Mesure non enregistrée :</span> ' + esc(measurement.error || 'procédure interrompue');
+    } else {
+      var phases = {
+        queued: 'commande en attente du script CSP',
+        before_lap: 'effectuez un tour complet avant les stands',
+        wait_pit_entry: 'tour avant validé — rejoignez la pit-lane au limiteur de 80 km/h',
+        pit_lane: 'entrée pit-lane détectée — rejoignez le box',
+        service: 'arrêt détecté — effectuez uniquement le service demandé',
+        wait_pit_exit: 'service confirmé — sortez de la pit-lane',
+        after_lap: 'sortie confirmée — effectuez un tour complet après l’arrêt'
+      };
+      box.innerHTML = '<b>Procédure en cours :</b> ' + esc(phases[measurement.phase] || measurement.phase)
+        + ' · ' + esc(measurement.driverName || 'Pilote') + ' · ' + esc(measurement.track)
+        + (measurement.trackConfig ? ' / ' + esc(measurement.trackConfig) : '');
+    }
+    updateMeasurementButtons();
+  }
+  function refreshMeasurementState() {
+    if (!token || measurementBusy) return Promise.resolve();
+    measurementBusy = true;
+    var clientsRequest = fetch('/api/telemetry/measurement-clients', {
+      cache: 'no-store', headers: headers()
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (r.status === 401) throw new Error('auth');
+        if (!r.ok) throw new Error(j.error || ('Sessions CSP indisponibles (HTTP ' + r.status + ').'));
+        return j.clients || [];
+      });
+    });
+    var statusRequest = Promise.resolve(null);
+    if (activeMeasurementId && !activeMeasurementStatus ||
+        activeMeasurementId && measurementIsActive(activeMeasurementStatus)) {
+      statusRequest = fetch('/api/telemetry/measurements/' + encodeURIComponent(activeMeasurementId), {
+        cache: 'no-store', headers: headers()
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (r.status === 401) throw new Error('auth');
+          if (r.status === 404) return {
+            id: activeMeasurementId, status: 'failed', phase: 'failed',
+            error: 'État de procédure perdu (redémarrage du serveur); aucune mesure n’a été enregistrée.'
+          };
+          if (!r.ok) throw new Error(j.error || ('État de mesure indisponible (HTTP ' + r.status + ').'));
+          return j.measurement || null;
+        });
+      });
+    }
+    return Promise.all([clientsRequest, statusRequest]).then(function (result) {
+      renderMeasurementClients(result[0]);
+      if (result[1]) renderPitMeasurement(result[1]);
+      else if (!activeMeasurementStatus || !measurementIsActive(activeMeasurementStatus)) {
+        renderPitMeasurement(activeMeasurementStatus);
+      }
+    }).catch(function (error) {
+      if (error.message === 'auth') {
+        token = '';
+        localStorage.removeItem(STORAGE_KEY);
+        showLogin('Connexion refusée par ce service.');
+      } else {
+        $('pitMeasurementClientsState').innerHTML = '<span class="bad">' + esc(error.message) + '</span>';
+      }
+    }).then(function () {
+      measurementBusy = false;
+      updateMeasurementButtons();
+    });
+  }
+  function startPitMeasurement(type) {
+    var client = selectedMeasurementClient();
+    if (!client || measurementBusy || measurementIsActive(activeMeasurementStatus)) return;
+    var body = { sessionKey: client.sessionKey, type: type };
+    if (type === 'refuel') {
+      body.liters = Number($('pitMeasureLiters').value);
+      if (!isFinite(body.liters) || body.liters < 0.1 || body.liters > 200) {
+        $('pitMeasurementState').innerHTML = '<span class="bad">Indique un volume compris entre 0,1 et 200 L.</span>';
+        return;
+      }
+    }
+    measurementBusy = true;
+    updateMeasurementButtons();
+    $('pitMeasurementState').textContent = 'Armement de la procédure sur la session choisie…';
+    fetch('/api/telemetry/measurements', {
+      method: 'POST', headers: headers({ 'Content-Type': 'application/json' }), body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (r.status === 401) throw new Error('auth');
+        if (!r.ok) throw new Error(j.error || ('Commande refusée (HTTP ' + r.status + ').'));
+        return j.measurement;
+      });
+    }).then(function (measurement) {
+      activeMeasurementId = measurement.id;
+      activeMeasurementStatus = measurement;
+      applyMeasurementContext(measurement);
+      renderPitMeasurement(measurement);
+    }).catch(function (error) {
+      if (error.message === 'auth') {
+        token = '';
+        localStorage.removeItem(STORAGE_KEY);
+        showLogin('Connexion refusée par ce service.');
+      } else {
+        $('pitMeasurementState').innerHTML = '<span class="bad">' + esc(error.message) + '</span>';
+      }
+    }).then(function () {
+      measurementBusy = false;
+      updateMeasurementButtons();
+      refreshMeasurementState();
+    });
   }
 
   // Les liens de téléchargement sont de simples <a href> : le navigateur n'y met
@@ -685,6 +917,15 @@
     pitFormDirty = false;
     refresh();
   });
+  $('pitMeasureClient').addEventListener('change', function () {
+    var client = selectedMeasurementClient();
+    if (!client) { updateMeasurementButtons(); return; }
+    applyMeasurementContext(client);
+    updateMeasurementButtons();
+  });
+  $('pitMeasureLiters').addEventListener('input', updateMeasurementButtons);
+  $('measureTyreBtn').addEventListener('click', function () { startPitMeasurement('tyre'); });
+  $('measureRefuelBtn').addEventListener('click', function () { startPitMeasurement('refuel'); });
   $('pitBtn').addEventListener('click', function () {
     var body = {
       track: $('pTrack').value.trim(),
