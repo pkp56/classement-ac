@@ -96,6 +96,22 @@ test('un tour sans temps est écarté, les autres passent', () => {
   assert.equal(check.clean.laps[0].lapNumber, 3);
 });
 
+test('une durée pit-lane mesurée est validée sans valeur de repli', () => {
+  const check = validatePush(pushPayload({
+    laps: [
+      { lapNumber: 1, lapMs: 75576, pitLaneMs: 22450 },
+      { lapNumber: 2, lapMs: 75400, pitLaneMs: 900000 }
+    ]
+  }));
+  assert.equal(check.ok, true);
+  assert.equal(check.clean.laps[0].pitLaneMs, 22450);
+  assert.equal(check.clean.laps[1].pitLaneMs, null, 'une mesure aberrante est écartée, pas corrigée');
+  const absent = validatePush(pushPayload({
+    laps: [{ lapNumber: 3, lapMs: 75500 }]
+  }));
+  assert.equal(absent.clean.laps[0].pitLaneMs, null);
+});
+
 test('les temps de secteurs CSP sont validés sans compléter les valeurs manquantes', () => {
   const checked = validatePush(pushPayload({
     laps: [{
@@ -304,6 +320,87 @@ test('le profil d\'une voiture agrège les mesures réelles', async () => {
   assert.equal(car.fuelCapacity, 45, 'capacité = plus gros plein observé, pas une valeur devinée');
 });
 
+test('le résumé sépare une voiture par circuit et layout au lieu de mélanger les tours', async () => {
+  const service = new TelemetryService(tempStore());
+  const car = 'dino_206s_berlinetta';
+  await service.ingest(pushPayload({
+    car,
+    track: 'ted_zolder67_reworked',
+    trackConfig: 'revival',
+    sessionKey: 'dino-zolder',
+    laps: [
+      { lapNumber: 1, lapMs: 120000, fuelUsedL: 3.1, tyreWearPct: 1.2 },
+      { lapNumber: 2, lapMs: 122000, fuelUsedL: 3.3, tyreWearPct: 1.4 }
+    ]
+  }));
+  await service.ingest(pushPayload({
+    car,
+    track: 'oesterreichring1979',
+    trackConfig: 'chicane',
+    sessionKey: 'dino-austria',
+    laps: [{ lapNumber: 1, lapMs: 99000, fuelUsedL: 2.1, tyreWearPct: 0.8 }]
+  }));
+  await service.ingest(pushPayload({
+    car,
+    track: 'ted_zolder67_reworked',
+    trackConfig: 'historic',
+    sessionKey: 'dino-zolder-historic',
+    laps: [{ lapNumber: 1, lapMs: 110000, fuelUsedL: 2.8, tyreWearPct: 1.0 }]
+  }));
+
+  const summary = await service.summary({ car });
+  assert.equal(summary.cars.length, 3, 'deux pistes et deux layouts distincts forment trois profils');
+  const zolderRevival = summary.cars.find(row => row.track === 'ted_zolder67_reworked' && row.trackConfig === 'revival');
+  const zolderHistoric = summary.cars.find(row => row.track === 'ted_zolder67_reworked' && row.trackConfig === 'historic');
+  const austria = summary.cars.find(row => row.track === 'oesterreichring1979');
+  assert.equal(zolderRevival.laps, 2);
+  assert.equal(zolderRevival.medianLapMs, 121000);
+  assert.equal(zolderRevival.fuelPerLap, 3.2);
+  assert.equal(zolderHistoric.medianLapMs, 110000);
+  assert.equal(austria.laps, 1);
+  assert.equal(austria.medianLapMs, 99000);
+  assert.equal((await service.summary({ car, track: 'ted_zolder67_reworked' })).cars.length, 2);
+});
+
+test('les passages détectés donnent une médiane pit-lane par circuit/layout', async () => {
+  const service = new TelemetryService(tempStore());
+  const track = 'ted_zolder67_reworked';
+  await service.ingest(pushPayload({
+    track,
+    trackConfig: 'revival',
+    sessionKey: 'pit-zolder-revival',
+    laps: [
+      { lapNumber: 1, lapMs: 120000, pitLaneMs: 18200 },
+      { lapNumber: 2, lapMs: 121000, pitLaneMs: 19000 },
+      { lapNumber: 3, lapMs: 122000 }
+    ]
+  }));
+  await service.ingest(pushPayload({
+    track,
+    trackConfig: 'historic',
+    sessionKey: 'pit-zolder-historic',
+    laps: [{ lapNumber: 1, lapMs: 110000, pitLaneMs: 45000 }]
+  }));
+
+  const summary = await service.summary({ track, trackConfig: 'revival' });
+  assert.equal(summary.cars[0].pitLaneLossMs, 18600);
+  assert.equal(summary.cars[0].pitLaneSamples, 2, 'un tour sans événement pit ne devient pas une mesure nulle');
+  const automatic = await service.pitProfile(track, 'revival');
+  assert.equal(automatic.pit_lane_loss_ms, 18600);
+  assert.equal(automatic.automatic_pit_lane_loss_ms, 18600);
+  assert.equal(automatic.pit_lane_samples, 2);
+  assert.match(automatic.source, /automatique.*80 km\/h/);
+  assert.equal(await service.pitProfile(track, 'other-layout'), null,
+    'une configuration ne récupère pas les temps pit d’une autre');
+
+  await service.savePitProfile(track, {
+    trackConfig: 'revival', pitLaneLossMs: 17500, refuelRateLps: 2.5, tyreChangeMs: 12000
+  });
+  const configured = await service.pitProfile(track, 'revival');
+  assert.equal(configured.pit_lane_loss_ms, 17500, 'la saisie admin explicite reste prioritaire');
+  assert.equal(configured.automatic_pit_lane_loss_ms, 18600, 'les échantillons auto restent consultables');
+});
+
 test('les filtres voiture / circuit / pilote portent sur les bonnes lignes', async () => {
   const service = new TelemetryService(tempStore());
   await service.ingest(pushPayload());
@@ -339,9 +436,10 @@ test('les filtres voiture / circuit / pilote portent sur les bonnes lignes', asy
   assert.equal(combined.rows, 3);
 
   const byDriver = await service.summary({ byDriver: true });
-  // Le troisième envoi garde le pilote par défaut : deux couples seulement.
-  assert.equal(byDriver.cars.length, 2, 'une ligne par couple voiture × pilote');
-  assert.deepEqual(byDriver.cars.map(c => c.driver).sort(), ['76561198000000001', '76561198015862674']);
+  // L'Alfa sur Brands Hatch et sur Monza reste séparée, même au niveau pilote.
+  assert.equal(byDriver.cars.length, 3, 'une ligne par voiture × circuit × pilote');
+  assert.equal(byDriver.cars.filter(c => c.driver === '76561198015862674').length, 2);
+  assert.equal(byDriver.cars.filter(c => c.driver === '76561198000000001').length, 1);
 });
 
 test('le catalogue ne propose que des valeurs réellement présentes', async () => {
@@ -356,10 +454,12 @@ test('le catalogue ne propose que des valeurs réellement présentes', async () 
 });
 
 test('filterRows ignore une valeur de filtre absente', () => {
-  const rows = [{ car: 'a', track: 't', driver_guid: 'g' }];
+  const rows = [{ car: 'a', track: 't', track_config: 'layout', driver_guid: 'g' }];
   assert.equal(filterRows(rows, {}).length, 1);
   assert.equal(filterRows(rows, { car: '' }).length, 1);
   assert.equal(filterRows(rows, { car: 'b' }).length, 0);
+  assert.equal(filterRows(rows, { trackConfig: 'layout' }).length, 1);
+  assert.equal(filterRows(rows, { trackConfig: 'autre' }).length, 0);
 });
 
 // --- rapport ----------------------------------------------------------------
@@ -376,6 +476,45 @@ test('sans mesures pit-lane, le rapport est produit mais signale le trou', async
   assert.equal(row.incomplete, true);
   assert.ok(row.missing.length > 0);
   assert.match(report.files.markdown, /données incomplètes|Aucun pilote|—/i);
+});
+
+test('un rapport sans filtre garde les circuits séparés et leurs propres profils pit-lane', async () => {
+  const service = new TelemetryService(tempStore());
+  const car = 'dino_206s_berlinetta';
+  await service.ingest(pushPayload({
+    car, track: 'ted_zolder67_reworked', trackConfig: 'revival', sessionKey: 'report-zolder',
+    laps: [
+      { lapNumber: 1, lapMs: 120000, fuelUsedL: 2, fuelLoadedL: 40, tyreWearPct: 1.1 },
+      { lapNumber: 2, lapMs: 121000, fuelUsedL: 2, fuelLoadedL: 40, tyreWearPct: 1.2 },
+      { lapNumber: 3, lapMs: 120500, fuelUsedL: 2, fuelLoadedL: 40, tyreWearPct: 1.1 }
+    ]
+  }));
+  await service.ingest(pushPayload({
+    car, track: 'oesterreichring1979', trackConfig: 'chicane', sessionKey: 'report-austria',
+    laps: [
+      { lapNumber: 1, lapMs: 99000, fuelUsedL: 1.7, fuelLoadedL: 38, tyreWearPct: 0.9 },
+      { lapNumber: 2, lapMs: 99500, fuelUsedL: 1.7, fuelLoadedL: 38, tyreWearPct: 0.9 },
+      { lapNumber: 3, lapMs: 100000, fuelUsedL: 1.7, fuelLoadedL: 38, tyreWearPct: 0.9 }
+    ]
+  }));
+  await service.savePitProfile('ted_zolder67_reworked', {
+    trackConfig: 'revival', pitLaneLossMs: 21000, refuelRateLps: 2.5, tyreChangeMs: 12000
+  });
+  await service.savePitProfile('oesterreichring1979', {
+    trackConfig: 'chicane', pitLaneLossMs: 30000, refuelRateLps: 2, tyreChangeMs: 14000
+  });
+
+  const report = await service.report({});
+  assert.equal(report.matrix, null, 'la matrice n’agrège pas les pilotes sur plusieurs pistes');
+  assert.equal(report.rows.length, 2, 'une ligne Dino par circuit');
+  const zolder = report.rows.find(row => row.circuit === 'ted_zolder67_reworked');
+  const austria = report.rows.find(row => row.circuit === 'oesterreichring1979');
+  assert.equal(zolder.pitLaneLossMs, 21000);
+  assert.equal(austria.pitLaneLossMs, 30000);
+  assert.equal(zolder.bestLapMs, 120000);
+  assert.equal(austria.bestLapMs, 99000);
+  assert.equal(zolder.byDuration[20].deltaToBestMs, 0);
+  assert.equal(austria.byDuration[20].deltaToBestMs, 0);
 });
 
 test('avec les mesures pit-lane, le rapport simule les arrêts sur les trois durées', async () => {
@@ -480,6 +619,49 @@ test('le script CSP se charge, annonce ce qu il lit et envoie un JSON valide', (
   const check = validatePush(payload);
   assert.equal(check.ok, true, check.error);
   assert.ok(Math.abs(check.clean.laps[0].tyreWearPct - 1.4) < 0.01);
+});
+
+test('le limiteur 80 km/h mesure le roulage pit-lane, sans compter l’arrêt au box', () => {
+  const run = simulate({
+    steps: [
+      0.016,
+      (L) => setCar(L, 'speedKmh', 80),
+      ...Array.from({ length: 12 }, () => 0.5), // 6 s au plateau du limiteur
+      (L) => setCar(L, 'speedKmh', 50),
+      ...Array.from({ length: 4 }, () => 0.5),  // 2 s supplémentaires dans la voie
+      (L) => setCar(L, 'speedKmh', 0),
+      ...Array.from({ length: 10 }, () => 0.5), // service au box : exclu
+      (L) => setCar(L, 'speedKmh', 90),
+      0.25, 0.25,                               // sortie confirmée au-dessus de 84
+      ...unTour()
+    ]
+  });
+  assert.equal(run.error, null);
+  const lapPayload = run.sent.map(text => JSON.parse(text))
+    .find(payload => Array.isArray(payload.laps) && payload.laps.length);
+  assert.ok(lapPayload, 'le tour avec l’échantillon pit-lane part au serveur');
+  assert.equal(lapPayload.laps[0].pitLaneMs, 8000, '6 s + 2 s roulées; les 5 s à l’arrêt sont exclues');
+  const checked = validatePush(lapPayload);
+  assert.equal(checked.ok, true, checked.error);
+  assert.equal(checked.clean.laps[0].pitLaneMs, 8000);
+});
+
+test('un passage bref à 80 km/h sur la piste ne suffit pas à créer une mesure pit-lane', () => {
+  const run = simulate({
+    steps: [
+      0.016,
+      (L) => setCar(L, 'speedKmh', 80),
+      ...Array.from({ length: 4 }, () => 0.5), // 2 s, sous la confirmation de 2,5 s
+      (L) => setCar(L, 'speedKmh', 90),
+      0.25, 0.25,
+      ...unTour()
+    ]
+  });
+  assert.equal(run.error, null);
+  const lapPayload = run.sent.map(text => JSON.parse(text))
+    .find(payload => Array.isArray(payload.laps) && payload.laps.length);
+  assert.ok(lapPayload);
+  assert.equal(lapPayload.laps[0].pitLaneMs, undefined, 'aucune durée n’est inventée');
 });
 
 test('le script CSP envoie les secteurs du tour record et les meilleurs secteurs mesurés', () => {
