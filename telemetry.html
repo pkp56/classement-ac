@@ -52,8 +52,13 @@
   .login input{width:100%;margin-bottom:10px}
   .links{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
   .links a{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--red);text-decoration:none;border-bottom:1px solid var(--red);padding-bottom:2px}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  .pit-fields{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr)) auto;gap:9px;align-items:end;margin-top:12px}
+  .pit-fields label{display:flex;flex-direction:column;gap:4px;font-size:10px;letter-spacing:1.1px;text-transform:uppercase;color:var(--grey);font-weight:bold;min-width:0}
+  .pit-fields input,.pit-fields select{width:100%;min-width:0}
+  .pit-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+  .pit-state{margin-top:10px}
+  @media(max-width:1000px){.pit-fields{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media(max-width:620px){.pit-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -109,7 +114,7 @@
 
     <div class="panel">
       <h2>Voitures mesurées</h2>
-      <p class="note">Chaque ligne agrège une voiture sur un seul circuit et une seule configuration. Les anciens tours d’une autre piste restent visibles séparément, sans fausser les statistiques du circuit courant.</p>
+      <p class="note">Chaque ligne agrège une voiture sur un seul circuit et une seule configuration. Le temps pit-lane est commun à toutes les voitures du même circuit/configuration; les autres mesures restent propres à chaque voiture.</p>
       <div id="cars"><div class="empty">Chargement…</div></div>
     </div>
 
@@ -122,34 +127,38 @@
       <div id="sessions"><div class="empty">Chargement…</div></div>
     </div>
 
-    <div class="grid2">
-      <div class="panel">
-        <h2>Mesures pit-lane (jour 4)</h2>
-        <div class="body">
-          <p class="note">Le script CSP détecte un plateau continu à 78–82 km/h, puis sa sortie au-dessus de 84 km/h. Il enregistre la durée de roulage détectée au tour suivant; l'arrêt au box est exclu. C'est un indice basé sur le limiteur 80 km/h, pas une position exacte sur la pit-lane: un plateau similaire en piste peut donner un faux positif.</p>
-          <p class="note">La médiane des passages détectés fournit automatiquement le temps pit-lane si aucune valeur manuelle n'est enregistrée. Le ravitaillement et le changement de gommes restent à saisir ici.</p>
-          <div class="filters" style="margin-top:10px">
-            <label>Circuit<input id="pTrack" type="text" placeholder="ks_monza66-junior"></label>
-            <label>Pit-lane (s)<input id="pPit" type="number" step="0.1" min="0"></label>
-            <label>Ravitaillement (L/s)<input id="pRefuel" type="number" step="0.1" min="0"></label>
-            <label>Gommes (s)<input id="pTyre" type="number" step="0.1" min="0"></label>
+    <div class="panel">
+      <h2>Mesures pit-lane (jour 4)</h2>
+      <div class="body">
+        <p class="note">Le circuit est détecté depuis la dernière séance envoyée par CSP. Le profil pit-lane est propre au circuit et à sa configuration, mais partagé par toutes les voitures : on regroupe leurs passages et on utilise la médiane.</p>
+        <p class="note">Le script reconnaît un plateau continu à 78–82 km/h, puis sa sortie au-dessus de 84 km/h. Il mesure le roulage au tour suivant et exclut l’arrêt au box. C’est une détection heuristique, pas une position GPS : un plateau similaire sur la piste peut donner un faux positif. Le ravitaillement et le changement de gommes restent à saisir.</p>
+        <div class="pit-fields">
+          <label>Circuit<input id="pTrack" type="text" list="pitTrackOptions" placeholder="Détecté automatiquement"></label>
+          <label>Configuration<select id="pTrackConfig"><option value="">Sans configuration (générique)</option></select></label>
+          <label>Pit-lane (s)<input id="pPit" type="number" step="0.1" min="0"></label>
+          <label>Ravitaillement (L/s)<input id="pRefuel" type="number" step="0.1" min="0"></label>
+          <label>Gommes (s)<input id="pTyre" type="number" step="0.1" min="0"></label>
+          <div class="pit-actions">
             <button id="pitBtn">Enregistrer</button>
+            <button id="pitAutoBtn" class="ghost" type="button">Suivre le dernier circuit</button>
           </div>
-          <div id="pitState" class="note" style="margin-top:10px"></div>
         </div>
+        <datalist id="pitTrackOptions"></datalist>
+        <div id="pitDetectionStatus" class="note pit-state" aria-live="polite"></div>
+        <div id="pitState" class="note pit-state" aria-live="polite"></div>
       </div>
+    </div>
 
-      <div class="panel">
-        <h2>Rapport BoP — 20 / 30 / 45 minutes</h2>
-        <div class="body">
-          <p class="note">Trois formats, mêmes chiffres : tableur (CSV), lecture (Markdown) et impression (HTML). Le rapport simule les arrêts : une voiture rapide mais gourmande paie son ravitaillement.</p>
-          <div class="links">
-            <a href="#" id="dlCsv">Télécharger CSV</a>
-            <a href="#" id="dlMd">Télécharger Markdown</a>
-            <a href="#" id="dlHtml">Ouvrir HTML</a>
-          </div>
-          <div id="reportState" class="note" style="margin-top:12px"></div>
+    <div class="panel">
+      <h2>Rapport BoP — 20 / 30 / 45 minutes</h2>
+      <div class="body">
+        <p class="note">Trois formats, mêmes chiffres : tableur (CSV), lecture (Markdown) et impression (HTML). Le rapport simule les arrêts : une voiture rapide mais gourmande paie son ravitaillement.</p>
+        <div class="links">
+          <a href="#" id="dlCsv">Télécharger CSV</a>
+          <a href="#" id="dlMd">Télécharger Markdown</a>
+          <a href="#" id="dlHtml">Ouvrir HTML</a>
         </div>
+        <div id="reportState" class="note" style="margin-top:12px"></div>
       </div>
     </div>
   </div>
@@ -161,6 +170,10 @@
   var STORAGE_KEY = 'gdsp_admin_token';
   var token = localStorage.getItem(STORAGE_KEY) || '';
   var catalog = null;
+  var pitAutoMode = true;
+  var pitFormDirty = false;
+  var pitSessions = [];
+  var refreshTimer = null;
 
   function $(id) { return document.getElementById(id); }
   function esc(v) {
@@ -193,6 +206,7 @@
     return p;
   }
   function showLogin(msg) {
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
     $('loginPanel').style.display = '';
     $('app').style.display = 'none';
     $('logoutBtn').style.display = 'none';
@@ -203,7 +217,8 @@
     $('loginPanel').style.display = 'none';
     $('app').style.display = '';
     $('logoutBtn').style.display = '';
-    $('stateText').textContent = 'Connecté · mesures en temps réel';
+    $('stateText').textContent = 'Connecté · actualisation automatique 60 s';
+    if (!refreshTimer) refreshTimer = window.setInterval(refresh, 60000);
   }
 
   function fillSelect(id, values, labels) {
@@ -216,6 +231,53 @@
       }).join('');
   }
 
+  function fillPitConfigOptions(track, preferredConfig) {
+    var select = $('pTrackConfig');
+    var current = select.value;
+    var configs = pitSessions.filter(function (session) { return session.track === track; })
+      .map(function (session) { return session.trackConfig; })
+      .filter(function (config) { return !!config; });
+    configs = Array.from(new Set(configs)).sort(function (a, b) { return String(a).localeCompare(String(b), 'fr'); });
+    if (preferredConfig && configs.indexOf(preferredConfig) < 0) configs.push(preferredConfig);
+    var latest = pitSessions.find(function (session) { return session.track === track; });
+    var chosen = preferredConfig !== undefined
+      ? (preferredConfig || '')
+      : (current === '' || configs.indexOf(current) >= 0 ? current : (latest ? latest.trackConfig || '' : ''));
+    select.innerHTML = '<option value="">Sans configuration (générique)</option>' + configs.map(function (config) {
+      return '<option value="' + esc(config) + '">' + esc(config) + '</option>';
+    }).join('');
+    select.value = chosen;
+  }
+
+  function updatePitTrackOptions(sessions) {
+    pitSessions = Array.isArray(sessions) ? sessions : [];
+    var tracks = (catalog && catalog.tracks ? catalog.tracks : []).concat(
+      pitSessions.map(function (session) { return session.track; })
+    );
+    tracks = Array.from(new Set(tracks.filter(Boolean))).sort(function (a, b) { return String(a).localeCompare(String(b), 'fr'); });
+    $('pitTrackOptions').innerHTML = tracks.map(function (track) {
+      return '<option value="' + esc(track) + '"></option>';
+    }).join('');
+    fillPitConfigOptions($('pTrack').value, undefined);
+  }
+
+  function setAutoPitContext(context) {
+    if (!pitAutoMode) return;
+    if (!context || !context.track) {
+      $('pTrack').value = '';
+      fillPitConfigOptions('', '');
+      $('pitDetectionStatus').innerHTML = 'Aucun circuit détecté pour le moment. Le premier tour reçu par le serveur le sélectionnera automatiquement.';
+      return;
+    }
+    $('pTrack').value = context.track;
+    fillPitConfigOptions(context.track, context.trackConfig || '');
+    var config = context.trackConfig ? ' · ' + esc(context.trackConfig) : '';
+    var date = context.startedAt ? ' · séance du ' + esc(new Date(context.startedAt).toLocaleString('fr-FR')) : '';
+    var source = context.source === 'derniere-seance' ? 'Circuit détecté automatiquement' : 'Circuit trouvé dans les données enregistrées';
+    $('pitDetectionStatus').innerHTML = '<span class="ok">' + source + ' : <b>' + esc(context.track) + '</b>' + config + '</span>' + date +
+      ' · pit-lane partagé par toutes les voitures de cette configuration.';
+  }
+
   function loadCatalog() {
     return fetch('/api/telemetry/catalog', { cache: 'no-store', headers: headers() })
       .then(function (r) { return r.json(); })
@@ -225,7 +287,7 @@
         fillSelect('fTrack', c.tracks || []);
         fillSelect('fDriver', c.drivers || [], c.driverNames || {});
         fillSelect('fCampaign', c.campaigns || []);
-        if (!$('pTrack').value && c.tracks && c.tracks.length) $('pTrack').value = c.tracks[0];
+        updatePitTrackOptions(pitSessions);
       });
   }
 
@@ -256,7 +318,7 @@
     }
     var html = '<table><thead><tr>' +
       '<th>Voiture</th><th>Circuit</th><th>Tours</th><th>Meilleur</th><th>Médian</th><th>Régularité</th>' +
-      '<th>L/tour</th><th>Gomme %/tour</th><th>Réservoir</th><th>Autonomie ess.</th><th>Autonomie gomme</th><th>Vit. max</th><th>Pit-lane mesuré</th>' +
+      '<th>L/tour</th><th>Gomme %/tour</th><th>Réservoir</th><th>Autonomie ess.</th><th>Autonomie gomme</th><th>Vit. max</th><th>Pit-lane commun au circuit</th>' +
       '</tr></thead><tbody>';
     cars.forEach(function (c) {
       var fuelStint = (c.fuelPerLap && c.fuelCapacity) ? c.fuelCapacity / c.fuelPerLap : null;
@@ -275,7 +337,9 @@
         '<td>' + (tyreStint ? num(tyreStint, 1) + ' tr' : '—') + '</td>' +
         '<td>' + (c.speedMaxKmh != null ? c.speedMaxKmh : '—') + '</td>' +
         '<td>' + (c.pitLaneLossMs != null
-          ? num(c.pitLaneLossMs / 1000, 1) + ' s' + (c.pitLaneSamples ? ' <span class="muted">· ' + c.pitLaneSamples + ' passage(s)</span>' : '')
+          ? num(c.pitLaneLossMs / 1000, 1) + ' s' + (c.pitLaneSource && c.pitLaneSource.indexOf('automatique') >= 0
+            ? ' <span class="muted">· ' + c.pitLaneSamples + ' passage(s), toutes voitures</span>'
+            : ' <span class="muted">· partagé</span>')
           : '—') + '</td>' +
         '</tr>';
     });
@@ -307,8 +371,12 @@
   function loadSessions() {
     return fetch('/api/telemetry/sessions', { cache: 'no-store', headers: headers() })
       .then(function (r) { return r.ok ? r.json() : { sessions: null }; })
-      .then(function (j) { renderSessions(j && j.sessions); })
-      .catch(function () { renderSessions(null); });
+      .then(function (j) {
+        var sessions = j && Array.isArray(j.sessions) ? j.sessions : null;
+        renderSessions(sessions);
+        return sessions;
+      })
+      .catch(function () { renderSessions(null); return null; });
   }
   function renderSessions(list) {
     var box = $('sessions');
@@ -372,15 +440,23 @@
         });
       })
     ]).then(function (res) {
-      // Promise.all suit l'ordre [catalogue, séances, résumé]. loadSessions()
-      // ne renvoie rien : prendre res[1] faisait lire `undefined.cars` et
-      // laissait le tableau « Voitures mesurées » bloqué sur Chargement…
+      // Les séances sont renvoyées les plus récentes d'abord; le circuit auto
+      // est choisi à partir du contexte détecté par le serveur.
       var summary = res[2];
+      if (Array.isArray(res[1])) updatePitTrackOptions(res[1]);
       showApp();
       renderBanner(summary);
       renderKpis(summary.rows, summary);
       renderCars(summary);
-      renderPit(summary.pitProfile);
+      if (!pitFormDirty) {
+        if (pitAutoMode) {
+          setAutoPitContext(summary.pitContext);
+          renderPit(summary.pitProfile, summary.pitContext);
+        } else {
+          setManualPitContextStatus();
+          loadPitProfileForSelected();
+        }
+      }
       renderLinks();
     }).catch(function (e) {
       if (e.message === 'auth') {
@@ -395,27 +471,61 @@
     });
   }
 
-  function renderPit(pit) {
+  function setManualPitContextStatus() {
+    var track = $('pTrack').value.trim();
+    var config = $('pTrackConfig').value;
+    if (!track) {
+      $('pitDetectionStatus').textContent = 'Choisis un circuit ou réactive la détection automatique.';
+      return;
+    }
+    $('pitDetectionStatus').innerHTML = 'Circuit sélectionné manuellement : <b>' + esc(track) + '</b>'
+      + (config ? ' · ' + esc(config) : ' · configuration générique')
+      + ' · une seule valeur pit-lane est partagée par toutes les voitures.';
+  }
+
+  function loadPitProfileForSelected() {
+    var track = $('pTrack').value.trim();
+    if (!track) { renderPit(null, null); return Promise.resolve(); }
+    var params = new URLSearchParams();
+    params.set('track', track);
+    // La présence d'une configuration vide signifie explicitement « générique ».
+    params.set('trackConfig', $('pTrackConfig').value || '');
+    return fetch('/api/telemetry/summary?' + params.toString(), { cache: 'no-store', headers: headers() })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok) throw new Error(j.error || ('Lecture impossible (HTTP ' + r.status + ').'));
+          return j;
+        });
+      })
+      .then(function (summary) { renderPit(summary.pitProfile, summary.pitContext); })
+      .catch(function (error) {
+        $('pitState').innerHTML = '<span class="bad">Profil pit-lane indisponible : ' + esc(error.message) + '</span>';
+      });
+  }
+
+  function renderPit(pit, context) {
+    var track = context && context.track || $('pTrack').value.trim();
+    var config = context && context.trackConfig || $('pTrackConfig').value;
+    $('pPit').value = pit && pit.pit_lane_loss_ms != null ? (pit.pit_lane_loss_ms / 1000).toFixed(1) : '';
+    $('pRefuel').value = pit && pit.refuel_rate_lps != null ? pit.refuel_rate_lps : '';
+    $('pTyre').value = pit && pit.tyre_change_ms != null ? (pit.tyre_change_ms / 1000).toFixed(1) : '';
     if (pit) {
-      if (pit.pit_lane_loss_ms != null) $('pPit').value = (pit.pit_lane_loss_ms / 1000).toFixed(1);
-      if (pit.refuel_rate_lps != null) $('pRefuel').value = pit.refuel_rate_lps;
-      if (pit.tyre_change_ms != null) $('pTyre').value = (pit.tyre_change_ms / 1000).toFixed(1);
       var message = pit.manual_pit_lane_loss_ms != null
-        ? '<span class="ok">Profil enregistré</span>'
+        ? '<span class="ok">Valeur pit-lane manuelle prioritaire</span>'
         : pit.automatic_pit_lane_loss_ms != null
           ? '<span class="ok">Temps pit-lane mesuré automatiquement</span>'
           : '<span class="ok">Profil partiel enregistré</span>';
       if (pit.automatic_pit_lane_loss_ms != null) {
         message += ' · médiane ' + num(pit.automatic_pit_lane_loss_ms / 1000, 1) + ' s sur '
-          + pit.pit_lane_samples + ' passage(s) au limiteur 80 km/h';
+          + pit.pit_lane_samples + ' passage(s), toutes voitures confondues';
       }
-      message += ' pour <b>' + esc($('pTrack').value) + '</b>.';
+      message += ' pour <b>' + esc(track || '—') + '</b>' + (config ? ' · ' + esc(config) : '') + '.';
       if (pit.refuel_rate_lps == null || pit.tyre_change_ms == null) {
         message += ' Débit d’essence et changement de gommes encore manquants.';
       }
       $('pitState').innerHTML = message;
     } else {
-      $('pitState').innerHTML = '<span class="bad">Aucune mesure pit-lane</span> pour ce circuit : un passage détecté ou une saisie manuelle est nécessaire.';
+      $('pitState').innerHTML = '<span class="bad">Aucune mesure pit-lane</span> pour ce contexte : un passage détecté ou une saisie manuelle est nécessaire.';
     }
   }
 
@@ -548,26 +658,49 @@
   ['fCar', 'fTrack', 'fDriver', 'fCampaign', 'fByDriver'].forEach(function (id) {
     $(id).addEventListener('change', refresh);
   });
+  $('pTrack').addEventListener('input', function () {
+    pitAutoMode = false;
+    pitFormDirty = true;
+    setManualPitContextStatus();
+  });
   $('pTrack').addEventListener('change', function () {
-    fetch('/api/telemetry/summary?track=' + encodeURIComponent($('pTrack').value), { cache: 'no-store', headers: headers() })
-      .then(function (r) { return r.json(); })
-      .then(function (s) { renderPit(s.pitProfile); })
-      .catch(function () {});
+    pitAutoMode = false;
+    pitFormDirty = false;
+    var latest = pitSessions.find(function (session) { return session.track === $('pTrack').value.trim(); });
+    fillPitConfigOptions($('pTrack').value.trim(), latest ? latest.trackConfig || '' : '');
+    setManualPitContextStatus();
+    loadPitProfileForSelected();
+  });
+  $('pTrackConfig').addEventListener('change', function () {
+    pitAutoMode = false;
+    pitFormDirty = false;
+    setManualPitContextStatus();
+    loadPitProfileForSelected();
+  });
+  ['pPit', 'pRefuel', 'pTyre'].forEach(function (id) {
+    $(id).addEventListener('input', function () { pitFormDirty = true; });
+  });
+  $('pitAutoBtn').addEventListener('click', function () {
+    pitAutoMode = true;
+    pitFormDirty = false;
+    refresh();
   });
   $('pitBtn').addEventListener('click', function () {
     var body = {
-      track: $('pTrack').value,
+      track: $('pTrack').value.trim(),
+      trackConfig: $('pTrackConfig').value,
       pitLaneLossMs: Math.round(Number($('pPit').value) * 1000),
       refuelRateLps: Number($('pRefuel').value),
       tyreChangeMs: Math.round(Number($('pTyre').value) * 1000)
     };
-    if (!body.track) { $('pitState').innerHTML = '<span class="bad">Indique le circuit.</span>'; return; }
+    if (!body.track) { $('pitState').innerHTML = '<span class="bad">Indiquez ou détectez un circuit.</span>'; return; }
     fetch('/api/telemetry/pit-profile', {
       method: 'PUT', headers: headers({ 'Content-Type': 'application/json' }), body: JSON.stringify(body)
     }).then(function (r) { return r.json(); })
       .then(function (j) {
         if (j.error) throw new Error(j.error);
-        $('pitState').innerHTML = '<span class="ok">Enregistré.</span> Le rapport peut maintenant simuler les arrêts.';
+        pitFormDirty = false;
+        $('pitState').innerHTML = '<span class="ok">Enregistré.</span> Le profil est partagé sur ce circuit/configuration.';
         refresh();
       })
       .catch(function (e) { $('pitState').innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; });

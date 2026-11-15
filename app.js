@@ -1065,11 +1065,34 @@ app.get('/api/telemetry/summary', async(req,res)=>{
     const service=await getTelemetry();
     const filters=telemetryFilters(req.query);
     const summary=await service.summary(filters);
-    // Sans filtre de circuit, on montre les mesures du circuit affiché : la
-    // page a besoin du pit-lane pour calculer les arrêts.
-    const track=filters.track||(summary.cars[0]&&summary.cars[0].track)||undefined;
-    const trackConfig=filters.trackConfig||(summary.cars[0]&&summary.cars[0].trackConfig)||undefined;
-    res.json({...summary,pitProfile:await service.pitProfile(track,trackConfig)});
+    // En mode automatique, le circuit affiché vient de la séance télémétrique
+    // la plus récente, pas de la première voiture (qui peut être la plus rapide
+    // sur une ancienne piste). Un filtre explicite reste prioritaire.
+    const recentSessions=await service.listSessions();
+    const configSpecified=Object.prototype.hasOwnProperty.call(req.query,'trackConfig')||filters.trackConfig!=null;
+    const detectedSession=recentSessions.find(session=>
+      (!filters.track||session.track===filters.track)
+      && (!configSpecified||(session.trackConfig||null)===(filters.trackConfig||null))
+      && (!filters.campaign||session.campaign===filters.campaign))||null;
+    const fallbackCar=summary.cars.find(car=>
+      (!filters.track||car.track===filters.track)
+      && (!configSpecified||(car.trackConfig||null)===(filters.trackConfig||null)))||null;
+    const track=filters.track||(detectedSession&&detectedSession.track)||(fallbackCar&&fallbackCar.track)||undefined;
+    const trackConfig=configSpecified
+      ? filters.trackConfig||null
+      : detectedSession&&detectedSession.track===track
+        ? detectedSession.trackConfig||null
+        : fallbackCar&&fallbackCar.track===track
+          ? fallbackCar.trackConfig||null
+          : null;
+    const pitContext=track?{
+      track,
+      trackConfig,
+      source:detectedSession&&detectedSession.track===track?'derniere-seance':'donnees-enregistrees',
+      startedAt:detectedSession&&detectedSession.track===track?detectedSession.startedAt:null,
+      sessionId:detectedSession&&detectedSession.track===track?detectedSession.id:null
+    }:null;
+    res.json({...summary,pitContext,pitProfile:await service.pitProfile(track,trackConfig)});
   }catch(e){res.status(503).json({error:e.message})}
 });
 app.get('/api/telemetry/report', async(req,res)=>{

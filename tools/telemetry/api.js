@@ -184,6 +184,39 @@ function validatePush(payload) {
 }
 
 /**
+ * Profil pit-lane indépendant de la voiture : les passages de tous les pilotes
+ * et modèles du même circuit/configuration alimentent la médiane commune.
+ */
+function pitProfileFromRows(track, trackConfig, profiles, rows) {
+  if (!track) return null;
+  const candidates = profiles.filter(row => row.track === track);
+  const exact = candidates.find(row => (row.track_config || null) === (trackConfig || null));
+  const generic = candidates.find(row => !row.track_config);
+  const row = exact || generic || null;
+  const samples = rows.filter(lap => lap.track === track
+    && (lap.track_config || null) === (trackConfig || null)
+    && lap.measured !== false)
+    .map(lap => num(lap.pit_lane_ms))
+    .filter(ms => ms != null && ms > 0);
+  const automaticPitLaneMs = lapStats(samples).median;
+  const manualPitLaneMs = row ? positive(row.pit_lane_loss_ms) : null;
+  if (!row && automaticPitLaneMs == null) return null;
+  return {
+    pit_lane_loss_ms: manualPitLaneMs != null ? manualPitLaneMs : automaticPitLaneMs,
+    manual_pit_lane_loss_ms: manualPitLaneMs,
+    automatic_pit_lane_loss_ms: automaticPitLaneMs,
+    pit_lane_samples: samples.length,
+    refuel_rate_lps: row ? num(row.refuel_rate_lps) : null,
+    tyre_change_ms: row ? num(row.tyre_change_ms) : null,
+    source: manualPitLaneMs != null
+      ? (row.source || 'mesure manuelle')
+      : automaticPitLaneMs != null
+        ? 'mesure automatique (limiteur 80 km/h)'
+        : (row && row.source) || null
+  };
+}
+
+/**
  * Service applicatif : un seul point d'entrée pour la route HTTP et les tests.
  */
 class TelemetryService {
@@ -459,14 +492,38 @@ class TelemetryService {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(row);
     }
+    // Le pit-lane est un temps du circuit/layout, pas de la voiture. Mesures
+    // automatiques de toutes les voitures et profil manuel sont donc partagés
+    // par chaque ligne de voiture du même contexte.
+    const pitContexts = new Map();
+    for (const laps of groups.values()) {
+      const { track, track_config: trackConfig } = laps[0];
+      const key = JSON.stringify([track || '', trackConfig || null]);
+      if (!pitContexts.has(key)) pitContexts.set(key, { track, trackConfig: trackConfig || null });
+    }
+    let pitProfiles = new Map();
+    if (pitContexts.size) {
+      // Une lecture globale suffit même si l'écran agrège plusieurs voitures :
+      // les filtres voiture/pilote/campagne ne doivent pas réduire les passages
+      // qui servent au profil partagé du circuit.
+      const pitRowsPromise = filters.car || filters.driver || filters.campaign
+        ? this.rows()
+        : Promise.resolve(rows);
+      const [storedProfiles, pitRows] = await Promise.all([
+        this.store.select('circuit_profile'), pitRowsPromise
+      ]);
+      pitProfiles = new Map([...pitContexts].map(([key, context]) => [
+        key, pitProfileFromRows(context.track, context.trackConfig, storedProfiles, pitRows)
+      ]));
+    }
+
     const cars = [];
     const loaded = rows.map(r => num(r.fuel_loaded_l)).filter(v => v != null && v > 0);
     for (const [key, laps] of groups) {
       const [car, track, trackConfig, driver] = JSON.parse(key);
       const profile = carProfile({ car, track, trackConfig }, laps);
       const stats = lapStats(laps.map(l => ({ ms: Number(l.lap_ms) })));
-      const pitStats = lapStats(laps.filter(l => l.measured !== false)
-        .map(l => ({ ms: num(l.pit_lane_ms) })));
+      const pit = pitProfiles.get(JSON.stringify([track || '', trackConfig || null]));
       // Capacité : le plus gros plein vu, pas une valeur devinée.
       const fuelLoadedMax = Math.max(0, ...laps.map(l => num(l.fuel_loaded_l) || 0));
       const wear = laps.map(l => num(l.tyre_wear_pct)).filter(v => v != null && v > 0);
@@ -486,8 +543,9 @@ class TelemetryService {
         tyreWearPerLap: avg(wear),
         fuelCapacity: fuelLoadedMax > 0 ? fuelLoadedMax : null,
         speedMaxKmh: profile.maxSpeedKmh,
-        pitLaneLossMs: pitStats.median,
-        pitLaneSamples: pitStats.count,
+        pitLaneLossMs: pit ? pit.pit_lane_loss_ms : null,
+        pitLaneSamples: pit ? pit.pit_lane_samples : 0,
+        pitLaneSource: pit ? pit.source : null,
         measuredLaps: laps.filter(l => l.measured !== false).length,
         cuts: laps.reduce((a, l) => a + (num(l.cuts) || 0), 0),
         lastLapAt: laps.map(l => l.recorded_at).filter(Boolean).sort().pop() || null
@@ -519,31 +577,11 @@ class TelemetryService {
    */
   async pitProfile(track, trackConfig = null) {
     if (!track) return null;
-    const profiles = await this.store.select('circuit_profile', { track });
-    const exact = profiles.find(row => (row.track_config || null) === (trackConfig || null));
-    const generic = profiles.find(row => !row.track_config);
-    const row = exact || generic || null;
-
-    const rows = (await this.rows({ track })).filter(lap =>
-      (lap.track_config || null) === (trackConfig || null) && lap.measured !== false);
-    const pitSamples = rows.map(lap => num(lap.pit_lane_ms)).filter(ms => ms != null && ms > 0);
-    const automaticPitLaneMs = lapStats(pitSamples).median;
-    const manualPitLaneMs = row ? positive(row.pit_lane_loss_ms) : null;
-    if (!row && automaticPitLaneMs == null) return null;
-
-    return {
-      pit_lane_loss_ms: manualPitLaneMs != null ? manualPitLaneMs : automaticPitLaneMs,
-      manual_pit_lane_loss_ms: manualPitLaneMs,
-      automatic_pit_lane_loss_ms: automaticPitLaneMs,
-      pit_lane_samples: pitSamples.length,
-      refuel_rate_lps: row ? num(row.refuel_rate_lps) : null,
-      tyre_change_ms: row ? num(row.tyre_change_ms) : null,
-      source: manualPitLaneMs != null
-        ? (row.source || 'mesure manuelle')
-        : automaticPitLaneMs != null
-          ? 'mesure automatique (limiteur 80 km/h)'
-          : (row && row.source) || null
-    };
+    const [profiles, rows] = await Promise.all([
+      this.store.select('circuit_profile', { track }),
+      this.rows({ track })
+    ]);
+    return pitProfileFromRows(track, trackConfig, profiles, rows);
   }
 
   /** Renseigne (ou remplace) les mesures pit-lane d'un circuit. */
@@ -610,7 +648,13 @@ class TelemetryService {
           lastLapAt: group.map(l => l.recorded_at).filter(Boolean).sort().pop() || null
         };
       })
-      .sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')));
+      .sort((a, b) => {
+        const time = value => {
+          const parsed = value instanceof Date ? value.getTime() : Date.parse(value || '');
+          return Number.isFinite(parsed) ? parsed : 0;
+        };
+        return time(b.startedAt) - time(a.startedAt);
+      });
   }
 
   /** Champs modifiables d'une séance : tout sauf les mesures elles-mêmes. */
