@@ -15,12 +15,20 @@
  *      le championnat, ni les événements, ni les fiches pilotes.
  */
 
+const crypto = require('node:crypto');
 const { openStore } = require('./store');
 const { carProfile, driverCarMatrix, field, plausibleCarId } = require('./aggregate');
 const { buildReport } = require('./export');
 const { lapStats, avg } = require('./bop');
 
 const MAX_LAPS_PER_PUSH = 200;
+const MEASUREMENT_CLIENT_TTL_MS = 15000;
+const MEASUREMENT_CLIENT_RETENTION_MS = 6 * 60 * 60 * 1000;
+const PIT_MEASUREMENT_TYPES = new Set(['tyre', 'refuel']);
+const PIT_MEASUREMENT_PHASES = new Set([
+  'before_lap', 'wait_pit_entry', 'pit_lane', 'service',
+  'wait_pit_exit', 'after_lap', 'complete', 'failed'
+]);
 
 /** Nombre fini ou null (jamais 0 de complaisance). */
 function num(v) {
@@ -200,14 +208,22 @@ function pitProfileFromRows(track, trackConfig, profiles, rows) {
     .filter(ms => ms != null && ms > 0);
   const automaticPitLaneMs = lapStats(samples).median;
   const manualPitLaneMs = row ? positive(row.pit_lane_loss_ms) : null;
+  const manualRefuelRateLps = row ? positive(row.refuel_rate_lps) : null;
+  const automaticRefuelRateLps = row ? positive(row.automatic_refuel_rate_lps) : null;
+  const manualTyreChangeMs = row ? positive(row.tyre_change_ms) : null;
+  const automaticTyreChangeMs = row ? positive(row.automatic_tyre_change_ms) : null;
   if (!row && automaticPitLaneMs == null) return null;
   return {
     pit_lane_loss_ms: manualPitLaneMs != null ? manualPitLaneMs : automaticPitLaneMs,
     manual_pit_lane_loss_ms: manualPitLaneMs,
     automatic_pit_lane_loss_ms: automaticPitLaneMs,
     pit_lane_samples: samples.length,
-    refuel_rate_lps: row ? num(row.refuel_rate_lps) : null,
-    tyre_change_ms: row ? num(row.tyre_change_ms) : null,
+    refuel_rate_lps: manualRefuelRateLps != null ? manualRefuelRateLps : automaticRefuelRateLps,
+    manual_refuel_rate_lps: manualRefuelRateLps,
+    automatic_refuel_rate_lps: automaticRefuelRateLps,
+    tyre_change_ms: manualTyreChangeMs != null ? manualTyreChangeMs : automaticTyreChangeMs,
+    manual_tyre_change_ms: manualTyreChangeMs,
+    automatic_tyre_change_ms: automaticTyreChangeMs,
     source: manualPitLaneMs != null
       ? (row.source || 'mesure manuelle')
       : automaticPitLaneMs != null
@@ -225,6 +241,9 @@ class TelemetryService {
     this.now = options.now || (() => new Date());
     this.sessions = new Map();       // clé de session → ligne en base
     this.liveSectors = new Map();    // mémoire RAM par serveur/circuit/pilote/voiture
+    this.measurementClients = new Map(); // CSP connectés, baux courts en mémoire
+    this.pitMeasurements = new Map();    // procédures guidées en cours/récentes
+    this.activePitMeasurementBySession = new Map();
     this.received = { pushes: 0, laps: 0, rejected: 0 };
   }
 
@@ -610,6 +629,411 @@ class TelemetryService {
       if (duplicate) return this.store.update('circuit_profile', duplicate.id, row);
       throw e;
     }
+  }
+
+  _measurementNow() {
+    const value = this.now();
+    return value instanceof Date ? value : new Date(value);
+  }
+
+  _measurementNowMs() {
+    const value = this._measurementNow().getTime();
+    return Number.isFinite(value) ? value : Date.now();
+  }
+
+  _expireStalePitMeasurements(now = this._measurementNowMs()) {
+    for (const run of this.pitMeasurements.values()) {
+      if (!['queued', 'running'].includes(run.status)) continue;
+      const client = this.measurementClients.get(run.sessionKey);
+      if (client && now - client.lastSeenAt <= MEASUREMENT_CLIENT_TTL_MS) continue;
+      run.status = 'failed';
+      run.phase = 'failed';
+      run.error = 'La session CSP est déconnectée; aucune nouvelle mesure ne sera enregistrée.';
+      run.updatedAt = this._measurementNow().toISOString();
+      this.activePitMeasurementBySession.delete(run.sessionKey);
+    }
+  }
+
+  _cleanPitMeasurement(run) {
+    if (!run) return null;
+    return {
+      id: run.id,
+      type: run.type,
+      requestedLiters: run.requestedLiters,
+      status: run.status,
+      phase: run.phase,
+      track: run.track,
+      trackConfig: run.trackConfig,
+      serverName: run.serverName,
+      driverName: run.driverName,
+      car: run.car,
+      preLaps: run.preLaps,
+      postLaps: run.postLaps,
+      serviceDurationMs: run.serviceDurationMs,
+      pitLaneDurationMs: run.pitLaneDurationMs || null,
+      fuelAddedL: run.fuelAddedL,
+      refuelRateLps: run.refuelRateLps,
+      tyreReset: run.tyreReset,
+      result: run.result || null,
+      error: run.error || null,
+      createdAt: run.createdAt,
+      updatedAt: run.updatedAt
+    };
+  }
+
+  /** Liste les scripts CSP qui ont battu un cœur récemment (bail 15 s). */
+  measurementClientList() {
+    const now = this._measurementNowMs();
+    this._expireStalePitMeasurements(now);
+    const clients = [];
+    for (const [sessionKey, client] of this.measurementClients) {
+      if (now - client.lastSeenAt > MEASUREMENT_CLIENT_RETENTION_MS) {
+        this.measurementClients.delete(sessionKey);
+        continue;
+      }
+      if (!client.authenticated || now - client.lastSeenAt > MEASUREMENT_CLIENT_TTL_MS) continue;
+      clients.push({
+        sessionKey,
+        serverName: client.serverName,
+        track: client.track,
+        trackConfig: client.trackConfig,
+        driverGuid: client.driverGuid,
+        driverName: client.driverName,
+        car: client.car,
+        lastSeenAt: new Date(client.lastSeenAt).toISOString()
+      });
+    }
+    return clients.sort((a, b) => {
+      const trackOrder = String(a.track).localeCompare(String(b.track), 'fr');
+      if (trackOrder) return trackOrder;
+      const driverOrder = String(a.driverName || a.driverGuid || '').localeCompare(
+        String(b.driverName || b.driverGuid || ''), 'fr'
+      );
+      return driverOrder || String(a.car || '').localeCompare(String(b.car || ''), 'fr');
+    });
+  }
+
+  /**
+   * Battement CSP + retour de commande. La clé de session n'est jamais fournie
+   * par la page : seul le script connecté, authentifié par TELEMETRY_TOKEN,
+   * peut recevoir une procédure, et celle-ci ne part qu'au client ciblé.
+   */
+  async pollPitMeasurement(payload) {
+    const sessionKey = String(payload && payload.sessionKey || '').trim().slice(0, 64);
+    const track = String(payload && payload.track || '').trim().slice(0, 160);
+    if (!/^[a-zA-Z0-9:_-]{3,64}$/.test(sessionKey) || !track) {
+      throw new Error('session CSP ou circuit manquant');
+    }
+    const now = this._measurementNowMs();
+    const driver = payload.driver && typeof payload.driver === 'object' ? payload.driver : {};
+    const details = {
+      sessionKey,
+      serverName: String(payload.serverName || '').trim().slice(0, 120),
+      track,
+      trackConfig: String(payload.trackConfig || '').trim().slice(0, 80) || null,
+      driverGuid: String(driver.guid || '').trim().slice(0, 64),
+      driverName: String(driver.name || '').trim().slice(0, 100),
+      car: String(payload.car || '').trim().slice(0, 120),
+      lastSeenAt: now
+    };
+    const suppliedSecret = String(payload.clientSecret || '').trim().toLowerCase();
+    const existingClient = this.measurementClients.get(sessionKey);
+    let client;
+    if (!existingClient) {
+      // Le serveur remet une capacité aléatoire au CSP. Elle n'est jamais
+      // renvoyée à la page admin; le jeton global seul ne permet donc pas de
+      // se faire passer pour une autre session active.
+      const secret = /^[a-f0-9]{48}$/.test(suppliedSecret)
+        ? suppliedSecret : crypto.randomBytes(24).toString('hex');
+      client = { ...details, clientSecret: secret, authenticated: /^[a-f0-9]{48}$/.test(suppliedSecret) };
+      this.measurementClients.set(sessionKey, client);
+      if (!client.authenticated) return `REGISTER|${secret}`;
+    } else {
+      if (!existingClient.authenticated && suppliedSecret !== existingClient.clientSecret) {
+        // Si la réponse REGISTER a été perdue, renvoyer la même capacité jusqu'à
+        // ce que le CSP la présente; sinon cette session resterait invisible.
+        return `REGISTER|${existingClient.clientSecret}`;
+      }
+      if (!suppliedSecret || suppliedSecret !== existingClient.clientSecret) return 'NONE';
+      client = { ...existingClient, ...details, authenticated: true };
+      this.measurementClients.set(sessionKey, client);
+    }
+
+    const update = payload.measurement && typeof payload.measurement === 'object'
+      ? payload.measurement : null;
+    const measurementId = this.activePitMeasurementBySession.get(sessionKey);
+    const run = measurementId && this.pitMeasurements.get(measurementId);
+    if (!run) {
+      const reported = update && this.pitMeasurements.get(String(update.id || ''));
+      if (reported && reported.sessionKey === sessionKey
+          && ['failed', 'cancelled'].includes(reported.status) && !reported.abortDelivered) {
+        reported.abortDelivered = true;
+        return `ABORT|${reported.id}`;
+      }
+      if (update && update.id && update.phase !== 'complete' && update.phase !== 'failed') {
+        // Après un redémarrage du site, une procédure volatile ne peut pas être
+        // finalisée : le script le sait et l'arrête au lieu d'afficher un faux succès.
+        return `ABORT|${String(update.id).replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64)}`;
+      }
+      return 'NONE';
+    }
+    if (['completed', 'failed', 'cancelled'].includes(run.status)) {
+      if (update && String(update.id || '') === run.id
+          && ['failed', 'cancelled'].includes(run.status) && !run.abortDelivered) {
+        run.abortDelivered = true;
+        return `ABORT|${run.id}`;
+      }
+      return 'NONE';
+    }
+    if (run.track !== client.track || (run.trackConfig || null) !== (client.trackConfig || null)) {
+      run.status = 'failed';
+      run.phase = 'failed';
+      run.error = 'Le circuit ou sa configuration a changé pendant la mesure.';
+      run.updatedAt = this._measurementNow().toISOString();
+      this.activePitMeasurementBySession.delete(sessionKey);
+      run.abortDelivered = true;
+      return `ABORT|${run.id}`;
+    }
+
+    if (update && String(update.id || '') === run.id) {
+      await this._applyPitMeasurementUpdate(run, update);
+    }
+    if (run.status === 'failed' || run.status === 'cancelled') {
+      run.abortDelivered = true;
+      return `ABORT|${run.id}`;
+    }
+    if (run.status === 'queued') {
+      const liters = run.requestedLiters == null ? 0 : run.requestedLiters;
+      return `START|${run.id}|${run.type}|${liters}`;
+    }
+    return 'NONE';
+  }
+
+  /** Arme une mesure uniquement pour un script CSP actuellement connecté. */
+  startPitMeasurement({ sessionKey, type, liters } = {}) {
+    this._expireStalePitMeasurements();
+    const key = String(sessionKey || '').trim().slice(0, 64);
+    const kind = String(type || '').trim();
+    if (!/^[a-zA-Z0-9:_-]{3,64}$/.test(key)) return { ok: false, error: 'Sélectionne une session de jeu connectée.' };
+    if (!PIT_MEASUREMENT_TYPES.has(kind)) return { ok: false, error: 'Type de mesure inconnu.' };
+    const client = this.measurementClients.get(key);
+    if (!client || !client.authenticated || this._measurementNowMs() - client.lastSeenAt > MEASUREMENT_CLIENT_TTL_MS) {
+      return { ok: false, error: 'Cette session CSP n’est plus connectée. Actualise la liste et réessaie.' };
+    }
+    const requestedLiters = kind === 'refuel' ? positive(liters) : null;
+    if (kind === 'refuel' && (requestedLiters == null || requestedLiters < 0.1 || requestedLiters > 200)) {
+      return { ok: false, error: 'Indique un volume de ravitaillement entre 0,1 et 200 L.' };
+    }
+    const currentId = this.activePitMeasurementBySession.get(key);
+    const current = currentId && this.pitMeasurements.get(currentId);
+    if (current && ['queued', 'running'].includes(current.status)) {
+      return { ok: false, error: 'Une mesure est déjà en cours sur cette session.' };
+    }
+    for (const active of this.pitMeasurements.values()) {
+      if (['queued', 'running'].includes(active.status)
+          && active.track === client.track
+          && (active.trackConfig || null) === (client.trackConfig || null)) {
+        return { ok: false, error: 'Une mesure est déjà en cours pour ce circuit/configuration.' };
+      }
+    }
+    const now = this._measurementNow();
+    const id = crypto.randomBytes(12).toString('hex');
+    const run = {
+      id,
+      sessionKey: key,
+      type: kind,
+      requestedLiters,
+      track: client.track,
+      trackConfig: client.trackConfig,
+      serverName: client.serverName,
+      driverGuid: client.driverGuid,
+      driverName: client.driverName,
+      car: client.car,
+      status: 'queued',
+      phase: 'queued',
+      phaseRank: 0,
+      preLaps: 0,
+      postLaps: 0,
+      serviceDurationMs: null,
+      fuelAddedL: null,
+      refuelRateLps: null,
+      tyreReset: false,
+      result: null,
+      error: null,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    };
+    this.pitMeasurements.set(id, run);
+    this.activePitMeasurementBySession.set(key, id);
+    return { ok: true, measurement: this._cleanPitMeasurement(run) };
+  }
+
+  async _applyPitMeasurementUpdate(run, update) {
+    if (!run || !['queued', 'running'].includes(run.status)) return;
+    const phase = String(update.phase || '');
+    if (!PIT_MEASUREMENT_PHASES.has(phase)) return;
+    const rank = {
+      before_lap: 1, wait_pit_entry: 2, pit_lane: 3, service: 4,
+      wait_pit_exit: 5, after_lap: 6, complete: 7, failed: 8
+    }[phase];
+    if (phase !== 'failed' && rank < run.phaseRank) return;
+    run.phase = phase;
+    run.phaseRank = Math.max(run.phaseRank, rank);
+    run.status = 'running';
+    const preLaps = Number(update.preLaps);
+    const postLaps = Number(update.postLaps);
+    if (Number.isFinite(preLaps)) run.preLaps = Math.max(run.preLaps, Math.min(100, Math.floor(preLaps)));
+    if (Number.isFinite(postLaps)) run.postLaps = Math.max(run.postLaps, Math.min(100, Math.floor(postLaps)));
+    const duration = positive(update.serviceDurationMs);
+    if (duration != null && duration <= 600000) run.serviceDurationMs = Math.round(duration);
+    const pitLaneDuration = positive(update.pitLaneDurationMs);
+    if (pitLaneDuration != null && pitLaneDuration <= 3600000) run.pitLaneDurationMs = Math.round(pitLaneDuration);
+    const added = positive(update.fuelAddedL);
+    if (added != null && added <= 200) run.fuelAddedL = added;
+    run.tyreReset = update.tyreReset === true;
+    if (typeof update.error === 'string') run.error = update.error.trim().slice(0, 240);
+    run.updatedAt = this._measurementNow().toISOString();
+
+    if (phase === 'failed') {
+      run.status = 'failed';
+      run.error = run.error || 'La procédure CSP n’a pas pu confirmer le service demandé.';
+      this.activePitMeasurementBySession.delete(run.sessionKey);
+      return;
+    }
+    if (phase !== 'complete') return;
+    if (run.preLaps < 1 || run.postLaps < 1) {
+      run.status = 'failed';
+      run.error = 'La procédure doit contenir un tour avant et un tour après le passage aux stands.';
+      this.activePitMeasurementBySession.delete(run.sessionKey);
+      return;
+    }
+    if (run.serviceDurationMs == null) {
+      run.status = 'failed';
+      run.error = 'Aucune durée de service valide n’a été transmise.';
+      this.activePitMeasurementBySession.delete(run.sessionKey);
+      return;
+    }
+    if (run.pitLaneDurationMs == null) {
+      run.status = 'failed';
+      run.error = 'Le roulage pit-lane n’a pas été mesuré séparément du service.';
+      this.activePitMeasurementBySession.delete(run.sessionKey);
+      return;
+    }
+
+    let profileMeasurement;
+    if (run.type === 'tyre') {
+      if (!run.tyreReset) {
+        run.status = 'failed';
+        run.error = 'Le CSP n’a pas confirmé le remplacement des pneus (usure non remise à neuf).';
+        this.activePitMeasurementBySession.delete(run.sessionKey);
+        return;
+      }
+      profileMeasurement = { type: 'tyre', tyreChangeMs: run.serviceDurationMs };
+      run.result = {
+        tyreChangeMs: run.serviceDurationMs,
+        serviceDurationMs: run.serviceDurationMs,
+        pitLaneDurationMs: run.pitLaneDurationMs
+      };
+    } else {
+      const requested = run.requestedLiters;
+      const addedLiters = run.fuelAddedL;
+      if (requested == null || addedLiters == null) {
+        run.status = 'failed';
+        run.error = 'Le niveau de carburant n’a pas confirmé le volume ajouté.';
+        this.activePitMeasurementBySession.delete(run.sessionKey);
+        return;
+      }
+      const tolerance = Math.max(0.05, requested * 0.1);
+      if (Math.abs(addedLiters - requested) > tolerance) {
+        run.status = 'failed';
+        run.error = `Volume détecté ${addedLiters.toFixed(2)} L, différent des ${requested.toFixed(2)} L demandés.`;
+        this.activePitMeasurementBySession.delete(run.sessionKey);
+        return;
+      }
+      const rate = addedLiters / (run.serviceDurationMs / 1000);
+      if (!Number.isFinite(rate) || rate < 0.05 || rate > 50) {
+        run.status = 'failed';
+        run.error = 'Le débit calculé sort de la plage mesurable; aucune valeur n’a été enregistrée.';
+        this.activePitMeasurementBySession.delete(run.sessionKey);
+        return;
+      }
+      run.refuelRateLps = Math.round(rate * 1000) / 1000;
+      profileMeasurement = { type: 'refuel', refuelRateLps: run.refuelRateLps };
+      run.result = {
+        fuelAddedL: Math.round(addedLiters * 1000) / 1000,
+        serviceDurationMs: run.serviceDurationMs,
+        pitLaneDurationMs: run.pitLaneDurationMs,
+        refuelRateLps: run.refuelRateLps
+      };
+    }
+    try {
+      await this.saveAutomaticPitMeasurement(run.track, run.trackConfig, profileMeasurement);
+      run.status = 'completed';
+      run.phase = 'complete';
+      run.error = null;
+    } catch (error) {
+      run.status = 'failed';
+      run.error = `Mesure validée, mais profil non enregistré : ${String(error.message || error).slice(0, 170)}`;
+    }
+    run.updatedAt = this._measurementNow().toISOString();
+    this.activePitMeasurementBySession.delete(run.sessionKey);
+  }
+
+  /** Enregistre une mesure CSP séparément des valeurs saisies manuellement. */
+  async saveAutomaticPitMeasurement(track, trackConfig, measurement) {
+    const cleanTrack = String(track || '').trim().slice(0, 160);
+    if (!cleanTrack) throw new Error('circuit manquant');
+    const config = String(trackConfig || '').trim().slice(0, 80) || null;
+    const type = String(measurement && measurement.type || '');
+    if (!PIT_MEASUREMENT_TYPES.has(type)) throw new Error('type de service inconnu');
+    const profiles = await this.store.select('circuit_profile', { track: cleanTrack });
+    const existing = profiles.find(row => (row.track_config || null) === config);
+    const row = {
+      track: cleanTrack,
+      track_config: config,
+      // Une mesure CSP n’écrase jamais une saisie de direction de course.
+      pit_lane_loss_ms: existing ? existing.pit_lane_loss_ms : null,
+      refuel_rate_lps: existing ? existing.refuel_rate_lps : null,
+      tyre_change_ms: existing ? existing.tyre_change_ms : null,
+      automatic_refuel_rate_lps: existing ? existing.automatic_refuel_rate_lps : null,
+      automatic_tyre_change_ms: existing ? existing.automatic_tyre_change_ms : null,
+      measured_at: this._measurementNow().toISOString(),
+      source: existing && existing.source ? existing.source : 'mesure automatique CSP'
+    };
+    if (type === 'refuel') {
+      const rate = positive(measurement.refuelRateLps);
+      if (rate == null || rate > 50) throw new Error('débit de ravitaillement invalide');
+      row.automatic_refuel_rate_lps = Math.round(rate * 1000) / 1000;
+    } else {
+      const duration = positive(measurement.tyreChangeMs);
+      if (duration == null || duration > 600000) throw new Error('durée de pneus invalide');
+      row.automatic_tyre_change_ms = Math.round(duration);
+    }
+    if (existing) return this.store.update('circuit_profile', existing.id, row);
+    try {
+      return await this.store.insert('circuit_profile', row);
+    } catch (error) {
+      const again = await this.store.select('circuit_profile', { track: cleanTrack });
+      const duplicate = again.find(item => (item.track_config || null) === config);
+      if (duplicate) return this.store.update('circuit_profile', duplicate.id, row);
+      throw error;
+    }
+  }
+
+  pitMeasurement(id) {
+    const run = this.pitMeasurements.get(String(id || ''));
+    if (!run) return null;
+    if (['queued', 'running'].includes(run.status)) {
+      const client = this.measurementClients.get(run.sessionKey);
+      if (!client || this._measurementNowMs() - client.lastSeenAt > MEASUREMENT_CLIENT_TTL_MS) {
+        run.status = 'failed';
+        run.phase = 'failed';
+        run.error = 'La session CSP est déconnectée; aucune nouvelle mesure ne sera enregistrée.';
+        run.updatedAt = this._measurementNow().toISOString();
+        this.activePitMeasurementBySession.delete(run.sessionKey);
+      }
+    }
+    return this._cleanPitMeasurement(run);
   }
 
   // --- gestion des données (page /telemetry, admin) -------------------------

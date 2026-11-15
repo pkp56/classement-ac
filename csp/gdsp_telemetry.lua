@@ -31,8 +31,10 @@
 --
 -- Dépendance : CSP 0.1.79+ (online scripts).
 
-local VERSION = 'GDSP-TELEMETRY 1.1'
+local VERSION = 'GDSP-TELEMETRY 1.2'
 local WHEELS = 4
+local COMMAND_POLL_SEC = 5
+local FUEL_CHANGE_EPSILON_L = 0.002
 local MAX_BUFFER = 120      -- tours en attente avant de jeter les plus anciens
 -- Sans indicateur pit-lane CSP fiable, on reconnaît le plateau du limiteur
 -- 80 km/h, puis sa libération. Un bref passage à cette vitesse sur piste ne
@@ -66,7 +68,11 @@ local state = {
   pitLaneActive = false,
   pitLaneMs = 0,
   pitExitMs = 0,
+  pitStopAt = nil,
   pendingPitLaneMs = {},
+  measurement = nil,
+  nextMeasurementPollAt = 0,
+  measurementPollErrors = 0,
   pending = {},
   pendingCount = 0,
   lastSendAt = -1e9,
@@ -93,6 +99,7 @@ local state = {
   lapConfirmed = false,     -- la première confirmation d'enregistrement est passée
   lastLapAt = -1e9,         -- dernier tour DÉTECTÉ (la bannière réapparaît)
   sessionKey = nil,         -- identité de cette exécution, côté site
+  clientSecret = nil,       -- capacité temporaire délivrée par le serveur CSP
   trackSource = nil,        -- d'où vient le circuit : « jeu » (ac.getTrackID) ou « config »
   updates = 0,              -- nombre d'appels à script.update
 }
@@ -246,10 +253,14 @@ local function sessionKey()
   -- Pas d'identifiant de séance fiable dans ac.StateSim : une clé par
   -- exécution du script (horodatage + aléa) isole chaque course.
   local ok, t = pcall(os.time)
+  local entropy = {}
+  for i = 1, 4 do
+    entropy[i] = string.format('%08x', math.random(0, 2147483647))
+  end
   if ok and type(t) == 'number' then
-    state.sessionKey = 't:' .. tostring(t) .. ':' .. tostring(math.random(100000, 999999))
+    state.sessionKey = 'r:' .. tostring(t) .. ':' .. table.concat(entropy)
   else
-    state.sessionKey = 'r:' .. tostring(math.random(1, 1073741824))
+    state.sessionKey = 'r:' .. table.concat(entropy)
   end
   return state.sessionKey
 end
@@ -685,7 +696,7 @@ local function blockSend(reason)
 end
 
 local function flush(force)
-  if state.pendingCount == 0 then return end
+  if state.pendingCount == 0 or state.inflight then return end
   if not force and (state.now - state.lastSendAt) < cfg.intervalSec then return end
   -- Même raison que dans completeLap : l'absence de guid ne doit pas retenir
   -- les tours indéfiniment. Seule la voiture est indispensable.
@@ -790,6 +801,203 @@ local function resetPitLaneDetection()
   state.pitLaneActive = false
   state.pitLaneMs = 0
   state.pitExitMs = 0
+  state.pitStopAt = nil
+end
+
+local function measurementMessage(text)
+  message('Télémétrie · mesure stand', text)
+  log('mesure stand : ' .. text)
+end
+
+local function failPitMeasurement(reason, force)
+  local m = state.measurement
+  if not m or m.phase == 'failed' or (m.phase == 'complete' and not force) then return end
+  m.phase = 'failed'
+  m.error = tostring(reason or 'procédure interrompue')
+  measurementMessage(m.error)
+end
+
+local function beginPitMeasurement(id, kind, requestedLiters)
+  local current = state.measurement
+  if current and current.id == id then return end -- commande répétée : idempotente
+  if current and current.phase ~= 'complete' and current.phase ~= 'failed' then return end
+  if kind ~= 'tyre' and kind ~= 'refuel' then return end
+  state.measurement = {
+    id = tostring(id),
+    kind = kind,
+    requestedLiters = kind == 'refuel' and tonumber(requestedLiters) or nil,
+    phase = 'before_lap',
+    preLaps = 0,
+    postLaps = 0,
+    serviceDurationMs = nil,
+    fuelAddedL = nil,
+    tyreReset = false,
+    error = nil
+  }
+  -- Une mesure commence sur un passage neuf : aucun plateau antérieur ne doit
+  -- être pris pour l'entrée du protocole demandé.
+  resetPitLaneDetection()
+  measurementMessage(kind == 'refuel'
+    and string.format('ravitaillement de %.1f L demandé — effectuez un tour, puis entrez aux stands.', tonumber(requestedLiters) or 0)
+    or 'changement de pneus demandé — effectuez un tour, puis entrez aux stands.')
+end
+
+local function measurementSnapshot()
+  local m = state.measurement
+  if not m then return nil end
+  return {
+    id = m.id,
+    phase = m.phase,
+    preLaps = m.preLaps or 0,
+    postLaps = m.postLaps or 0,
+    serviceDurationMs = m.serviceDurationMs,
+    fuelAddedL = m.fuelAddedL,
+    refuelRateLps = m.refuelRateLps,
+    pitLaneDurationMs = m.pitLaneDurationMs,
+    tyreReset = m.tyreReset == true,
+    error = m.error
+  }
+end
+
+local function measurementLapCompleted()
+  local m = state.measurement
+  if not m then return end
+  if m.phase == 'before_lap' then
+    m.preLaps = (m.preLaps or 0) + 1
+    if m.preLaps >= 1 then
+      m.phase = 'wait_pit_entry'
+      resetPitLaneDetection()
+      measurementMessage('tour avant validé — entrez dans la pit-lane au limiteur de 80 km/h.')
+    end
+  elseif m.phase == 'after_lap' then
+    m.postLaps = (m.postLaps or 0) + 1
+    if m.postLaps >= 1 then
+      m.phase = 'complete'
+      measurementMessage('tour après validé — la mesure est prête à être enregistrée.')
+    end
+  end
+end
+
+local function tyreResetDetected(before, after)
+  if not before or not after then return false end
+  local increased = 0
+  for i = 1, WHEELS do
+    if before[i] ~= nil and after[i] ~= nil
+        and after[i] >= 0.95 and after[i] > before[i] + 0.0005 then
+      increased = increased + 1
+    end
+  end
+  -- Un changement complet remet à neuf les quatre roues. Trois roues au moins
+  -- tolèrent une valeur momentanément illisible sans accepter une usure normale.
+  return increased >= 3
+end
+
+local function startMeasuredService()
+  local m = state.measurement
+  if not m or m.phase ~= 'pit_lane' then return end
+  m.phase = 'service'
+  m.stopStartAt = state.now
+  m.fuelBefore = readFuelLiters()
+  m.fuelLastObserved = m.fuelBefore
+  m.fuelMax = m.fuelBefore
+  m.tyresBefore = readTyreWear()
+  measurementMessage(m.kind == 'refuel'
+    and 'arrêt au box détecté — effectuez le ravitaillement demandé, puis repartez.'
+    or 'arrêt au box détecté — effectuez uniquement le changement de pneus, puis repartez.')
+end
+
+local function observeMeasuredService()
+  local m = state.measurement
+  if not m or m.phase ~= 'service' then return end
+  if m.kind == 'tyre' then
+    if tyreResetDetected(m.tyresBefore, readTyreWear()) then
+      m.tyreReset = true
+      m.serviceDurationMs = math.floor(math.max(0, state.now - m.stopStartAt) * 1000 + 0.5)
+      m.phase = 'wait_pit_exit'
+      measurementMessage(string.format('pneus neufs confirmés · %.2f s — sortez de la pit-lane.', m.serviceDurationMs / 1000))
+    end
+    return
+  end
+
+  local fuel = readFuelLiters()
+  if fuel and m.fuelBefore and fuel > m.fuelBefore + FUEL_CHANGE_EPSILON_L then
+    if not m.fuelStartAt then
+      m.fuelStartAt = state.now
+      m.fuelLastChangeAt = state.now
+      m.fuelLastObserved = fuel
+      m.fuelMax = fuel
+    elseif fuel > (m.fuelLastObserved or m.fuelBefore) + FUEL_CHANGE_EPSILON_L then
+      m.fuelLastChangeAt = state.now
+      m.fuelLastObserved = fuel
+      m.fuelMax = math.max(m.fuelMax or fuel, fuel)
+    end
+  end
+end
+
+local function finishMeasuredService()
+  local m = state.measurement
+  if not m or m.phase ~= 'service' then return end
+  if m.kind == 'tyre' then
+    failPitMeasurement('Pneus neufs non confirmés par la télémétrie; aucune durée enregistrée.')
+    return
+  end
+  local fuelEnd = readFuelLiters()
+  local measuredEnd = math.max(tonumber(fuelEnd) or -1, tonumber(m.fuelMax) or -1)
+  local added = m.fuelBefore and measuredEnd >= m.fuelBefore
+    and (measuredEnd - m.fuelBefore) or nil
+  local durationMs = m.fuelStartAt and m.fuelLastChangeAt
+    and math.floor(math.max(0, m.fuelLastChangeAt - m.fuelStartAt) * 1000 + 0.5) or nil
+  if not added or added <= 0.05 or not durationMs or durationMs <= 0 or durationMs > 600000 then
+    failPitMeasurement('La hausse réelle du carburant n’a pas permis de mesurer le débit; réessayez sans interrompre le remplissage.')
+    return
+  end
+  local requested = tonumber(m.requestedLiters) or 0
+  local tolerance = math.max(0.05, requested * 0.1)
+  if requested <= 0 or math.abs(added - requested) > tolerance then
+    failPitMeasurement(string.format('%.2f L ajoutés au lieu des %.2f L demandés; aucune valeur enregistrée.', added, requested))
+    return
+  end
+  local rate = added / (durationMs / 1000)
+  if rate < 0.05 or rate > 50 then
+    failPitMeasurement('Le débit calculé est hors plage mesurable; aucune valeur enregistrée.')
+    return
+  end
+  m.fuelAddedL = math.floor(added * 1000 + 0.5) / 1000
+  m.serviceDurationMs = durationMs
+  m.refuelRateLps = math.floor(rate * 1000 + 0.5) / 1000
+  m.phase = 'wait_pit_exit'
+  measurementMessage(string.format('%.2f L en %.2f s · %.3f L/s — sortez de la pit-lane.',
+    m.fuelAddedL, m.serviceDurationMs / 1000, m.refuelRateLps))
+end
+
+local function pitMeasurementEntry()
+  local m = state.measurement
+  if m and m.phase == 'wait_pit_entry' then
+    m.phase = 'pit_lane'
+    measurementMessage('entrée pit-lane confirmée par le plateau 80 km/h — rejoignez le box.')
+  end
+end
+
+local function pitMeasurementExit()
+  local m = state.measurement
+  if not m then return end
+  if m.phase == 'wait_pit_exit' then
+    -- Le compteur pitLaneMs ne progresse jamais véhicule à l'arrêt : on fige
+    -- ici le roulage du passage, distinct du chronomètre de service au box.
+    m.pitLaneDurationMs = math.floor(math.max(0, state.pitLaneMs) + 0.5)
+    if m.pitLaneDurationMs <= 0 then
+      failPitMeasurement('Temps de roulage pit-lane non mesurable; aucune valeur de service enregistrée.')
+      return
+    end
+    m.phase = 'after_lap'
+    m.postLaps = 0
+    measurementMessage(string.format('sortie confirmée · roulage pit-lane %.1f s · service %.2f s — effectuez un tour complet après l’arrêt.',
+      m.pitLaneDurationMs / 1000, (m.serviceDurationMs or 0) / 1000))
+  elseif m.phase == 'pit_lane' then
+    failPitMeasurement('Sortie de pit-lane détectée sans arrêt de service; aucune mesure enregistrée.')
+  elseif m.phase == 'service' then
+    failPitMeasurement('Le service demandé n’a pas été confirmé avant la sortie des stands.')
+  end
 end
 
 local function updatePitLane(speedKmh, dt)
@@ -803,6 +1011,7 @@ local function updatePitLane(speedKmh, dt)
         state.pitLaneActive = true
         state.pitLaneMs = state.pitCandidateMs
         state.pitExitMs = 0
+        pitMeasurementEntry()
       end
     else
       state.pitCandidateMs = 0
@@ -810,12 +1019,21 @@ local function updatePitLane(speedKmh, dt)
     return
   end
 
-  -- Une voiture immobile au box reste dans le même passage, mais le temps de
-  -- service n'entre pas dans le temps de roulage pit-lane (pas de double compte
-  -- avec le ravitaillement et les pneus).
+  -- La durée d'arrêt/service est suivie à part : elle ne s'ajoute jamais au
+  -- roulage entre le plateau 80 et la sortie de la pit-lane.
   if speedKmh <= PIT_STOP_KMH then
     state.pitExitMs = 0
+    if not state.pitStopAt then
+      state.pitStopAt = state.now
+      startMeasuredService()
+    end
+    observeMeasuredService()
     return
+  end
+
+  if state.pitStopAt then
+    finishMeasuredService()
+    state.pitStopAt = nil
   end
 
   if speedKmh > PIT_EXIT_KMH then
@@ -826,6 +1044,7 @@ local function updatePitLane(speedKmh, dt)
         state.pendingPitLaneMs[#state.pendingPitLaneMs + 1] = measuredMs
         log(string.format('passage pit-lane détecté au limiteur 80 : %.1f s', measuredMs / 1000))
       end
+      pitMeasurementExit()
       resetPitLaneDetection()
     end
     return
@@ -836,6 +1055,9 @@ local function updatePitLane(speedKmh, dt)
 end
 
 local function completeLap(lapNumber)
+  -- La procédure attend un tour avant puis un tour après le service, même si
+  -- le chrono d'un tour est illisible (la détection du compteur reste réelle).
+  measurementLapCompleted()
   -- La bannière réapparaît à chaque tour bouclé : c'est le seul moment où
   -- le joueur peut lire compteur, tours enregistrés et anomalies — le reste
   -- du temps, elle serait du bruit.
@@ -996,6 +1218,11 @@ local function updateStep(dt)
   end
 
   if state.pendingCount > 0 then flush(false) end
+  -- Une seule requête CSP à la fois : un envoi de tours en attente garde la
+  -- priorité, puis le canal de commande reprend à intervalle fixe.
+  if state.pinged and not state.inflight and state.now >= state.nextMeasurementPollAt then
+    script.pollMeasurement()
+  end
 end
 
 function script.update(dt)
@@ -1086,6 +1313,7 @@ function script.ping()
     end
     if status and status >= 200 and status < 300 then
       state.pinged = true
+      state.nextMeasurementPollAt = state.now + COMMAND_POLL_SEC
       log('PING accepté (HTTP ' .. tostring(status) .. ') · base joignable côté serveur')
       message('Télémétrie GDSP', 'Connexion au site établie (' .. tostring(status) .. ').')
     else
@@ -1093,6 +1321,57 @@ function script.ping()
       message('Télémétrie GDSP : le site refuse', 'HTTP ' .. tostring(status) ..
         ' · vérifier TELEMETRY_TOKEN / TELEMETRY_ENABLED sur Render')
     end
+  end)
+end
+
+--- Battement du canal de commande CSP. La page admin ne peut pas atteindre la
+--- voiture directement : elle arme une procédure côté serveur, et seul le
+--- script de la session ciblée reçoit START via cette requête authentifiée.
+function script.pollMeasurement()
+  if not state.pinged or state.inflight or cfg.url == '' then return end
+  state.nextMeasurementPollAt = state.now + COMMAND_POLL_SEC
+  local body = toJson({
+    v = 1,
+    script = VERSION,
+    kind = 'measurement-poll',
+    campaign = cfg.campaign,
+    serverName = resolveServerName(),
+    track = resolveTrack(),
+    trackConfig = resolveTrackLayout(),
+    sessionKey = sessionKey(),
+    clientSecret = state.clientSecret,
+    driver = { guid = state.driverGuid or '', name = state.driverName or '' },
+    car = state.carId or '',
+    measurement = measurementSnapshot()
+  })
+  post(body, function(err, res)
+    if err then
+      state.measurementPollErrors = state.measurementPollErrors + 1
+      if state.measurementPollErrors == 1 or state.measurementPollErrors % 10 == 0 then
+        log('poll de mesure impossible (' .. state.measurementPollErrors .. '×) : ' .. tostring(err))
+      end
+      return
+    end
+    local status = res and tonumber(res.status) or 0
+    if status < 200 or status >= 300 then
+      state.measurementPollErrors = state.measurementPollErrors + 1
+      return
+    end
+    state.measurementPollErrors = 0
+    local raw = res and res.body ~= nil and tostring(res.body) or ''
+    raw = raw:gsub('^%s+', ''):gsub('%s+$', '')
+    local registration = raw:match('^REGISTER|([%w%-]+)$')
+    if registration then
+      state.clientSecret = registration
+      return
+    end
+    local abortedId = raw:match('^ABORT|([%w%-]+)$')
+    if abortedId and state.measurement and state.measurement.id == abortedId then
+      failPitMeasurement('Le serveur a interrompu la procédure; aucune mesure ne sera enregistrée.', true)
+      return
+    end
+    local id, kind, liters = raw:match('^START|([%w%-]+)|([%a]+)|([%d%.]+)$')
+    if id and kind then beginPitMeasurement(id, kind, tonumber(liters) or 0) end
   end)
 end
 
@@ -1133,10 +1412,12 @@ script.__init__ = function() script.init() end
 --- script ne s'exécute pas du tout.
 function script.drawUI()
   -- Affichée 20 s au démarrage, PUIS tant que le ping n'a pas abouti, PUIS
-  -- 15 s à chaque tour bouclé : au moment de franchir la ligne (minute 2 ou
-  -- 3), la bannière des 20 s a disparu depuis longtemps — c'est pourtant là
-  -- que compteur, tours enregistrés et anomalies se lisent.
-  if state.now > 20 and state.pinged and (state.now - state.lastLapAt) > 15 then return end
+  -- 15 s à chaque tour bouclé. Une procédure de stand reste visible du début
+  -- à la fin, même pendant plusieurs tours.
+  local m = state.measurement
+  local measurementActive = m and m.phase ~= 'complete' and m.phase ~= 'failed'
+  if state.now > 20 and state.pinged and (state.now - state.lastLapAt) > 15
+      and not measurementActive then return end
   -- init n'a peut-être jamais été appelé : le diagnostic doit rester lisible.
   pcall(resolveConfig)
   local trackNow = resolveTrack()
@@ -1167,6 +1448,20 @@ function script.drawUI()
       or (state.lastError ~= '' and state.lastError or 'aucune')),
     'sonde: ' .. tostring(state.probe),
   }
+  if m then
+    local phases = {
+      before_lap = 'tour avant', wait_pit_entry = 'attente limiteur 80',
+      pit_lane = 'entrée stands', service = 'service au box',
+      wait_pit_exit = 'sortie des stands', after_lap = 'tour après',
+      complete = 'terminée', failed = 'interrompue'
+    }
+    local detail = phases[m.phase] or tostring(m.phase)
+    if m.serviceDurationMs then detail = detail .. string.format(' · service %.2f s', m.serviceDurationMs / 1000) end
+    if m.pitLaneDurationMs then detail = detail .. string.format(' · roulage pit-lane %.1f s', m.pitLaneDurationMs / 1000) end
+    if m.refuelRateLps then detail = detail .. string.format(' · %.3f L/s', m.refuelRateLps) end
+    lines[#lines + 1] = 'procédure stand: ' .. detail
+    if m.error then lines[#lines + 1] = 'mesure: ' .. tostring(m.error):sub(1, 90) end
+  end
   -- Une erreur attrapée dans la boucle s'affiche : sans cela, un crash
   -- répété dans update restait invisible (le harnais ne peut pas le voir,
   -- ses car/sim sont des tables Lua permissives).
@@ -1192,7 +1487,9 @@ function script.drawUI()
 end
 
 function script.onCarReset()
-  -- Une remise en piste rendrait ambiguë une mesure pit-lane en cours.
+  -- Une remise en piste rendrait ambiguë le protocole guidé : jamais de durée
+  -- enregistrée après un reset ou une téléportation.
+  failPitMeasurement('Remise en piste détectée; la procédure a été annulée.')
   resetPitLaneDetection()
   -- Sortie des stands ou remise en piste : les niveaux repartent de zéro, et
   -- le tour en cours ne doit pas être compté comme une consommation.

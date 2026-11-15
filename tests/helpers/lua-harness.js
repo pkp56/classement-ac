@@ -257,10 +257,17 @@ function runTelemetryScript(options = {}) {
       lua.lua_pushinteger(state, shouldFail ? 0 : 200);
       lua.lua_setfield(state, -2, to_luastring('status'));
       // `options.respond` : corps JSON de la réponse (added, duplicates…),
-      // pour tester la lecture côté script de ce que le site a enregistré.
+      // ou fonction de simulation pour le protocole de commandes CSP. Une
+      // chaîne représente une réponse texte brute (START|…); un objet est JSON.
       if (options.respond && !shouldFail) {
-        lua.lua_pushstring(state, to_luastring(JSON.stringify(options.respond)));
-        lua.lua_setfield(state, -2, to_luastring('body'));
+        const response = typeof options.respond === 'function'
+          ? options.respond(text, sent.length, posts[posts.length - 1])
+          : options.respond;
+        if (response !== undefined) {
+          const responseBody = typeof response === 'string' ? response : JSON.stringify(response);
+          lua.lua_pushstring(state, to_luastring(responseBody));
+          lua.lua_setfield(state, -2, to_luastring('body'));
+        }
       }
       lua.lua_call(state, 2, 0);
     }

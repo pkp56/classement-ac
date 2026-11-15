@@ -100,11 +100,17 @@ CREATE TABLE IF NOT EXISTS ${SCHEMA}.circuit_profile (
   track           TEXT NOT NULL,
   track_config    TEXT,
   pit_lane_loss_ms INT,                       -- temps perdu entrée → sortie des stands
-  refuel_rate_lps NUMERIC(5,3),               -- débit de ravitaillement mesuré
-  tyre_change_ms  INT,                        -- durée d'un changement de gommes
+  refuel_rate_lps NUMERIC(5,3),               -- saisie manuelle prioritaire
+  tyre_change_ms  INT,                        -- saisie manuelle prioritaire
+  automatic_refuel_rate_lps NUMERIC(5,3),     -- mesure CSP, utilisée si aucune saisie manuelle
+  automatic_tyre_change_ms INT,               -- mesure CSP, utilisée si aucune saisie manuelle
   measured_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   source          TEXT
 );
+
+-- Migration sans perte pour les profils déjà créés.
+ALTER TABLE ${SCHEMA}.circuit_profile ADD COLUMN IF NOT EXISTS automatic_refuel_rate_lps NUMERIC(5,3);
+ALTER TABLE ${SCHEMA}.circuit_profile ADD COLUMN IF NOT EXISTS automatic_tyre_change_ms INT;
 
 -- Unicité sur une expression : Postgres refuse UNIQUE (a, COALESCE(b,''))
 -- dans une contrainte de table (« syntax error at or near "(" »), il faut un index unique

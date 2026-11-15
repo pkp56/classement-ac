@@ -401,6 +401,90 @@ test('les passages détectés donnent une médiane pit-lane par circuit/layout',
   assert.equal(configured.automatic_pit_lane_loss_ms, 18600, 'les échantillons auto restent consultables');
 });
 
+test('une mesure CSP guidée suit un seul client, valide le débit réel et laisse les valeurs manuelles prioritaires', async () => {
+  let clock = new Date('2026-11-10T12:00:00.000Z');
+  const service = new TelemetryService(tempStore(), { now: () => new Date(clock) });
+  const track = 'ks_monza66-junior';
+  await service.savePitProfile(track, {
+    trackConfig: 'junior', pitLaneLossMs: 22000, refuelRateLps: 2.25, tyreChangeMs: 12000
+  });
+  const client = {
+    kind: 'measurement-poll', sessionKey: 't:1731234567:654321',
+    serverName: 'Serveur test', track, trackConfig: 'junior',
+    driver: { guid: '76561198015862674', name: 'Pilote test' }, car: 'alfa_test'
+  };
+  const registration = await service.pollPitMeasurement(client);
+  assert.match(registration, /^REGISTER\|[a-f0-9]{48}$/);
+  assert.equal(await service.pollPitMeasurement(client), registration,
+    'si le retour initial est perdu, le serveur répète le même REGISTER');
+  client.clientSecret = registration.split('|')[1];
+  assert.equal(await service.pollPitMeasurement(client), 'NONE');
+  const visibleClients = service.measurementClientList();
+  assert.equal(visibleClients.length, 1);
+  assert.equal(visibleClients[0].clientSecret, undefined, 'le secret n’est jamais révélé à la page admin');
+  const forgedClient = { ...client };
+  delete forgedClient.clientSecret;
+  assert.equal(await service.pollPitMeasurement(forgedClient), 'NONE', 'le jeton partagé seul ne permet pas d’usurper une session');
+  const started = service.startPitMeasurement({
+    sessionKey: client.sessionKey, type: 'refuel', liters: 15
+  });
+  assert.equal(started.ok, true);
+  assert.equal(await service.pollPitMeasurement(client), `START|${started.measurement.id}|refuel|15`);
+  const otherClient = { ...client, sessionKey: 't:1731234567:654322' };
+  const otherRegistration = await service.pollPitMeasurement(otherClient);
+  otherClient.clientSecret = otherRegistration.split('|')[1];
+  assert.equal(await service.pollPitMeasurement(otherClient), 'NONE', 'une autre session ne reçoit pas la commande');
+
+  const report = measurement => service.pollPitMeasurement({ ...client, measurement });
+  await report({ id: started.measurement.id, phase: 'before_lap', preLaps: 1, postLaps: 0 });
+  await report({ id: started.measurement.id, phase: 'wait_pit_entry', preLaps: 1, postLaps: 0 });
+  await report({ id: started.measurement.id, phase: 'pit_lane', preLaps: 1, postLaps: 0 });
+  await report({ id: started.measurement.id, phase: 'service', preLaps: 1, postLaps: 0 });
+  await report({ id: started.measurement.id, phase: 'wait_pit_exit', preLaps: 1, postLaps: 0,
+    serviceDurationMs: 12000, pitLaneDurationMs: 5500, fuelAddedL: 15 });
+  await report({ id: started.measurement.id, phase: 'after_lap', preLaps: 1, postLaps: 0,
+    serviceDurationMs: 12000, pitLaneDurationMs: 5500, fuelAddedL: 15 });
+  await report({ id: started.measurement.id, phase: 'complete', preLaps: 1, postLaps: 1,
+    serviceDurationMs: 12000, pitLaneDurationMs: 5500, fuelAddedL: 15 });
+  const savedRun = service.pitMeasurement(started.measurement.id);
+  assert.equal(savedRun.status, 'completed');
+  assert.equal(savedRun.result.refuelRateLps, 1.25);
+  assert.equal(savedRun.pitLaneDurationMs, 5500);
+  assert.equal(savedRun.result.serviceDurationMs, 12000);
+  assert.equal(savedRun.result.pitLaneDurationMs, 5500, 'temps de roulage et temps au box restent séparés');
+  const profile = await service.pitProfile(track, 'junior');
+  assert.equal(profile.pit_lane_loss_ms, 22000, 'la mesure service ne modifie pas la pit-lane');
+  assert.equal(profile.refuel_rate_lps, 2.25, 'la valeur manuelle reste prioritaire');
+  assert.equal(profile.automatic_refuel_rate_lps, 1.25);
+  assert.equal(profile.tyre_change_ms, 12000, 'les autres champs manuels sont conservés');
+  assert.equal(profile.automatic_tyre_change_ms, null);
+
+  clock = new Date(clock.getTime() + 16000);
+  assert.equal(service.measurementClientList().length, 0, 'un client silencieux expire après le bail');
+});
+
+test('une mesure pneus automatique ne valide pas un arrêt sans remise à neuf confirmée', async () => {
+  const service = new TelemetryService(tempStore());
+  const client = {
+    kind: 'measurement-poll', sessionKey: 't:1731234567:654322',
+    track: 'ks_monza66-junior', trackConfig: 'junior',
+    driver: { guid: '76561198015862674', name: 'Pilote test' }, car: 'alfa_test'
+  };
+  const registration = await service.pollPitMeasurement(client);
+  client.clientSecret = registration.split('|')[1];
+  await service.pollPitMeasurement(client);
+  const started = service.startPitMeasurement({ sessionKey: client.sessionKey, type: 'tyre' });
+  const report = measurement => service.pollPitMeasurement({ ...client, measurement });
+  await report({ id: started.measurement.id, phase: 'before_lap', preLaps: 1 });
+  await report({ id: started.measurement.id, phase: 'complete', preLaps: 1, postLaps: 1,
+    serviceDurationMs: 12000, pitLaneDurationMs: 5500, tyreReset: false });
+  const result = service.pitMeasurement(started.measurement.id);
+  assert.equal(result.status, 'failed');
+  assert.match(result.error, /pneus/);
+  assert.equal(await service.pitProfile('ks_monza66-junior', 'junior'), null,
+    'aucune valeur de service non confirmée n’entre au profil');
+});
+
 test('le temps pit-lane est commun à toutes les voitures du même circuit/layout', async () => {
   const service = new TelemetryService(tempStore());
   const track = 'ted_zolder67_reworked';
@@ -671,6 +755,103 @@ test('le limiteur 80 km/h mesure le roulage pit-lane, sans compter l’arrêt au
   assert.equal(checked.clean.laps[0].pitLaneMs, 8000);
 });
 
+test('la procédure CSP impose un tour avant, confirme les pneus neufs et attend un tour après', () => {
+  let commandSent = false;
+  const respond = body => {
+    const payload = JSON.parse(body);
+    if (payload.kind === 'measurement-poll') {
+      if (!commandSent) { commandSent = true; return 'START|tyre-run-1|tyre|0'; }
+      return 'NONE';
+    }
+    if (payload.kind === 'ping') return { ok: true };
+    if (Array.isArray(payload.laps)) return { added: payload.laps.length, duplicates: 0 };
+    return {};
+  };
+  const steps = [
+    (L) => setCar(L, 'wheels', [
+      { tyreWear: 0.98 }, { tyreWear: 0.98 }, { tyreWear: 0.98 }, { tyreWear: 0.98 }
+    ]),
+    ...Array.from({ length: 11 }, () => 0.5), // le poll armé après le ping délivre START
+    (L) => setCar(L, 'lapCount', 2), 0.1,      // un tour complet avant les stands
+    (L) => setCar(L, 'speedKmh', 80),
+    ...Array.from({ length: 7 }, () => 0.5),  // plateau 80 confirmé
+    (L) => setCar(L, 'speedKmh', 50),
+    ...Array.from({ length: 4 }, () => 0.5),  // roulage dans la voie des stands
+    (L) => setCar(L, 'speedKmh', 0),
+    ...Array.from({ length: 4 }, () => 0.5),  // arrêt au box
+    (L) => setCar(L, 'wheels', [
+      { tyreWear: 1 }, { tyreWear: 1 }, { tyreWear: 1 }, { tyreWear: 1 }
+    ]),
+    0.5, 0.5,                                 // retour à neuf observé pendant l'arrêt
+    (L) => setCar(L, 'speedKmh', 90),
+    0.25, 0.25,                               // sortie confirmée > 84 km/h
+    (L) => setCar(L, 'lapCount', 3), 0.1,      // le tour après est terminé
+    0.5                                       // poll de confirmation du protocole complet
+  ];
+  const run = simulate({
+    served: true, callInit: true, respond, steps
+  });
+  assert.equal(run.error, null);
+  assert.equal(commandSent, true, 'le serveur a armé une mesure CSP');
+  const polls = run.sent.map(text => JSON.parse(text))
+    .filter(payload => payload.kind === 'measurement-poll' && payload.measurement);
+  assert.ok(polls.length > 0, 'le CSP renvoie son état au serveur');
+  const measurement = polls[polls.length - 1].measurement;
+  assert.equal(measurement.phase, 'complete');
+  assert.equal(measurement.preLaps, 1);
+  assert.equal(measurement.postLaps, 1);
+  assert.equal(measurement.tyreReset, true);
+  assert.ok(measurement.serviceDurationMs > 0);
+  assert.equal(measurement.pitLaneDurationMs, 5500, 'le temps pit-lane cumule le roulage et exclut le service de 2 s');
+});
+
+test('la procédure de ravitaillement calcule un débit à partir du carburant et du temps CSP observés', () => {
+  let commandSent = false;
+  const respond = body => {
+    const payload = JSON.parse(body);
+    if (payload.kind === 'measurement-poll') {
+      if (!commandSent) { commandSent = true; return 'START|fuel-run-1|refuel|10'; }
+      return 'NONE';
+    }
+    if (payload.kind === 'ping') return { ok: true };
+    if (Array.isArray(payload.laps)) return { added: payload.laps.length, duplicates: 0 };
+    return {};
+  };
+  const steps = [
+    ...Array.from({ length: 11 }, () => 0.5), // START après le ping
+    (L) => setCar(L, 'lapCount', 2), 0.1,
+    (L) => setCar(L, 'speedKmh', 80),
+    ...Array.from({ length: 7 }, () => 0.5),
+    (L) => setCar(L, 'speedKmh', 50),
+    ...Array.from({ length: 4 }, () => 0.5),
+    (L) => setCar(L, 'speedKmh', 0),
+    0.5,                                       // niveau de départ au box capturé
+    (L) => setCar(L, 'fuel', 32.5), 0.5,       // début du remplissage réel
+    (L) => setCar(L, 'fuel', 36.5), 0.5,
+    (L) => setCar(L, 'fuel', 40.5), 0.5,       // 10 L effectivement ajoutés
+    0.5, 0.5,                                  // stabilisation avant de repartir
+    (L) => setCar(L, 'speedKmh', 90),
+    0.25, 0.25,
+    (L) => setCar(L, 'lapCount', 3), 0.1,
+    0.5
+  ];
+  const run = simulate({
+    served: true, callInit: true, respond, steps
+  });
+  assert.equal(run.error, null);
+  const polls = run.sent.map(text => JSON.parse(text))
+    .filter(payload => payload.kind === 'measurement-poll' && payload.measurement);
+  assert.ok(polls.length > 0);
+  const measurement = polls[polls.length - 1].measurement;
+  assert.equal(measurement.phase, 'complete');
+  assert.equal(measurement.preLaps, 1);
+  assert.equal(measurement.postLaps, 1);
+  assert.equal(measurement.fuelAddedL, 10);
+  assert.equal(measurement.serviceDurationMs, 1000);
+  assert.equal(measurement.refuelRateLps, 10);
+  assert.equal(measurement.pitLaneDurationMs, 5500, 'le temps arrêté au box est exclu du roulage');
+});
+
 test('un passage bref à 80 km/h sur la piste ne suffit pas à créer une mesure pit-lane', () => {
   const run = simulate({
     steps: [
@@ -843,6 +1024,27 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
   assert.equal(acceptedBody.added, 3);
   assert.equal(acceptedBody.skipped, 0);
 
+  const cspClient = {
+    kind: 'measurement-poll', v: 1, sessionKey: 't:http-session:123456',
+    serverName: 'GDSP Test Race Control', track: 'ks_monza66-junior', trackConfig: 'junior',
+    driver: { guid: '76561198015862674', name: 'Pilote HTTP' }, car: 'alfa_giulietta_spider'
+  };
+  const noCommand = await fetch(`${base}/api/telemetry/push`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Telemetry-Token': 'jeton-tel' },
+    body: JSON.stringify(cspClient)
+  });
+  assert.equal(noCommand.status, 200);
+  const registration = await noCommand.text();
+  assert.match(registration, /^REGISTER\|[a-f0-9]{48}$/);
+  cspClient.clientSecret = registration.split('|')[1];
+  const registered = await fetch(`${base}/api/telemetry/push`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Telemetry-Token': 'jeton-tel' },
+    body: JSON.stringify(cspClient)
+  });
+  assert.equal(await registered.text(), 'NONE');
+  const unauthClients = await fetch(`${base}/api/telemetry/measurement-clients`);
+  assert.equal(unauthClients.status, 401, 'la liste des clients CSP reste réservée à l’admin');
+
   // Les meilleurs secteurs sont lisibles sans jeton, mais seulement pour ce
   // serveur/circuit et sans exposer le GUID Steam.
   const sectorResponse = await fetch(`${base}/api/live/sectors?serverName=${encodeURIComponent('GDSP Test Race Control')}&track=ks_monza66-junior`);
@@ -892,6 +1094,28 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
 
   // 4. lecture avec admin → les tours sont là
   const auth = { Authorization: 'Bearer ' + loginBody.token };
+  const clients = await (await fetch(`${base}/api/telemetry/measurement-clients`, { headers: auth })).json();
+  assert.equal(clients.clients.length, 1);
+  assert.equal(clients.clients[0].car, 'alfa_giulietta_spider');
+  assert.equal(clients.clients[0].clientSecret, undefined);
+  const forbiddenStart = await fetch(`${base}/api/telemetry/measurements`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionKey: cspClient.sessionKey, type: 'refuel', liters: 15 })
+  });
+  assert.equal(forbiddenStart.status, 401, 'la page ne peut armer une mesure sans jeton admin');
+  const startResponse = await fetch(`${base}/api/telemetry/measurements`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionKey: cspClient.sessionKey, type: 'refuel', liters: 15 })
+  });
+  assert.equal(startResponse.status, 202);
+  const started = (await startResponse.json()).measurement;
+  const delivered = await fetch(`${base}/api/telemetry/push`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Telemetry-Token': 'jeton-tel' },
+    body: JSON.stringify(cspClient)
+  });
+  assert.equal(await delivered.text(), `START|${started.id}|refuel|15`);
+  const status = await (await fetch(`${base}/api/telemetry/measurements/${started.id}`, { headers: auth })).json();
+  assert.equal(status.measurement.status, 'queued');
   const summary = await (await fetch(`${base}/api/telemetry/summary`, { headers: auth })).json();
   assert.equal(summary.rows, 3);
   assert.equal(summary.cars[0].car, 'alfa_giulietta_spider');
@@ -1010,6 +1234,33 @@ test('le backend PostgreSQL parle uniquement le schéma telemetry', async () => 
   }
 });
 
+test('une mesure CSP écrit ses colonnes automatiques sans remplacer les saisies manuelles sur PostgreSQL', async () => {
+  const { PgStore } = require('../tools/telemetry/store');
+  const stored = {
+    id: 4, track: 'ks_monza66-junior', track_config: 'junior',
+    pit_lane_loss_ms: 22000, refuel_rate_lps: 2.25, tyre_change_ms: 12000,
+    automatic_refuel_rate_lps: null, automatic_tyre_change_ms: null, source: 'mesure manuelle'
+  };
+  const pool = fakePool((sql, params) => {
+    if (/^SELECT/.test(sql)) return [stored];
+    if (/^UPDATE/.test(sql)) {
+      const cols = [...sql.matchAll(/"(\w+)" = \$\d+/g)].map(match => match[1]);
+      cols.forEach((column, index) => { stored[column] = params[index]; });
+      return [stored];
+    }
+    throw new Error('requête inattendue : le profil existe déjà');
+  });
+  const service = new TelemetryService(new PgStore(pool));
+  await service.saveAutomaticPitMeasurement('ks_monza66-junior', 'junior', {
+    type: 'refuel', refuelRateLps: 3.4567
+  });
+  assert.equal(stored.automatic_refuel_rate_lps, 3.457);
+  assert.equal(stored.refuel_rate_lps, 2.25);
+  assert.equal(stored.tyre_change_ms, 12000);
+  assert.equal(stored.pit_lane_loss_ms, 22000);
+  assert.equal(stored.source, 'mesure manuelle');
+});
+
 test('savePitProfile corrige la mesure existante, même sur PostgreSQL', async () => {
   const { PgStore } = require('../tools/telemetry/store');
   let stored = {
@@ -1111,6 +1362,31 @@ test('admin : « refusé » et « backend injoignable » ne se confondent pas', 
 });
 
 // --- diagnostic « ping » -----------------------------------------------------
+
+test('le script mémorise le secret de session REGISTER avant ses polls CSP suivants', () => {
+  const { simulate } = require('./helpers/lua-harness');
+  const clientSecret = 'ab'.repeat(24);
+  let pollCount = 0;
+  const run = simulate({
+    served: true,
+    steps: Array.from({ length: 22 }, () => 0.5),
+    respond(body) {
+      const payload = JSON.parse(body);
+      if (payload.kind === 'ping') return { ok: true };
+      if (payload.kind === 'measurement-poll') {
+        pollCount += 1;
+        return pollCount === 1 ? `REGISTER|${clientSecret}` : 'NONE';
+      }
+      return {};
+    }
+  });
+  assert.equal(run.error, null);
+  const polls = run.sent.map(text => JSON.parse(text))
+    .filter(payload => payload.kind === 'measurement-poll');
+  assert.equal(polls.length, 2, 'le script attend le prochain poll avant le handshake, puis repoll');
+  assert.equal(polls[0].clientSecret, undefined);
+  assert.equal(polls[1].clientSecret, clientSecret, 'le poll suivant authentifie la session CSP');
+});
 
 test('le script envoie un ping au démarrage : la chaîne est vérifiable sans rouler', () => {
   const { simulate } = require('./helpers/lua-harness');

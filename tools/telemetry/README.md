@@ -49,7 +49,7 @@ Le rapport simule les trois formats demandés : **20, 30 et 45 minutes**.
 | consommation, usure pneus, vitesse max | script CSP `csp/gdsp_telemetry.lua`, poussé par le serveur | oui, une fois le script déclaré sur le serveur |
 | secteurs du dernier tour, secteurs du tour record, meilleurs secteurs personnels | script CSP côté pilote `csp/gdsp_telemetry.lua` (`car.lastSplits` / `car.bestSplits`), affichés sur `/live-timing` | direct après un tour bouclé ; mémoire serveur par pilote/voiture/circuit jusqu'au redémarrage, non inclus au rapport BoP |
 | pit-lane | mesure auto CSP : plateau 78–82 km/h continu, puis sortie >84 km/h; temps de roulage seulement, arrêt au box exclu | oui |
-| débit de ravitaillement, changement de gommes | mesure dédiée, saisie dans `/telemetry` | oui |
+| débit de ravitaillement, changement de gommes | procédure CSP guidée depuis `/telemetry` (carburant et usure réellement observés) | oui |
 
 **Limite de la mesure pit-lane** : faute d'un indicateur CSP de position dans
 la voie des stands, le script reconnaît un plateau de vitesse proche du limiteur
@@ -58,6 +58,23 @@ la voie des stands, le script reconnaît un plateau de vitesse proche du limiteu
 passage mais son temps immobile est exclu pour ne pas doubler le service. C'est
 un détecteur heuristique : un plateau similaire sur la piste peut produire un
 faux positif; chaque valeur et son nombre d'échantillons sont affichés.
+
+**Mesure guidée du service** : depuis `/telemetry`, choisir un client CSP actif
+et lancer « Changement de pneus » ou un ravitaillement avec un volume (15 L par
+défaut). Le serveur administre la procédure via le jeton télémétrie et une
+capacité aléatoire propre à cette session (présence renouvelée par bail de 15 s);
+le JWT admin ne quitte jamais la page. Le
+script suit un tour avant, l'entrée au plateau 80, l'arrêt au box, la sortie
+puis un tour après. Il n'ordonne aucune action de conduite/service : le pilote
+exécute le service demandé à l'écran.
+
+Le temps pneus n'est accepté que si la télémétrie confirme le retour à neuf des
+quatre roues (au moins trois variations positives). Pour l'essence, le script
+mesure la période réelle de hausse du niveau, compare les litres observés au
+volume demandé, puis calcule `litres / secondes`; un arrêt sans hausse mesurable
+ou un volume incohérent n'est pas enregistré. Le roulage à 80 et le service
+restent distincts. Les résultats CSP sont conservés à part des saisies manuelles;
+ces dernières gardent la priorité dans le BoP.
 
 **Règle absolue** : une valeur qui n'a pas été mesurée reste `null`. Elle
 n'entre jamais dans un calcul de BoP. Un tour sans mesure de conso compte pour
@@ -370,8 +387,14 @@ Connexion avec le compte administrateur habituel du site, puis :
 - **profil pit-lane** : circuit/configuration détecté automatiquement depuis la
   dernière séance reçue; médiane des passages de toutes les voitures au limiteur
   80 km/h (sauf valeur manuelle explicite), car le temps appartient au circuit,
-  pas au modèle de voiture. Débit et changement de gommes restent administrables ;
+  pas au modèle de voiture; débit et durée pneus sont mesurables depuis le jeu,
+  les saisies manuelles restant prioritaires ;
 - **rapport** téléchargeable en CSV, Markdown et HTML.
+
+La procédure guidée utilise `GET /api/telemetry/measurement-clients`,
+`POST /api/telemetry/measurements` et `GET /api/telemetry/measurements/:id`
+(admin); le script CSP lui répond sur le canal authentifié
+`POST /api/telemetry/push` (`kind: measurement-poll`).
 
 Chaque cellule non mesurée affiche « — » : c'est une information, pas un zéro.
 
