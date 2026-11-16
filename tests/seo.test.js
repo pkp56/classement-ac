@@ -54,3 +54,79 @@ test('HTTP public pages render without JavaScript, return correct errors, robots
   res=await get('/site.js?v=93');assert.equal(res.headers.get('cache-control'),'no-cache');
   res=await get('/seo.js');assert.equal(res.status,404);
 });
+
+// --- Origine publique et balises de partage -------------------------------
+test('renderPage résout la canonique en absolu, échappe les métadonnées et publie le JSON-LD',()=>{
+  const html=seo.renderPage('<head><title>x</title></head><body><div class="page" id="app"></div></body>',{
+    title:'Nom "cité"',description:'d',content:'<p>ok</p>',canonical:'/evenements/a',origin:'http://gdsp.duckdns.org/',ogType:'article',
+    jsonLd:seo.breadcrumb([{name:'Accueil',url:'http://gdsp.duckdns.org/'},{name:'A'}])
+  });
+  assert.match(html,/rel="canonical" href="http:\/\/gdsp\.duckdns\.org\/evenements\/a"/);
+  assert.match(html,/property="og:image" content="http:\/\/gdsp\.duckdns\.org\/hero-gdsp\.jpg"/);
+  assert.match(html,/property="og:type" content="article"/);
+  assert.match(html,/name="twitter:card" content="summary_large_image"/);
+  assert.match(html,/name="theme-color"/);
+  const ld=JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)[1]);
+  assert.equal(ld['@type'],'BreadcrumbList');
+  assert.equal(ld.itemListElement.length,2);
+});
+test('sans PUBLIC_SITE_URL, robots, canonique et sitemap utilisent le domaine de la requête',async t=>{
+  const backend=http.createServer((req,res)=>{
+    res.setHeader('content-type','application/json');
+    if(req.url==='/api/events')return res.end(JSON.stringify({events:[event]}));
+    if(req.url==='/api/events/test-cup')return res.end(JSON.stringify(event));
+    res.statusCode=404;res.end('{}');
+  });
+  backend.listen(0,'127.0.0.1');await once(backend,'listening');
+  t.after(()=>backend.close());
+  const reservation=http.createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');
+  const port=reservation.address().port;await new Promise(r=>reservation.close(r));
+  const env={...process.env,PORT:String(port),BACKEND_URL:`http://127.0.0.1:${backend.address().port}`};
+  delete env.PUBLIC_SITE_URL;delete env.RENDER_EXTERNAL_URL;
+  const child=spawn(process.execPath,['app.js'],{cwd:require('node:path').resolve(__dirname,'..'),env});
+  t.after(()=>child.kill());
+  await new Promise((resolve,reject)=>{
+    const timeout=setTimeout(()=>reject(new Error('Server startup timeout')),10000);
+    child.stdout.on('data',chunk=>{if(String(chunk).includes('démarré')){clearTimeout(timeout);resolve()}});
+    child.on('exit',code=>{clearTimeout(timeout);reject(new Error('Server exited '+code))});
+  });
+  const host='gdsp.duckdns.org';
+  // fetch interdit de forcer l'en-tête Host : on passe par http.get pour
+  // simuler un visiteur qui arrive bien par gdsp.duckdns.org.
+  const get=p=>new Promise((resolve,reject)=>{
+    const req=http.get({hostname:'127.0.0.1',port,path:p,headers:{host}},res=>{
+      const chunks=[];res.on('data',c=>chunks.push(c));
+      res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,text:()=>Promise.resolve(Buffer.concat(chunks).toString('utf8'))}));
+      res.on('error',reject);
+    });
+    req.on('error',reject);
+  });
+
+  let res=await get('/');
+  assert.equal(res.status,200);
+  const home=await res.text();
+  assert.match(home,/rel="canonical" href="http:\/\/gdsp\.duckdns\.org\/"/);
+  assert.match(home,/property="og:url" content="http:\/\/gdsp\.duckdns\.org\/"/);
+
+  res=await get('/evenements/test-cup');
+  const page=await res.text();
+  assert.match(page,/rel="canonical" href="http:\/\/gdsp\.duckdns\.org\/evenements\/test-cup"/);
+  assert.match(page,/application\/ld\+json/);
+
+  // La vue Circuit est rendue mais explicitement hors index (canonique = événement).
+  res=await get('/evenements/test-cup/circuit');
+  assert.equal(res.status,200);
+  assert.match(res.headers['x-robots-tag']||'',/noindex/i);
+  assert.match(await res.text(),/rel="canonical" href="http:\/\/gdsp\.duckdns\.org\/evenements\/test-cup"/);
+
+  res=await get('/robots.txt');
+  const robots=await res.text();
+  assert.match(robots,/Sitemap: http:\/\/gdsp\.duckdns\.org\/sitemap\.xml/);
+  assert.doesNotMatch(robots,/onrender/);
+
+  res=await get('/sitemap.xml');
+  const xml=await res.text();
+  assert.match(xml,/<loc>http:\/\/gdsp\.duckdns\.org\/<\/loc>/);
+  assert.match(xml,/<loc>http:\/\/gdsp\.duckdns\.org\/evenements\/test-cup<\/loc>/);
+  assert.doesNotMatch(xml,/onrender/);
+});

@@ -70,7 +70,15 @@ Le navigateur restaure l'événement à l'ouverture directe et gère Retour/Suiv
 Les classements, résultats détaillés et profils restent interactifs : leur rendu
 serveur et leurs URL dédiées ne font pas encore partie de cette première étape.
 
-L’origine publique par défaut est **`https://classement-ac-1.onrender.com`** :
+**Domaine auto-déclaré.** L'origine publique utilisée pour les URL canoniques,
+`/robots.txt` et `/sitemap.xml` est, dans l'ordre : `PUBLIC_SITE_URL`, puis le
+domaine par lequel la requête arrive (ex. `http://gdsp.duckdns.org`), puis
+`RENDER_EXTERNAL_URL`, puis l'adresse Render connue. Servir le site derrière
+DuckDNS suffit donc : les canoniques et le sitemap citent `gdsp.duckdns.org`
+sans aucune variable à définir. Un hôte local (`localhost`, `127.0.0.1`) est
+ignoré.
+
+L’origine publique de repli est **`https://classement-ac-1.onrender.com`** :
 les URL canoniques et `/sitemap.xml` sont activés sans variable supplémentaire.
 En cas de changement de domaine, définir **`PUBLIC_SITE_URL=https://votre-domaine.fr`**
 sur le serveur de production (sans chemin). Ne pas utiliser
@@ -83,6 +91,18 @@ avec un cache de 60 secondes et un délai maximum de 10 secondes. Une panne
 retourne HTTP 503 avec `Retry-After` plutôt qu'une page vide indexable ; un événement
 inexistant retourne 404. Les calculs sportifs ne sont pas dupliqués. Les textes
 édités dans Administration → Événements alimentent le HTML public.
+
+Chaque page publique porte aussi Open Graph / Twitter Card, un JSON-LD
+(`WebSite` sur l'accueil, `BreadcrumbList` + `SportsEvent` sur un événement) et
+une canonique absolue. La vue `/evenements/:slug/circuit` est servie en HTML
+mais en `noindex, follow` (canonique = la fiche événement) ; les pages d'erreur
+sont en `noindex`.
+
+Le guide pas-à-pas (port 80, HTTPS, vérification Search Console, sitemap,
+attentes réalistes) est dans **[`docs/referencement-google.md`](docs/referencement-google.md)**.
+Contrôle automatisé d'une instance publique :
+`node tools/seo-check.js http://gdsp.duckdns.org` (code de sortie 1 si un point
+bloquant est cassé — utilisable en cron après déploiement).
 
 Vérification : `npm test` comprend des tests HTTP avec un backend local simulé,
 le HTML sans JavaScript, les erreurs, le sitemap et la restauration d'une URL.

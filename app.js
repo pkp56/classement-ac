@@ -21,7 +21,7 @@ const BACKEND_URL = (process.env.BACKEND_URL || process.env.GDSP_API_URL || 'htt
 const ROOT = __dirname;
 
 // Fichiers interdits au public
-const FORBIDDEN = /(^|\/)(?:\.env|node_modules|\.git|\.github|package\.json|package-lock\.json|README\.md|render\.yaml|\.gitignore|\.gitattributes|app\.js|seo\.js|tests?\/|backups?\/)/i;
+const FORBIDDEN = /(^|\/)(?:\.env|node_modules|\.git|\.github|package\.json|package-lock\.json|README\.md|render\.yaml|\.gitignore|\.gitattributes|app\.js|seo\.js|docs?\/|tests?\/|backups?\/)/i;
 app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
   if (FORBIDDEN.test(req.path)) return res.sendStatus(404);
@@ -1221,8 +1221,31 @@ function getIndex() {
              `window.GDSP_API_URL=window.GDSP_API_URL||""`);
 }
 const seo = require('./seo');
-// Production origin; PUBLIC_SITE_URL can override it when migrating to a custom domain.
-const PUBLIC_SITE_URL = (process.env.PUBLIC_SITE_URL || 'https://classement-ac-1.onrender.com').replace(/\/$/, '');
+/**
+ * Origine publique du site, sans slash final : base des URL canoniques, du
+ * sitemap et des balises Open Graph.
+ *
+ * - `PUBLIC_SITE_URL` gagne toujours (ex. `http://gdsp.duckdns.org`).
+ * - Sans elle, on retient l'origine de la requête : le site annonce alors le
+ *   domaine par lequel il est réellement consulté (duckdns, tunnel, Render),
+ *   sans redéploiement. Un hôte local est ignoré, il n'a aucune valeur publique.
+ * - En dernier recours, l'adresse Render connue ou `RENDER_EXTERNAL_URL`.
+ */
+const PUBLIC_SITE_URL_ENV = (process.env.PUBLIC_SITE_URL || '').replace(/\/+$/, '');
+const DEFAULT_SITE_URL = 'https://classement-ac-1.onrender.com';
+const LOCAL_HOST = /^(localhost|127\.|0\.0\.0\.0|\[?::1\]?)/i;
+function publicOrigin(req) {
+  if (PUBLIC_SITE_URL_ENV) return PUBLIC_SITE_URL_ENV;
+  const host = req ? String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim() : '';
+  if (host) {
+    const proto = String(req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim() || 'https';
+    try {
+      const parsed = new URL(proto + '://' + host);
+      if (!LOCAL_HOST.test(parsed.hostname)) return (parsed.protocol + '//' + parsed.host).replace(/\/+$/, '');
+    } catch (e) { /* hôte illisible : on garde le défaut */ }
+  }
+  return (process.env.RENDER_EXTERNAL_URL || DEFAULT_SITE_URL).replace(/\/+$/, '');
+}
 const publicJsonCache = new Map();
 /**
  * Lecture JSON pour le rendu serveur (accueil, page événement, sitemap).
@@ -1292,6 +1315,9 @@ function sendPublicPage(res, options) {
 function publicFailure(res,error) {
   const status=error.status===404?404:503;
   res.set('Cache-Control','no-store');
+  // Une page d'erreur ne doit jamais être indexée : elle revient dès que le
+  // service répond, et son contenu ne dit rien du site.
+  res.set('X-Robots-Tag','noindex');
   if(status===503)res.set('Retry-After','60');
   res.status(status).type('html').send(seo.renderPage(getIndex(),{
     title:status===404?'Événement introuvable | GDSP':'GDSP — temporairement indisponible',
@@ -1299,36 +1325,67 @@ function publicFailure(res,error) {
     content:`<div class="panel"><h1>${status===404?'Événement introuvable':'Chargement temporairement indisponible'}</h1><p>Réessayez dans quelques instants.</p><a href="/">Accueil GDSP</a></div>`
   }));
 }
-app.get('/', async (_req,res)=>{
+const HOME_TITLE='GDSP — Open et championnat Assetto Corsa historique & vintage';
+const HOME_DESCRIPTION='GDSP : open et championnat Assetto Corsa, simracing historique et vintage. Retrouvez les calendriers, résultats et classements.';
+app.get('/', async (req,res)=>{
   try {
     const result=await publicJson('/api/events');
     const events=Array.isArray(result.events)?result.events:[];
-    sendPublicPage(res,{title:'GDSP — Open et championnat Assetto Corsa historique & vintage',description:'GDSP : open et championnat Assetto Corsa, simracing historique et vintage. Retrouvez les calendriers, résultats et classements.',content:seo.homeContent(events),canonical:PUBLIC_SITE_URL?PUBLIC_SITE_URL+'/':null});
+    const origin=publicOrigin(req);
+    sendPublicPage(res,{title:HOME_TITLE,description:HOME_DESCRIPTION,content:seo.homeContent(events),canonical:'/',origin,jsonLd:seo.homeJsonLd(origin)});
   }catch(error){publicFailure(res,error)}
 });
 app.get('/evenements/:slug',async(req,res)=>{
   try {
     const ev=await publicJson('/api/events/'+encodeURIComponent(req.params.slug));
     if(!ev.slug||!ev.name)throw new Error('Invalid event data');
-    sendPublicPage(res,{title:ev.name+' | GDSP Assetto Corsa',description:String(ev.data?.eventInfo?.briefing||'Calendrier et présentation de '+ev.name+' — Gentleman Drivers Project.').slice(0,180),content:seo.eventContent(ev),canonical:PUBLIC_SITE_URL?PUBLIC_SITE_URL+seo.eventPath(ev.slug):null});
+    const origin=publicOrigin(req);
+    sendPublicPage(res,{title:ev.name+' | GDSP Assetto Corsa',description:String(ev.data?.eventInfo?.briefing||'Calendrier et présentation de '+ev.name+' — Gentleman Drivers Project.').slice(0,180),content:seo.eventContent(ev),canonical:seo.eventPath(ev.slug),origin,ogType:'article',jsonLd:seo.eventJsonLd(ev,origin)});
   }catch(error){publicFailure(res,error)}
 });
-app.get('/robots.txt',(_req,res)=>res.type('text').send('User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\n'+(PUBLIC_SITE_URL?'Sitemap: '+PUBLIC_SITE_URL+'/sitemap.xml\n':'')));
-let lastSitemapEventPaths=[];
-app.get('/sitemap.xml',async(_req,res)=>{
-  if(!PUBLIC_SITE_URL)return res.status(503).type('text').send('PUBLIC_SITE_URL must be configured.');
+// L'onglet Circuit est une vue du même événement (promesse « page dédiée »),
+// pas un contenu distinct : on le sert en HTML rendu pour que le visiteur ait
+// un vrai document, mais on le retire de l'index pour éviter le contenu dupliqué.
+app.get('/evenements/:slug/circuit',async(req,res)=>{
+  try {
+    const ev=await publicJson('/api/events/'+encodeURIComponent(req.params.slug));
+    if(!ev.slug||!ev.name)throw new Error('Invalid event data');
+    const origin=publicOrigin(req);
+    res.set('X-Robots-Tag','noindex, follow');
+    sendPublicPage(res,{title:ev.name+' — Circuit | GDSP Assetto Corsa',description:String(ev.data?.eventInfo?.briefing||'Fiches circuit de '+ev.name+' — Gentleman Drivers Project.').slice(0,180),content:seo.eventContent(ev),canonical:seo.eventPath(ev.slug),origin,ogType:'article'});
+  }catch(error){publicFailure(res,error)}
+});
+// Robots : le contenu privé (API, administration) reste hors index, les images
+// et scripts statiques doivent rester accessibles pour le rendu et les aperçus
+// de partage.
+app.get('/robots.txt',(req,res)=>{
+  const origin=publicOrigin(req);
+  res.type('text/plain').send(['User-agent: *','Allow: /','Disallow: /api/','Disallow: /admin','','Sitemap: '+origin+'/sitemap.xml',''].join('\n'));
+});
+// Dernière liste d'URL valide connue : un backend endormi ne doit pas vider le sitemap.
+let lastSitemapEntries=[];
+app.get('/sitemap.xml',async(req,res)=>{
+  const origin=publicOrigin(req);
   try {
     const result=await publicJson('/api/events');
     if(!Array.isArray(result.events))throw new Error('Invalid event catalog');
-    lastSitemapEventPaths=[...new Set(result.events.filter(ev=>ev&&typeof ev.slug==='string'&&ev.slug).map(ev=>seo.eventPath(ev.slug)))];
+    const seen=new Set();
+    lastSitemapEntries=result.events
+      .filter(ev=>ev&&typeof ev.slug==='string'&&ev.slug)
+      .filter(ev=>seen.has(ev.slug)?false:seen.add(ev.slug))
+      .map(ev=>({path:seo.eventPath(ev.slug),lastmod:(ev.updated_at||ev.updatedAt||null)}))
+      .sort((a,b)=>a.path.localeCompare(b.path));
   }catch(error){
     // A sleeping/unavailable backend must not prevent Google from reading the sitemap.
     // Retain the last successful list, or the home URL alone on a fresh server.
     console.warn('Sitemap: using fallback URL list because the event catalog is unavailable.');
   }
-  const paths=['/',...lastSitemapEventPaths];
+  const entries=[{path:'/',lastmod:null},...lastSitemapEntries];
   res.set('Cache-Control','no-cache');
-  res.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+paths.map(p=>'<url><loc>'+seo.escapeHtml(PUBLIC_SITE_URL+p)+'</loc></url>').join('')+'</urlset>');
+  res.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+    +entries.map(({path,lastmod})=>'<url><loc>'+seo.escapeHtml(origin+path)+'</loc>'
+      +(lastmod?'<lastmod>'+seo.escapeHtml(String(lastmod).slice(0,10))+'</lastmod>':'')+'</url>').join('')
+    +'</urlset>');
 });
 app.get('/healthz', (_req, res) => {
   res.set('Cache-Control','no-store');
