@@ -76,13 +76,14 @@ const LVL_BADGES={1:{webp:'/assets/lvl1-elite.webp',png:'/assets/lvl1-elite.png'
 function levelBadge(level,size){const badge=LVL_BADGES[level];return badge?`<picture style="width:${size}px;height:${size}px;display:inline-block;vertical-align:middle"><source type="image/webp" srcset="${badge.webp}?v=27"><img class="lvl-badge" src="${badge.png}?v=26" alt="Niveau ${level}" width="${size}" height="${size}" loading="lazy" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-block;vertical-align:middle"></picture>`:`<span class="tag lvl lvl-${level}">${level}</span>`}
 const PROFILE_TIPS={
   regularite:`<b>Régularité (Race Consistency)</b><br>Écart moyen entre chaque tour et le <b>meilleur tour</b> du pilote sur la course (en secondes).<br>Le 1<sup>er</sup> tour et les tours aux stands / lents (&gt; 21 s plus lent que le meilleur tour) sont exclus.<br>Plus l'écart moyen est petit, plus le score est élevé.<br><i>Méthode iRacing — best minus average non-best.</i>`,
-  regulariteGlobal:`<b>Rythme (Race Consistency)</b><br>Écart moyen entre chaque tour et le <b>meilleur tour</b> du pilote sur chaque course (1<sup>er</sup> tour et tours &gt; +21 s exclus), moyenné par week-end et comparé au plateau.<br>Plus l'écart moyen est petit, plus le score est élevé.<br>Pondération récente : demi-vie 90 jours.`,
+  regulariteGlobal:`<b>Rythme (Race Consistency)</b><br>Écart moyen entre chaque tour et le <b>meilleur tour</b> du pilote sur chaque course (1<sup>er</sup> tour et tours &gt; +21 s exclus), comparé au plateau de chaque course.<br>Moyenne sur les courses retenues parmi les 10 dernières participations, sans pondération temporelle.`,
+  propreteGlobal:`<b>Propreté GLOBAL · Commission</b><br>Base 100, retraits par incident validé : avertissement 5, légère 10, importante 20, grave 35, DQ de conduite 50.<br>Attente / place rendue validée : retrait réduit de moitié, sauf faute grave, DQ de conduite ou acte volontaire. Plancher 0.<br>Les 10 courses restent prises en compte, même le joker. Sans examen : aucun retrait connu, pas une certification. Décision non qualifiée : donnée indisponible ; axe entièrement absent = 50. Pas de déduction automatique depuis les contacts, cuts ou secondes de pénalité. Real Penalty non importé.`,
   proprete:`<b>Propreté</b><br>Pénalités attribuées selon les contacts en course qui font <b>perdre du temps</b> à l'adversaire :<br>• Touchette sans conséquence (&lt; 1,5 s de perte pour l'autre) → 0<br>• Choc latéral / côte à côte (|Z| ≥ 1,0 m, bagarre) → 0 pour les deux<br>• Choc arrière clair (|X| ≥ 0,4 m, |Z| &lt; 1,0 m) → secondes perdues par la victime / 2, au pilote responsable<br>• Cuts de piste : +1 point par cut<br>100 = aucun contact responsable ni cut.`,
   vitesse:`<b>Vitesse au tour</b><br>Basé sur le <b>meilleur tour du week-end</b> (meilleur temps entre <b>Q</b>ualification et toutes les courses <b>R</b> de la manche).<br>Le badge <b>Q</b> ou <b>R</b> dans l'encadré Analyse du rythme indique où ce meilleur temps a été réalisé.<br>100 = pilote le plus rapide du plateau sur le week-end.`,
   resultats:`<b>Résultats</b><br>Basé sur la position finale après pénalités Commission :<br>• 1 pilote → 50 · 2 pilotes : 55 / 45<br>• Entre 2 et 28 pilotes : l'écart entre le 1<sup>er</sup> et le dernier augmente linéairement de 10 à 100 pts (milieu = 50)<br>• 28+ pilotes : 100 au vainqueur, 0 au dernier (linéaire)<br>• DNF / DNS / DQ → <b>0</b>.<br>Arrondi à 1 décimale.`,
   progression:`<b>Progression</b><br>Pente de régression linéaire du classement par week-end en fonction du temps, toutes compétitions confondues.<br>100 = plus forte amélioration ; 0 = plus forte régression.<br>Moins de 3 week-ends → 50 (neutre).`,
   scoreEvent:`<b>Score &amp; Niveau événement</b><br>Moyenne sur 100 des quatre critères (Régularité, Propreté, Vitesse au tour, Résultats) calculés par week-end sur cet événement.<br>Répartition en 4 niveaux par quartiles (Niveau 4 = top 25 % sur l'événement). Minimum 2 manches exploitables.`,
-  niveauGlobal:`<b>Niveau GLOBAL Discord</b><br>Niveau selon le score GLOBAL arrondi : 0–40 Débutant · 41–60 Intermédiaire · 61–80 Confirmé · 81–100 Élite. Score établi sur la moyenne des 4 critères par week-end sur tous les championnats et opens.<br>Pondération récente (demi-vie 90 jours) · minimum 5 courses.`,
+  niveauGlobal:`<b>Niveau GLOBAL Discord</b><br>Niveau selon le score GLOBAL arrondi : 0–40 Débutant · 41–60 Intermédiaire · 61–80 Confirmé · 81–100 Élite. Score sur les 10 dernières courses disputées, tous événements confondus. Dès 10 : 9 meilleures retenues pour rythme, vitesse et résultats ; propreté sur les 10.<br>Minimum 5 courses pour apparaître ; provisoire avant 10, données partielles tant que les examens de propreté sont incomplets.`,
   courses:`<b>Courses disputées</b><br>Nombre de sessions de course (RACE) enregistrées pour ce pilote.`,
   bestPos:`<b>Meilleur résultat</b><br>Meilleure position obtenue à l'arrivée d'une course (après pénalités Commission).`,
   avgPos:`<b>Position moyenne</b><br>Moyenne des positions d'arrivée sur l'ensemble des courses disputées.`,
@@ -714,7 +715,7 @@ function globalRankingSync(){
     4:'Pilotes récents ou en phase d\'apprentissage : la régularité et la propreté sont à construire, la marge de progression est importante.'
   };
   const now=Date.now();
-  function trendArrow(t){const v=t.trend||0; if(v>4)return `<span style="color:#3b6341">▲ ${v.toFixed(0)} places</span>`; if(v>1)return `<span style="color:#3b6341">↑ ${v.toFixed(1)}</span>`; if(v<-4)return `<span style="color:#9c3021">▼ ${Math.abs(v).toFixed(0)} places</span>`; if(v<-1)return `<span style="color:#9c3021">↓ ${Math.abs(v).toFixed(1)}</span>`; return `<span style="color:#6d726c">→ stable</span>`}
+  function trendArrow(t){return `<span class="muted" style="font-size:10px">${t.conductReviewed}/${t.windowCount} examens propreté</span>`}
   // Blocs tiers (3 colonnes pour 1/2/3-4 ? Mieux 4 colonnes)
   const tierCards=[1,2,3,4].map(l=>{
     const list=tiers[l].slice(0,18).map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #dbd0ba;cursor:pointer" data-pid="${esc(d.id)}" onclick="globalDriverId=this.dataset.pid;go('gpilote')"><span><b>${esc(d.name)}</b></span><span class="muted" style="font-size:12px">${d.count}c · ${d.score.toFixed(0)}</span></div>`).join('');
@@ -732,18 +733,18 @@ function globalRankingSync(){
       detailRows.push(`<tr data-tier-divider><td colspan="6" style="padding:8px 14px;background:#132d35;color:#f7ecd5;font-family:Impact,sans-serif;font-size:13px;letter-spacing:2px">${levelBadge(d.level,24)} &nbsp; ${LVL_NAMES[d.level]} &nbsp;·&nbsp; niveau ${d.level}</td></tr>`);
     }
     lastLevel=d.level;
-    const barTips={regularite:PROFILE_TIPS.regulariteGlobal,proprete:PROFILE_TIPS.proprete,vitesse:PROFILE_TIPS.vitesse,resultats:PROFILE_TIPS.resultats,progression:PROFILE_TIPS.progression};
+    const barTips={regularite:PROFILE_TIPS.regulariteGlobal,proprete:PROFILE_TIPS.propreteGlobal,vitesse:PROFILE_TIPS.vitesse,resultats:PROFILE_TIPS.resultats,progression:PROFILE_TIPS.progression};
     const bars=Object.keys(labels).map(k=>{
       const v=d.details[k]||0;
       const tipBody=`<b>${labels[k]} : ${v.toFixed(0)} / 100</b><br>${(barTips[k]||'').replace(/^<b>[^<]*<\/b><br>/,'')}`;
       return `<span class="gdsp-tip gdsp-bar" style="display:inline-block;width:34px;margin-right:3px"><span class="mini-bar"><i style="width:${Math.max(2,Math.min(100,v))}%"></i></span><span style="font-size:9px;color:#6d726c;display:block;text-align:center;margin-top:2px">${Math.round(v)}</span><span class="gdsp-bubble">${tipBody}</span></span>`;
     }).join('');
     const c=LVL_COLORS[d.level]||LVL_COLORS[4];
-    detailRows.push(`<tr style="cursor:pointer;background:${c.bg};border-left:4px solid ${c.bar}" onclick="globalDriverId=this.dataset.pid;go('gpilote')" data-pid="${esc(d.id)}"><td class="pos">${i+1}</td><td>${levelBadge(d.level,40)}</td><td><b>${esc(d.name)}</b></td><td>${d.count}</td><td><b>${d.score.toFixed(0)}</b> ${trendArrow(d)}</td><td>${bars}</td></tr>`);
+    detailRows.push(`<tr style="cursor:pointer;background:${c.bg};border-left:4px solid ${c.bar}" onclick="globalDriverId=this.dataset.pid;go('gpilote')" data-pid="${esc(d.id)}"><td class="pos">${i+1}</td><td>${levelBadge(d.level,40)}</td><td><b>${esc(d.name)}</b></td><td>${d.count}<br><small>${d.retainedCount}/${d.windowCount} retenues</small></td><td><b>${d.score.toFixed(0)}</b><br><small>${d.provisional?'Provisoire / partiel':'Confirmé'}</small> ${trendArrow(d)}</td><td>${bars}</td></tr>`);
   });
   const detailHtml=detailRows.join('');
   return `${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
-    <p class="note" style="margin-bottom:16px">Le niveau est établi par week-end sur <b>quatre critères</b> : position finale en course, <b>rythme</b> (écart moyen au meilleur tour, 1<sup>er</sup> tour et stands exclus), <b>propreté</b> (contacts responsables causant ≥ 1,5 s de perte &amp; cuts), <b>vitesse au tour</b> sur le week-end (Q + R). Survolez les <b>?</b> dorés pour la définition complète de chaque critère. Les manches récentes comptent davantage (demi-vie 90 jours). Il faut au moins <b>${GLOBAL_MIN_RACES} courses</b> pour être classé.</p>
+    <p class="note" style="margin-bottom:16px"><b>10 dernières courses disputées · 9 meilleures dès 10 participations.</b> Rythme, vitesse et résultats sur les courses retenues ; propreté Commission sur toute la fenêtre, joker compris. Même poids pour chaque course, pas de pondération temporelle. Minimum ${GLOBAL_MIN_RACES} courses pour apparaître. Avant 10 : provisoire. Données partielles si des décisions restent à qualifier ou des courses non examinées. Sans sanction connue ne signifie pas course certifiée propre. <b>Real Penalty : DT / Stop & Go non évalués sans journaux.</b></p>
     <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">${tierCards}</div>
     <div class="panel global-rank-wrap"><h2>Détail des pilotes classés</h2><p class="note">Trié par score global. Les 4 mini-barres représentent Rythme / Propreté / Vitesse / Résultats (0-100) — survolez une mini-barre ou l'icône ? pour le détail. Les séparateurs bleu foncé marquent les changements de niveau.</p>${table(['#','','Pilote','Courses','Score / 100',`4 critères (0-100) ${gdspTip(PROFILE_TIPS.quatreCriteres,'gdsp-tip-right')}`],detailRows)}</div>`;
 }
@@ -1048,164 +1049,51 @@ function buildRythmeCard(targetDriverId,roundsList,opts={}){
     +`<table class="rythme-table"><thead><tr><th>Manche</th><th>Meilleur WE ${gdspTip(PROFILE_TIPS.meilleurWE)}</th><th>Moy. course</th><th>Δ rythme ${gdspTip(PROFILE_TIPS.sigma)}</th><th>Tours</th><th>Pit/exclu ${gdspTip(PROFILE_TIPS.pitExclu,'gdsp-tip-right')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-// Calcule un score 0-100 par pilote, tous événements confondus, par week-end avec pondération récente (demi-vie 90 jours).
-// Le niveau suit le score entier affiché, indépendamment du nombre de pilotes.
+// Global v2 : dix dernières courses effectivement disputées, joker sportif.
 function globalLevelForScore(score){
   const displayedScore=Math.round(score);
   return displayedScore>=81?1:displayedScore>=61?2:displayedScore>=41?3:4;
 }
-// Retourne un tableau trié par score décroissant, avec level (1=élite..4=débutant).
 function globalPerformanceRatings(){
-  const allWeekends=[];
-  const idName=new Map(),idTeam=new Map();
+  const records=[];
   for(const ev of events){
-    const d=ev.data||{};
-    const evSessions=Array.isArray(d.sessions)?d.sessions:[];
-    const evPenMap=d.penMap||{};
-    const minPct=(ev.points_config&&typeof ev.points_config.minPercentDistance==='number')?ev.points_config.minPercentDistance:0.75;
-    const evRounds=groupSessionsByDate(evSessions);
-    evRounds.forEach((rd,rIdx)=>{
-      const raceSessions=[];
-      rd.sessions.forEach((s,sIdx)=>{if(s&&s.type==='RACE')raceSessions.push({s,sIdx});});
-      if(!raceSessions.length)return;
-      const bestMap=weekendBestLaps(rd,rIdx,evPenMap);
-      const pilotAgg=new Map();
-      let firstRaceTs=rd.ts;
-      for(const {s,sIdx} of raceSessions){
-        const ts=new Date(s.date).getTime();
-        if(isFinite(ts))firstRaceTs=isFinite(firstRaceTs)?Math.min(firstRaceTs,ts):ts;
-        const lapsById={};
-        (s.laps||[]).forEach(l=>{if(!l||!l.id)return;if(!lapsById[l.id])lapsById[l.id]=[];lapsById[l.id].push(l);});
-        const sorted=sortSessionForPerf(s,rIdx,sIdx,evPenMap,minPct);
-        const N=sorted.length;
-        const foulScores=raceFoulScores({...s,results:sorted});
-        sorted.forEach((r,i)=>{
-          if(!r||!r.id)return;
-          if(r.name)idName.set(r.id,r.name);
-          if(r.team!=null)idTeam.set(r.id,r.team||'');
-          const myLaps=(lapsById[r.id]||[]).filter(l=>Number.isFinite(l.time)&&l.time>0&&l.time<600000);
-          const consistency=raceConsistencyMs(myLaps);
-          const isOut=!!(r._dq||r.comDQ||r.comDNS||r.disqualified||r.comDNF);
-          const resScore=scoreResultsV45(N,i+1,isOut);
-          const fouls=foulScores.get(r.id)??0;
-          if(!pilotAgg.has(r.id))pilotAgg.set(r.id,{id:r.id,n:0,consS:0,consN:0,foulS:0,foulN:0,resS:0,resN:0});
-          const p=pilotAgg.get(r.id);
-          p.n++;
-          if(consistency!=null){p.consS+=consistency;p.consN++;}
-          p.foulS+=fouls;p.foulN++;
-          p.resS+=resScore;p.resN++;
+    const data=ev.data||{},pm=data.penMap||{};
+    const evSessions=Array.isArray(data.sessions)?data.sessions:[];
+    const minPct=ev.points_config?.minPercentDistance??0.75;
+    for(const [ri,rd] of groupSessionsByDate(evSessions).entries()){
+      const best=weekendBestLaps(rd,ri,pm);
+      let raceNumber=0;
+      rd.sessions.forEach((session,si)=>{
+        if(session.type!=='RACE')return;
+        raceNumber++;
+        const sorted=sortSessionForPerf(session,ri,si,pm,minPct);
+        const participants=sorted.filter(r=>!r.comDNS&&((r.laps||0)>0||(session.laps||[]).some(l=>l.id===r.id)));
+        const entries=participants.map(r=>({id:r.id,
+          consistency:raceConsistencyMs((session.laps||[]).filter(l=>l.id===r.id)),
+          best:best.get(r.id)?.best??null}));
+        const consistency=GDSPGlobalRating.percentile(entries,'consistency');
+        const speed=GDSPGlobalRating.percentile(entries,'best');
+        participants.forEach((r,i)=>{
+          const review=GDSPGlobalRating.conduct(pm[`${ri}:${si}:${r.id}`]);
+          const label=`${ev.name||ev.slug} · M${ri+1} C${raceNumber}`;
+          records.push({id:r.id,name:r.name,team:r.team,key:`${ev.slug}:${session.date}:${session.track}:${session.type}`,
+            ts:Date.parse(session.date),date:session.date,label,conduct:review,
+            axes:{regularite:consistency[i],proprete:review.score,vitesse:speed[i],
+              resultats:scoreResultsV45(participants.length,i+1,!!(r._dq||r.comDQ||r.comDNF||r.disqualified))}});
         });
-      }
-      const entries=[];
-      for(const [id,p] of pilotAgg){
-        const b=bestMap.get(id);
-        entries.push({
-          id,
-          raceCount:p.n,
-          consistency:p.consN?p.consS/p.consN:null,
-          foul:p.foulN?p.foulS/p.foulN:0,
-          best:b?b.best:null,
-          bestSession:b?b.bestSession:null,
-          resScore:p.resN?p.resS/p.resN:0
-        });
-      }
-      if(entries.length>=2&&isFinite(firstRaceTs))allWeekends.push({ts:firstRaceTs,entries});
-    });
-  }
-  if(allWeekends.length===0)return [];
-  const now=Date.now();
-  const HALF_LIFE=90*24*3600*1000;
-  const pilot=new Map();
-  function pct(arr,key,lower){
-    const valid=arr.filter(x=>Number.isFinite(x[key]));
-    if(valid.length<2)return arr.map(()=>null);
-    return arr.map(it=>{
-      if(!Number.isFinite(it[key]))return null;
-      const better=valid.filter(x=>lower?x[key]<it[key]:x[key]>it[key]).length;
-      const equal=valid.filter(x=>x[key]===it[key]).length;
-      return 100*(1-(better+(equal-1)/2)/(valid.length-1));
-    });
-  }
-  function pctFoul(arr,key){
-    const valid=arr.filter(x=>Number.isFinite(x[key]));
-    if(valid.length<2)return arr.map(it=>(Number.isFinite(it[key])&&it[key]<=0)?100:null);
-    return arr.map(it=>{
-      if(!Number.isFinite(it[key]))return null;
-      if(it[key]<=0)return 100;
-      const better=valid.filter(x=>x[key]<it[key]).length;
-      const equal=valid.filter(x=>x[key]===it[key]).length;
-      return 100*(1-(better+(equal-1)/2)/(valid.length-1));
-    });
-  }
-  for(const rc of allWeekends){
-    const weight=Math.exp(-(now-rc.ts)/HALF_LIFE);
-    const pcons=pct(rc.entries,'consistency',true);
-    const pcln=pctFoul(rc.entries,'foul');
-    const pspd=pct(rc.entries,'best',true);
-    const rankedByRes=rc.entries.slice().sort((a,b)=>b.resScore-a.resScore);
-    rc.entries.forEach((e,i)=>{
-      if(!pilot.has(e.id)){
-        pilot.set(e.id,{
-          id:e.id,sumW:0,raceCount:0,
-          ax:{regularite:0,proprete:0,vitesse:0,resultats:0},
-          wAx:{regularite:0,proprete:0,vitesse:0,resultats:0},
-          positions:[],ts:[]
-        });
-      }
-      const p=pilot.get(e.id);
-      const weekendRank=rankedByRes.findIndex(x=>x.id===e.id)+1;
-      const vals={regularite:pcons[i],proprete:pcln[i],vitesse:pspd[i],resultats:e.resScore};
-      for(const k in vals){
-        const v=vals[k];
-        if(Number.isFinite(v)){p.ax[k]+=v*weight;p.wAx[k]+=weight;}
-      }
-      p.sumW+=weight;
-      p.raceCount+=(e.raceCount||1);
-      p.positions.push(weekendRank);
-      p.ts.push(rc.ts);
-    });
-  }
-  const out=[];
-  for(const [id,p] of pilot){
-    if(p.sumW<=0)continue;
-    const det={};
-    for(const k in p.ax)det[k]=p.wAx[k]>0?p.ax[k]/p.wAx[k]:50;
-    let prog=null;
-    if(p.ts.length>=3){
-      const idx=p.ts.map((t,i)=>({t,pos:p.positions[i]})).sort((a,b)=>a.t-b.t);
-      const n=idx.length;
-      const meanT=idx.reduce((a,x)=>a+x.t,0)/n;
-      const meanP=idx.reduce((a,x)=>a+x.pos,0)/n;
-      let num=0,den=0;
-      idx.forEach(x=>{num+=(x.t-meanT)*(x.pos-meanP);den+=(x.t-meanT)**2;});
-      if(den>0){
-        const slope=num/den;
-        prog=-slope*30*24*3600*1000;
-      }
+      });
     }
-    p.prog=prog;
-    p.races=p.raceCount;
-    p.det=det;
-    out.push(p);
   }
-  const progVals=out.filter(x=>Number.isFinite(x.prog)).map(x=>x.prog);
-  if(progVals.length>=2){
-    out.forEach(p=>{
-      if(!Number.isFinite(p.prog)){p.det.progression=50;return;}
-      const better=progVals.filter(v=>v>p.prog).length;
-      const equal=progVals.filter(v=>v===p.prog).length;
-      p.det.progression=100*(1-(better+(equal-1)/2)/(progVals.length-1));
-    });
-  }else{out.forEach(p=>{p.det.progression=50;});}
-  const final=out.filter(p=>p.races>=GLOBAL_MIN_RACES&&!globalHidden[p.id]).map(p=>{
-    const ax=p.det;
-    const score=(ax.regularite+ax.proprete+ax.vitesse+ax.resultats)/4;
-    return {id:p.id,name:idName.get(p.id)||'?',team:idTeam.get(p.id)||'',score,details:ax,count:p.races,trend:p.prog||0};
-  }).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name));
-  final.forEach(p=>{p.level=globalLevelForScore(p.score);});
-  return final;
+  const list=GDSPGlobalRating.aggregate(records,{minRaces:GLOBAL_MIN_RACES,hidden:globalHidden});
+  list.forEach(r=>r.level=globalLevelForScore(r.score));
+  return list;
 }
-
+function globalRatingStatus(r){
+  return `${r.sportingProvisional?'Provisoire':'10 courses atteintes'} · ${r.retainedCount}/${r.windowCount} retenues · propreté examinée ${r.conductReviewed}/${r.windowCount}${r.conductPending?' · '+r.conductPending+' décision(s) à qualifier':''}`;
+}
+function globalRatingAudit(r){
+  return `<div class="panel" style="margin:16px 0"><h2>Calcul du Global · 10 courses + joker</h2><p class="note">${esc(globalRatingStatus(r))}. ${r.joker?'Joker sportif : '+esc(r.joker.label)+'. Sa propreté reste comptée.':'Aucun joker avant 10 courses.'} Sans examen, 100 signifie seulement aucun retrait connu ; une décision non qualifiée est indisponible, pas une faute nulle. Un axe sans données utilise 50 (neutre). Real Penalty : journaux non importés, DT / Stop & Go non évalués.</p><p class="note">${r.returned} restitution(s) / attente(s) validée(s) dans la fenêtre. Les qualificatifs de niveau restent indicatifs tant que les données sont partielles.</p>${table(['Course','Date','Retenue','Propreté / 100','Examen'],r.window.map(x=>`<tr><td>${esc(x.label)}</td><td>${date(x.date)}</td><td>${x.joker?'Joker sportif':'Oui'}</td><td>${Number.isFinite(x.axes.proprete)?x.axes.proprete.toFixed(1):'Indisponible'}</td><td>${x.conduct.pending?'Décision à qualifier':x.conduct.reviewed?'Examinée : '+esc(x.conduct.reason||''):'Non examinée'}</td></tr>`))}</div>`;
+}
 
 // Compute standings for an event without touching global sessions/penMap
 function computeEventStandings(sArr,penMapArg,cfg){
@@ -2358,12 +2246,14 @@ function filterDrivers(q){q=(q||'').toLowerCase();document.querySelectorAll('#dr
 // ---------- Sauvegarde / admin ----------
 function shaShort(input){let h=2166136261;for(let i=0;i<input.length;i++){h^=input.charCodeAt(i);h=Math.imul(h,16777619)}return ('00000000'+(h>>>0).toString(16)).slice(-8)+input.slice(0,4)}
 function pseudonymizeGuid(guid){return shaShort(String(guid||''))}
-function saveState(){
+function saveState(opts={}){
+  const cached=events.find(e=>e.slug===currentSlug);
+  if(cached)cached.data={...(cached.data||{}),sessions,penMap,manualDrivers,customCalendar};
   localStorage.setItem('gdsp_sessions',JSON.stringify(sessions));
   localStorage.setItem('gdsp_penalties',JSON.stringify(penMap));
   if(manualDrivers)localStorage.setItem('gdsp_drivers',JSON.stringify(manualDrivers));
   if(customCalendar)localStorage.setItem('gdsp_calendar',JSON.stringify(customCalendar));
-  if(adminToken)saveRemote().catch(e=>console.warn('auto-save failed',e));
+  if(adminToken&&opts.remote!==false)saveRemote().catch(e=>console.warn('auto-save failed',e));
 }
 async function adminLogin(){
   const u=(document.getElementById('adminuser')||{}).value||'gdspadmin';const p=document.getElementById('adminpass').value;
@@ -2501,7 +2391,63 @@ async function bulkImport(ev){
   if(out)out.innerHTML=`<p class="note"><b>Import terminé :</b> ${ok} fichier(s) importé(s), ${errs.length} erreur(s).</p>${errs.length?`<ul class="note" style="font-family:monospace;font-size:11px">${errs.map(x=>'<li>✗ '+esc(x)+'</li>').join('')}</ul>`:''}`;
   ev.target.value='';
 }
+// Qualification explicite ; aucun parsing automatique des commentaires anciens.
+async function qualifyConduct(key){
+  if(!adminAuth)return;
+  const [rj,sj,id]=String(key).split(':');
+  const session=rounds()[Number(rj)]?.sessions[Number(sj)];
+  const driver=session?.results.find(r=>r.id===id);
+  if(!session||session.type!=='RACE'||!driver)return alert('Course ou pilote introuvable.');
+  const existing=penMap[key]||{};
+  const answer=prompt(`Propreté — ${driver.name}\nDécision existante : ${existing.note||'(aucune)'}\n\nNombre d’incidents distincts à qualifier (0 = course examinée, aucune faute retenue). Ne compte pas deux fois avertissement et temps pour un même incident.\nAnnuler : aucune modification.`,String(existing.conduct?.incidents?.length??1));
+  if(answer===null)return;
+  const count=Number(answer);
+  if(answer.trim()===''||!Number.isInteger(count)||count<0||count>20)return alert('Nombre entier attendu entre 0 et 20.');
+  const codes=['warning','minor','major','severe','dq'],incidents=[];
+  for(let i=0;i<count;i++){
+    const choice=prompt(`Incident ${i+1}/${count}\n1=Avertissement (−5)\n2=Légère (−10)\n3=Importante (−20)\n4=Grave / mise en danger (−35)\n5=DQ pour comportement (−50)\nUne DQ technique n’est pas une faute de conduite.`, '3');
+    if(choice===null)return;
+    const severity=codes[Number(choice)-1];
+    if(!severity||!/^([1-5])$/.test(choice.trim()))return alert('Choix invalide : aucune modification.');
+    const returned=confirm(`Incident ${i+1} : attente / position rendue explicitement validée ?\nOK = oui ; Annuler = non. Ce n’est pas une détection automatique.`);
+    const intentional=confirm(`Incident ${i+1} : acte volontaire retenu par la commission ?\nOK = oui ; Annuler = non.\nPas d’atténuation pour acte volontaire, faute grave ou DQ de conduite.`);
+    incidents.push({severity,returned,intentional});
+  }
+  const reason=prompt('Motif de l’examen (obligatoire). Précise la responsabilité, la règle, les exceptions et les éventuels doublons. Les fautes non liées à la conduite peuvent être examinées avec 0 incident.',existing.conduct?.reason||'');
+  if(reason===null)return;
+  if(!reason.trim())return alert('Motif obligatoire : aucune modification.');
+  const review={version:1,reviewed:true,incidents,reason:reason.trim(),reviewedAt:new Date().toISOString(),reviewedBy:adminUser||'Commission'};
+  const next={...existing,conduct:review};
+  const preview=GDSPGlobalRating.conduct(next);
+  if(!confirm(`Enregistrer pour ${driver.name} : propreté ${preview.score}/100 ?\nLes sanctions sportives existantes restent inchangées.\n${reason}`))return;
+  penMap[key]=next;
+  saveState({remote:false});
+  try{
+    await saveRemote();
+    const response=await apiGet(backendMulti&&currentSlug?'/api/events/'+encodeURIComponent(currentSlug):'/api/championship');
+    if(!response.ok)throw new Error('Vérification de sauvegarde impossible');
+    const saved=await response.json();
+    const persisted=(saved.data||saved.championship||saved).penMap?.[key]?.conduct;
+    if(GDSPGlobalRating.reviewSignature(persisted)!==GDSPGlobalRating.reviewSignature(review))throw new Error('Le serveur ne restitue pas la qualification enregistrée. Vérifier la conservation du champ conduct dans le backend.');
+    alert('Examen de propreté enregistré et relu sur le serveur.');
+  }
+  catch(error){alert('Examen conservé localement, mais sauvegarde serveur échouée : '+error.message+'. Réessaie avec Données → Enregistrer sur le serveur avant de fermer la page.');}
+  render();
+}
+function clearConduct(key){
+  if(!adminAuth||!penMap[key]?.conduct||!confirm('Retirer uniquement la qualification de propreté ? Les sanctions sportives restent.'))return;
+  delete penMap[key].conduct;
+  if(!penMap[key].warning&&!penMap[key].dq&&!penMap[key].dnf&&!penMap[key].dns&&!penMap[key].timeAdd&&!penMap[key].note)delete penMap[key];
+  saveState();render();
+}
+function exportEventBackup(){
+  const payload={slug:currentSlug||LEGACY_DEFAULT_SLUG,name:eventContext?.name||'GDSP',kind:eventContext?.kind||'championship',points_config:pointsConfig(),
+    data:{...(eventContext?.data||{}),sessions,penMap,manualDrivers,customCalendar},exportedAt:new Date().toISOString()};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+  const a=document.createElement('a');a.href=url;a.download=(currentSlug||'gdsp')+'_sauvegarde-complete.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
 function addAdjustment(roundKey,sessionIdx,drvId,timeAdd,dq,warning,note,opts){
+  if(penMap[`${roundKey}:${sessionIdx}:${drvId}`]?.conduct&&!confirm('Modifier la sanction invalidera son examen de propreté. Il faudra la qualifier à nouveau. Continuer ?'))return;
   const adj={timeAdd:+timeAdd||0,dq:!!dq,warning:!!warning,note:note||''};
   if(opts&&(opts.dnf||opts.dns)){
     adj.timeAdd=0;adj.dq=false;adj.warning=false;
@@ -3311,7 +3257,7 @@ function admin(){
       const badge=pts<0?`<span class="penalty">${esc(txt)}</span>`:`<span style="color:#3b6341;font-weight:700">${esc(txt)}</span>`;
       return `<tr><td><span class="tag live">Championnat</span></td><td>Classement général</td><td><b>${esc(drvName)}</b></td><td>${badge}</td><td>${esc(v.note||'')}</td><td><button class="btn secondary small" onclick="removeAdjustment('${safeKey}')">Retirer</button></td></tr>`;
     }
-    const [rj,sj,did]=k.split(':');const ri=+rj,si=+sj,r=rs[ri],s=r&&r.sessions[si];const drv=s&&s.results.find(x=>x.id===did);const raceCount=r?r.sessions.slice(0,si+1).filter(x=>x.type==='RACE').length:0;let label='';if(v.dq)label='DQ';else if(v.dns)label='DNS';else if(v.dnf)label='DNF';else if(typeof v.timeAdd==='number'&&v.timeAdd!==0)label=(v.timeAdd>0?'+':'')+v.timeAdd+' s';else if(v.warning)label='Avertissement';return `<tr><td>${r?'M'+r.number:'—'}</td><td>${s?(s.type==='QUALIFY'?'Qualif':'Course '+raceCount):'—'}</td><td>${esc(drv?drv.name:'(pilote)')}</td><td>${label}</td><td>${esc(v.note||'')}</td><td><button class="btn secondary small" onclick="removeAdjustment('${safeKey}')">Retirer</button></td></tr>`;
+    const [rj,sj,did]=k.split(':');const ri=+rj,si=+sj,r=rs[ri],s=r&&r.sessions[si];const drv=s&&s.results.find(x=>x.id===did);const raceCount=r?r.sessions.slice(0,si+1).filter(x=>x.type==='RACE').length:0;let label=v.conduct?'Examen propreté':'';if(v.dq)label='DQ';else if(v.dns)label='DNS';else if(v.dnf)label='DNF';else if(typeof v.timeAdd==='number'&&v.timeAdd!==0)label=(v.timeAdd>0?'+':'')+v.timeAdd+' s';else if(v.warning)label='Avertissement';return `<tr><td>${r?'M'+r.number:'—'}</td><td>${s?(s.type==='QUALIFY'?'Qualif':'Course '+raceCount):'—'}</td><td>${esc(drv?drv.name:'(pilote)')}</td><td>${label}</td><td>${esc(v.note||'')}</td><td><button class="btn secondary small" onclick="removeAdjustment('${safeKey}')">Retirer</button></td></tr>`;
   });
   const importedDateSet=new Set(rs.map(r=>String(r.date).slice(0,10)));
   const plannedRoundCards=(customCalendar&&typeof customCalendar==='object')
@@ -3336,7 +3282,7 @@ function admin(){
     return `${head('administration','Direction de course','')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['circuits','Circuits'],['globalexc','Global · exclusions']]:[]).concat([['telemetry','Télémétrie & BoP']]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel"><h2>Sélectionne d'abord un événement</h2><p class="note">Choisis un championnat/open dans le menu en haut à droite, ou crée-en un depuis l'onglet <b>« Serveurs AH »</b> ou <b>« Événements »</b>, avant d'importer des résultats.</p><button class="btn secondary" onclick="goHome()">← Retour à l'accueil</button></div>`;
   }
   return `${head('administration','Direction de course','Gestion des imports, pénalités, calendrier et sauvegarde.')}<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><span class="tag">Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div><div class="tabs">${[['import','Imports'],['rounds','Manches'],['adjust','Commission'],['drivers','Pilotes'],['data','Données']].concat(backendMulti?[['events','Événements'],['ah','Serveurs AH'],['circuits','Circuits'],['globalexc','Global · exclusions']]:[]).concat([['telemetry','Télémétrie & BoP']]).map(([id,l])=>`<button class="${adminTab===id?'active':''}" onclick="adminTabs('${id}')">${l}</button>`).join('')}</div><div class="panel">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Ajustements de points au championnat (+ / −), pénalités temps en course (reclassement automatique), DNF/DNS/DQ ou avertissements.</p>${renderChampPointsPanel()}${selectedRaceAdj!==null&&rs[selectedRaceAdj]?renderAdjPanel(rs[selectedRaceAdj]):rs.length?`<div class="controls"><select onchange="selectedRaceAdj=this.value===''?null:+this.value;render()"><option value="">— Choisir une manche pour ajuster un résultat de course —</option>${rs.map((x,i)=>`<option value="${i}">Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div>`:`<p class="note">Aucune manche importée pour les pénalités de course.</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'?`<h2>Pilotes et équipes</h2><div class="driver-admin-list">${allDrivers().map(d=>`<div class="driver-admin-row"><span>${number(d.name)} <b>${esc(d.name)}</b> <span class="muted">${esc(d.team)}</span></span><button class="btn secondary small" onclick="editDriver('${d.id}')">Modifier</button></div>`).join('')}</div>`:adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='circuits'?renderCircuitsAdmin():adminTab==='globalexc'?renderGlobalExclusions():adminTab==='telemetry'?renderTelemetryAdmin()
-:`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>`;
+:`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter les sessions</button><button class="btn secondary" onclick="exportEventBackup()">Sauvegarde complète (commission incluse)</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>`;
 }
 function renderAdjPanel(r){
   const rs=rounds();
@@ -3346,12 +3292,12 @@ function renderAdjPanel(r){
   // Compter correctement les courses (RACE) — pas juste length-1 (certaines manches n'ont pas de qualif).
   const racesCount=r.sessions.filter(s=>s.type==='RACE').length;
   const quaysCount=r.sessions.filter(s=>s.type==='QUALIFY').length;
-  let html=`<div class="controls"><select onchange="${switcher('Number(this.value)')}">${rs.map((x,i)=>`<option value="${i}" ${i===curIdx?'selected':''}>Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div><p class="note">${racesCount} course(s)${quaysCount?' · '+quaysCount+' qualif':''}. Sélectionne un pilote pour ajuster son résultat.</p><div class="grid">`;
+  let html=`<div class="controls"><select onchange="${switcher('Number(this.value)')}">${rs.map((x,i)=>`<option value="${i}" ${i===curIdx?'selected':''}>Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div><p class="note">${racesCount} course(s)${quaysCount?' · '+quaysCount+' qualif':''}. Sélectionne un pilote pour ajuster son résultat ou examiner sa propreté. <b>Propreté Global :</b> qualifie chaque incident, ou indique 0 si aucune faute de conduite n’est retenue. Les anciennes sanctions ne sont jamais converties automatiquement. Les incidents de Real Penalty ne sont pas évalués sans journaux.</p><div class="grid">`;
   r.sessions.forEach((s,sj)=>{
     if(s.type!=='RACE')return;
     const raceNum=r.sessions.slice(0,sj+1).filter(x=>x.type==='RACE').length;
     const rIdx=r.number-1;
-    html+=`<div class="panel"><h3>Course ${raceNum}</h3>${table(['Pos.','Pilote','Ajuster'],s.results.map((p,i)=>`<tr><td class="pos">${i+1}</td><td>${esc(p.name)}</td><td><button class="btn secondary small" onclick="openAdjForm(${rIdx},${sj},'${String(p.id).replace(/'/g,"\\'")}')">Modifier</button></td></tr>`))}</div>`;
+    html+=`<div class="panel"><h3>Course ${raceNum}</h3>${table(['Pos.','Pilote','Ajuster'],s.results.map((p,i)=>`<tr><td class="pos">${i+1}</td><td>${esc(p.name)}</td><td><button class="btn secondary small" onclick="openAdjForm(${rIdx},${sj},'${String(p.id).replace(/'/g,"\\'")}')">Modifier</button> <button type="button" class="btn secondary small" data-conduct-key="${esc(`${rIdx}:${sj}:${p.id}`)}" onclick="qualifyConduct(this.dataset.conductKey)">Propreté : ${penMap[`${rIdx}:${sj}:${p.id}`]?.conduct?.reviewed?'examinée':'à examiner'}</button>${penMap[`${rIdx}:${sj}:${p.id}`]?.conduct?` <button class="btn secondary small" data-conduct-key="${esc(`${rIdx}:${sj}:${p.id}`)}" onclick="clearConduct(this.dataset.conductKey)">Annuler l’examen</button>`:''}</td></tr>`))}</div>`;
   });
   return html+'</div>';
 }
@@ -3673,14 +3619,14 @@ function globalDriverProfile(){
   else if(avgColl>=3)weaknesses.push("Plusieurs incidents de collision par course en moyenne.");
   if(r.details.progression>=60)positives.push("Tendance à la progression dans le temps.");
   else if(r.details.progression<=40)weaknesses.push("Tendance à la régression récente.");
-  if(r.details.proprete>=65)positives.push("Bonne propreté de course (peu de cuts et de contacts responsables).");
+  if(r.details.proprete>=65&&r.conductReviewed===r.windowCount)positives.push("Propreté évaluée par la commission sur toute la fenêtre récente.");
   if(r.details.regularite>=65)positives.push("Régularité de rythme solide (faible écart moyen au meilleur tour).");
   if(r.details.vitesse>=65)positives.push("Vitesse au tour parmi les plus rapides du plateau.");
   if(r.details.regularite<=40)weaknesses.push("Rythme irrégulier entre les tours.");
   if(!positives.length)positives.push("En cours d'évaluation.");
   if(!weaknesses.length)weaknesses.push("Continue sur cette lancée.");
   const lbl={regularite:'Rythme',proprete:'Propreté',vitesse:'Vitesse au tour',resultats:'Résultats'};
-  const gTips={regularite:PROFILE_TIPS.regulariteGlobal,proprete:PROFILE_TIPS.proprete,vitesse:PROFILE_TIPS.vitesse,resultats:PROFILE_TIPS.resultats,progression:PROFILE_TIPS.progression};
+  const gTips={regularite:PROFILE_TIPS.regulariteGlobal,proprete:PROFILE_TIPS.propreteGlobal,vitesse:PROFILE_TIPS.vitesse,resultats:PROFILE_TIPS.resultats,progression:PROFILE_TIPS.progression};
   const bars=Object.keys(lbl).map(k=>{const v=r.details[k];return `<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span><b>${lbl[k]||k}</b>${gTips[k]?gdspTip(gTips[k],'gdsp-tip-left'):''}</span><span>${v.toFixed(0)} / 100</span></div><div class="bar" style="margin-top:6px"><i style="width:${v.toFixed(1)}%"></i></div></div>`;}).join('');
   const rythmeHtml=buildRythmeCard(id,allRounds,{showEvent:true});
   const raceRows=races.map(x=>{
@@ -3694,7 +3640,7 @@ function globalDriverProfile(){
   const podiums=races.filter(x=>x.position<=3).length;
   const kpi=(label,value,sub,cls='')=>`<div class="drv-kpi ${cls}"><span class="label">${label}</span><strong>${value}</strong><span class="drv-kpi-sub">${sub}</span></div>`;
   const portrait=(items,positive)=>`<div class="panel drv-portrait-card ${positive?'drv-portrait-pos':'drv-portrait-axe'}"><div class="drv-portrait-head"><span class="drv-portrait-ico ${positive?'pos':'axe'}">${positive?'✓':'↗'}</span><div><div class="eyebrow">${positive?'Points forts':'Axes de progression'}</div><h3>${positive?'Ce qui fonctionne en piste':'Points de vigilance'}</h3></div></div><ul class="drv-portrait-list">${items.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul></div>`;
-  return `<div class="drv-topbar"><button class="btn secondary" onclick="go('global')">← Retour au classement Global</button><div class="drv-quick-switch"><span class="label">Fiche pilote Global</span><select aria-label="Choisir un pilote Global" onchange="globalDriverId=this.value;render()">${ratings.map(x=>`<option value="${esc(x.id)}" ${x.id===id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div></div>
+  return `${globalRatingAudit(r)}<div class="drv-topbar"><button class="btn secondary" onclick="go('global')">← Retour au classement Global</button><div class="drv-quick-switch"><span class="label">Fiche pilote Global</span><select aria-label="Choisir un pilote Global" onchange="globalDriverId=this.value;render()">${ratings.map(x=>`<option value="${esc(x.id)}" ${x.id===id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div></div>
     <div class="drv-hero"><div class="drv-hero-id"><div class="drv-hero-eyebrow">GLOBAL GDSP · TOUS ÉVÉNEMENTS</div><div class="drv-id-main"><div class="drv-roundel drv-roundel-txt">${esc(initials)}</div><div><h1>${esc(r.name)}</h1><div class="drv-team-line">Profil inter-événements · Classement GLOBAL Discord</div></div></div><div class="drv-hero-stamps"><span class="tag">${races.length} courses enregistrées</span><span class="tag">${esc(levelLabels[r.level]||'')} · ${r.score.toFixed(0)} / 100</span></div></div>
     <div class="drv-hero-car drv-global-level"><div class="drv-car-head"><span class="label">Niveau GLOBAL ${gdspTip(PROFILE_TIPS.niveauGlobal,'gdsp-tip-left')}</span><span class="drv-car-num">${esc(levelLabels[r.level]||'')}</span></div><div class="drv-car-stage">${levelBadge(r.level,180)}</div><div class="drv-car-foot"><span>Score <b>${r.score.toFixed(0)} / 100</b></span><span>Arrivée moy. ${gdspTip(PROFILE_TIPS.avgPos,'gdsp-tip-right')} <b>P${avgPos.toFixed(1)}</b></span></div></div></div>
     <div class="drv-kpis">${kpi('Courses '+gdspTip(PROFILE_TIPS.courses,'gdsp-tip-left'),races.length,'Tous événements confondus')}${kpi('Meilleur '+gdspTip(PROFILE_TIPS.bestPos),'P'+bestPos,`${wins} victoire(s) · ${podiums} podium(s)`,'kpi-gold')}${kpi('Pos. moy. '+gdspTip(PROFILE_TIPS.avgPos),'P'+avgPos.toFixed(1),'Position moyenne en course')}${kpi('Δ départ '+gdspTip(PROFILE_TIPS.delta),signed(avgDelta!==null?avgDelta.toFixed(1):null),'Grille départ − position d’arrivée','kpi-green')}${kpi('Coll./course '+gdspTip(PROFILE_TIPS.collisions,'gdsp-tip-right'),avgColl.toFixed(1),'Contacts serveur enregistrés','kpi-red')}</div>

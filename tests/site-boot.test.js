@@ -70,6 +70,7 @@ function makeBrowser(extraEvents = [], extraFetch = null, browserOptions = {}) {
   Object.assign(sandbox, browserOptions);
   sandbox.window = sandbox;
   vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(root,'assets/global-rating.js'),'utf8'), sandbox);
   vm.runInContext(siteSource, sandbox);
   vm.runInContext(patchSource, sandbox);
   return { sandbox, getElementById, calls, storage };
@@ -702,4 +703,38 @@ test("L'onglet LIVE est détecté avant le premier rendu (pas seulement après n
   assert.ok(iDetect<iFirstRender, "detectLiveTiming doit précéder le premier render (onglet LIVE visible tout de suite)");
   // La détection n'accepte pas n'importe quelle réponse 200 : elle exige du JSON.
   assert.match(src,/content-type[^\n]*json/i);
+});
+
+test('Global v2 exposes its window and pending commission without changing sporting standings', async()=>{
+  const {sandbox,getElementById}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext(`loadEvent(${JSON.stringify(fixture.event.slug)})`,sandbox);
+  vm.runInContext("adminAuth=true;adminTab='adjust';selectedRaceAdj=1;page='admin';render()",sandbox);
+  assert.match(getElementById('app').innerHTML,/Propreté :/);
+  assert.match(getElementById('app').innerHTML,/qualifie chaque incident/);
+  const before=JSON.stringify(vm.runInContext('calculate().map(d=>({id:d.id,total:d.total}))',sandbox));
+  vm.runInContext("globalThis.conductKey=Object.keys(penMap).find(k=>/^\\d+:\\d+:/.test(k));globalThis.originalAdj=JSON.stringify(penMap[conductKey]);",sandbox);
+  const prompts=['1','3','Contact responsable, attente validée sur replay'];
+  sandbox.prompt=()=>prompts.shift()??null;
+  sandbox.confirm=text=>!text.includes('acte volontaire');
+  await vm.runInContext("adminToken='tok';qualifyConduct(conductKey)",sandbox);
+  assert.equal(vm.runInContext('penMap[conductKey].conduct.incidents[0].severity',sandbox),'major');
+  assert.equal(vm.runInContext('penMap[conductKey].conduct.incidents[0].returned',sandbox),true);
+  assert.equal(vm.runInContext('penMap[conductKey].conduct.incidents[0].intentional',sandbox),false);
+  const after=JSON.stringify(vm.runInContext('calculate().map(d=>({id:d.id,total:d.total}))',sandbox));
+  assert.equal(after,before);
+  const old=JSON.parse(vm.runInContext('originalAdj',sandbox));
+  for(const [k,v] of Object.entries(old))assert.equal(JSON.stringify(vm.runInContext(`penMap[conductKey][${JSON.stringify(k)}]`,sandbox)),JSON.stringify(v));
+});
+
+test('Commission qualification is cancelled atomically and unauthenticated calls cannot change it', async()=>{
+  const {sandbox}=makeBrowser();await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext(`loadEvent(${JSON.stringify(fixture.event.slug)})`,sandbox);
+  vm.runInContext("globalThis.testKey=Object.keys(penMap).find(k=>/^\\d+:\\d+:/.test(k));globalThis.beforeReview=JSON.stringify(penMap);adminAuth=true",sandbox);
+  sandbox.prompt=()=>null;
+  await vm.runInContext('qualifyConduct(testKey)',sandbox);
+  assert.equal(vm.runInContext('JSON.stringify(penMap)===beforeReview',sandbox),true);
+  vm.runInContext('adminAuth=false',sandbox);
+  sandbox.prompt=()=>{throw Error('No prompt without authentication')};
+  await vm.runInContext('qualifyConduct(testKey)',sandbox);
 });
