@@ -1209,6 +1209,16 @@ if(eventsSource()==='local'){
   eventsApi.mountEventRoutes(app,{getStore:getEventsStore});
 }
 
+// Catalogue des mods du PC hébergeant Node : lecture seule, administrateurs.
+require('./tools/lib/local-mods').mountLocalMods(app,{
+  authorize:async(req,res)=>{
+    const status=await verifyAdminDetail(req);
+    if(status==='ok')return true;
+    res.status(status==='denied'?401:503).json({error:status==='denied'?'Connexion administrateur requise.':'Vérification administrateur indisponible.'});
+    return false;
+  }
+});
+
 app.all('/api/*', (req,res)=>proxyRequest(req,res));
 
 function tryParse(s){try{return JSON.parse(s)}catch(e){return s}}

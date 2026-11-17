@@ -1376,7 +1376,7 @@ function getEventInfo(evCtx){
     :"Retrouvez sur cette page l'affiche officielle, les informations pratiques, le calendrier des manches et l'accès direct aux classements, résultats et fiches pilotes de l'événement.";
   const defaultFormat=`${cfg.doubleLongRaces!==false?'Manches à course unique (1h) à points doublés · ':''}${cfg.polePoints?'+'+cfg.polePoints+' pt pole en qualification · ':''}${Math.round((cfg.minPercentDistance||0.75)*100)} % de distance minimale pour marquer des points.`;
   return {
-    car:String(raw.car||'').trim()||defaultCar,
+    car:String(raw.car||'').trim()||(ctx.data?.modSelection?.cars||[]).map(c=>c.name).join(' / ')||defaultCar,
     schedule:String(raw.schedule||'').trim()||defaultSchedule,
     briefing:String(raw.briefing||'').trim()||defaultBriefing,
     formatText:String(raw.formatText||'').trim()||defaultFormat,
@@ -1408,7 +1408,7 @@ function eventHome(){
     ?Object.entries(customCalendar)
       .filter(([dt,val])=>dt&&val&&!importedDates.has(String(dt).slice(0,10)))
       .sort(([a],[b])=>a.localeCompare(b))
-      .map(([dt,val])=>({date:dt,track:val.track||'Circuit à annoncer'}))
+      .map(([dt,val])=>({date:dt,track:val.trackName||val.track||'Circuit à annoncer'}))
     :[];
   const isLola=!ev.slug||ev.slug===LEGACY_DEFAULT_SLUG||ev.slug===ACTIVE_LOLA_SLUG;
   const totalExpected=Number(cfg.expectedRounds)||(isLola?Math.max(6,rs.length+plannedExtras.length):(rs.length+plannedExtras.length));
@@ -2329,6 +2329,7 @@ async function saveRemote(){
   if(baseData.posterImage)payload.posterImage=baseData.posterImage;
   if(Array.isArray(baseData.galleryImages)&&baseData.galleryImages.length)payload.galleryImages=baseData.galleryImages;
   if(baseData.eventInfo&&typeof baseData.eventInfo==='object')payload.eventInfo=baseData.eventInfo;
+  if(baseData.modSelection&&typeof baseData.modSelection==='object')payload.modSelection=baseData.modSelection;
   // Manches circuit ajoutées par l'import Drive : sans cette ligne, chaque
   // sauvegarde de l'événement les effacerait.
   if(Array.isArray(baseData.circuitRounds)&&baseData.circuitRounds.length)payload.circuitRounds=baseData.circuitRounds;
@@ -2530,6 +2531,8 @@ function adminTabs(x){adminTab=x;render()}
 
 // Event creation (multi only)
 async function createEventPrompt(){
+  const chosenMods=readLocalModSelection();
+  const plannedDate=document.getElementById('local-mod-date')?.value||'';
   const name=prompt('Nom du championnat/open (ex: Open de Spa 2026) ?');if(!name)return;
   const kind=prompt('Type : "championship", "open" ou "archive" ?','open');if(!['championship','open','archive'].includes(kind))return alert('Type invalide.');
   const slugIn=prompt('Identifiant URL (lettres minuscules, chiffres, tirets, ex: open-spa-2026) ?',name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''));if(!slugIn)return;
@@ -2540,7 +2543,13 @@ async function createEventPrompt(){
   const joker=+prompt('Nombre de meilleures manches retenues pour le Joker (0 = toutes les manches) ?','5')||0;
   const cfg={pointsScale:scale,polePoints:1,doubleLongRaces:long2,longRaceMinutes:60,minPercentDistance:0.75,jokerCount:joker,globalCoef:+coefS||1};
   markEventSlugDeleted(slugIn,false);
-  const r=await apiPost('/api/events',{slug:slugIn,name,kind,pointsConfig:cfg});
+  const initialData={};
+  if(chosenMods&&(chosenMods.cars.length||chosenMods.track)){
+    initialData.modSelection=chosenMods;
+    if(chosenMods.cars.length)initialData.eventInfo={car:chosenMods.cars.map(c=>c.name).join(' / ')};
+    if(plannedDate&&chosenMods.track)initialData.customCalendar={[plannedDate]:{track:chosenMods.track.trackId,layout:chosenMods.track.layoutId,trackName:chosenMods.track.name}};
+  }
+  const r=await apiPost('/api/events',{slug:slugIn,name,kind,pointsConfig:cfg,data:initialData});
   const j=await r.json().catch(()=>({}));
   if(!r.ok)return alert('Erreur : '+(j.error||r.status));
   // Reload events list
@@ -3151,8 +3160,75 @@ async function removeEventGalleryImage(idx){
   }
 }
 
+// Catalogue local : métadonnées uniquement, jamais les fichiers des mods.
+let localModsCatalog=null,localModsBusy=false,localModsMessage='';
+async function loadLocalMods(scan=false){
+  if(!adminAuth||localModsBusy)return;
+  localModsBusy=true;localModsMessage='';render();
+  try{
+    const response=scan?await apiPost('/api/admin/local-mods/scan',{}):await apiGet('/api/admin/local-mods');
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.error||('HTTP '+response.status));
+    localModsCatalog=data;
+    localModsMessage=data.scannedAt?'Catalogue chargé. Les mods absents ne seront pas retirés des événements déjà enregistrés.':'Clique sur Actualiser pour analyser les dossiers du PC serveur.';
+  }catch(error){localModsMessage='Erreur : '+error.message;}
+  finally{localModsBusy=false;render();}
+}
+function localModChoices(){
+  const saved=eventContext?.data?.modSelection||{};
+  const cars=[...(localModsCatalog?.cars||[])],tracks=[...(localModsCatalog?.tracks||[])];
+  for(const car of saved.cars||[])if(!cars.some(x=>x.id===car.id))cars.push({...car,unavailable:true});
+  if(saved.track&&!tracks.some(x=>x.id===saved.track.id))tracks.push({...saved.track,unavailable:true});
+  return {cars,tracks,saved};
+}
+function readLocalModSelection(){
+  const carsSelect=document.getElementById('local-mod-cars'),trackSelect=document.getElementById('local-mod-track');
+  if(!carsSelect||!carsSelect.selectedOptions||!trackSelect)return null;
+  const choices=localModChoices();
+  const ids=new Set(Array.from(carsSelect.selectedOptions,o=>o.value));
+  return {version:1,cars:choices.cars.filter(c=>ids.has(c.id)).map(c=>({id:c.id,name:c.name,brand:c.brand||''})),
+    track:(()=>{const t=choices.tracks.find(t=>t.id===trackSelect.value);return t?{id:t.id,trackId:t.trackId,layoutId:t.layoutId,name:t.name}:null;})()};
+}
+function filterLocalModOptions(input,selectId){
+  const query=input.value.toLocaleLowerCase('fr');
+  const select=document.getElementById(selectId);
+  if(select)for(const option of select.options)option.hidden=!!option.value&&!option.selected&&!option.textContent.toLocaleLowerCase('fr').includes(query);
+}
+async function saveLocalModSelection(){
+  if(!adminAuth||!currentSlug)return;
+  const selected=readLocalModSelection();if(!selected)return;
+  try{
+    await saveEventHomePatch(currentSlug,data=>{data.modSelection=selected;if(selected.cars.length)data.eventInfo={...(data.eventInfo||{}),car:selected.cars.map(c=>c.name).join(' / ')};},'✓ Voitures et circuit enregistrés pour cet événement.');
+  }catch(error){alert('Enregistrement impossible : '+error.message);}
+}
+async function addLocalModRound(){
+  if(!adminAuth||!currentSlug)return;
+  const selected=readLocalModSelection(),day=document.getElementById('local-mod-date')?.value;
+  if(!selected?.track||!/^\d{4}-\d{2}-\d{2}$/.test(day||''))return alert('Choisis un circuit et une date.');
+  const t=selected.track;
+  const existing=eventContext?.data?.customCalendar?.[day];
+  if(existing&&!confirm('Remplacer la manche prévue à cette date ?'))return;
+  try{
+    await saveEventHomePatch(currentSlug,data=>{data.customCalendar={...(data.customCalendar||{}),[day]:{track:t.trackId,layout:t.layoutId,trackName:t.name}};},'✓ Manche ajoutée au calendrier du site.');
+    customCalendar=eventContext.data.customCalendar;render();
+  }catch(error){alert('Ajout impossible : '+error.message);}
+}
+function renderLocalModsPanel(){
+  const {cars,tracks,saved}=localModChoices();
+  const statuses={available:'Accessible',missing:'Absent (ignoré)',unreadable:'Lecture refusée / erreur', 'not-scanned':'Pas encore analysé'};
+  const sourceName=id=>{const p=localModsCatalog?.sources?.find(s=>s.id===id)?.path||'';return /^[a-z]:/i.test(p)?p.slice(0,2):id;};
+  const suffix=item=>item.unavailable?' — disponibilité à vérifier':(' — '+sourceName(item.source)+(item.metadataAvailable?'':' · nom de dossier'));
+  return `<section class="panel" style="margin:16px 0;background:#f4ecd8"><div class="eyebrow">Mods installés · catalogue du PC serveur</div><h3>Voitures et circuits locaux (C: / D: / E:)</h3><p class="note">Lecture seule des dossiers configurés. Aucun téléchargement de mod, déplacement ou configuration automatique de CM / ACSM. Les disques absents sont ignorés. Les premières sources ont priorité sur les doublons.</p>
+    <div class="controls"><button type="button" class="btn secondary" onclick="loadLocalMods(false)" ${localModsBusy?'disabled':''}>Charger le catalogue</button><button type="button" class="btn" onclick="loadLocalMods(true)" ${localModsBusy?'disabled':''}>${localModsBusy?'Analyse en cours…':'Actualiser les voitures et circuits'}</button></div><p class="note" role="status">${esc(localModsMessage)}</p>
+    ${localModsCatalog?`<p class="note">${localModsCatalog.cars.length} voitures · ${localModsCatalog.tracks.length} circuits / variantes${localModsCatalog.scannedAt?' · analysés le '+esc(new Date(localModsCatalog.scannedAt).toLocaleString('fr-FR')):''}</p><ul class="note">${localModsCatalog.sources.map(s=>`<li>${esc(s.path)} : ${esc(statuses[s.status]||s.status)}</li>`).join('')}</ul>${localModsCatalog.warnings.length?`<details><summary>Avertissements de lecture (${localModsCatalog.warnings.length})</summary><ul class="note">${localModsCatalog.warnings.map(w=>'<li>'+esc(w)+'</li>').join('')}</ul></details>`:''}`:''}
+    <div class="grid"><label>Voitures (plusieurs : Ctrl + clic)<input type="search" placeholder="Rechercher une voiture…" oninput="filterLocalModOptions(this,'local-mod-cars')"><select id="local-mod-cars" aria-label="Voitures de l’événement" multiple size="6" style="width:100%">${cars.map(c=>`<option value="${esc(c.id)}" ${(saved.cars||[]).some(x=>x.id===c.id)?'selected':''}>${esc(c.name+' ['+c.id+']'+suffix(c))}</option>`).join('')}</select></label>
+    <label>Circuit / variante<input type="search" placeholder="Rechercher un circuit…" oninput="filterLocalModOptions(this,'local-mod-track')"><select id="local-mod-track" aria-label="Circuit et variante" style="width:100%"><option value="">— Sans circuit sélectionné —</option>${tracks.map(t=>`<option value="${esc(t.id)}" ${saved.track?.id===t.id?'selected':''}>${esc(t.name+' ['+t.id+']'+suffix(t))}</option>`).join('')}</select><br>Date de la manche (optionnelle à la création)<input type="date" id="local-mod-date"></label></div>
+    <p class="note">La sélection ci-dessus est utilisée par « Créer un événement ». Pour l’événement courant, enregistre-la avec le bouton ci-dessous. Une date et un circuit permettent aussi d’ajouter une manche au calendrier.</p>
+    ${currentSlug?`<div class="controls"><button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button></div>`:''}</section>`;
+}
+
 function renderEventsAdmin(){
-  if(!events.length)return '<p class="note">Aucun événement.</p>';
+
   const fileInput=`<input type="file" id="event-poster-input" accept="image/*" style="display:none" onchange="handleEventPosterFile(event)"><input type="file" id="event-gallery-input" accept="image/*" style="display:none" onchange="handleEventGalleryFile(event)">`;
   const topBar=`${fileInput}<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px"><button class="btn" onclick="createEventPrompt()">+ Créer un événement</button>${currentSlug&&eventContext?`<button class="btn secondary" onclick="triggerEventPosterUpload('${currentSlug.replace(/'/g,"\\'")}')">🖼️ ${hasEventPoster(eventContext)?'Changer':'Insérer'} l'affiche de l'événement courant (${esc(eventContext.name)})</button><button class="btn secondary" onclick="deleteCurrentEvent()">Supprimer l'événement courant</button>`:''}</div><div id="event-poster-status" class="note" style="margin-bottom:12px"></div>`;
   const row=(e)=>{
@@ -3219,7 +3295,7 @@ function renderEventsAdmin(){
       ${gallery.length?`<div class="admin-gal-thumbs">${gallery.map((g,idx)=>`<div class="admin-gal-thumb"><button type="button" class="admin-gal-del" title="Retirer" onclick="removeEventGalleryImage(${idx})">✕</button><img src="${esc(g.src)}" alt="${esc(g.caption||'Photo')}"><div class="muted" style="font-size:10px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.caption||'Sans légende')}</div></div>`).join('')}</div>`:''}
     </div>
   </div>`:'';
-  return topBar+table(['','Événement','Courant','Coeff','Affiche','Mis à jour',''],events.map(row))+evHomeEditor;
+  return renderLocalModsPanel()+topBar+table(['','Événement','Courant','Coeff','Affiche','Mis à jour',''],events.map(row))+evHomeEditor;
 }
 
 function renderChampPointsPanel(){
@@ -3266,7 +3342,7 @@ function admin(){
       .sort(([a],[b])=>a.localeCompare(b))
       .map(([dt,val],idx)=>{
         const safeDt=esc(String(dt).replace(/'/g,"\\'"));
-        return `<div class="admin-round" style="border-style:dashed"><b>Manche ${rs.length+idx+1} · ${esc(track(val.track||''))} <span class="tag" style="margin-left:6px">À VENIR</span></b><div class="muted">${date(dt)} · Date prévisionnelle</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn secondary small" onclick="removePlannedRound('${safeDt}')">Retirer</button></div></div>`;
+        return `<div class="admin-round" style="border-style:dashed"><b>Manche ${rs.length+idx+1} · ${esc(val.trackName||track(val.track||''))} <span class="tag" style="margin-left:6px">À VENIR</span></b><div class="muted">${date(dt)} · Date prévisionnelle</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn secondary small" onclick="removePlannedRound('${safeDt}')">Retirer</button></div></div>`;
       }).join('')
     :'';
   const roundCards=rs.map((r,i)=>{

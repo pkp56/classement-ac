@@ -214,3 +214,12 @@ de pointer vers une image absente.
   Trois départs = trois secteurs (le dernier va jusqu'à 1), pas quatre.
 - `tests/drive-import.test.js` couvre l'extraction d'ID, le décodage, le rejet
   d'un fichier tronqué et les deux cas ci-dessus.
+
+## Catalogue local des voitures et circuits (Windows)
+
+L'administration des événements peut analyser les métadonnées de mods sur le PC
+hébergeant Node : `content` du jeu sur C:, puis `D:\content` et `E:\content`.
+Les disques absents sont ignorés. Le catalogue est réservé aux administrateurs,
+en lecture seule ; les choix de voitures et de variantes sont conservés avec
+l'événement. Configuration, mise à jour Windows et script facultatif de jonctions
+CM : voir [MODS-LOCAUX-WINDOWS.md](MODS-LOCAUX-WINDOWS.md).
