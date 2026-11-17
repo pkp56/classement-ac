@@ -738,3 +738,66 @@ test('Commission qualification is cancelled atomically and unauthenticated calls
   sandbox.prompt=()=>{throw Error('No prompt without authentication')};
   await vm.runInContext('qualifyConduct(testKey)',sandbox);
 });
+
+test('Catalogue local : menus même sans événements, variantes et sélections historiques conservées',async()=>{
+  const catalog={scannedAt:'2026-11-11T12:00:00Z',sources:[{id:'source-1',path:'D:\\content',status:'available'}],cars:[{id:'lola',name:'Lola <test>',brand:'Lola',source:'source-1',metadataAvailable:true}],tracks:[{id:'spa/short',trackId:'spa',layoutId:'short',name:'Spa court',source:'source-1',metadataAvailable:true}],warnings:[]};
+  const {sandbox,getElementById}=makeBrowser([],url=>url.startsWith('/api/admin/local-mods')?response(catalog):null);
+  await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext("adminAuth=true;adminTab='events';page='admin';events=[];render()",sandbox);
+  assert.match(getElementById('app').innerHTML,/Actualiser les voitures et circuits/);
+  assert.match(getElementById('app').innerHTML,/Créer un événement/);
+  await vm.runInContext('loadLocalMods(true)',sandbox);
+  assert.match(getElementById('app').innerHTML,/Lola &lt;test&gt;/);
+  assert.match(getElementById('app').innerHTML,/spa\/short/);
+  vm.runInContext("eventContext={data:{modSelection:{cars:[{id:'missing',name:'Ancienne voiture'}],track:{id:'old/layout',trackId:'old',layoutId:'layout',name:'Ancien tracé'}}}};render()",sandbox);
+  assert.match(getElementById('app').innerHTML,/disponibilité à vérifier/);
+  getElementById('local-mod-cars').selectedOptions=[{value:'missing'}];
+  getElementById('local-mod-track').value='old/layout';
+  const selection=vm.runInContext('readLocalModSelection()',sandbox);
+  assert.equal(selection.cars[0].id,'missing');assert.equal(selection.track.layoutId,'layout');
+});
+
+test('Catalogue local : sélection et calendrier persistés sans effacer les sessions ou la commission',async()=>{
+  let remote=null;
+  const catalog={scannedAt:'2026-11-11T12:00:00Z',sources:[],cars:[{id:'lola',name:'Lola',brand:'Lola'}],tracks:[{id:'spa/short',trackId:'spa',layoutId:'short',name:'Spa court'}],warnings:[]};
+  const {sandbox,getElementById,calls}=makeBrowser([], (url,opts)=>{
+    if(url.startsWith('/api/admin/local-mods'))return response(catalog);
+    if(remote&&url==='/api/events/'+fixture.event.slug)return response(remote);
+    if(remote&&url==='/api/events/'+fixture.event.slug+'/data'&&opts.method==='POST'){
+      remote.data=JSON.parse(opts.body);return response({ok:true});
+    }
+    return null;
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext(`loadEvent(${JSON.stringify(fixture.event.slug)})`,sandbox);
+  remote={slug:fixture.event.slug,data:JSON.parse(vm.runInContext('JSON.stringify(eventContext.data)',sandbox))};
+  const originalSessions=JSON.stringify(remote.data.sessions),originalPen=JSON.stringify(remote.data.penMap);
+  vm.runInContext("adminAuth=true;adminToken='tok';adminTab='events';page='admin'",sandbox);
+  await vm.runInContext('loadLocalMods(true)',sandbox);
+  getElementById('local-mod-cars').selectedOptions=[{value:'lola'}];getElementById('local-mod-track').value='spa/short';
+  await vm.runInContext('saveLocalModSelection()',sandbox);
+  assert.equal(remote.data.modSelection.track.layoutId,'short');
+  assert.equal(remote.data.eventInfo.car,'Lola');
+  assert.equal(JSON.stringify(remote.data.sessions),originalSessions);assert.equal(JSON.stringify(remote.data.penMap),originalPen);
+  getElementById('local-mod-cars').selectedOptions=[{value:'lola'}];getElementById('local-mod-track').value='spa/short';getElementById('local-mod-date').value='2027-03-10';
+  await vm.runInContext('addLocalModRound()',sandbox);
+  assert.equal(remote.data.customCalendar['2027-03-10'].layout,'short');
+  await vm.runInContext('saveRemote()',sandbox);
+  const saved=calls.filter(c=>c.url.endsWith('/data')&&c.method==='POST').at(-1).body;
+  assert.equal(saved.modSelection.track.id,'spa/short');
+  assert.equal(saved.customCalendar['2027-03-10'].trackName,'Spa court');
+});
+
+test('Création depuis le catalogue : identifiants de voiture et layout inclus dans le POST initial',async()=>{
+  const {sandbox,getElementById,calls}=makeBrowser([], (url,opts)=>url==='/api/events'&&opts.method==='POST'?response({error:'Arrêt du scénario de test après capture'},409):null);
+  await new Promise(resolve=>setImmediate(resolve));
+  sandbox.initialCatalog={scannedAt:'2026-11-11',sources:[],cars:[{id:'car',name:'Voiture'}],tracks:[{id:'track/layout',trackId:'track',layoutId:'layout',name:'Circuit variante'}],warnings:[]};
+  vm.runInContext('localModsCatalog=initialCatalog;adminAuth=true',sandbox);
+  getElementById('local-mod-cars').selectedOptions=[{value:'car'}];
+  getElementById('local-mod-track').value='track/layout';getElementById('local-mod-date').value='2027-04-01';
+  const prompts=['Nouvel open','open','nouvel-open','0.5','25,18,15','0'];sandbox.prompt=()=>prompts.shift();
+  await vm.runInContext('createEventPrompt()',sandbox);
+  const body=calls.find(c=>c.url==='/api/events'&&c.method==='POST').body;
+  assert.equal(body.data.modSelection.cars[0].id,'car');assert.equal(body.data.modSelection.track.layoutId,'layout');
+  assert.equal(body.data.customCalendar['2027-04-01'].track,'track');
+});
