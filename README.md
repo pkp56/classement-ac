@@ -218,3 +218,7 @@ CM : voir [MODS-LOCAUX-WINDOWS.md](MODS-LOCAUX-WINDOWS.md).
 ## Sauvegardes Windows
 
 Voir [SAUVEGARDES-WINDOWS.md](SAUVEGARDES-WINDOWS.md) : première sauvegarde privée hors dépôt, vérification, restauration dans une base de test distincte, puis tâche quotidienne (session utilisateur ouverte requise). Les 14 dernières archives complètes sont conservées. Une copie sur C: ne protège pas contre une panne du disque. Les lanceurs sont préparés mais doivent encore être validés sur le PC Windows.
+
+## Référencement et domaine public
+
+Le domaine officiel par défaut est `https://gdsp.duckdns.org` ; `PUBLIC_SITE_URL` permet de le remplacer par une origine HTTP(S) simple. Les pages d'accueil et d'événements sont rendues côté serveur avec canonique et balises de partage. `/index.html` redirige vers `/` et les adresses inconnues renvoient une vraie 404. Contrôles après déploiement et démarches externes (Search Console, ancien hébergement) : [REFERENCEMENT.md](REFERENCEMENT.md).

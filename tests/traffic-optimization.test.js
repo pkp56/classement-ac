@@ -53,7 +53,11 @@ test('Les réponses texte sont compressées et le flux SSE compressé reste imm�
     child.on('exit', code => { clearTimeout(timeout); reject(new Error('Server exited ' + code)); });
   });
 
-  const htmlResponse = await request(port, '/index.html', { 'accept-encoding': 'gzip' });
+  const redirect = await request(port, '/index.html');
+  assert.equal(redirect.status, 301);
+  assert.equal(redirect.headers.location, '/');
+  // Le shell HTML conservé sur /admin permet de tester la compression sans base de données.
+  const htmlResponse = await request(port, '/admin', { 'accept-encoding': 'gzip' });
   assert.equal(htmlResponse.status, 200);
   assert.equal(htmlResponse.headers['content-encoding'], 'gzip');
   assert.match(htmlResponse.headers.vary || '', /Accept-Encoding/i);
