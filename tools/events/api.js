@@ -141,7 +141,7 @@ function timingSafeStringEqual(a, b) {
 /** Signe un jeton admin (HS256, 8 h) — même format que l'ancien backend. */
 function signAdminToken(username, env = process.env) {
   const jwt = require('jsonwebtoken');
-  return jwt.sign({ sub: username, role: 'admin' }, jwtSecret(env), { expiresIn: TOKEN_TTL_SECONDS });
+  return jwt.sign({ sub: username, role: 'admin' }, jwtSecret(env), { expiresIn: TOKEN_TTL_SECONDS, jwtid:crypto.randomUUID() });
 }
 
 /**
@@ -155,7 +155,8 @@ function verifyAdminToken(header, env = process.env) {
   let jwt;
   try { jwt = require('jsonwebtoken'); } catch (e) { return { ok: false, reason: 'invalid' }; }
   try {
-    const payload = jwt.verify(token, jwtSecret(env));
+    const payload = jwt.verify(token, jwtSecret(env),{algorithms:['HS256']});
+    if(payload.role!=='admin'||typeof payload.sub!=='string'||!payload.sub||!Number.isFinite(payload.exp))return {ok:false,reason:'invalid'};
     return { ok: true, user: String(payload.sub || 'admin') };
   } catch (e) {
     return { ok: false, reason: 'invalid' };

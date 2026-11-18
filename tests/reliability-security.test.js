@@ -99,3 +99,19 @@ test('reset local : sauvegarde obligatoire avant écriture, métadonnées conser
   await assert.rejects(resetWithBackup({store,slug:'cup',user:'admin',backup:async()=>{throw Error('disk full')}}),/disk full/);
   assert.deepEqual(calls,[]);
 });
+
+test('session navigateur réelle : login HTTPS, exclusions protégées CSRF et lecture télémétrie',async t=>{
+  const {call}=await server(t);
+  const login=await call('/api/admin/login',{method:'POST',headers:{'content-type':'application/json','x-gdsp-session':'cookie','x-forwarded-proto':'https'},body:'{"username":"staff","password":"test-password-only"}'});
+  assert.equal(login.status,200);const j=await login.json();assert.equal(j.token,undefined);assert.equal(j.authenticated,true);
+  const cookie=login.headers.get('set-cookie').split(';')[0];
+  const headers={cookie,'x-forwarded-proto':'https','content-type':'application/json'};
+  const body='{"ids":{"test-pilot":true}}';
+  const blocked=await call('/api/global-exclusions',{method:'PUT',headers,body});assert.equal(blocked.status,403);
+  assert.deepEqual((await(await call('/api/global-exclusions')).json()).ids,{});
+  const saved=await call('/api/global-exclusions',{method:'PUT',headers:{...headers,'x-gdsp-csrf':j.csrfToken},body});assert.equal(saved.status,200);
+  assert.deepEqual((await(await call('/api/global-exclusions')).json()).ids,{'test-pilot':true});
+  const verified=await call('/api/admin/verify',{headers});assert.equal(verified.status,200);assert.equal((await verified.json()).user,'staff');
+  const telemetry=await call('/api/telemetry/catalog',{headers});assert.notEqual(telemetry.status,401);assert.notEqual(telemetry.status,403);
+  const noCsrf=await call('/api/admin/reset',{method:'POST',headers,body:'{"confirmation":"REINIT_CHAMPIONNAT"}'});assert.equal(noCsrf.status,403);
+});

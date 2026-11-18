@@ -34,7 +34,7 @@ Rien, sauf trois choses volontaires :
 Le jeton reste un **JWT HS256 de 8 h**, avec `sub` = nom d'utilisateur et
 `role = "admin"`. **Conséquence utile :** si `JWT_SECRET` est le même que celui
 de l'ancien backend, les sessions déjà ouvertes restent valides après la bascule.
-Autrement, il suffit de se reconnecter.
+Autrement, il suffit de se reconnecter. Pour le navigateur, une reconnexion est requise lors de la migration du stockage JavaScript vers le cookie sécurisé.
 
 ## Variables d'environnement
 
@@ -98,4 +98,4 @@ Le proxy générique n'est utilisé qu'en `EVENTS_SOURCE=backend`. En mode local
 - un jeton expiré est refusé ;
 - sans base locale, on répond 503 sans solliciter un autre hébergeur.
 
-Le jeton navigateur reste un Bearer JWT, désormais conservé en sessionStorage uniquement. Une migration vers cookie HttpOnly n’est pas incluse dans ce lot.
+Le navigateur utilise désormais un cookie HttpOnly/Secure/SameSite=Strict en HTTPS, sans JWT en JSON ni dans le stockage JavaScript. Le client commun `assets/admin-session.js` demande ce mode avec `X-GDSP-Session: cookie`. Les écritures par cookie exigent un nonce CSRF ; les origines étrangères sont refusées. Login limité à 10 tentatives/IP/15 minutes avant bcrypt. Voir [le guide lot 2](../../LOT2-CONNEXION-SECURISEE.md), notamment la restriction de connexion navigateur à EVENTS_SOURCE=local. Le contrat Bearer historique reste disponible pour les scripts sans cookie.

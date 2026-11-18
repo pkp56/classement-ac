@@ -8,7 +8,8 @@ Site de championnat GDSP servi par Node/Express, notamment sur le PC Windows der
 - **Sans base configurée ou joignable : 503 JSON explicite**, pas de repli automatique vers un ancien hébergement.
 - `EVENTS_SOURCE=backend` : ancien backend uniquement si ce mode est choisi explicitement, via `BACKEND_URL` / `GDSP_API_URL`.
 - Authentification JWT 8 h ; `ADMIN_USERNAME`, `ADMIN_PASSWORD` et un `JWT_SECRET` fort sont à configurer sur le serveur. Aucun compte de secours.
-- Le navigateur utilise uniquement `sessionStorage` pour le jeton, pas `localStorage`. Cela réduit la persistance, mais **ne remplace pas** une migration ultérieure vers des cookies HttpOnly et une CSP stricte.
+- Le navigateur utilise un cookie HttpOnly/Secure/SameSite=Strict (8 h), sans JWT dans le stockage JavaScript. Les écritures par cookie sont protégées par nonce CSRF ; le login est limité à 10 tentatives/IP/15 min. La CSP stricte reste un chantier distinct.
+- La connexion navigateur exige HTTPS et `EVENTS_SOURCE=local` ; HTTP loopback est réservé aux essais sur le PC. Voir [LOT2-CONNEXION-SECURISEE.md](LOT2-CONNEXION-SECURISEE.md) pour les détails et les limites.
 - `/healthz` et `/health` : processus Node ; `/api/health` : disponibilité des événements. L'absence d'un serveur Assetto Corsa n'est pas une panne du site.
 
 Voir [LOT1-FIABILITE-SECURITE.md](LOT1-FIABILITE-SECURITE.md) pour l'installation Windows, les vérifications Caddy, les limites et les sauvegardes. Détail API : [tools/events/README.md](tools/events/README.md).
