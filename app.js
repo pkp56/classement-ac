@@ -24,6 +24,7 @@ const ROOT = __dirname;
 // Fichiers interdits au public
 const FORBIDDEN = /(^|\/)(?:\.env|node_modules|\.git|\.github|package\.json|package-lock\.json|README\.md|render\.yaml|\.gitignore|\.gitattributes|app\.js|seo\.js|tests?\/|backups?\/)/i;
 app.use(express.json({ limit: '10mb' }));
+require('./tools/lib/admin-session').mountAdminSession(app,{source:()=>eventsSource()});
 app.use((req, res, next) => {
   let publicPath;
   try{publicPath=decodeURIComponent(req.path).replace(/\\/g,'/')}catch(e){return res.status(400).json({error:'URL invalide.'});}
@@ -41,6 +42,9 @@ function proxyRequest(req, res, opts = {}) {
   delete headers.connection;
   delete headers.origin;
   delete headers.referer;
+  delete headers.cookie;
+  delete headers['x-gdsp-csrf'];
+  delete headers['x-gdsp-session'];
   delete headers['content-length'];
   delete headers['transfer-encoding'];
   delete headers['accept-encoding']; // évite les problèmes de décompression
@@ -522,7 +526,7 @@ async function verifyAdminDetail(req){
     const {status} = await new Promise((resolve,reject)=>{
       const target=new URL('/api/admin/verify', BACKEND_URL);
       const hdrs=Object.assign({}, req.headers);
-      delete hdrs.host;delete hdrs.connection;delete hdrs.origin;delete hdrs.referer;delete hdrs['content-length'];
+      delete hdrs.host;delete hdrs.connection;delete hdrs.origin;delete hdrs.referer;delete hdrs.cookie;delete hdrs['x-gdsp-csrf'];delete hdrs['content-length'];
       const proto=target.protocol==='https:'?https:http;
       // Même tolérance que le login : sur Render free tier, le backend peut
       // mettre 20-30 s à sortir de veille. Un délai de 8 s faisait échouer une

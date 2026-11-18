@@ -19,7 +19,10 @@ let sessions=[], penMap={}, manualDrivers=null, customCalendar=null;
 let adminAuth=false, adminUser='', adminTab='import', selectedRaceAdj=null;
 // Les anciens jetons persistants ne sont plus réutilisés : reconnexion requise.
 localStorage.removeItem('gdsp_admin_token');
-let adminToken=sessionStorage.getItem('gdsp_admin_token')||null;
+sessionStorage.removeItem('gdsp_admin_token');
+// Indicateur d’interface uniquement : aucun secret dans le JavaScript.
+let adminToken=null;
+const authFetch=(...args)=>window.gdspAuth.fetch(...args);
 const app=document.getElementById('app');
 
 // ---------- Points config par défaut (Lola T290 2026) ----------
@@ -128,7 +131,7 @@ async function detectLiveTiming(){
   try{
     // Certains hébergements statiques répondent 200 avec le HTML du site sur
     // toute URL : on n'accepte qu'une vraie réponse JSON.
-    const r=await fetch('/api/live/config',{cache:'no-store',headers:{Accept:'application/json'}});
+    const r=await authFetch('/api/live/config',{cache:'no-store',headers:{Accept:'application/json'}});
     if(!r.ok)throw new Error('HTTP '+r.status);
     const type=String(r.headers.get('content-type')||'');
     if(!/json/i.test(type))throw new Error('pas du JSON');
@@ -236,18 +239,16 @@ async function switchEvent(slug){
 }
 
 // ---------- API helpers ----------
-async function apiGet(path,opts){const r=await fetch(path,Object.assign({cache:'no-store',headers:adminToken?{Authorization:'Bearer '+adminToken}:{}},opts||{}));return r}
+async function apiGet(path,opts){const r=await authFetch(path,Object.assign({cache:'no-store',headers:{}},opts||{}));return r}
 async function apiPost(path,body){
   const headers={'Content-Type':'application/json'};
-  if(adminToken)headers['Authorization']='Bearer '+adminToken;
-  const r=await fetch(path,{method:'POST',headers,body:body?JSON.stringify(body):undefined});
+  const r=await authFetch(path,{method:'POST',headers,body:body?JSON.stringify(body):undefined});
   if(r.status===401){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');sessionStorage.removeItem('gdsp_admin_token');render()}
   return r;
 }
 async function apiPut(path,body){
   const headers={'Content-Type':'application/json'};
-  if(adminToken)headers['Authorization']='Bearer '+adminToken;
-  const r=await fetch(path,{method:'PUT',headers,body:body?JSON.stringify(body):undefined});
+  const r=await authFetch(path,{method:'PUT',headers,body:body?JSON.stringify(body):undefined});
   if(r.status===401){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');sessionStorage.removeItem('gdsp_admin_token');render()}
   return r;
 }
@@ -290,7 +291,7 @@ async function detectBackend(){
   backendError='';
   for(let attempt=0;attempt<2;attempt++){
     try{
-      const r=await fetch('/api/events',{cache:'no-store'});
+      const r=await authFetch('/api/events',{cache:'no-store'});
       if(!r.ok)throw new Error('HTTP '+r.status);
       const j=await r.json();
       if(!Array.isArray(j.events))throw new Error('Réponse événements invalide');
@@ -301,6 +302,7 @@ async function detectBackend(){
   }
 }
 async function retryBackend(){
+  try{const state=await window.gdspAuth.session();adminToken=state.authenticated?true:null;}catch(e){adminToken=null;}
   await detectBackend();
   await detectLiveTiming().catch(()=>{});
   if(!backendError){
@@ -1600,7 +1602,7 @@ async function circuitsData(){
   // calendrier Lola afficherait six circuits qui ne les concernent pas.
   if (isLolaEvent()) {
     try {
-      const r = await fetch('/data/circuits.json', { cache: 'no-store' });
+      const r = await authFetch('/data/circuits.json', { cache: 'no-store' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       base = await r.json();
       if (!base || !Array.isArray(base.rounds)) throw new Error('Données circuit incomplètes');
@@ -2264,11 +2266,11 @@ async function adminLogin(){
     const r=await apiPost('/api/admin/login',{username:u,password:p});
     if(r.status>=500){alert('Serveur de connexion temporairement indisponible. Réessayez dans quelques instants.');return}
     const j=await r.json();
-    if(!r.ok||!j.token){alert(j.error||j.message||'Identifiant ou mot de passe incorrect.');return}
-    adminToken=j.token;
-    // Session d’onglet uniquement ; pas de jeton persistant dans localStorage.
+    if(!r.ok||!j.authenticated){alert(j.error||j.message||'Identifiant ou mot de passe incorrect.');return}
+    adminToken=true;
+    // Le cookie HttpOnly est géré par le navigateur ; aucun JWT stocké ici.
     localStorage.removeItem('gdsp_admin_token');
-    sessionStorage.setItem('gdsp_admin_token',adminToken);
+
     adminAuth=true;
     adminUser=j.user||'Direction de course';
     if(backendError)await detectBackend();
@@ -2282,7 +2284,13 @@ async function adminLogin(){
     render()
   }catch(e){alert('Erreur de connexion : '+e.message)}
 }
-async function adminLogout(){adminToken=null;adminAuth=false;adminUser='';localStorage.removeItem('gdsp_admin_token');sessionStorage.removeItem('gdsp_admin_token');render()}
+async function adminLogout(){
+  try{
+    const r=await apiPost('/api/admin/logout',{});
+    if(!r.ok)throw Error('HTTP '+r.status);
+    adminToken=null;adminAuth=false;adminUser='';render();
+  }catch(e){alert('Déconnexion non confirmée. Réessaie avant de quitter ce poste.');}
+}
 async function doSaveRemote(){
   const el=document.getElementById('save-status');
   function say(txt,c){if(el){el.textContent=txt;el.style.color=c||'#586260'}console.log('[save]',txt)}
@@ -2563,19 +2571,19 @@ async function deleteEvent(slug){
   if(!backendMulti||!slug)return;
   const evObj=events.find(e=>e.slug===slug)||(eventContext&&eventContext.slug===slug?eventContext:{slug,name:slug});
   if(!confirm(`Supprimer DÉFINITIVEMENT "${evObj.name||slug}" du serveur ? Cette action est irréversible.`))return;
-  const hdrs=adminToken?{Authorization:'Bearer '+adminToken,'Content-Type':'application/json'}:{'Content-Type':'application/json'};
+  const hdrs={'Content-Type':'application/json'};
   if(slug===LEGACY_DEFAULT_SLUG){
     // L'événement legacy ("International Series Lola T290 — 2026") est recréé au démarrage du backend
     // si sa ligne est absente de PostgreSQL (ON CONFLICT DO NOTHING). On conserve donc une tombe
     // (_deleted:true) en base et on vide l'ancienne table championship pour qu'il ne revienne jamais.
     const tombCfg=Object.assign({},DEFAULT_POINTS,{_deleted:true});
-    const putRes=await fetch('/api/events/'+encodeURIComponent(slug),{
+    const putRes=await authFetch('/api/events/'+encodeURIComponent(slug),{
       method:'PUT',headers:hdrs,body:JSON.stringify({kind:'archive',pointsConfig:tombCfg})
     }).catch(()=>null);
     await apiPost('/api/events/'+encodeURIComponent(slug)+'/data',{_deleted:true,sessions:[],penMap:{},manualDrivers:null,customCalendar:null}).catch(()=>null);
     await apiPost('/api/save-championship',{_reset:true,_deleted:true,sessions:[],penMap:{},manualDrivers:null,customCalendar:null}).catch(()=>null);
     if(!putRes||putRes.status===404){
-      const delRes=await fetch('/api/events/'+encodeURIComponent(slug),{method:'DELETE',headers:adminToken?{Authorization:'Bearer '+adminToken}:{}});
+      const delRes=await authFetch('/api/events/'+encodeURIComponent(slug),{method:'DELETE',headers:{}});
       if(!delRes.ok&&delRes.status!==404){
         const dj=await delRes.json().catch(()=>({}));
         return alert('Erreur : '+(dj.error||delRes.status));
@@ -2585,7 +2593,7 @@ async function deleteEvent(slug){
       return alert('Erreur : '+(pj.error||putRes.status));
     }
   }else{
-    const r=await fetch('/api/events/'+encodeURIComponent(slug),{method:'DELETE',headers:adminToken?{Authorization:'Bearer '+adminToken}:{}});
+    const r=await authFetch('/api/events/'+encodeURIComponent(slug),{method:'DELETE',headers:{}});
     const j=await r.json().catch(()=>({}));
     if(!r.ok)return alert('Erreur : '+(j.error||r.status));
   }
@@ -2623,7 +2631,7 @@ async function saveGlobalHidden(){
 }
 async function loadGlobalHidden(){
   try{
-    const r=await fetch('/api/global-exclusions',{cache:'no-store'});
+    const r=await authFetch('/api/global-exclusions',{cache:'no-store'});
     if(!r.ok)throw Error('HTTP '+r.status);
     const j=await r.json();
     if(!j||!j.ids||typeof j.ids!=='object'||Array.isArray(j.ids))throw Error('Format invalide');
@@ -2703,9 +2711,9 @@ async function circuitImportRun(){
   if(!url){if(box)box.innerHTML=`<p class="note" style="color:#9c3021">Collez d'abord l'adresse du dossier Drive.</p>`;return}
   if(box)box.innerHTML=`<p class="note">Lecture du dossier Drive… (quelques secondes)</p>`;
   try{
-    const r=await fetch('/api/admin/circuits/import',{
+    const r=await authFetch('/api/admin/circuits/import',{
       method:'POST',
-      headers:Object.assign({'Content-Type':'application/json'},adminToken?{Authorization:'Bearer '+adminToken}:{}),
+      headers:Object.assign({'Content-Type':'application/json'},{}),
       body:JSON.stringify({driveUrl:url,name:(draft.name||'').trim()||undefined,round:draft.round?Number(draft.round):undefined})
     });
     const payload=await r.json().catch(()=>({error:'Réponse illisible du serveur'}));
@@ -2778,9 +2786,9 @@ async function circuitImportSave(){
     existing.sort((a,b)=>(Number(a.round)||999)-(Number(b.round)||999));
     data.circuitRounds=existing;
 
-    const put=await fetch('/api/events/'+encodeURIComponent(currentSlug)+'/data',{
+    const put=await authFetch('/api/events/'+encodeURIComponent(currentSlug)+'/data',{
       method:'POST',
-      headers:Object.assign({'Content-Type':'application/json'},adminToken?{Authorization:'Bearer '+adminToken}:{}),
+      headers:Object.assign({'Content-Type':'application/json'},{}),
       body:JSON.stringify(data)
     });
     if(!put.ok){
@@ -3456,7 +3464,7 @@ async function ahCreateEventFromBtn(btn){
   btn.disabled=true;btn.textContent='⏳ Création…';
   try{
     // Vérifie d'abord que le backend répond (sinon ça va rester bloqué en erreur silencieuse)
-    const h=await fetch('/api/events',{cache:'no-store'}).catch(()=>null);
+    const h=await authFetch('/api/events',{cache:'no-store'}).catch(()=>null);
     if(!h||!h.ok||!/json/i.test(h.headers.get('content-type')||'')){
       alert("❌ Le backend n'est pas joignable (API introuvable).\n\nLe frontend est actuellement servi en mode statique (GitHub Pages ou preview) sans proxy API. Pour créer des événements via AH, il faut déployer le serveur Node (app.js) sur Render avec le backend, ou utiliser le serveur local.\n\nLes autres pages (classements, résultats, GLOBAL) restent consultables normalement.");
       return;
@@ -3801,13 +3809,14 @@ function syncCircuitHistory(){
   let storedSessions=JSON.parse(localStorage.getItem('gdsp_sessions')||'null');
   if(storedSessions&&Array.isArray(storedSessions)&&storedSessions.length)sessions=storedSessions;
 
+  try{const state=await window.gdspAuth.session();adminToken=state.authenticated?true:null;}catch(e){adminToken=null;}
   await detectBackend();
   // Détection du live timing avant le premier rendu : sinon l'onglet LIVE
   // n'apparaît qu'après une navigation (l'utilisateur croit qu'il manque).
   await detectLiveTiming().catch(()=>{});
   // État courant du live timing (démo / direct / hors ligne) pour le bandeau
   // d'accueil. Jamais bloquant : si l'appel échoue, le bandeau reste générique.
-  fetch('/api/live/status',{cache:'no-store'}).then(r=>r.ok?r.json():null)
+  authFetch('/api/live/status',{cache:'no-store'}).then(r=>r.ok?r.json():null)
     .then(j=>{if(j&&j.status){window.__gdspLive=j;if(page==='hub'||page==='accueil')render()}})
     .catch(()=>{});
 
@@ -3850,7 +3859,7 @@ function syncCircuitHistory(){
         sessions.length=0;
         try{const remote=await loadRemoteLegacy();const cs=remote&&remote.championship&&remote.championship.sessions;if(Array.isArray(cs)&&cs.length)localStorage.removeItem('gdsp_reset')}catch(e){}
       }else{
-        if(!sessions.length){try{const r=await fetch('/data/data.json',{cache:'no-store'});if(r.ok){const base=await r.json();if(Array.isArray(base)&&base.length)sessions.push(...base)}}catch(e){}}
+        if(!sessions.length){try{const r=await authFetch('/data/data.json',{cache:'no-store'});if(r.ok){const base=await r.json();if(Array.isArray(base)&&base.length)sessions.push(...base)}}catch(e){}}
         try{
           const remote=await loadRemoteLegacy();
           if(remote){

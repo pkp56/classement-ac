@@ -69,6 +69,7 @@ function makeBrowser(extraEvents = [], extraFetch = null, browserOptions = {}) {
   };
   Object.assign(sandbox, browserOptions);
   sandbox.window = sandbox;
+  sandbox.gdspAuth = {fetch:(...args)=>sandbox.fetch(...args),session:async()=>({authenticated:!!browserOptions.authenticatedSession})};
   vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(root,'assets/global-rating.js'),'utf8'), sandbox);
   vm.runInContext(siteSource, sandbox);
@@ -824,11 +825,21 @@ test('Exclusions indisponibles : secours visible et échec de sauvegarde annonc�
 
 test('Le jeton administrateur n’est plus écrit dans localStorage',()=>{
   assert.doesNotMatch(siteSource,/localStorage\.setItem\(['"]gdsp_admin_token/);
-  assert.match(siteSource,/sessionStorage\.getItem\(['"]gdsp_admin_token/);
-  assert.match(siteSource,/sessionStorage\.setItem\(['"]gdsp_admin_token/);
+  assert.doesNotMatch(siteSource,/sessionStorage\.(getItem|setItem)\(['"]gdsp_admin_token/);
+  assert.match(siteSource,/gdspAuth/);
   const telemetry=fs.readFileSync(path.join(root,'telemetry.html'),'utf8');
   assert.doesNotMatch(telemetry,/localStorage\.setItem\(STORAGE_KEY/);
-  assert.match(telemetry,/sessionStorage\.getItem\(STORAGE_KEY/);
+  assert.doesNotMatch(telemetry,/sessionStorage\.(getItem|setItem)\(STORAGE_KEY/);
+  assert.match(telemetry,/gdspAuth/);
   assert.doesNotMatch(siteSource,/cdn\.discordapp\.com[^"\s]*Reglement_Piste_GDSP/);
   assert.match(siteSource,/\/docs\/reglement-piste-gdsp-v2024-12\.pdf/);
+});
+
+test('cookie existant : rétablit l’interface administrateur au chargement, sans jeton stocké',async()=>{
+  const {sandbox}=makeBrowser([],null,{authenticatedSession:true});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(vm.runInContext('adminAuth',sandbox),true);
+  assert.equal(vm.runInContext('adminToken',sandbox),true);
+  assert.equal(vm.runInContext('page',sandbox),'admin');
+  assert.doesNotMatch(siteSource,/Authorization.*Bearer/);
 });
