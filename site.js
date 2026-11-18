@@ -3742,6 +3742,40 @@ function globalDriverProfile(){
     <div class="panel driver-hist-wrap">${table(['Date','Événement','Circuit','Grille','Arr.',`Δ ${gdspTip(PROFILE_TIPS.delta)}`,`Coll. ${gdspTip(PROFILE_TIPS.collisions)}`,'Meilleur',`Δ rythme ${gdspTip(PROFILE_TIPS.sigma,'gdsp-tip-right')}`],raceRows)}</div>`;
 }
 
+// ---------- INDICATION DES TABLEAUX DÉFILANTS SUR MOBILE ----------
+const MOBILE_TABLE_SCROLL_LABEL='Tableau défilant horizontalement. Faites glisser pour consulter toutes les colonnes.';
+function updateTableScrollHints(){
+  if(!document.querySelectorAll)return;
+  const isNarrow=typeof window.matchMedia==='function'
+    ?window.matchMedia('(max-width: 800px)').matches
+    :Number(window.innerWidth)<=800;
+  for(const wrap of document.querySelectorAll('#app .table-wrap')){
+    if(!wrap.classList||typeof wrap.setAttribute!=='function'||typeof wrap.getAttribute!=='function')continue;
+    const overflowing=isNarrow&&Number(wrap.scrollWidth)>Number(wrap.clientWidth)+1;
+    wrap.classList.toggle('has-overflow',overflowing);
+    const enhanced=wrap.getAttribute('data-gdsp-scroll-enhanced')==='true';
+    if(overflowing){
+      wrap.setAttribute('data-gdsp-scroll-enhanced','true');
+      wrap.setAttribute('role','region');
+      wrap.setAttribute('aria-label',MOBILE_TABLE_SCROLL_LABEL);
+      wrap.setAttribute('tabindex','0');
+    }else if(enhanced){
+      wrap.removeAttribute('data-gdsp-scroll-enhanced');
+      if(wrap.getAttribute('role')==='region')wrap.removeAttribute('role');
+      if(wrap.getAttribute('aria-label')===MOBILE_TABLE_SCROLL_LABEL)wrap.removeAttribute('aria-label');
+      if(wrap.getAttribute('tabindex')==='0')wrap.removeAttribute('tabindex');
+    }
+  }
+}
+let tableScrollHintFrame=null;
+function scheduleTableScrollHints(){
+  if(typeof window.requestAnimationFrame==='function'){
+    if(tableScrollHintFrame!==null)return;
+    tableScrollHintFrame=window.requestAnimationFrame(()=>{tableScrollHintFrame=null;updateTableScrollHints()});
+  }else setTimeout(updateTableScrollHints,0);
+}
+if(typeof window.addEventListener==='function')window.addEventListener('resize',scheduleTableScrollHints,{passive:true});
+
 // ---------- RENDER ----------
 function render(){
   // Keep landing metadata consistent after in-app navigation as well as direct loads.
@@ -3760,17 +3794,18 @@ function render(){
   if(backendError){
     const warning=`<div class="panel" role="alert"><h2>Connexion au serveur interrompue</h2><p>${esc(backendError)}</p><button class="btn secondary" onclick="retryBackend()">Réessayer</button><button class="btn secondary" onclick="go('admin')">Administration</button></div>`;
     app.innerHTML=warning+(page==='admin'?admin():hub());
+    updateTableScrollHints();
     return;
   }
   if(backendMulti&&page==='gpilote'){
     // Sécurité : si les données ne sont pas encore chargées, passer par go('gpilote')
     const anyLoaded=events.some(ev=>ev.__loaded);
     if(!anyLoaded){go('gpilote');return}
-    app.innerHTML=globalDriverProfile();return;
+    app.innerHTML=globalDriverProfile();updateTableScrollHints();return;
   }
-  if(page==='hub'&&backendMulti){app.innerHTML=hub();return}
+  if(page==='hub'&&backendMulti){app.innerHTML=hub();updateTableScrollHints();return}
   // En mode multi, 'accueil' = LA PAGE D'ACCUEIL GDSP (hero 65/35, Règlements, Stats, Discord)
-  if(page==='accueil'&&backendMulti){app.innerHTML=hub();return}
+  if(page==='accueil'&&backendMulti){app.innerHTML=hub();updateTableScrollHints();return}
   if(isEventPage(page)){
     if(page==='circuit'&&!circuitsCache&&!circuitsError){
       if(!circuitsPending){
@@ -3780,10 +3815,11 @@ function render(){
       circuitsPending.then(()=>{if(page==='circuit')render()});
       return;
     }
-    app.innerHTML=renderEventShell();return;
+    app.innerHTML=renderEventShell();updateTableScrollHints();return;
   }
   const renderers={accueil:home,global:globalRankingSync,admin};
   app.innerHTML=(renderers[page]||home)();
+  updateTableScrollHints();
 }
 // URL dédiée de l'onglet circuit (permet un lien direct et le bouton Retour).
 function circuitUrl(){

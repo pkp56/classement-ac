@@ -843,3 +843,35 @@ test('cookie existant : rétablit l’interface administrateur au chargement, sa
   assert.equal(vm.runInContext('page',sandbox),'admin');
   assert.doesNotMatch(siteSource,/Authorization.*Bearer/);
 });
+
+test('les tableaux débordants sont signalés et accessibles au clavier uniquement sur mobile',async()=>{
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const makeWrap=(scrollWidth,clientWidth)=>{
+    const attrs=new Map(),classes=new Set();
+    return{
+      scrollWidth,clientWidth,
+      classList:{toggle(name,on){if(on)classes.add(name);else classes.delete(name)},contains(name){return classes.has(name)}},
+      setAttribute(name,value){attrs.set(name,String(value))},
+      getAttribute(name){return attrs.has(name)?attrs.get(name):null},
+      removeAttribute(name){attrs.delete(name)}
+    };
+  };
+  const overflowing=makeWrap(620,340),fitting=makeWrap(340,340);
+  sandbox.document.querySelectorAll=selector=>selector==='#app .table-wrap'?[overflowing,fitting]:[];
+  sandbox.matchMedia=query=>({matches:query==='(max-width: 800px)'});
+
+  vm.runInContext('updateTableScrollHints()',sandbox);
+  assert.equal(overflowing.classList.contains('has-overflow'),true);
+  assert.equal(overflowing.getAttribute('role'),'region');
+  assert.equal(overflowing.getAttribute('tabindex'),'0');
+  assert.match(overflowing.getAttribute('aria-label'),/Faites glisser/);
+  assert.equal(fitting.classList.contains('has-overflow'),false);
+  assert.equal(fitting.getAttribute('role'),null);
+
+  sandbox.matchMedia=()=>({matches:false});
+  vm.runInContext('updateTableScrollHints()',sandbox);
+  assert.equal(overflowing.classList.contains('has-overflow'),false);
+  assert.equal(overflowing.getAttribute('role'),null);
+  assert.equal(overflowing.getAttribute('tabindex'),null);
+});
