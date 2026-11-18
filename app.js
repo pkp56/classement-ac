@@ -1282,7 +1282,7 @@ function getIndex() {
 }
 const seo = require('./seo');
 // Production origin; PUBLIC_SITE_URL can override it when migrating to a custom domain.
-const PUBLIC_SITE_URL = (process.env.PUBLIC_SITE_URL || 'https://classement-ac-1.onrender.com').replace(/\/$/, '');
+const PUBLIC_SITE_URL = seo.siteOrigin(process.env.PUBLIC_SITE_URL || seo.DEFAULT_SITE_URL);
 const publicJsonCache = new Map();
 /**
  * Lecture JSON pour le rendu serveur (accueil, page événement, sitemap).
@@ -1345,10 +1345,12 @@ function publicFailure(res,error) {
   if(status===503)res.set('Retry-After','60');
   res.status(status).type('html').send(seo.renderPage(getIndex(),{
     title:status===404?'Événement introuvable | GDSP':'GDSP — temporairement indisponible',
-    description:'Gentleman Drivers Project',
+    description:'Gentleman Drivers Project',noindex:true,interactive:false,
     content:`<div class="panel"><h1>${status===404?'Événement introuvable':'Chargement temporairement indisponible'}</h1><p>Réessayez dans quelques instants.</p><a href="/">Accueil GDSP</a></div>`
   }));
 }
+// Une seule URL pour l'accueil ; destination relative fixe, sans redirection externe.
+app.get('/index.html',(req,res)=>res.redirect(301,'/'+(req.originalUrl.includes('?')?req.originalUrl.slice(req.originalUrl.indexOf('?')):'')));
 app.get('/', async (_req,res)=>{
   try {
     const result=await publicJson('/api/events');
@@ -1356,7 +1358,7 @@ app.get('/', async (_req,res)=>{
     sendPublicPage(res,{title:'GDSP — Open et championnat Assetto Corsa historique & vintage',description:'GDSP : open et championnat Assetto Corsa, simracing historique et vintage. Retrouvez les calendriers, résultats et classements.',content:seo.homeContent(events),canonical:PUBLIC_SITE_URL?PUBLIC_SITE_URL+'/':null});
   }catch(error){publicFailure(res,error)}
 });
-app.get('/evenements/:slug',async(req,res)=>{
+app.get(['/evenements/:slug','/evenements/:slug/circuit'],async(req,res)=>{
   try {
     const ev=await publicJson('/api/events/'+encodeURIComponent(req.params.slug));
     if(!ev.slug||!ev.name)throw new Error('Invalid event data');
@@ -1384,8 +1386,17 @@ app.get(['/healthz','/health'], (_req, res) => {
   res.set('Cache-Control','no-store');
   res.status(200).json({ ok:true, service:'gdsp-frontend' });
 });
+// Entrée historique conservée, non destinée à l'indexation.
+app.get('/admin',(_req,res)=>{res.set('X-Robots-Tag','noindex, follow');res.set('Cache-Control','no-store');res.type('html').send(getIndex());});
 app.use(express.static(ROOT,{dotfiles:'deny',etag:true,maxAge:'1h',setHeaders(res,filePath){
   if(/data\.json$/i.test(filePath)||/\.(?:html|js)$/i.test(filePath))res.set('Cache-Control','no-cache');
 }}));
-app.get('*',(req,res,next)=>{if(path.extname(req.path))return next();res.sendFile(INDEX_PATH)});
+app.get('*',(_req,res)=>{
+  res.set('Cache-Control','no-store');res.set('X-Robots-Tag','noindex, follow');
+  res.status(404).type('html').send(seo.renderPage(getIndex(),{
+    title:'Page introuvable | GDSP',description:'Cette adresse ne correspond à aucune page GDSP.',
+    noindex:true,interactive:false,
+    content:'<div class="panel"><h1>Page introuvable</h1><p>Cette adresse n’existe pas ou n’est plus disponible.</p><p><a href="/">Revenir à l’accueil GDSP</a></p></div>'
+  }));
+});
 app.listen(PORT,'0.0.0.0',()=>console.log(`GDSP frontend démarré sur le port ${PORT}. API proxifiée vers : ${BACKEND_URL}`));
