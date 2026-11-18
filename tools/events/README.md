@@ -40,7 +40,7 @@ Autrement, il suffit de se reconnecter.
 
 | Variable | Rôle |
 | --- | --- |
-| `DATABASE_URL` | base PostgreSQL/Neon. **Sans elle, les événements sont laissés à l'ancien service** (voir plus bas) — aucun plantage |
+| `DATABASE_URL` | base PostgreSQL/Neon. **Sans base configurée, 503 local explicite**, aucun repli implicite |
 | `EVENTS_DATABASE_URL` | facultatif : une base dédiée aux événements, si tu veux les séparer de `DATABASE_URL` |
 | `ADMIN_USERNAME` | identifiant admin (défaut `admin`) |
 | `ADMIN_PASSWORD` | mot de passe **ou** hash bcrypt (`$2…`). Plusieurs comptes : `nom:secret,autre:$2…` |
@@ -49,9 +49,7 @@ Autrement, il suffit de se reconnecter.
 
 ## Bascule, dans l'ordre
 
-1. **Rien à faire pour démarrer.** Sans `DATABASE_URL` sur ce service, chaque
-   route d'événements appelle `next()` : le proxy `/api/*` prend le relais et
-   l'ancien backend répond. Le site se comporte comme avant.
+1. **Vérifier la configuration avant déploiement.** Le mode local nécessite une base configurée et joignable. Sans elle, les routes retournent un 503 JSON explicite. Pour conserver intentionnellement l'ancien backend, choisir `EVENTS_SOURCE=backend`.
 2. **Ajouter `DATABASE_URL`** (la même base que le backend, ou une copie). Au
    premier appel, `gdsp_events` est créée si elle n'existe pas, et l'ancienne
    table `gdsp_championship_data` est reprise une fois. Les événements sont alors
@@ -71,12 +69,12 @@ L'accueil (`/`), la fiche d'un événement (`/evenements/:slug`) et le
 HTTP, ils lisent maintenant la base (`publicJson` → `publicJsonLocal`). Le cache
 de 60 s est conservé.
 
-Le repli HTTP reste en place, mais uniquement quand il a un sens :
+Le choix de la source est explicite :
 
 | Cas | Comportement |
 | --- | --- |
 | événement inexistant | **404** immédiat — le backend ne le connaîtrait pas davantage |
-| aucune base configurée, ou base en erreur | repli sur l'ancien service (une page ne doit pas disparaître pendant la migration) |
+| aucune base configurée, ou base en erreur | **503 local**, aucun changement de source |
 | `EVENTS_SOURCE=backend` | tout repasse par l'ancien service, comme avant |
 
 Conséquence : une fois `DATABASE_URL` posée et vérifiée, `GDSP_API_URL` et
@@ -85,10 +83,7 @@ sans que l'accueil, les pages événement ni le sitemap ne tombent.
 
 ## Ce qui reste proxié
 
-Les routes qui n'existent que dans l'ancien backend et qui ne sont pas des
-événements (supervision `/health`, appels AssettoHosting non couverts) continuent
-de passer par le proxy. Elles sont déjà servies localement pour la plupart
-(`/api/ah-*`, `/api/live/*`, télémétrie).
+Le proxy générique n'est utilisé qu'en `EVENTS_SOURCE=backend`. En mode local, les routes inconnues donnent 404 JSON (les écritures sans authentification donnent 401). `/health`, `/healthz`, les exclusions Global et les API live sont locaux. `/api/state` est retirée (410), `/api/live/state` est un alias déprécié de `/api/live/status`. La réinitialisation locale crée une sauvegarde privée avant toute écriture destructive.
 
 ## Tests
 
@@ -101,4 +96,6 @@ de passer par le proxy. Elles sont déjà servies localement pour la plupart
 - les identifiants de secours de l'ancien dépôt ne passent plus ;
 - un jeton signé avec un autre secret est refusé proprement (401, pas 500) ;
 - un jeton expiré est refusé ;
-- sans base, on délègue au proxy au lieu de renvoyer une erreur.
+- sans base locale, on répond 503 sans solliciter un autre hébergeur.
+
+Le jeton navigateur reste un Bearer JWT, désormais conservé en sessionStorage uniquement. Une migration vers cookie HttpOnly n’est pas incluse dans ce lot.

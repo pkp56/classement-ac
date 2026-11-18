@@ -27,7 +27,7 @@ test('HTTP public pages render without JavaScript, return correct errors, robots
   t.after(()=>backend.close());
   const reservation=http.createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');
   const port=reservation.address().port;await new Promise(r=>reservation.close(r));
-  const child=spawn(process.execPath,['app.js'],{cwd:require('node:path').resolve(__dirname,'..'),env:{...process.env,PORT:String(port),BACKEND_URL:`http://127.0.0.1:${backend.address().port}`,PUBLIC_SITE_URL:'https://gdsp.example'}});
+  const child=spawn(process.execPath,['app.js'],{cwd:require('node:path').resolve(__dirname,'..'),env:{...process.env,EVENTS_SOURCE:'backend',PORT:String(port),BACKEND_URL:`http://127.0.0.1:${backend.address().port}`,PUBLIC_SITE_URL:'https://gdsp.example'}});
   t.after(()=>child.kill());
   await new Promise((resolve,reject)=>{
     const timeout=setTimeout(()=>reject(new Error('Server startup timeout')),10000);

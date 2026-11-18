@@ -396,18 +396,17 @@ test('GET /api/championship et POST /api/save-championship restent compatibles',
   assert.equal(read.body.championship.penMap.pilote, 5);
 });
 
-test('sans base configurée, la requête est laissée au proxy (le site continue de marcher)', async () => {
+test('sans base configurée ou joignable, 503 JSON local sans repli silencieux', async () => {
   const harness = fakeApp();
   harness.mount(harness.app, { getStore: async () => null });
   const res = await harness.call('get', '/api/events');
-  assert.equal(res.delegated, true, 'sans base, on ne casse pas : on délègue');
-  assert.equal(res.body, undefined, 'aucune réponse locale');
-
-  // Une base qui échoue à s'ouvrir ne doit pas produire de 500 non plus.
-  const failing = fakeApp();
-  failing.mount(failing.app, { getStore: async () => { throw new Error('ECONNREFUSED'); } });
-  const res2 = await failing.call('get', '/api/events');
-  assert.equal(res2.delegated, true);
+  assert.equal(res.delegated, false);
+  assert.equal(res.statusCode,503);
+  assert.equal(res.body.code,'events-unavailable');
+  const failing=fakeApp();
+  failing.mount(failing.app,{getStore:async()=>{throw Error('ECONNREFUSED')}});
+  const res2=await failing.call('get','/api/events');
+  assert.equal(res2.delegated,false);assert.equal(res2.statusCode,503);
 });
 
 test('la connexion admin reste locale même sans base (aucun jeton sans ADMIN_PASSWORD)', async () => {

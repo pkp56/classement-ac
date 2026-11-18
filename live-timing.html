@@ -543,12 +543,27 @@
     sectorRows = [];
     sectorContext = '';
     sectorLastFetchAt = 0;
-    fetch(statusUrl()).then(function (r) { return r.json(); }).then(render).catch(function () {});
+    fetchLiveJson(statusUrl()).then(render).catch(showLiveError);
   }
   $('history').addEventListener('click', function (e) {
     var btn = e.target.closest('button.hopen');
     if (btn) openHistory(btn.getAttribute('data-id'));
   });
+
+  function showLiveError() {
+    if (viewingHistory) return;
+    $('stateText').textContent = 'Données indisponibles — nouvelle tentative en cours';
+    $('bannerTitle').textContent = 'Le service de direct ne répond pas';
+    $('bannerBody').textContent = 'Impossible de charger les données. Cela ne permet pas de savoir si une course est en cours. Réessayez avec le bouton ci-dessous.';
+    $('banner').style.display = 'block';
+    $('copyCmd').style.display = 'none';
+  }
+  function fetchLiveJson(url) {
+    return fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' } }).then(function (r) {
+      if (!r.ok || !/json/i.test(r.headers.get('content-type') || '')) throw new Error('Service indisponible');
+      return r.json();
+    });
+  }
 
   function connect() {
     if (socket) { try { socket.close(); } catch (e) {} }
@@ -580,14 +595,14 @@
   setInterval(function () {
     if (viewingHistory) return;
     if (Date.now() - lastSnapshotAt < 4000) return;
-    fetch(statusUrl()).then(function (r) { return r.json(); }).then(function (d) {
+    fetchLiveJson(statusUrl()).then(function (d) {
       lastSnapshotAt = Date.now();
       render(d);
-    }).catch(function () {});
+    }).catch(showLiveError);
   }, 3000);
 
   $('reload').addEventListener('click', function () {
-    fetch(statusUrl()).then(function (r) { return r.json(); }).then(render);
+    fetchLiveJson(statusUrl()).then(render).catch(showLiveError);
     connect();
   });
   $('copyCmd').addEventListener('click', function () {
@@ -602,7 +617,7 @@
     siteConfig = c;
     renderSources(c);
   }).catch(function () {});
-  fetch(statusUrl()).then(function (r) { return r.json(); }).then(render).catch(function () {});
+  fetchLiveJson(statusUrl()).then(render).catch(showLiveError);
   connect();
   loadHistory();
   $('sourceSelect').addEventListener('change', function () {

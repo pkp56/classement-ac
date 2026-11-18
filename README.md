@@ -1,27 +1,17 @@
 # GDSP — International Series Lola T290
 
-Site de championnat de la GDSP, servi statiquement par un petit serveur Express prêt à déployer sur Render.
+Site de championnat GDSP servi par Node/Express, notamment sur le PC Windows derrière Caddy.
 
-## Déploiement Render (frontend)
+## Événements et administration
 
-1. Déployer ce dépôt comme **Web Service** Node :
-   - Build command : `npm install`
-   - Start command : `npm start`
-2. Ajouter la variable d'environnement `GDSP_API_URL` pointant vers l'URL du backend déployé (`gdsp-render-backend`, par ex. `https://gdsp-lola-t290-api-xxxx.onrender.com`, sans slash final). Sans cette variable, le site fonctionne en lecture seule à partir de `data/data.json`.
-3. Redéployer. Le site sera servi sur l'URL Render fournie.
+- `EVENTS_SOURCE=local` (défaut) : événements et sauvegardes utilisent PostgreSQL via `EVENTS_DATABASE_URL` ou `DATABASE_URL`.
+- **Sans base configurée ou joignable : 503 JSON explicite**, pas de repli automatique vers un ancien hébergement.
+- `EVENTS_SOURCE=backend` : ancien backend uniquement si ce mode est choisi explicitement, via `BACKEND_URL` / `GDSP_API_URL`.
+- Authentification JWT 8 h ; `ADMIN_USERNAME`, `ADMIN_PASSWORD` et un `JWT_SECRET` fort sont à configurer sur le serveur. Aucun compte de secours.
+- Le navigateur utilise uniquement `sessionStorage` pour le jeton, pas `localStorage`. Cela réduit la persistance, mais **ne remplace pas** une migration ultérieure vers des cookies HttpOnly et une CSP stricte.
+- `/healthz` et `/health` : processus Node ; `/api/health` : disponibilité des événements. L'absence d'un serveur Assetto Corsa n'est pas une panne du site.
 
-## Événements et administration (depuis la fusion)
-
-L'API des événements, l'authentification et la sauvegarde du championnat étaient
-dans un service séparé (`gdsp-render-backend`). Elles sont maintenant servies par
-ce dépôt, dans la même base PostgreSQL : voir [`tools/events/README.md`](tools/events/README.md).
-
-- Sans `DATABASE_URL` sur ce service, les routes `/api/events*` sont laissées au
-  proxy et l'ancien backend répond : le site fonctionne comme avant.
-- Avec `DATABASE_URL`, elles sont lues et écrites en local, et le backend peut
-  être éteint : l'accueil, les pages événement et le sitemap sont rendus depuis
-  la base (le repli HTTP ne sert plus qu'en cas de base absente ou en erreur).
-- Le jeton admin est un JWT de 8 h. Le mot de passe ne circule plus comme jeton.
+Voir [LOT1-FIABILITE-SECURITE.md](LOT1-FIABILITE-SECURITE.md) pour l'installation Windows, les vérifications Caddy, les limites et les sauvegardes. Détail API : [tools/events/README.md](tools/events/README.md).
 
 ## Développement et vérification
 

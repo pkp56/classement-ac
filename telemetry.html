@@ -189,7 +189,8 @@
 (function () {
   'use strict';
   var STORAGE_KEY = 'gdsp_admin_token';
-  var token = localStorage.getItem(STORAGE_KEY) || '';
+  localStorage.removeItem(STORAGE_KEY);
+  var token = sessionStorage.getItem(STORAGE_KEY) || '';
   var catalog = null;
   var pitAutoMode = true;
   var pitFormDirty = false;
@@ -490,7 +491,7 @@
     }).catch(function (e) {
       if (e.message === 'auth') {
         token = '';
-        localStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(STORAGE_KEY);
         $('loginHint').textContent = 'Ce service refuse le jeton : vérifie ADMIN_PASSWORD sur Render.';
         showLogin('Connexion refusée par ce service.');
       } else {
@@ -709,7 +710,7 @@
     }).catch(function (error) {
       if (error.message === 'auth') {
         token = '';
-        localStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(STORAGE_KEY);
         showLogin('Connexion refusée par ce service.');
       } else {
         $('pitMeasurementClientsState').innerHTML = '<span class="bad">' + esc(error.message) + '</span>';
@@ -749,7 +750,7 @@
     }).catch(function (error) {
       if (error.message === 'auth') {
         token = '';
-        localStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(STORAGE_KEY);
         showLogin('Connexion refusée par ce service.');
       } else {
         $('pitMeasurementState').innerHTML = '<span class="bad">' + esc(error.message) + '</span>';
@@ -794,7 +795,7 @@
         $('reportState').innerHTML = 'Rapport récupéré (' + new Date().toLocaleTimeString('fr-FR') + ').';
       })
       .catch(function (e) {
-        if (e.message === 'auth') { token = ''; localStorage.removeItem(STORAGE_KEY); showLogin('Session expirée, reconnecte-toi.'); return; }
+        if (e.message === 'auth') { token = ''; sessionStorage.removeItem(STORAGE_KEY); showLogin('Session expirée, reconnecte-toi.'); return; }
         $('reportState').innerHTML = '<span class="bad">Rapport indisponible : ' + esc(e.message) + '</span>';
       });
   }
@@ -817,7 +818,7 @@
             : (res.j.error || ('Connexion impossible (HTTP ' + res.status + ').')));
         }
         token = res.j.token;
-        localStorage.setItem(STORAGE_KEY, token);
+        sessionStorage.setItem(STORAGE_KEY, token);
         // Le jeton du site et celui du backend ne sont pas forcément le même :
         // on vérifie tout de suite, et on dit clairement lequel refuse.
         return verifySession(res.j);
@@ -829,7 +830,7 @@
   });
   $('logoutBtn').addEventListener('click', function () {
     token = '';
-    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
     showLogin('Déconnecté.');
   });
   $('reloadBtn').addEventListener('click', refresh);
@@ -976,7 +977,7 @@
       .catch(function (e) {
         if (e.message === 'auth-401') {
           token = '';
-          localStorage.removeItem(STORAGE_KEY);
+          sessionStorage.removeItem(STORAGE_KEY);
           $('loginHint').textContent = localWarning
             ? 'Le backend a validé ces identifiants, mais ce service-ci ne reconnaît pas le jeton : ' +
               'ADMIN_PASSWORD n\'est pas défini sur ce service Render.'
