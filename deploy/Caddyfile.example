@@ -1,0 +1,17 @@
+# EXEMPLE à adapter, pas une copie automatique de la configuration du PC.
+# Vérifier PORT dans .env : 10000 est le port Node par défaut.
+# Ne pas placer un file_server ou respond statique /api/* avant ce proxy.
+gdsp.duckdns.org {
+    encode zstd gzip
+    header {
+        -Server
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        X-Frame-Options "SAMEORIGIN"
+        Content-Security-Policy "base-uri 'self'; object-src 'none'; frame-ancestors 'self'"
+        # HTTPS automatique Caddy vérifié avant activation. Pas de preload.
+        Strict-Transport-Security "max-age=86400"
+    }
+    reverse_proxy 127.0.0.1:10000
+}

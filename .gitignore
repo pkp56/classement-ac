@@ -194,3 +194,7 @@ data/telemetry/demo-store.json
 
 # Historique live généré à l'exécution ( Render utilise PostgreSQL)
 data/live-history.json
+
+# Exclusions et sauvegardes privées générées sur le PC serveur
+data/global-exclusions.json
+data/global-exclusions.json.*

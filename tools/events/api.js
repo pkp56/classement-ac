@@ -280,16 +280,18 @@ class EventStore {
 /** Ouvre le store depuis une URL PostgreSQL (même base que le site). */
 async function openEventStore(options = {}) {
   const url = options.databaseUrl || process.env.EVENTS_DATABASE_URL || process.env.DATABASE_URL || '';
-  if (!url) return null;                       // pas de base : le proxy reste en service
+  if (!url) return null;                       // la route locale répondra 503
   let pg;
   try { pg = require('pg'); } catch (e) { throw new Error("Le module 'pg' est requis (npm i pg)."); }
   const pool = options.pool || new pg.Pool({
     connectionString: url,
+    connectionTimeoutMillis:5000,
+    query_timeout:10000,
     ssl: /neon\.tech|render\.com/i.test(url) ? { rejectUnauthorized: false } : undefined
   });
   const store = new EventStore(pool);
-  await store.init();
-  return store;
+  try{await store.init();return store;}
+  catch(error){if(!options.pool)await pool.end().catch(()=>{});throw error;}
 }
 
 // --- routes -----------------------------------------------------------------
@@ -305,13 +307,8 @@ async function openEventStore(options = {}) {
  */
 function mountEventRoutes(app, deps) {
   const getStore = deps.getStore;
-  /*
-   * Pas de base configurée sur ce service (DATABASE_URL absent) : on ne casse
-   * rien, on laisse passer la requête. Le proxy `/api/*` déclaré juste après
-   * prend le relais et l'ancien backend répond — le site continue de marcher
-   * pendant la migration, sans variable à ajouter.
-   */
-  const storeOrDelegate = async (next) => {
+  // Fail closed : sans base, 503 JSON local, aucun repli vers un autre hébergeur.
+  const storeOrDelegate = async (next,res) => {
     let store = null;
     try {
       store = await getStore();
@@ -319,7 +316,8 @@ function mountEventRoutes(app, deps) {
       console.error('événements: base injoignable —', e.message);
     }
     if (!store) {
-      next();
+      res.set('Retry-After','30');
+      res.status(503).json({error:'Service événements indisponible. Vérifier la base de données du serveur.',code:'events-unavailable'});
       return null;
     }
     return store;
@@ -352,7 +350,7 @@ function mountEventRoutes(app, deps) {
   // --- lecture publique ---
   app.get('/api/events', async (_req, res, next) => {
     try {
-      const store = await storeOrDelegate(next);
+      const store = await storeOrDelegate(next,res);
       if (!store) return undefined;
       return res.json({ events: await store.list() });
     } catch (e) {
@@ -364,7 +362,7 @@ function mountEventRoutes(app, deps) {
   app.get('/api/events/:slug', async (req, res, next) => {
     if (!validSlug(req.params.slug)) return res.status(400).json({ error: 'Slug invalide.' });
     try {
-      const store = await storeOrDelegate(next);
+      const store = await storeOrDelegate(next,res);
       if (!store) return undefined;
       const event = await store.get(req.params.slug);
       if (!event) return res.status(404).json({ error: 'Événement introuvable.' });
@@ -377,7 +375,7 @@ function mountEventRoutes(app, deps) {
 
   app.get('/api/championship', async (_req, res, next) => {
     try {
-      const store = await storeOrDelegate(next);
+      const store = await storeOrDelegate(next,res);
       if (!store) return undefined;
       const row = await store.legacyChampionship();
       return res.json({
@@ -415,7 +413,7 @@ function mountEventRoutes(app, deps) {
     const pointsConfig = Object.assign({}, DEFAULT_POINTS, { globalCoef: kind === 'open' ? 0.5 : 1.0 }, body.pointsConfig || {});
     const data = isNonEmptyObject(body.data) ? body.data : {};
     try {
-      const store = await storeOrDelegate(next);
+      const store = await storeOrDelegate(next,res);
       if (!store) return undefined;
       const created = await store.create({ slug, name, kind, pointsConfig, data, user });
       if (!created) return res.status(409).json({ error: 'Un événement avec cet identifiant existe déjà.' });
@@ -439,7 +437,7 @@ function mountEventRoutes(app, deps) {
       return res.status(400).json({ error: 'Type invalide.' });
     }
     try {
-      const store = await storeOrDelegate(next);
+      const store = await storeOrDelegate(next,res);
       if (!store) return undefined;
       const result = await store.update(req.params.slug, body, user);
       if (result.error) return res.status(400).json({ error: result.error });
@@ -456,7 +454,7 @@ function mountEventRoutes(app, deps) {
     if (!user) return undefined;
     if (!validSlug(req.params.slug)) return res.status(400).json({ error: 'Slug invalide.' });
     try {
-      const store = await storeOrDelegate(next);
+      const store = await storeOrDelegate(next,res);
       if (!store) return undefined;
       const removed = await store.remove(req.params.slug);
       if (!removed) return res.status(404).json({ error: 'Événement introuvable.' });
@@ -473,7 +471,7 @@ function mountEventRoutes(app, deps) {
     if (!validSlug(req.params.slug)) return res.status(400).json({ error: 'Slug invalide.' });
     if (!isNonEmptyObject(req.body)) return res.status(400).json({ error: 'Données invalides.' });
     try {
-      const store = await storeOrDelegate(next);
+      const store = await storeOrDelegate(next,res);
       if (!store) return undefined;
       const saved = await store.saveData(req.params.slug, req.body, user);
       if (!saved) return res.status(404).json({ error: 'Événement introuvable.' });
@@ -489,7 +487,7 @@ function mountEventRoutes(app, deps) {
     if (!user) return undefined;
     if (!isNonEmptyObject(req.body)) return res.status(400).json({ error: 'Championnat JSON invalide.' });
     try {
-      const store = await storeOrDelegate(next);
+      const store = await storeOrDelegate(next,res);
       if (!store) return undefined;
       const saved = await store.saveLegacy(req.body, user);
       return res.json({ status: 'ok', message: 'Championnat enregistré.', updatedAt: saved && saved.updated_at });

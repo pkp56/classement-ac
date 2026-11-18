@@ -1,7 +1,5 @@
-// Serveur GDSP frontend — statique + proxy API vers le backend Render/Neon.
-// Pas de variable d'environnement obligatoire : l'URL du backend est celle du
-// dépôt gdsp-render-backend déployé, mais elle peut être surchargée par BACKEND_URL
-// (ou GDSP_API_URL) si tu redéploies le backend ailleurs.
+// Serveur GDSP : pages, événements PostgreSQL locaux et API de course.
+// L’ancien backend ne sert que si EVENTS_SOURCE=backend est choisi explicitement.
 
 const express = require('express');
 const compression = require('compression');
@@ -12,6 +10,9 @@ const https = require('https');
 
 const app = express();
 app.disable('x-powered-by');
+// Caddy installé sur ce PC : seul le proxy loopback peut déclarer HTTPS.
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
+app.use(require('./tools/lib/web-security').securityHeaders);
 // Réduit le volume des réponses texte/JSON, y compris le flux live (SSE).
 // Les clients SSE sont flushés à chaque événement plus bas pour ne pas retarder l'affichage.
 app.use(compression());
@@ -24,7 +25,9 @@ const ROOT = __dirname;
 const FORBIDDEN = /(^|\/)(?:\.env|node_modules|\.git|\.github|package\.json|package-lock\.json|README\.md|render\.yaml|\.gitignore|\.gitattributes|app\.js|seo\.js|tests?\/|backups?\/)/i;
 app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
-  if (FORBIDDEN.test(req.path)) return res.sendStatus(404);
+  let publicPath;
+  try{publicPath=decodeURIComponent(req.path).replace(/\\/g,'/')}catch(e){return res.status(400).json({error:'URL invalide.'});}
+  if (FORBIDDEN.test(publicPath)||/(^|\/)\.|^\/tools(?:\/|$)|^\/data\/(?:global-exclusions|telemetry-store|live-history)(?:\.|\/)|\.(?:bak|log|sql|sqlite|db|pem|key|pfx)$/i.test(publicPath)) return res.sendStatus(404);
   next();
 });
 
@@ -57,23 +60,30 @@ function proxyRequest(req, res, opts = {}) {
       timeout: upTimeout,
       rejectUnauthorized: true,
     }, (upRes) => {
-      res.writeHead(upRes.statusCode || 502, upRes.headers);
+      if((upRes.statusCode||502)>=500&&req.path.startsWith('/api/')){
+        upRes.resume();res.set('Retry-After','30');
+        return res.status(503).json({error:'Le service distant est indisponible. Les données ne sont pas modifiées.',code:'upstream-unavailable'});
+      }
+      const responseHeaders={...upRes.headers};
+      for(const key of ['content-security-policy','strict-transport-security','x-frame-options','x-content-type-options','referrer-policy','permissions-policy','x-powered-by'])delete responseHeaders[key];
+      res.writeHead(upRes.statusCode || 502, responseHeaders);
       upRes.pipe(res);
     });
     upstream.on('timeout', () => upstream.destroy(new Error('upstream timeout')));
     upstream.on('error', (e) => {
       console.error('proxy error:', method, opts.path||req.url, '->', e.message);
-      if (!res.headersSent) res.status(502).json({ error: 'Backend indisponible', detail: e.message });
+      if (!res.headersSent) res.status(503).json({ error: 'Service distant indisponible. Réessaie dans quelques instants.', code:'upstream-unavailable' });
       else if (!res.writableEnded) res.end();
     });
     if (body) upstream.write(body);
     upstream.end();
   };
   if (opts.method) { send(opts.body); return; }
+  if(req.method==='GET'||req.method==='HEAD'){send(null);return;}
   // Si le body a déjà été parsé par express.json() (pour nos endpoints POST locaux),
   // rawBody est disponible sur req. Sinon on lit le flux.
   if (req.rawBody && req.rawBody.length) { send(req.rawBody); return; }
-  if (req.body && typeof req.body === 'object' && Object.keys(req.body).length && !req._bodyConsumed) {
+  if (req.body && typeof req.body === 'object' && !req._bodyConsumed) {
     // body parsé: le resérialiser pour le relayer
     send(JSON.stringify(req.body));
     return;
@@ -96,7 +106,7 @@ function proxyJson(opts, cb) {
   up.write(opts.body||'{}');up.end();
 }
 
-app.all('/health',(req,res)=>proxyRequest(req,res));
+// /health et /healthz sont locaux ; /api/health vérifie aussi les dépendances.
 
 // --- PROXY AssettoHosting pour import automatique ---
 const AH_SERVERS = (process.env.AH_SERVERS||'https://fr2.assettohosting.com:50648,https://fr5.assettohosting.com:50145')
@@ -439,22 +449,31 @@ app.get('/api/ah-championship-session-json', async(req,res)=>{
 // ---------- GLOBAL EXCLUSIONS (partagées entre tous les admins/navigateurs) ----------
 // Les exclusions du Classement GLOBAL sont stockées dans un fichier JSON sur le serveur
 // (pas uniquement dans localStorage du navigateur de l'admin).
-const GLOBAL_EXC_PATH = path.join(ROOT, 'data', 'global-exclusions.json');
+const GLOBAL_EXC_PATH = process.env.GLOBAL_EXCLUSIONS_FILE ? path.resolve(process.env.GLOBAL_EXCLUSIONS_FILE) : path.join(ROOT, 'data', 'global-exclusions.json');
 function readGlobalExc(){
   try{
-    const raw=fs.readFileSync(GLOBAL_EXC_PATH,'utf8');
-    const j=JSON.parse(raw);
-    // Format accepté : { ids: { "<id>": true } } ou bien tableau d'ids
-    if(j && typeof j==='object' && j.ids && typeof j.ids==='object') return j.ids;
-    if(Array.isArray(j)){const o={};j.forEach(id=>{if(typeof id==='string')o[id]=true});return o}
-    return {};
-  }catch(e){return {}}
+    const j=JSON.parse(fs.readFileSync(GLOBAL_EXC_PATH,'utf8'));
+    const ids=Object.create(null);
+    if(Array.isArray(j)){for(const id of j)if(typeof id==='string'&&id.length<=120)ids[id]=true;return ids;}
+    if(!j||!j.ids||typeof j.ids!=='object'||Array.isArray(j.ids))throw Error('invalid-exclusions');
+    for(const [id,hidden] of Object.entries(j.ids))if(id.length<=120&&hidden===true)ids[id]=true;
+    return ids;
+  }catch(e){if(e.code==='ENOENT')return {};throw e;}
 }
 function writeGlobalExc(ids){
-  const payload={ids, updated_at:new Date().toISOString(), updated_by:process.env.ADMIN_USERNAME||'admin'};
+  const payload={ids,updated_at:new Date().toISOString(),updated_by:process.env.ADMIN_USERNAME||'admin'};
   fs.mkdirSync(path.dirname(GLOBAL_EXC_PATH),{recursive:true});
-  fs.writeFileSync(GLOBAL_EXC_PATH, JSON.stringify(payload,null,2),'utf8');
+  const tmp=GLOBAL_EXC_PATH+'.'+require('crypto').randomUUID()+'.tmp';
+  try{
+    if(fs.existsSync(GLOBAL_EXC_PATH))fs.copyFileSync(GLOBAL_EXC_PATH,GLOBAL_EXC_PATH+'.bak');
+    fs.writeFileSync(tmp,JSON.stringify(payload,null,2),'utf8');
+    fs.renameSync(tmp,GLOBAL_EXC_PATH);
+  }finally{try{fs.unlinkSync(tmp)}catch(e){if(e.code!=='ENOENT')console.error('exclusions: nettoyage temporaire impossible');}}
 }
+app.get('/api/global-exclusions',(_req,res)=>{
+  try{res.json({ids:readGlobalExc(),source:'local'});}
+  catch(e){res.set('Retry-After','30');res.status(503).json({error:'Exclusions temporairement illisibles. Aucune modification effectuée.',code:'exclusions-unavailable'});}
+});
 // --- Événements & authentification, servis par CE service -------------------
 // L'API des événements vivait dans un service séparé (gdsp-render-backend).
 // Elle est reprise ici : même base PostgreSQL, mêmes tables, même contrat JSON.
@@ -556,14 +575,14 @@ app.put('/api/global-exclusions', async (req,res)=>{
   if(!(await verifyAdmin(req))) return res.status(401).json({error:'Connexion administrateur requise.'});
   const body=req.body||{};
   const ids=body.ids;
-  if(!ids || typeof ids!=='object') return res.status(400).json({error:'ids doit être un objet { id: true }.'});
+  if(!ids || typeof ids!=='object'||Array.isArray(ids)) return res.status(400).json({error:'ids doit être un objet { id: true }.'});
   // Valider que toutes les clés sont des chaînes courtes et que les valeurs sont booléennes
-  const clean={};
+  const clean=Object.create(null);
   for(const k of Object.keys(ids)){
     if(typeof k!=='string'||k.length>120) continue;
-    if(ids[k]) clean[k]=true;
+    if(ids[k]===true) clean[k]=true;
   }
-  writeGlobalExc(clean);
+  try{writeGlobalExc(clean)}catch(e){return res.status(503).json({error:'Sauvegarde des exclusions impossible. Réessaie ; ne ferme pas la page.',code:'save-failed'});}
   res.json({ok:true, count:Object.keys(clean).length, updated_at:new Date().toISOString(), source:'local'});
 });
 
@@ -571,29 +590,25 @@ app.put('/api/global-exclusions', async (req,res)=>{
 // 1) sauvegarde un championnat VIDE mais valide (avec une clé _reset pour satisfaire isNonEmptyObject) ;
 // 2) efface aussi l'ancienne table drivers/penalties via PUT /api/results ;
 // 3) renvoie le résultat agrégé au frontend.
-app.all('/api/admin/reset', (req, res) => {
-  let body=req.body||{};
+app.all('/api/admin/reset', async(req,res)=>{
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  if(req.method!=='POST')return res.set('Allow','POST').status(405).json({error:'Utiliser POST.'});
+  const body=req.body||{};
   if(body.confirmation!=='REINIT_CHAMPIONNAT')return res.status(400).json({error:'Confirmation manquante.'});
-    const auth=req.headers.authorization||'';
-    if(!auth.startsWith('Bearer '))return res.status(401).json({error:'Connexion administrateur requise.'});
-    const hdrs={'Authorization':auth,'Content-Type':'application/json'};
-    // If the new backend supports /api/events/:slug/data, the frontend will reset that way.
-    // For legacy backend (no /api/events), we keep the old behavior.
-    const eventSlug=typeof body.slug==='string'?body.slug:null;
-    if(eventSlug){
-      const champ={sessions:[],penMap:{},manualDrivers:null,customCalendar:null};
-      proxyJson({method:'POST',path:'/api/events/'+encodeURIComponent(eventSlug)+'/data',headers:hdrs,body:JSON.stringify(champ)},(s,data)=>{
-        res.json({status:'ok', eventReset:{status:s,body:tryParse(data)}});
-      });
-      return;
-    }
-    let champ={ _reset:true, sessions:[], penMap:{}, manualDrivers:null, customCalendar:null, warnings:{}, meta:{ resetAt:new Date().toISOString(), resetBy:'admin', note:'Championnat entièrement réinitialisé.' } };
-    proxyJson({method:'POST',path:'/api/save-championship',headers:hdrs,body:JSON.stringify(champ)},(s1,data1)=>{
-      if(s1<200||s1>=300){return res.status(502).json({error:'Échec reset championnat',step1:{status:s1,body:data1}})}
-      proxyJson({method:'PUT',path:'/api/results',headers:hdrs,body:JSON.stringify({drivers:[],penalties:[]})},(s2,data2)=>{
-        res.json({status:'ok', championship:{status:s1,body:tryParse(data1)}, results:{status:s2,body:tryParse(data2)}});
-      });
-    });
+  if(eventsSource()!=='local')return proxyRequest(req,res);
+  const slug=typeof body.slug==='string'?body.slug:null;
+  if(slug&&!eventsApi.validSlug(slug))return res.status(400).json({error:'Identifiant événement invalide.'});
+  try{
+    const store=await getEventsStore();
+    if(!store)return res.status(503).json({error:'Base des événements non configurée.',code:'events-unavailable'});
+    const user=eventsApi.verifyAdminToken(req.headers.authorization).user||'admin';
+    await require('./tools/events/reset').resetWithBackup({store,slug,user,backup:async previous=>{
+      const dir=path.join(ROOT,'backups','events');fs.mkdirSync(dir,{recursive:true});
+      const name=(slug||'legacy')+'-'+Date.now()+'-'+require('crypto').randomUUID()+'.json';
+      fs.writeFileSync(path.join(dir,name),JSON.stringify(previous,null,2),'utf8');
+    }});
+    res.json({status:'ok',source:'local',backupCreated:true});
+  }catch(e){console.error('reset local:',e.message);if(e.status===404)return res.status(404).json({error:'Événement introuvable.'});res.status(503).json({error:'Réinitialisation non confirmée. Vérifier les données avant de réessayer.',code:'reset-failed'});}
 });
 // --- IMPORT DE CIRCUIT DEPUIS UN DOSSIER DRIVE PARTAGÉ PAR LIEN ---
 // Protégé par le mot de passe admin (même Bearer que le reste de l'admin).
@@ -694,7 +709,7 @@ function getLiveMirror(){
 function liveMirrorConfig(){
   const m=getLiveMirror();
   if(!m)return {enabled:false};
-  return {enabled:true,file:liveMirrorFile(),sourceUrl:m.url||null,capturedAt:m.capturedAt?new Date(m.capturedAt).toISOString():null};
+  return {enabled:true,sourceUrl:m.url||null,capturedAt:m.capturedAt?new Date(m.capturedAt).toISOString():null};
 }
 function liveSourceUrls(){
   return String(process.env.LIVE_HTTP_SOURCES||'')
@@ -827,7 +842,8 @@ app.get('/api/live/config',(req,res)=>{
     mirror:liveMirrorConfig()
   });
 });
-app.get('/api/live/status',(req,res)=>{
+app.get(['/api/live/status','/api/live/state'],(req,res)=>{
+  if(req.path==='/api/live/state')res.set('Deprecation','true');
   res.set('Cache-Control','no-store');
   if(!liveTimingEnabled())return res.json({enabled:false,status:{status:'offline',mode:'disabled'},server:{},session:{},cars:[]});
   res.json({enabled:true,...liveSnapshot(req.query.source)});
@@ -1219,7 +1235,37 @@ require('./tools/lib/local-mods').mountLocalMods(app,{
   }
 });
 
-app.all('/api/*', (req,res)=>proxyRequest(req,res));
+app.get('/api/health',async(_req,res)=>{
+  let timer;
+  try{
+    const check=(async()=>{
+      if(eventsSource()==='backend'){
+        const response=await fetch(new URL('/api/events',BACKEND_URL),{signal:AbortSignal.timeout(4000),redirect:'error'});
+        if(!response.ok){if(response.body)await response.body.cancel();throw Error('remote-unavailable');}
+        const data=await response.json();
+        if(!Array.isArray(data.events))throw Error('remote-invalid');
+      }else{
+        const store=await getEventsStore();if(!store)throw Error('not-configured');
+        await store.pool.query('SELECT 1');
+      }
+    })();
+    await Promise.race([check,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),5000)})]);
+    res.json({ok:true,service:'gdsp',events:{source:eventsSource(),status:'available'},live:{enabled:liveTimingEnabled(),note:'Un serveur de course absent ne signifie pas que le site est en panne.'}});
+  }catch(e){res.set('Retry-After','30');res.status(503).json({ok:false,service:'gdsp',events:{source:eventsSource(),status:e.message==='not-configured'?'not-configured':'unavailable'},error:'Service événements indisponible. Vérifier la configuration et la base sur le PC serveur.'});}
+  finally{clearTimeout(timer);}
+});
+app.get('/api/state',(_req,res)=>res.status(410).json({error:'Ancienne route retirée. Utiliser /api/events ou /api/championship.',code:'retired-endpoint'}));
+app.all('/api/save-championship',(req,res,next)=>{if(req.method==='POST'&&eventsSource()==='backend')return next();res.set('Allow','POST').status(405).json({error:'Utiliser POST pour enregistrer le championnat.'});});
+app.all('/api/*', async(req,res)=>{
+  if(eventsSource()==='backend'){
+    if(!['GET','HEAD','OPTIONS'].includes(req.method)&&!(req.method==='POST'&&req.path==='/api/admin/login')&&!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+    return proxyRequest(req,res);
+  }
+  // Pas de repli implicite sur un hébergement retiré ou suspendu.
+  if(!['GET','HEAD','OPTIONS'].includes(req.method)&&!checkAdminAuth(req))return res.status(401).json({error:'Connexion administrateur requise.'});
+  res.status(404).json({error:'Route API locale inconnue.',code:'unknown-endpoint'});
+});
+app.use(require('./tools/lib/web-security').apiErrors);
 
 function tryParse(s){try{return JSON.parse(s)}catch(e){return s}}
 
@@ -1238,23 +1284,13 @@ const publicJsonCache = new Map();
  * Lecture JSON pour le rendu serveur (accueil, page événement, sitemap).
  *
  * En source locale, on interroge la base : le site n'a plus besoin d'un second
- * service pour afficher son propre catalogue. La lecture HTTP vers le backend
- * reste le repli (base non configurée, ou EVENTS_SOURCE=backend), ce qui
- * garantit qu'une page ne disparaît jamais pendant la migration.
+ * service pour afficher son propre catalogue. Le mode backend est explicite ;
+ * une base locale absente ou en panne ne provoque pas un changement de source.
  */
 async function publicJson(apiPath) {
   const cached = publicJsonCache.get(apiPath);
   if (cached && cached.until > Date.now()) return cached.value;
-  const value = eventsSource() === 'local'
-    ? await publicJsonLocal(apiPath).catch(err => {
-        // Un 404 est une réponse : l'événement n'existe pas, le backend ne le
-        // connaîtrait pas davantage. Tout le reste (pas de base, base en
-        // erreur) justifie de retomber sur l'ancien service.
-        if (err.status === 404) throw err;
-        console.warn('rendu: lecture locale impossible (' + err.message + '), repli sur le backend');
-        return publicJsonRemote(apiPath);
-      })
-    : await publicJsonRemote(apiPath);
+  const value = eventsSource()==='local'?await publicJsonLocal(apiPath):await publicJsonRemote(apiPath);
   publicJsonCache.set(apiPath, { value, until: Date.now() + 60000 });
   return value;
 }
@@ -1340,9 +1376,9 @@ app.get('/sitemap.xml',async(_req,res)=>{
   res.set('Cache-Control','no-cache');
   res.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+paths.map(p=>'<url><loc>'+seo.escapeHtml(PUBLIC_SITE_URL+p)+'</loc></url>').join('')+'</urlset>');
 });
-app.get('/healthz', (_req, res) => {
+app.get(['/healthz','/health'], (_req, res) => {
   res.set('Cache-Control','no-store');
-  res.status(200).json({ ok:true, service:'gdsp-frontend', backend:BACKEND_URL });
+  res.status(200).json({ ok:true, service:'gdsp-frontend' });
 });
 app.use(express.static(ROOT,{dotfiles:'deny',etag:true,maxAge:'1h',setHeaders(res,filePath){
   if(/data\.json$/i.test(filePath)||/\.(?:html|js)$/i.test(filePath))res.set('Cache-Control','no-cache');

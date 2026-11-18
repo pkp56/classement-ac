@@ -801,3 +801,34 @@ test('Création depuis le catalogue : identifiants de voiture et layout inclus d
   assert.equal(body.data.modSelection.cars[0].id,'car');assert.equal(body.data.modSelection.track.layoutId,'layout');
   assert.equal(body.data.customCalendar['2027-04-01'].track,'track');
 });
+
+test('Global incomplet : garde les données en mémoire, propose un nouvel essai sans faux classement',async()=>{
+  const extra={slug:'offline-cup',name:'Cup indisponible',kind:'archive'};
+  const {sandbox}=makeBrowser([extra],url=>url==='/api/events/offline-cup'?response({error:'unavailable'},503):null);
+  await new Promise(resolve=>setImmediate(resolve));
+  const html=await vm.runInContext('globalRanking()',sandbox);
+  assert.match(html,/Aucun classement partiel/);assert.match(html,/Réessayer/);
+  assert.equal(vm.runInContext("events.find(e=>e.slug==='offline-cup').__loaded",sandbox),false);
+});
+
+test('Exclusions indisponibles : secours visible et échec de sauvegarde annoncé',async()=>{
+  const {sandbox,getElementById}=makeBrowser([],url=>url==='/api/global-exclusions'?response({error:'unavailable'},503):null);
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext('loadGlobalHidden()',sandbox);
+  assert.match(vm.runInContext('exclusionsStatus()',sandbox),/copie locale/);
+  const alerts=[];sandbox.alert=message=>alerts.push(message);
+  vm.runInContext('adminAuth=true',sandbox);
+  await vm.runInContext('saveGlobalHidden()',sandbox);
+  assert.match(alerts[0],/sauvegarde serveur non confirmée/);
+});
+
+test('Le jeton administrateur n’est plus écrit dans localStorage',()=>{
+  assert.doesNotMatch(siteSource,/localStorage\.setItem\(['"]gdsp_admin_token/);
+  assert.match(siteSource,/sessionStorage\.getItem\(['"]gdsp_admin_token/);
+  assert.match(siteSource,/sessionStorage\.setItem\(['"]gdsp_admin_token/);
+  const telemetry=fs.readFileSync(path.join(root,'telemetry.html'),'utf8');
+  assert.doesNotMatch(telemetry,/localStorage\.setItem\(STORAGE_KEY/);
+  assert.match(telemetry,/sessionStorage\.getItem\(STORAGE_KEY/);
+  assert.doesNotMatch(siteSource,/cdn\.discordapp\.com[^"\s]*Reglement_Piste_GDSP/);
+  assert.match(siteSource,/\/docs\/reglement-piste-gdsp-v2024-12\.pdf/);
+});

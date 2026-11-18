@@ -17,7 +17,9 @@ let ahConfig = null;              // {server, uuid} when event is bound to an AH
 let page='accueil', ranktab='pilotes', eventtab='resultats', round=0, sessionIndex=1, driverId='', globalDriverId='', compareA='', compareB='';
 let sessions=[], penMap={}, manualDrivers=null, customCalendar=null;
 let adminAuth=false, adminUser='', adminTab='import', selectedRaceAdj=null;
-let adminToken=localStorage.getItem('gdsp_admin_token')||null;
+// Les anciens jetons persistants ne sont plus réutilisés : reconnexion requise.
+localStorage.removeItem('gdsp_admin_token');
+let adminToken=sessionStorage.getItem('gdsp_admin_token')||null;
 const app=document.getElementById('app');
 
 // ---------- Points config par défaut (Lola T290 2026) ----------
@@ -452,16 +454,17 @@ function showrank(x){ranktab=x;render()}function showevent(x){eventtab=x;render(
 function liveInfoBanner(){
   // Petit rappel honnête en haut de l'accueil : la page LIVE existe, son état
   // dépend de la config (démo, serveur branché, ou rien).
+  if(hasLiveTiming===false)return '';
   const st=(window.__gdspLive&&window.__gdspLive.status)||null;
   const mode=st&&st.mode;
   let text;
   const srvName=(window.__gdspLive&&window.__gdspLive.server&&window.__gdspLive.server.name)||'';
   const short=srvName?`${srvName.replace(/\s+$/,'')} — `:'';
-  if(mode==='demo')text='Démonstration : les données affichées sont fictives. Branche ton serveur AC pour du vrai direct.';
+  if(mode==='demo')text='Démonstration : les données affichées sont fictives, pas une course en direct.';
   else if(mode==='live')text=short+'un serveur est en direct en ce moment.';
   else if(mode==='mirror')text=short+'capture enregistrée du serveur (pas de direct). Ouvre la page pour le détail.';
   else if(mode==='stale'||mode==='http-remote')text='Serveur configuré, mais aucune donnée fraîche pour l\'instant.';
-  else text='Aucun serveur branché pour le moment : la page explique comment connecter le tien (2 lignes dans server_cfg.ini).';
+  else text='Pas de session en direct pour le moment. Consultez le calendrier et les derniers résultats.';
   return `<a class="live-banner" href="/live-timing"><span class="live-banner-dot"></span><span class="live-banner-kicker">Live timing</span><span class="live-banner-text">${esc(text)}</span><span class="live-banner-go">Ouvrir →</span></a>`;
 }
 function hub(){
@@ -544,7 +547,7 @@ function hub(){
           <details class="hub-rule">
             <summary>Règlement piste<span class="chev"></span></summary>
             <div class="hub-rule-body">${reglesPiste.replace(/style="[^"]*"/g,'')}
-              <div style="margin-top:10px"><a class="hub-pdf" href="https://cdn.discordapp.com/attachments/1027270562499809440/1312457170310135968/Reglement_Piste_GDSP.pdf?ex=6ae5703d&is=6ae41ebd&hm=21c799554a4f8d861f7020895ca7302307acda2c0310da87e4016c6323a0769e&" target="_blank" rel="noopener">📎 Règlement de piste (PDF) ↗</a></div>
+              <div style="margin-top:10px"><a class="hub-pdf" href="/docs/reglement-piste-gdsp-v2024-12.pdf" target="_blank" rel="noopener">📎 Règlement de piste (PDF · version décembre 2024) ↗</a></div>
             </div>
           </details>
         </div>
@@ -693,10 +696,10 @@ async function globalRanking(){
     needFetch.forEach((ev,i)=>{
       const j=results[i];
       if(j&&j.slug){ev.data=j.data||{};ev.points_config=j.points_config||ev.points_config;ev.updated_at=j.updated_at||ev.updated_at}
-      else{ev.data={}}
-      ev.__loaded=true;
+      ev.__loaded=!!(j&&j.slug);
     });
   }
+  if(events.some(ev=>!ev.__loaded))return `<div class="panel" role="alert"><h2>Classement temporairement indisponible</h2><p>Tous les événements n’ont pas pu être chargés. Aucun classement partiel n’est présenté comme complet.</p><button class="btn secondary" onclick="go('global')">Réessayer</button></div>`;
   try{return globalRankingSync()}
   catch(e){console.error('globalRankingSync error:',e);return `<div class="panel"><p class="note" style="color:#9c3021">✗ Erreur lors du calcul : ${esc(e.message)}</p><pre style="font-size:11px;overflow:auto">${esc(e.stack||'')}</pre></div>`}
 }
@@ -743,7 +746,7 @@ function globalRankingSync(){
     detailRows.push(`<tr style="cursor:pointer;background:${c.bg};border-left:4px solid ${c.bar}" onclick="globalDriverId=this.dataset.pid;go('gpilote')" data-pid="${esc(d.id)}"><td class="pos">${i+1}</td><td>${levelBadge(d.level,40)}</td><td><b>${esc(d.name)}</b></td><td>${d.count}<br><small>${d.retainedCount}/${d.windowCount} retenues</small></td><td><b>${d.score.toFixed(0)}</b><br><small>${d.provisional?'Provisoire / partiel':'Confirmé'}</small> ${trendArrow(d)}</td><td>${bars}</td></tr>`);
   });
   const detailHtml=detailRows.join('');
-  return `${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
+  return `${exclusionsStatus()}${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
     <p class="note" style="margin-bottom:16px"><b>10 dernières courses disputées · 9 meilleures dès 10 participations.</b> Rythme, vitesse et résultats sur les courses retenues ; propreté Commission sur toute la fenêtre, joker compris. Même poids pour chaque course, pas de pondération temporelle. Minimum ${GLOBAL_MIN_RACES} courses pour apparaître. Avant 10 : provisoire. Données partielles si des décisions restent à qualifier ou des courses non examinées. Sans sanction connue ne signifie pas course certifiée propre. <b>Real Penalty : DT / Stop & Go non évalués sans journaux.</b></p>
     <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">${tierCards}</div>
     <div class="panel global-rank-wrap"><h2>Détail des pilotes classés</h2><p class="note">Trié par score global. Les 4 mini-barres représentent Rythme / Propreté / Vitesse / Résultats (0-100) — survolez une mini-barre ou l'icône ? pour le détail. Les séparateurs bleu foncé marquent les changements de niveau.</p>${table(['#','','Pilote','Courses','Score / 100',`4 critères (0-100) ${gdspTip(PROFILE_TIPS.quatreCriteres,'gdsp-tip-right')}`],detailRows)}</div>`;
@@ -2263,9 +2266,8 @@ async function adminLogin(){
     const j=await r.json();
     if(!r.ok||!j.token){alert(j.error||j.message||'Identifiant ou mot de passe incorrect.');return}
     adminToken=j.token;
-    // Stocker aussi dans sessionStorage pour que les tokens JWT (expirant) ne survivent pas
-    // à la fermeture du navigateur, MAIS garder dans localStorage pour compatibilité.
-    localStorage.setItem('gdsp_admin_token',adminToken);
+    // Session d’onglet uniquement ; pas de jeton persistant dans localStorage.
+    localStorage.removeItem('gdsp_admin_token');
     sessionStorage.setItem('gdsp_admin_token',adminToken);
     adminAuth=true;
     adminUser=j.user||'Direction de course';
@@ -2606,33 +2608,37 @@ async function deleteCurrentEvent(){
   await deleteEvent(currentSlug);
 }
 
-function saveGlobalHidden(){
+let globalExclusionsWarning='';
+async function saveGlobalHidden(){
+  if(!adminAuth)return false;
   localStorage.setItem('gdsp_global_hidden',JSON.stringify(globalHidden));
-  // Sauvegarde SERVEUR (partagée entre tous les admins / navigateurs).
-  apiPut('/api/global-exclusions',{ids:globalHidden})
-    .then(r=>{if(!r.ok&&r.status!==404&&r.status!==503)console.warn('global-exclusions: sauvegarde serveur HTTP',r.status)})
-    .catch(e=>console.warn('global-exclusions: serveur indisponible, sauvegarde locale conservée.'));
+  try{
+    const r=await apiPut('/api/global-exclusions',{ids:globalHidden});
+    if(!r.ok)throw Error('HTTP '+r.status);
+    globalExclusionsWarning='';return true;
+  }catch(e){
+    globalExclusionsWarning='Exclusions modifiées localement, mais sauvegarde serveur non confirmée. Réessaie avant de fermer cette page.';
+    alert(globalExclusionsWarning);return false;
+  }
 }
 async function loadGlobalHidden(){
-  // 1) Charger depuis le serveur (exclusions partagées entre admins)
   try{
     const r=await fetch('/api/global-exclusions',{cache:'no-store'});
-    if(r.ok){
-      const j=await r.json();
-      if(j&&typeof j.ids==='object'){globalHidden=j.ids||{};localStorage.setItem('gdsp_global_hidden',JSON.stringify(globalHidden));return}
-    }
-  }catch(e){}
-  // 2) Fallback: localStorage (pour le mode GitHub Pages sans serveur)
+    if(!r.ok)throw Error('HTTP '+r.status);
+    const j=await r.json();
+    if(!j||!j.ids||typeof j.ids!=='object'||Array.isArray(j.ids))throw Error('Format invalide');
+    globalHidden=j.ids;globalExclusionsWarning='';
+    localStorage.setItem('gdsp_global_hidden',JSON.stringify(globalHidden));return;
+  }catch(e){globalExclusionsWarning='Exclusions serveur indisponibles : copie locale utilisée, classement potentiellement incomplet.';}
   try{globalHidden=JSON.parse(localStorage.getItem('gdsp_global_hidden')||'{}')}catch(e){globalHidden={}}
 }
-function toggleGlobalHidden(id,hide){
+async function toggleGlobalHidden(id,hide){
+  if(!adminAuth)return;
   if(hide)globalHidden[id]=true;else delete globalHidden[id];
-  localStorage.setItem('gdsp_global_hidden',JSON.stringify(globalHidden));
-  // Push serveur
-  apiPut('/api/global-exclusions',{ids:globalHidden})
-    .then(r=>{if(!r.ok)console.warn('global-exclusions: échec push serveur HTTP',r.status)})
-    .catch(e=>console.warn('global-exclusions: push serveur impossible',e));
-  render();
+  await saveGlobalHidden();render();
+}
+function exclusionsStatus(){
+  return globalExclusionsWarning?`<div class="panel" role="alert"><p>${esc(globalExclusionsWarning)}</p><button class="btn secondary" onclick="loadGlobalHidden().then(()=>render())">Relire le serveur</button>${adminAuth?'<button class="btn secondary" onclick="saveGlobalHidden().then(()=>render())">Réessayer la sauvegarde locale vers le serveur</button>':''}</div>`:'';
 }
 // ---------- Admin : import de circuits depuis Google Drive ----------
 // Le dossier Drive doit être partagé « tout le monde disposant du lien ».
@@ -2810,7 +2816,7 @@ function renderGlobalExclusions(){
       ?`<button class="btn secondary small" onclick="toggleGlobalHidden(this.dataset.id,false)" data-id="${esc(d.id)}">Réintégrer</button>`
       :`<button class="btn secondary small" onclick="toggleGlobalHidden(this.dataset.id,true)" data-id="${esc(d.id)}">Exclure du Global</button>`}</td>
   </tr>`).join('');
-  return `<h2>Classement GLOBAL · pilotes exclus</h2>
+  return `${exclusionsStatus()}<h2>Classement GLOBAL · pilotes exclus</h2>
     <p class="note">Exclut des pilotes du Classement GLOBAL Discord (invités, organisateurs, remplaçants, faux comptes). Les autres classements (par événement) ne sont pas affectés. La liste est <b>sauvegardée sur le serveur</b> et partagée entre tous les administrateurs (une copie locale dans le navigateur sert de secours si le serveur est indisponible).</p>
     <p class="note"><b>${Object.keys(globalHidden).length}</b> pilote(s) exclu(s).</p>
     ${table(['Pilote','Statut','Action'],rows)}`;
