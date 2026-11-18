@@ -214,3 +214,7 @@ Les disques absents sont ignorés. Le catalogue est réservé aux administrateur
 en lecture seule ; les choix de voitures et de variantes sont conservés avec
 l'événement. Configuration, mise à jour Windows et script facultatif de jonctions
 CM : voir [MODS-LOCAUX-WINDOWS.md](MODS-LOCAUX-WINDOWS.md).
+
+## Sauvegardes Windows
+
+Voir [SAUVEGARDES-WINDOWS.md](SAUVEGARDES-WINDOWS.md) : première sauvegarde privée hors dépôt, vérification, restauration dans une base de test distincte, puis tâche quotidienne (session utilisateur ouverte requise). Les 14 dernières archives complètes sont conservées. Une copie sur C: ne protège pas contre une panne du disque. Les lanceurs sont préparés mais doivent encore être validés sur le PC Windows.

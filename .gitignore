@@ -198,3 +198,7 @@ data/live-history.json
 # Exclusions et sauvegardes privées générées sur le PC serveur
 data/global-exclusions.json
 data/global-exclusions.json.*
+
+# Archives PostgreSQL privées : ne jamais versionner les sauvegardes
+*.dump
+GDSP-Backups/
