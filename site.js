@@ -2027,7 +2027,7 @@ function circuit(){
   }
 
   const rounds = data.rounds || [];
-  if(!rounds.length)return `<div class="section-head"><div><div class="eyebrow">Reconnaissance &amp; direction de course</div><h1>Fiche Circuit</h1></div></div><div class="cir-empty"><b>Aucun tracé n’est encore associé à cet événement.</b><br>L’onglet est prêt : sélectionne un circuit dans Administration → Événements, ou importe une fiche Drive depuis Administration → Circuits.</div>${adminAuth?`<div class="controls" style="margin-top:12px"><button type="button" class="btn secondary" onclick="adminTab='events';go('admin')">Choisir un circuit →</button><button type="button" class="btn secondary" onclick="adminTab='circuits';go('admin')">Importer / corriger une fiche →</button></div>`:''}`;
+  if(!rounds.length)return `<div class="section-head"><div><div class="eyebrow">Reconnaissance &amp; direction de course</div><h1>Fiche Circuit</h1></div></div><div class="cir-empty"><b>Aucun tracé n’est encore associé à cet événement.</b><br>L’onglet est prêt : sélectionne un circuit dans Administration → Événements, ou importe une fiche Drive de secours.</div>${adminAuth?`<div class="controls" style="margin-top:12px"><button type="button" class="btn secondary" onclick="adminTab='events';go('admin')">Choisir un circuit →</button><button type="button" class="btn secondary" onclick="adminTab='circuits';go('admin')">Importer / corriger une fiche →</button></div>`:''}`;
   const idx = Math.max(0, Math.min(rounds.length - 1, circuitRound() - 1));
   const round = rounds[idx];
   const alt = circuitAlt();
@@ -3781,13 +3781,13 @@ function renderLocalModsPanel(){
   const sourceName=id=>{const p=localModsCatalog?.sources?.find(s=>s.id===id)?.path||'';return /^[a-z]:/i.test(p)?p.slice(0,2):(id||'catalogue local');};
   const suffix=item=>item.unavailable?' — disponibilité à vérifier':(' — '+sourceName(item.source)+(item.metadataAvailable?'':' · nom de dossier'));
   const selectedCount=(saved.cars||[]).length;
-  return `<section class="panel" style="margin:16px 0;background:#f4ecd8"><div class="eyebrow">Mods installés · catalogue du PC serveur</div><h3>Préparer le plateau et le circuit</h3><p class="note">Lecture seule des dossiers configurés. Aucun mod n’est téléchargé, déplacé ou configuré. Les disques absents sont ignorés ; les premières sources ont priorité sur les doublons.</p>
-    <div class="controls"><button type="button" class="btn secondary" onclick="loadLocalMods(false)" ${localModsBusy?'disabled':''}>Charger le catalogue</button><button type="button" class="btn" onclick="loadLocalMods(true)" ${localModsBusy?'disabled':''}>${localModsBusy?'Analyse en cours…':'Actualiser les voitures et circuits'}</button></div><p class="note" role="status">${esc(localModsMessage)}</p>
+  return `<section class="adm-subpanel"><div class="adm-subhead"><div><div class="eyebrow">Mods installés · catalogue du PC serveur</div><h3>Préparer le plateau et le circuit</h3></div><div class="controls" style="margin:0"><button type="button" class="btn secondary small" onclick="loadLocalMods(false)" ${localModsBusy?'disabled':''}>Charger le catalogue</button><button type="button" class="btn small" onclick="loadLocalMods(true)" ${localModsBusy?'disabled':''}>${localModsBusy?'Analyse en cours…':'Actualiser les voitures et circuits'}</button></div></div><p class="note" style="margin-top:0">Lecture seule des dossiers configurés. Aucun mod n’est téléchargé, déplacé ou configuré. Les disques absents sont ignorés ; les premières sources ont priorité sur les doublons.</p>
+    <p class="note" role="status">${esc(localModsMessage)}</p>
     ${localModsCatalog?`<p class="note">${localModsCatalog.cars.length} voitures · ${localModsCatalog.tracks.length} circuits / variantes${localModsCatalog.scannedAt?' · analysés le '+esc(new Date(localModsCatalog.scannedAt).toLocaleString('fr-FR')):''}</p><ul class="note">${localModsCatalog.sources.map(s=>`<li>${esc(s.path)} : ${esc(statuses[s.status]||s.status)}</li>`).join('')}</ul>${localModsCatalog.warnings.length?`<details><summary>Avertissements de lecture (${localModsCatalog.warnings.length})</summary><ul class="note">${localModsCatalog.warnings.map(w=>'<li>'+esc(w)+'</li>').join('')}</ul></details>`:''}`:''}
     <div class="grid local-mod-selection-grid"><div><label for="local-mod-car-search">Voitures à engager (<span id="local-mod-car-count">${selectedCount}</span> sélectionnée(s))</label><input id="local-mod-car-search" type="search" placeholder="Rechercher une voiture…" oninput="filterLocalModOptions(this,'local-mod-cars')"><div id="local-mod-cars" class="local-mod-car-list" role="group" aria-label="Voitures de l’événement">${cars.length?cars.map(car=>`<label class="local-mod-car-option"><input type="checkbox" data-local-car-id value="${esc(car.id)}" ${(saved.cars||[]).some(item=>item.id===car.id)?'checked':''} onchange="updateLocalModCount()"><span><b>${esc(car.name)}</b><small>${esc(car.brand||car.category||'Voiture')} · ${esc(car.id)}${suffix(car)}</small></span></label>`).join(''):'<span class="note">Aucune voiture chargée. Clique sur « Actualiser » pour analyser les mods installés.</span>'}</div><p class="note">Coche simplement une ou plusieurs voitures : cette sélection sera reprise lors de la création de l’événement.</p></div>
-      <label>Circuit / variante<input type="search" placeholder="Rechercher un circuit…" oninput="filterLocalModOptions(this,'local-mod-track')"><select id="local-mod-track" aria-label="Circuit et variante" style="width:100%"><option value="">— Sans circuit sélectionné —</option>${tracks.map(track=>`<option value="${esc(track.id)}" ${saved.track?.id===track.id?'selected':''}>${esc(track.name+' ['+track.id+']'+suffix(track))}</option>`).join('')}</select><br>Date de la manche (optionnelle à la création)<input type="date" id="local-mod-date"></label></div>
+      <div style="display:flex;flex-direction:column;gap:10px"><label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#586260">Circuit / variante<input type="search" placeholder="Rechercher un circuit…" oninput="filterLocalModOptions(this,'local-mod-track')"><select id="local-mod-track" aria-label="Circuit et variante" style="width:100%"><option value="">— Sans circuit sélectionné —</option>${tracks.map(track=>`<option value="${esc(track.id)}" ${saved.track?.id===track.id?'selected':''}>${esc(track.name+' ['+track.id+']'+suffix(track))}</option>`).join('')}</select></label><label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#586260">Date de la manche (optionnelle à la création)<input type="date" id="local-mod-date" style="background:#fbf7ec;border:1px solid #b3a78e"></label></div></div>
     <p class="note">À la création d’un événement ou d’une manche, la fiche Circuit est importée automatiquement lorsque les fichiers techniques du mod sont disponibles. Si le tracé est incomplet, l’événement et sa fiche Circuit de base restent accessibles. Pour l’événement courant, choisis une date puis clique sur « Ajouter la manche sélectionnée ».</p>
-    ${currentSlug?`<div class="controls"><button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button></div>`:''}</section>`;
+    <div class="controls" style="margin-bottom:0">${currentSlug?`<button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button>`:''}<button type="button" class="btn secondary" onclick="createEventPrompt()">+ Créer un événement avec cette sélection</button></div></section>`;
 }
 
 // Les traductions appartiennent à l'événement, pas au catalogue ni au mod.
@@ -3815,25 +3815,23 @@ function adminSheetRounds(data){
   return merged.concat(eventCircuitPlaceholders(merged,data));
 }
 function renderEventSheetTools(showNav=true){
-  if(!currentSlug||!eventContext)return '';
-  const tabs=[['settings','Gestion'],['translation','Traduction'],['refresh','Actualiser les circuits']];
-  const nav=!showNav?'':`<div class="tabs">${tabs.map(([key,label])=>`<button type="button" class="${key===eventSheetTab?'active':''}" onclick="openEventSheetTab('${key}')">${label}</button>`).join('')}</div>`;
-  if(eventSheetTab==='settings')return nav;
+  if(!currentSlug||!eventContext||eventSheetTab==='settings')return '';
+  const nav=!showNav?'':`<div class="controls" style="margin-top:0"><button type="button" class="btn secondary small" onclick="openEventSheetTab('settings')">← Retour à la gestion des événements</button></div>`;
   if(isLolaEvent()&&!adminCircuitBase)return nav+`<p class="note">${adminCircuitError?'Calendrier indisponible : '+esc(adminCircuitError)+'. Cliquez à nouveau sur l’onglet pour réessayer.':'Chargement du calendrier…'}</p>`;
   const data=eventContext.data||{},rows=adminSheetRounds(data);
   const heading=`<h3>${esc(eventContext.name)}</h3><p id="event-poster-status" class="note" role="status"></p>`;
-  if(eventSheetTab==='refresh')return nav+heading+'<p>Relire les fichiers du circuit et publier la fiche de cette manche, sans ajouter de manche au calendrier.</p>'+ (rows.map((r,i)=>{
+  if(eventSheetTab==='refresh')return nav+heading+'<p class="note">Relire les fichiers du circuit et publier la fiche de cette manche, sans ajouter de manche au calendrier.</p>'+ (rows.map((r,i)=>{
     const source=r.driveFolderId?'Drive':r.localTrackId||r.trackId?'Mod local':'';
-    return `<div class="admin-round"><b>${esc(r.label)} · ${esc(r.name)}</b> ${esc(r.date||'')} · ${source?`<button type="button" class="btn secondary small" onclick="refreshEventCircuit(${i},this)">Actualiser depuis ${source}</button>`:'Source inconnue : utilisez Administration → Circuits.'}</div>`;
-  }).join('')||'<p>Aucune manche associée.</p>');
+    return `<div class="admin-round" style="margin-bottom:10px"><b>${esc(r.label)} · ${esc(r.name)}</b> ${esc(r.date||'')} · ${source?`<button type="button" class="btn secondary small" onclick="refreshEventCircuit(${i},this)">Actualiser depuis ${source}</button>`:'Source inconnue : utilise le secours Drive depuis la fiche Circuit.'}</div>`;
+  }).join('')||'<p class="note">Aucune manche associée.</p>');
   const entries=[...eventCarSheets(eventContext).map(r=>['car',r]),...rows.map(r=>['track',r])];
   const seen=new Set();
   const forms=entries.map(([kind,r])=>{
     const key=sheetTextKey(kind,r),value=data.sheetTranslations?.[key]||'';
     if(seen.has(key)||(!r.description&&!value))return '';seen.add(key);
-    return `<section class="admin-round"><h3>${kind==='car'?'Voiture':'Circuit'} · ${esc(r.name)}</h3><details open><summary>Texte original du mod</summary><p style="white-space:pre-wrap">${esc(r.description||'')}</p></details><label>Traduction française<textarea class="admin-input" style="display:block;width:100%" rows="5" maxlength="6000" data-key="${esc(key)}">${esc(value)}</textarea></label><button type="button" class="btn" onclick="saveSheetTranslation(this)">Enregistrer la traduction</button></section>`;
+    return `<section class="admin-round" style="margin-bottom:12px"><h3>${kind==='car'?'Voiture':'Circuit'} · ${esc(r.name)}</h3><details open><summary>Texte original du mod</summary><p style="white-space:pre-wrap">${esc(r.description||'')}</p></details><label>Traduction française<textarea class="admin-input" style="display:block;width:100%" rows="5" maxlength="6000" data-key="${esc(key)}">${esc(value)}</textarea></label><button type="button" class="btn" style="margin-top:8px" onclick="saveSheetTranslation(this)">Enregistrer la traduction</button></section>`;
   }).join('');
-  return nav+heading+'<p>La fiche publique affiche le français. Videz le champ pour revenir au texte original.</p>'+(forms||'<p>Aucune description importée à traduire.</p>');
+  return nav+heading+'<p class="note">La fiche publique affiche le français. Videz le champ pour revenir au texte original.</p>'+(forms||'<p class="note">Aucune description importée à traduire.</p>');
 }
 async function saveSheetTranslation(button){
   if(!adminAuth||!currentSlug)return;
@@ -3883,14 +3881,36 @@ async function refreshEventCircuit(index,button){
   }catch(e){alert('Fiche non actualisée : '+e.message);}finally{button.disabled=false;button.textContent='Actualiser depuis '+(old.driveFolderId?'Drive':'Mod local');}
 }
 
+let eventsSubTab='catalog';
+function openEventsSubTab(tab){eventsSubTab=tab==='editor'?'editor':'catalog';render();}
+async function editAdminEvent(slug){
+  if(!slug)return;
+  if(currentSlug!==slug&&!await loadEvent(slug)){alert('Impossible de charger cet événement.');return;}
+  eventSheetTab='settings';eventsSubTab='editor';render();
+}
+async function selectEditorEvent(slug){
+  if(!slug)return;
+  if(!await loadEvent(slug)){alert('Impossible de charger cet événement.');render();return;}
+  round=0;sessionIndex=0;selectedRaceAdj=null;driverId='';compareA='';compareB='';
+  eventsSubTab='editor';render();
+}
+
 function renderEventsAdmin(){
   const sheetTools=renderEventSheetTools();
   if(sheetTools&&eventSheetTab!=='settings')return sheetTools;
 
   const fileInput=`<input type="file" id="event-poster-input" accept="image/*" style="display:none" onchange="handleEventPosterFile(event)"><input type="file" id="event-gallery-input" accept="image/*" style="display:none" onchange="handleEventGalleryFile(event)">`;
-  const topBar=`${fileInput}<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px"><button class="btn" onclick="createEventPrompt()">+ Créer un événement</button>${currentSlug&&eventContext?`<button class="btn secondary" onclick="triggerEventPosterUpload('${currentSlug.replace(/'/g,"\\'")}')">🖼️ ${hasEventPoster(eventContext)?'Changer':'Insérer'} l'affiche de l'événement courant (${esc(eventContext.name)})</button><button class="btn secondary" onclick="deleteCurrentEvent()">Supprimer l'événement courant</button>`:''}</div><div id="event-poster-status" class="note" style="margin-bottom:12px"></div>`;
+  const activeEv=currentSlug&&eventContext?eventContext:null;
+  const safeCurrentSlug=activeEv?String(activeEv.slug||currentSlug||'').replace(/'/g,"\\'"):'';
+  const isCatalog=eventsSubTab!=='editor';
+  const subTabs=`${fileInput}<div class="adm-subtabs" role="tablist" aria-label="Gestion des événements">
+    <button type="button" role="tab" id="adm-ev-tab-catalog" aria-selected="${isCatalog}" aria-controls="adm-ev-panel-catalog" onclick="openEventsSubTab('catalog')">Catalogue des événements <span class="adm-subtabs-badge">${events.length}</span></button>
+    <button type="button" role="tab" id="adm-ev-tab-editor" aria-selected="${!isCatalog}" aria-controls="adm-ev-panel-editor" onclick="openEventsSubTab('editor')">Création &amp; modification d’événement <span class="adm-subtabs-badge">${activeEv?esc(activeEv.name||currentSlug||''):'Nouveau'}</span></button>
+  </div><div id="event-poster-status" class="note" role="status" style="margin:10px 0 0"></div>`;
+
   const row=(e)=>{
     const safe=e.slug.replace(/'/g,"\\'");
+    const isCurrent=currentSlug===e.slug;
     const tag = e.kind==='championship'?'<span class="tag live">CHAMPIONNAT</span>':e.kind==='open'?'<span class="tag open">OPEN</span>':'<span class="tag archive">ARCHIVÉ</span>';
     const posterOn=hasEventPoster(e);
     let actions;
@@ -3903,37 +3923,53 @@ function renderEventsAdmin(){
     const posterBtns=posterOn
       ?`<button class="btn secondary small" onclick="triggerEventPosterUpload('${safe}')">🖼️ Changer l'affiche</button><button class="btn secondary small" onclick="removeEventPoster('${safe}')" title="Retirer l'affiche">✕ Affiche</button>`
       :`<button class="btn secondary small" onclick="triggerEventPosterUpload('${safe}')">🖼️ Insérer une affiche</button>`;
-    return `<tr>
+    return `<tr class="${isCurrent?'adm-ev-current-row':''}">
       <td>${tag}</td>
-      <td><b>${esc(e.name)}</b><br><span class="muted" style="font-size:12px">${esc(e.slug)}</span></td>
-      <td>${currentSlug===e.slug?'<span class="tag live">▶</span>':''}</td><td>${e.points_config&&e.points_config.globalCoef?'×'+e.points_config.globalCoef:'—'}</td>
+      <td><b>${esc(e.name)}</b>${isCurrent?' <span class="tag" style="margin-left:6px">▶ En cours</span>':''}<br><span class="muted" style="font-size:12px">${esc(e.slug)}</span></td>
+      <td>${e.points_config&&e.points_config.globalCoef?'×'+e.points_config.globalCoef:'—'}</td>
       <td>${posterOn?'<span class="tag live">✓ Active</span>':'<span class="muted">—</span>'}</td>
       <td>${new Date(e.updated_at).toLocaleDateString('fr-FR')}</td>
-      <td style="white-space:nowrap;text-align:right">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+      <td style="text-align:right">
+        <div class="adm-ev-actions">
+          <button class="btn small" onclick="editAdminEvent('${safe}')">Éditer</button>
           <button class="btn secondary small" onclick="switchEvent('${safe}')">Ouvrir</button>
           <button class="btn secondary small" onclick="renameEvent('${safe}')">Modifier le titre</button>
           ${posterBtns}
           ${actions}
-          <button class="btn secondary small" style="border-color:#9c3021;color:#9c3021" onclick="deleteEvent('${safe}')">Supprimer</button>
+          <button class="btn secondary small" style="border-color:var(--red);color:var(--red)" onclick="deleteEvent('${safe}')">Supprimer</button>
         </div>
       </td>
     </tr>`;
   };
+  const catalogPanel=`<div id="adm-ev-panel-catalog" class="adm-tabpanel" role="tabpanel" aria-labelledby="adm-ev-tab-catalog"${isCatalog?'':' hidden'}>
+    <div class="adm-events-topbar" style="margin-top:0">
+      <div class="adm-events-topbar-actions">
+        <button type="button" class="btn" onclick="openEventsSubTab('editor')">+ Créer ou modifier un événement</button>
+        ${activeEv?`<button type="button" class="btn secondary" onclick="triggerEventPosterUpload('${safeCurrentSlug}')">🖼️ ${hasEventPoster(activeEv)?'Changer':'Insérer'} l'affiche</button>`:''}
+      </div>
+      ${activeEv?`<div class="adm-active-pill">Événement courant : <b>${esc(activeEv.name||currentSlug||'')}</b></div>`:''}
+    </div>
+    <section class="adm-subpanel-light" style="margin-top:0">
+      <div class="adm-subhead"><div><div class="eyebrow">Catalogue · ${events.length} événement(s)</div><h3>Championnats, opens et archives</h3></div></div>
+      ${events.length?table(['Type','Événement','Coeff','Affiche','Mis à jour','Actions'],events.map(row)):'<p class="note">Aucun événement enregistré pour le moment.</p>'}
+    </section>
+  </div>`;
+
   const currentPoster=getEventPoster(eventContext);
   const rawInfo=(eventContext&&eventContext.data&&eventContext.data.eventInfo)||{};
   const currentInfo=getEventInfo(eventContext);
   const sportingRulesForEditor=Array.isArray(rawInfo.sportingRules)?rawInfo.sportingRules:defaultSportingRules(eventContext,currentInfo,pointsConfig());
   const gallery=getEventGallery(eventContext);
-  const evHomeEditor=(currentSlug&&eventContext)?`<div class="panel" style="margin-top:18px;background:#f4ecd8">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-      <div><div class="eyebrow">Onglet Accueil de l'événement courant</div><h3 style="margin:2px 0 0">${esc(eventContext.name)}</h3></div>
+  const evHomeEditor=activeEv?`<section class="adm-subpanel">
+    <div class="adm-subhead">
+      <div><div class="eyebrow">Événement courant · Onglet Accueil public</div><h3>${esc(eventContext.name||currentSlug||'')}</h3></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button type="button" class="btn secondary small" onclick="go('event')">Voir l'Accueil événement →</button>
-        ${currentPoster?`<button type="button" class="btn secondary small" onclick="removeEventPoster('${currentSlug.replace(/'/g,"\\'")}')">Retirer l'affiche</button>`:''}
+        <button type="button" class="btn secondary small" onclick="openEventSheetTab('translation')">🌐 Traduire les fiches</button>
+        ${currentPoster?`<button type="button" class="btn secondary small" onclick="removeEventPoster('${safeCurrentSlug}')">Retirer l'affiche</button>`:''}
       </div>
     </div>
-    ${currentPoster?`<img src="${esc(currentPoster)}" alt="Aperçu affiche" style="display:block;max-width:440px;width:100%;height:auto;border:1px solid #c9bba1;margin-bottom:14px">`:''}
+    ${currentPoster?`<img src="${esc(currentPoster)}" alt="Aperçu affiche" style="display:block;max-width:440px;width:100%;height:auto;border:1px solid var(--line);margin-bottom:14px">`:''}
     <div class="admin-evhome-grid">
       <label>Voiture / Catégorie<input id="evinfo-car" type="text" value="${esc(rawInfo.car||'')}" placeholder="Ex : Lola T290 · Prototypes historiques"></label>
       <label>Horaires / Rendez-vous<input id="evinfo-schedule" type="text" value="${esc(rawInfo.schedule||'')}" placeholder="Ex : Mercredi 21h00 · Essais 20h30"></label>
@@ -3950,7 +3986,7 @@ function renderEventsAdmin(){
       <button type="button" class="btn small" onclick="saveEventInfoForm()">💾 Enregistrer la présentation</button>
       <span class="muted">Astuce : pour ajouter des manches « À venir » au calendrier, utilise l'onglet <b>Manches</b>.</span>
     </div>
-    <div style="margin-top:18px;padding-top:14px;border-top:1px dashed #c9bba1">
+    <div style="margin-top:18px;padding-top:14px;border-top:1px dashed #d8ccb4">
       <div class="eyebrow">Autres images · Galerie (${gallery.length} / 6)</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
         <input id="evgal-caption" type="text" class="admin-input" placeholder="Légende optionnelle de la photo…" style="min-width:240px">
@@ -3958,14 +3994,28 @@ function renderEventsAdmin(){
       </div>
       ${gallery.length?`<div class="admin-gal-thumbs">${gallery.map((g,idx)=>`<div class="admin-gal-thumb"><button type="button" class="admin-gal-del" title="Retirer" onclick="removeEventGalleryImage(${idx})">✕</button><img src="${esc(g.src)}" alt="${esc(g.caption||'Photo')}"><div class="muted" style="font-size:10px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.caption||'Sans légende')}</div></div>`).join('')}</div>`:''}
     </div>
-  </div>`:'';
-  return sheetTools+renderLocalModsPanel()+topBar+table(['','Événement','Courant','Coeff','Affiche','Mis à jour',''],events.map(row))+evHomeEditor;
+  </section>`:'';
+
+  const editorPanel=`<div id="adm-ev-panel-editor" class="adm-tabpanel" role="tabpanel" aria-labelledby="adm-ev-tab-editor"${isCatalog?' hidden':''}>
+    <div class="adm-events-topbar" style="margin-top:0">
+      <div class="adm-events-topbar-actions">
+        <button type="button" class="btn" onclick="createEventPrompt()">+ Créer un événement</button>
+        ${events.length?`<select aria-label="Événement à modifier" onchange="selectEditorEvent(this.value)"><option value="">— Événement à modifier —</option>${events.map(e=>`<option value="${esc(e.slug)}" ${e.slug===currentSlug?'selected':''}>${esc(e.name)}</option>`).join('')}</select>`:''}
+        ${activeEv?`<button type="button" class="btn secondary" onclick="triggerEventPosterUpload('${safeCurrentSlug}')">🖼️ ${hasEventPoster(activeEv)?'Changer':'Insérer'} l'affiche</button>
+        <button type="button" class="btn secondary" onclick="openEventSheetTab('translation')">🌐 Traductions des fiches</button>
+        <button type="button" class="btn secondary" style="border-color:var(--red);color:var(--red)" onclick="deleteCurrentEvent()">Supprimer l'événement courant</button>`:''}
+      </div>
+    </div>
+    ${renderLocalModsPanel()}${evHomeEditor}
+  </div>`;
+
+  return subTabs+catalogPanel+editorPanel;
 }
 
 function renderChampPointsPanel(){
   const ds=allDrivers();
-  if(!ds.length)return `<div class="panel" style="margin:14px 0;background:#f4ecd8"><div class="eyebrow">Points au championnat</div><p class="note" style="margin:6px 0 0">Importe au moins une session pour pouvoir attribuer ou retirer des points à un pilote.</p></div>`;
-  return `<div class="panel" style="margin:14px 0;background:#f4ecd8">
+  if(!ds.length)return `<div class="adm-subpanel"><div class="eyebrow">Points au championnat</div><p class="note" style="margin:6px 0 0">Importe au moins une session pour pouvoir attribuer ou retirer des points à un pilote.</p></div>`;
+  return `<div class="adm-subpanel">
     <div class="eyebrow">Classement général &amp; Joker</div>
     <h3 style="margin:4px 0 8px">Points au championnat (bonus / pénalité)</h3>
     <p class="note" style="margin:0 0 12px">Choisis un pilote, indique le nombre de points puis clique sur <b>+ Ajouter des points</b> ou <b>− Enlever des points</b>. L'ajustement s'applique directement au cumul du championnat (général et Joker).</p>
@@ -3981,7 +4031,7 @@ function renderChampPointsPanel(){
 
 const adminEventTools=[['import','Importer les résultats','Import automatique AssettoHosting ou JSON manuels.'],['refresh','Actualiser un circuit','Relire le mod et publier la fiche du tracé.'],['rounds','Gérer les manches','Calendrier, résultats et manches à venir.']];
 const adminManagement=[['drivers','Pilotes','Engagés et miniatures voiture'],['teams','Équipes','Affectations des pilotes'],['adjust','Commission','Décisions et pénalités'],['data','Sauvegardes','Données de cet événement']];
-const adminGeneralTools=[['events','Événements','Championnats, opens et fiches'],['ah','Serveurs AssettoHosting','Découverte automatique'],['circuits','Circuits','Importer des fiches'],['globalexc','Exclusions globales','Règles communes']];
+const adminGeneralTools=[['events','Événements','Championnats, opens et fiches'],['ah','Serveurs AssettoHosting','Découverte automatique'],['globalexc','Exclusions globales','Règles communes']];
 async function chooseAdminEvent(slug){
   if(!slug)return;
   if(!await loadEvent(slug)){alert('Impossible de charger cet événement.');render();return}
@@ -3995,11 +4045,11 @@ function adminWorkspace(){
   const hasEvent=!!eventContext||!backendMulti;
   const nav=[['desk','Événement sélectionné'],...(backendMulti?[['general','Administration générale']]:[]),['telemetry','Télémétrie']];
   const buttons=(items,compact=false)=>`<div class="adm-actions ${compact?'compact':''}">${items.map(([id,title,desc],i)=>`<button type="button" aria-pressed="${adminTab===id}" onclick="adminOpenTool('${id}')"><small>${String(i+1).padStart(2,'0')} /</small><b>${title}</b><span>${desc}</span></button>`).join('')}</div>`;
-  return `${head('paddock / administration','Direction de course','')}<div class="adm-user"><span>Connecté : ${esc(adminUser)}</span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div>`
-    +`<nav class="tabs adm-nav" aria-label="Espaces d’administration">${nav.map(([id,title])=>`<button class="${current===id?'active':''}" aria-pressed="${current===id}" onclick="adminTabs('${id}')">${title}</button>`).join('')}</nav>`
-    +`<div class="adm-banner"><div class="eyebrow">${telemetry?'Télémétrie / Station de mesure':general?'Administration générale':'Événement sélectionné'}</div><h2>${telemetry?'Mur des stands':general?'Gestion du paddock':esc(eventContext?.name||(hasEvent?'Championnat':'Choisir un événement'))}</h2>`
-    +(!general&&!telemetry&&backendMulti?`<label>Changer d’événement <select onchange="chooseAdminEvent(this.value)"><option value="">Choisir…</option>${events.map(e=>`<option value="${esc(e.slug)}" ${e.slug===currentSlug?'selected':''}>${esc(e.name)}</option>`).join('')}</select></label>`:'')+'</div>'
-    +(telemetry?'':general?buttons(adminGeneralTools):hasEvent?`<h3>Actions rapides</h3>${buttons(adminEventTools)}<h3>Gestion de l’événement</h3>${buttons(adminManagement,true)}`:'');
+  return `${head('paddock / administration','Direction de course','')}<div class="adm-user"><span>Connecté : <b>${esc(adminUser)}</b></span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div>`
+    +`<div class="adm-shell"><div class="adm-banner"><div><div class="eyebrow">${telemetry?'Télémétrie / Station de mesure':general?'Administration générale':'Événement sélectionné'}</div><h2>${telemetry?'Mur des stands':general?'Gestion du paddock':esc(eventContext?.name||(hasEvent?'Championnat':'Choisir un événement'))}</h2></div>`
+    +(!general&&!telemetry&&backendMulti?`<div class="adm-banner-right"><label>Changer d’événement <select onchange="chooseAdminEvent(this.value)"><option value="">Choisir…</option>${events.map(e=>`<option value="${esc(e.slug)}" ${e.slug===currentSlug?'selected':''}>${esc(e.name)}</option>`).join('')}</select></label></div>`:'')
+    +`</div><nav class="adm-nav" aria-label="Espaces d’administration">${nav.map(([id,title])=>`<button class="${current===id?'active':''}" aria-pressed="${current===id}" onclick="adminTabs('${id}')">${title}</button>`).join('')}</nav></div>`
+    +(telemetry?'':general?`<div class="adm-group-title"><h3>Outils du paddock</h3></div>${buttons(adminGeneralTools)}`:hasEvent?`<div class="adm-group-title"><h3>Actions rapides</h3></div>${buttons(adminEventTools)}<div class="adm-group-title"><h3>Gestion de l’événement</h3></div>${buttons(adminManagement,true)}`:'');
 }
 async function adminOpenTool(id){
   if(id==='events')eventSheetTab='settings';
@@ -4057,7 +4107,7 @@ async function saveDriverTeam(button){
 function admin(){
   if(!adminAuth){return `${head('administration','Direction de course','Accès direction de course.')}<div class="panel"><h2>Connexion direction de course</h2><p class="note">Identifiant et mot de passe configurés dans les variables d'environnement Render (<code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code>). Les classements restent consultables librement.</p><div style="display:flex;gap:10px;align-items:center;max-width:520px;flex-wrap:wrap"><input id="adminuser" type="text" placeholder="Identifiant" class="admin-input" style="min-width:140px"><input id="adminpass" type="password" placeholder="Mot de passe" style="flex:1;min-width:200px" class="admin-input"><button class="btn" onclick="adminLogin()">Entrer</button></div></div>`}
   const workspace=adminWorkspace();
-  if(backendMulti&&!eventContext&&!['telemetry','general',...adminGeneralTools.map(t=>t[0])].includes(adminTab))return workspace+'<p class="panel">Sélectionne un championnat ou un open pour gérer ses résultats.</p>';
+  if(backendMulti&&!eventContext&&!['telemetry','general','circuits',...adminGeneralTools.map(t=>t[0])].includes(adminTab))return workspace+'<p class="panel">Sélectionne un championnat ou un open pour gérer ses résultats.</p>';
   if(['desk','general'].includes(adminTab))return workspace;
   const rs=rounds();
   const allDrv=allDrivers();
