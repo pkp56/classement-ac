@@ -600,7 +600,8 @@ test('Unified Event tab includes Circuit and Voiture, and persists rich Accueil 
 
   await vm.runInContext("go('event')", sandbox);
   const updatedEvHome = getElementById('app').innerHTML;
-  assert.match(updatedEvHome, /Pilotes engagés<\/span><a class="ev-register" href="https:\/\/example.org\/inscription" target="_blank"/);
+  assert.match(updatedEvHome, /<a class="ev-register" href="https:\/\/example.org\/inscription" target="_blank"/);
+  assert.match(updatedEvHome,/Inscriptions<svg aria-hidden="true"/);
   assert.match(updatedEvHome, /Briefing spécial championnat historique\./);
   assert.match(updatedEvHome, /href="https:\/\/example\.com\/briefing"[^>]*>Consignes<\/a>/);
   assert.match(updatedEvHome, /href="https:\/\/example\.com\/format"/);

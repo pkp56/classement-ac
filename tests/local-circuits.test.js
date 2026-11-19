@@ -202,6 +202,7 @@ test('import local : sections nommées et coordonnées pour explorer la carte et
   const {round,files}=await importLocalCircuit({roots:[root],trackId:'test-track',layoutId:'gp'});
   assert.equal(files.sections.name,'gp/data/sections.ini');
   const pin=round.outline.corners.find(p=>p.name==='Prima Curva');
+  assert.deepEqual([pin.from,pin.to],[0.1,0.2]);
   assert.ok(pin.norm>=0.1&&pin.norm<=0.2);
   assert.ok(Math.abs(pin.dist-round.lengthM*pin.norm)<10);
   assert.ok(Number.isFinite(pin.altitude));

@@ -419,7 +419,7 @@ async function importLocalCircuit({ roots = configuredRoots(), trackId, layoutId
         sectors: sectorBounds,
         cornerNorms: markers.map(marker => marker.norm)
       });
-      full.outline.corners.forEach((pin,i)=>{if(markers[i].name)pin.name=markers[i].name;});
+      full.outline.corners.forEach((pin,i)=>{const section=sections.find(s=>s.from<=markers[i].norm&&markers[i].norm<=s.to);if(section)Object.assign(pin,{name:section.name,from:section.from,to:section.to});});
       full.hasNamedSections=sections.length>0;
       full.estimatedSectors=!sectors.length;
       full.surfaces = surfaces;

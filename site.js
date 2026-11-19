@@ -1462,9 +1462,10 @@ function eventHome(){
   const carMain=(carParts[0]||'Assetto Corsa').trim();
   const carSub=(carParts.slice(1).join('·')||'Assetto Corsa').trim();
 
+  const registerLink=`<a class="ev-register" href="${esc(infoObj.registrationUrl||infoObj.discordUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Ouvrir les inscriptions (nouvel onglet)">Inscriptions<svg aria-hidden="true" width="22" height="18" viewBox="0 0 24 18"><path fill="#d7a347" stroke="#765623" d="M2 3h20v4a2 2 0 0 0 0 4v4H2v-4a2 2 0 0 0 0-4z"/><path stroke="#765623" stroke-dasharray="2 1" d="M16 4v10"/></svg></a>`;
   const kpisHtml=`<div class="ev-kpis">`
     +`<div class="ev-kpi"><span class="label">Progression saison</span><strong>${totalExpected?`${String(rs.length).padStart(2,'0')} / ${String(totalExpected).padStart(2,'0')}`:String(rs.length).padStart(2,'0')}</strong><small>${rs.length?`${rs.length} manche(s) disputée(s)`:'Coup d’envoi à venir'}</small></div>`
-    +`<div class="ev-kpi gold"><span class="label">Pilotes engagés</span><a class="ev-register" href="${esc(infoObj.registrationUrl||infoObj.discordUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Ouvrir les inscriptions (nouvel onglet)" title="Ouvrir les inscriptions"><span aria-hidden="true">↗</span></a><strong>${ds.length||'Inscriptions'}</strong><small>${ds.length?'Classés ou ayant pris un départ':infoObj.registrationUrl?'Accéder aux inscriptions':'Ouvertes sur le Discord GDSP'}</small></div>`
+    +`<div class="ev-kpi gold"><span class="label">Pilotes engagés</span><strong>${ds.length||registerLink}</strong>${ds.length?registerLink:''}<small>${ds.length?'Classés ou ayant pris un départ':infoObj.registrationUrl?'Accéder aux inscriptions':'Ouvertes sur le Discord GDSP'}</small></div>`
     +`<div class="ev-kpi green"><span class="label">Voiture / Plateau</span><strong style="font-size:21px;line-height:1.2">${esc(carMain)}</strong><small>${esc(carSub)}</small></div>`
     +`<div class="ev-kpi red"><span class="label">Coefficient Global</span><strong>×${Number(cfg.globalCoef??1).toFixed(1)}</strong><small>${cfg.polePoints?`+${cfg.polePoints} pt pole · `:''}${Math.round((cfg.minPercentDistance||0.75)*100)} % distance min.</small></div>`
     +`</div>`;
@@ -1905,7 +1906,7 @@ function circuitMap(round, profile, mode, opts = {}){
   if (!o.path) return '';
   const compact = !!opts.compact;
   const corners = (o.corners || []).map(c =>
-    `<g class="cir-pin" data-corner="${Number(c.id)}" tabindex="0" role="button" data-norm="${Number(c.norm)||0}" data-x="${Number(c.x)}" data-y="${Number(c.y)}" aria-label="${esc((c.name||'Virage '+c.id)+' · '+Math.round(c.dist)+' m'+(Number.isFinite(c.altitude)?' · altitude '+c.altitude+' m':''))}"><circle cx="${c.x}" cy="${c.y}" r="13"/>`
+    `<g class="cir-pin" data-corner="${Number(c.id)}" tabindex="0" role="button" data-name="${esc(c.name||'Virage '+c.id)}" data-from="${Number(c.from??Math.max(0,c.norm-.009))}" data-to="${Number(c.to??Math.min(1,c.norm+.009))}" data-norm="${Number(c.norm)||0}" data-x="${Number(c.x)}" data-y="${Number(c.y)}" aria-label="${esc((c.name||'Virage '+c.id)+' · '+Math.round(c.dist)+' m'+(Number.isFinite(c.altitude)?' · altitude '+c.altitude+' m':''))}"><circle cx="${c.x}" cy="${c.y}" r="13"/>`
     + `<text x="${c.x}" y="${c.y + 4.5}" text-anchor="middle">${c.id}</text>`
     + `<title>Virage ${c.id}${c.name ? ' · ' + esc(c.name) : ''} · ${Math.round(c.dist)} m</title></g>`).join('');
   const sectorDots = (o.sectors || []).map(s =>
@@ -1921,7 +1922,8 @@ function circuitMap(round, profile, mode, opts = {}){
     + `<path class="cir-map-center" d="${o.path}"/>`
     + (compact ? '' : sectorDots)
     + (compact ? '' : pins)
-    + `<circle class="cir-map-start" cx="${o.start ? o.start.x : 0}" cy="${o.start ? o.start.y : 0}" r="9"><title>Ligne de départ / arrivée</title></circle>`
+    + (compact?'':`<g transform="translate(${Number(o.start?.x)||0} ${Number(o.start?.y)||0})"><title>Départ / arrivée</title><path d="M0 0v-29" stroke="#fff2d9" stroke-width="2"/><rect x="1" y="-29" width="20" height="12" fill="#f4ecd8"/><path fill="#17292c" d="M1 -29h5v6H1z M11 -29h5v6h-5z M6 -23h5v6H6z M16 -23h5v6h-5z"/></g>`)
+
     + `</svg>`;
 }
 
@@ -2142,15 +2144,15 @@ function circuit(){
         : `<span class="lg lg-1">Départ / arrivée</span>`)
     + `</div></div>`;
 
-  const samples=activeProfile.outline?.samples;
-  const scrub=Array.isArray(samples)&&samples.length?`<label class="cir-scrub">Explorer le tour <input type="range" min="0" max="1000" value="0" data-length="${Number(activeProfile.lengthM)||0}" data-samples="${esc(JSON.stringify(samples))}"></label>`:'';
+  const trace=activeProfile.outline||round.outline;
+  const scrub=trace?.path?`<div class="tour-controls"><button type="button" class="btn secondary small" data-play>▶ Lire le tour</button><label class="cir-scrub">Explorer le tour <input type="range" min="0" max="1000" value="0" data-length="${Number(activeProfile.lengthM||round.lengthM)||0}" data-samples="${esc(JSON.stringify(trace.samples||[]))}" data-bounds="${esc(JSON.stringify((trace.sectors||[]).map(s=>s.at)))}"></label>${mode==='corners'&&trace.corners?.length?`<select aria-label="Choisir un repère" data-jump><option value="">Choisir un repère…</option>${trace.corners.map((c,i)=>`<option value="${i}">${esc(c.name||'Virage '+c.id)}</option>`).join('')}</select>`:''}</div>`:'';
   const mapBlock = `<gdsp-track-guide class="cir-map-block">`
     + `<div class="cir-map-head"><div class="cir-map-tabs">${tabs}</div>`
     + sectorLegend
     + `<div class="cir-map-stage"><div class="cir-map-tag">${round.direction === 'clockwise' ? 'Sens horaire' : 'Sens anti-horaire'} · tracé extrait du fast_lane.ai</div>`
     + `${round.outline&&round.outline.path?circuitMap(round, activeProfile, mode):'<div class="cir-empty">Tracé indisponible : le fichier <code>fast_lane.ai</code> manque ou est illisible.</div>'}`
     + `<div class="cir-map-hint">${cornerCount} ${markerLabel} · ${round.lengthM?nb(round.lengthM,0)+' m mesurés':'mesure indisponible'}</div></div>`
-    + `${round.outline?.path?`<div class="cir-readout">${scrub}<output>Sélectionnez un repère sur le tracé.</output></div>`:''}<div class="cir-elev"><div class="cir-elev-top"><span>Profil altimétrique sur un tour</span><b>${elev ? frNum(elev.delta, 1) + " m d'amplitude" : '—'}</b></div>${elev?circuitElevSvg(activeProfile):'<div class="cir-empty">Profil indisponible sans le tracé fast_lane.ai.</div>'}</div>`
+    + `${round.outline?.path?`<div class="cir-readout">${scrub}<output>Survolez le tracé ou le profil, ou déplacez le curseur.</output></div>`:''}<div class="cir-elev"><div class="cir-elev-top"><span>Profil altimétrique sur un tour</span><b>${elev ? frNum(elev.delta, 1) + " m d'amplitude" : '—'}</b></div>${elev?circuitElevSvg(activeProfile):'<div class="cir-empty">Profil indisponible sans le tracé fast_lane.ai.</div>'}</div>`
     + `</gdsp-track-guide>`;
 
   // --- Briefing surfaces ---
