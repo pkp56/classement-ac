@@ -234,7 +234,22 @@ function parseIni(text) {
   return out;
 }
 
-/** Extrait les lignes de surface (grip, validité) d'un `surfaces.ini`. */
+const SURFACE_DETAILS = Object.freeze({
+  ROAD: { label: 'Asphalte', note: 'Surface de course principale' },
+  ASPHALT: { label: 'Asphalte', note: 'Surface de course principale' },
+  PITS: { label: 'Stands', note: 'Voie des stands — vitesse limitée' },
+  PIT: { label: 'Stands', note: 'Voie des stands — vitesse limitée' },
+  PITS1: { label: 'Stands', note: 'Voie des stands — vitesse limitée' },
+  CURB: { label: 'Vibreurs', note: 'Franchissables, attention au survirage' },
+  KERB: { label: 'Vibreurs', note: 'Franchissables, attention au survirage' },
+  CARPET: { label: 'Tapis', note: 'Zone de dégagement — cut sanctionné' },
+  GRASS: { label: 'Herbe', note: 'Hors piste — adhérence très faible' },
+  SAND: { label: 'Graviers', note: 'Bac à gravier — sortie de piste' },
+  PADDOCK: { label: 'Paddock', note: 'Hors piste — validé uniquement aux stands' },
+  CONCRETE: { label: 'Béton', note: 'Zone de dégagement' }
+});
+
+/** Extrait et traduit les lignes de surface d'un `surfaces.ini`. */
 function readSurfaces(text) {
   const ini = parseIni(text);
   const rows = [];
@@ -245,11 +260,14 @@ function readSurfaces(text) {
     const name = String(kv.KEY || key.replace(/^SURFACE_/, '')).toUpperCase();
     const gripRaw = kv.GRIP ?? kv.FRICTION;
     const grip = Number.isFinite(Number(gripRaw)) ? Math.round((Number(gripRaw) <= 1.5 ? Number(gripRaw) * 100 : Number(gripRaw))) : null;
+    const details = SURFACE_DETAILS[name] || { label: name, note: '' };
     rows.push({
       key: name,
+      label: details.label,
+      note: details.note,
       grip,
       valid: kv.IS_VALID_TRACK === undefined ? true : String(kv.IS_VALID_TRACK).trim() === '1',
-      pit: /^PIT/i.test(name)
+      pit: /^PIT/i.test(name) || String(kv.IS_PITLANE || '').trim() === '1'
     });
   }
   return rows;

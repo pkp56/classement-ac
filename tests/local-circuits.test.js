@@ -51,9 +51,11 @@ async function addCompleteLayout(write, prefix = 'tracks/test-track/gp') {
     '[SECTOR_0]', 'START=0', '[SECTOR_1]', 'START=0.4', '[SECTOR_2]', 'START=0.72'
   ].join('\n'));
   await write('tracks/test-track/ui/gp/ui_track.json', JSON.stringify({
-    name: 'Test Track GP', layout: 'Grand Prix', country: 'France', city: 'Hillion',
-    geographicLocation: '48.5° N · 2.7° W', year: 2026, author: 'GDSP',
-    version: '1.0', pitboxes: '24', width: '10 m', run: 'clockwise'
+    name: 'Test Track GP', layout: 'Grand Prix', country: 'France', countryCode: 'FRA', city: 'Hillion',
+    geotags: ['48.5° N', '2.7° W'], year: 2026, author: 'GDSP',
+    version: '1.0', pitboxes: '24', width: '10 m', run: 'clockwise',
+    description: 'Test <b>track</b><br>Two &amp; corners', tags: ['historic', '<b>F1</b>'],
+    length: '4.260 km', url: 'https://example.com/test-track'
   }));
 }
 
@@ -73,9 +75,23 @@ test('la fiche locale réutilise le tracé, les surfaces, les secteurs et les m�
   assert.equal(result.round.layoutId, 'gp');
   assert.equal(result.round.layout, 'Grand Prix');
   assert.equal(result.round.country, 'France');
+  assert.equal(result.round.countryCode, 'FRA');
   assert.equal(result.round.city, 'Hillion');
+  assert.equal(result.round.gps, '48.5° N · 2.7° W');
+  assert.equal(result.round.year, '2026');
+  assert.equal(result.round.author, 'GDSP');
+  assert.equal(result.round.version, '1.0');
+  assert.equal(result.round.width, '10 m');
+  assert.equal(result.round.pitboxes, '24');
+  assert.equal(result.round.direction, 'clockwise');
+  assert.equal(result.round.description, 'Test track\nTwo & corners');
+  assert.deepEqual(result.round.tags, ['historic', 'F1']);
+  assert.equal(result.round.officialLength, '4.260 km');
+  assert.equal(result.round.officialLengthM, 4260);
+  assert.equal(result.round.trackUrl, 'https://example.com/test-track');
   assert.equal(result.round.date, '2027-04-14');
   assert.equal(result.round.status, 'upcoming');
+  assert.deepEqual(result.round.importWarnings, []);
   assert.ok(result.round.outline.path.startsWith('M'));
   assert.ok(result.round.profile.path.startsWith('M'));
   assert.ok(result.round.lengthM > 4000);
@@ -86,11 +102,48 @@ test('la fiche locale réutilise le tracé, les surfaces, les secteurs et les m�
   assert.deepEqual(result.warnings, []);
 });
 
-test('un mod incomplet ne bloque pas le calendrier et ne fabrique pas une fiche sans fast_lane.ai', async t => {
+test('recherche aussi les fichiers techniques rangés dans data/<variante> des mods locaux', async t => {
   const { root, write } = await fixture(t);
-  await write('tracks/no-line/ui/ui_track.json', JSON.stringify({ name: 'Circuit sans tracé' }));
+  await write('tracks/data-layout/ai/fast_lane.ai', Buffer.from('base layout should not be selected'));
+  await write('tracks/data-layout/ai/gp/fast_lane.ai', fastLaneBuffer());
+  await write('tracks/data-layout/data/gp/surfaces.ini', '[SURFACE_0]\nKEY=ROAD\nFRICTION=0.99\nIS_VALID_TRACK=1');
+  await write('tracks/data-layout/data/gp/overlays.ini', '[SECTOR_0]\nSTART=0\n[SECTOR_1]\nSTART=0.5');
+  await write('tracks/data-layout/ui/gp/ui_track.json', JSON.stringify({
+    name: 'Circuit variante data', layout: 'GP', country: 'France'
+  }));
+  const result = await importLocalCircuit({ roots: [root], trackId: 'data-layout', layoutId: 'gp' });
+  assert.equal(result.round.name, 'Circuit variante data');
+  assert.ok(result.round.outline.path.startsWith('M'));
+  assert.equal(result.round.surfaces[0].label, 'Asphalte');
+  assert.equal(result.round.surfaceFile, 'data/gp/surfaces.ini');
+  assert.equal(result.round.overlaysFile, 'data/gp/overlays.ini');
+  assert.equal(result.round.sectorSplits.length, 2);
+  assert.deepEqual(result.warnings, []);
+});
+
+test('un mod sans fast_lane.ai conserve une fiche partielle fondée sur ui_track.json', async t => {
+  const { root, write } = await fixture(t);
+  await write('tracks/no-line/ui/ui_track.json', JSON.stringify({
+    name: 'Circuit sans tracé', country: 'France', length: '3200',
+    description: 'Tracé en préparation', tags: ['historic'], url: 'javascript:alert(1)'
+  }));
+  await write('tracks/no-line/data/surfaces.ini', '[SURFACE_0]\nKEY=ROAD\nFRICTION=0.98\nIS_VALID_TRACK=1');
+  await write('tracks/no-line/data/overlays.ini', '[SECTOR_0]\nSTART=0\n[SECTOR_1]\nSTART=0.5');
   const result = await importLocalCircuit({ roots: [root], trackId: 'no-line', date: '2027-04-14' });
-  assert.equal(result.round, null);
+  assert.equal(result.round.name, 'Circuit sans tracé');
+  assert.equal(result.round.technicalUnavailable, true);
+  assert.equal(result.round.outline, null);
+  assert.equal(result.round.lengthStr, '3,200 km (ui_track.json)');
+  assert.equal(result.round.description, 'Tracé en préparation');
+  assert.deepEqual(result.round.tags, ['historic']);
+  assert.equal(result.round.trackUrl, null);
+  assert.equal(result.round.surfaces[0].label, 'Asphalte');
+  assert.equal(result.round.surfaceFile, 'data/surfaces.ini');
+  assert.equal(result.round.overlaysFile, 'data/overlays.ini');
+  assert.equal(result.round.sectorSplits.length, 2);
+  assert.equal(result.round.sectorSplits[1].to, 3200);
+  assert.equal(result.round.sectorFractions.length, 2);
+  assert.ok(result.round.importWarnings.some(w => /fast_lane\.ai absent/.test(w)));
   assert.ok(result.warnings.some(w => /fast_lane\.ai absent/.test(w)));
   await assert.rejects(importLocalCircuit({ roots: [root], trackId: '../private' }), /Identifiant de circuit invalide/);
   await assert.rejects(importLocalCircuit({ roots: [root], trackId: 'no-line', date: '2027-02-30' }), /Date invalide/);
@@ -135,6 +188,9 @@ test('API locale authentifiée : absence de tracé signalée sans perdre la rép
   assert.equal(response.status, 200);
   const result = await response.json();
   assert.equal(result.ok, true);
-  assert.equal(result.round, null);
+  assert.equal(result.round.name, 'Calendrier uniquement');
+  assert.equal(result.round.technicalUnavailable, true);
+  assert.equal(result.round.outline, null);
+  assert.ok(result.round.importWarnings.some(w => /fast_lane\.ai absent/.test(w)));
   assert.ok(result.warnings.some(w => /fast_lane\.ai absent/.test(w)));
 });
