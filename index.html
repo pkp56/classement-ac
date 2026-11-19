@@ -320,13 +320,19 @@ nav button.nav-event-tab.active{background:rgba(156,48,33,.32);border-color:#d7a
 .car-sheet-mark b{display:block;font-family:Impact,'Arial Narrow',sans-serif;font-size:46px;font-weight:400;letter-spacing:2px;color:#d7a347;line-height:1}
 .car-sheet-mark span{display:block;margin-top:8px;font-size:9px;letter-spacing:1.6px;text-transform:uppercase;font-weight:700}
 .car-sheet-tags{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 14px}
+.car-curves-panel{margin:14px 0}.car-curves-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:12px}
+.car-curve-card{min-width:0;padding:12px;background:#fbf7ec;border:1px solid #dfd3bc}
+.car-curve-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.car-curve-head h4{margin:0;color:var(--ink);font-size:14px}.car-curve-head span{font-size:10px;color:#6d726c;text-transform:uppercase;letter-spacing:.7px}
+.car-curve-peak{display:flex;gap:5px;flex-wrap:wrap;margin:7px 0 0;color:#586260;font-size:11px}.car-curve-peak b{color:var(--ink)}
+.car-curve-svg{display:block;width:100%;height:auto;margin-top:4px;overflow:visible}.car-curve-gridline line{stroke:#d8ccb4;stroke-width:1}.car-curve-gridline text,.car-curve-xlabel{fill:#6d726c;font:10px Arial,sans-serif}
+.car-curve-details{margin-top:7px;font-size:11px}.car-curve-details summary{cursor:pointer;color:#586260;font-weight:700}.car-curve-table{min-width:220px}
 .admin-gal-thumbs{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
 .admin-gal-thumb{position:relative;width:150px;background:#fbf7ec;border:1px solid var(--line);padding:5px}
 .admin-gal-thumb img{width:100%;height:86px;object-fit:cover;display:block;border:1px solid #dfd3bc}
 .admin-gal-del{position:absolute;top:8px;right:8px;background:var(--red);color:#fff;border:0;width:22px;height:22px;font-size:11px;font-weight:700;cursor:pointer;line-height:1}
 @media(max-width:920px){
   .ev-kpis,.ev-gallery{grid-template-columns:repeat(2,1fr)}
-  .ev-two-col,.admin-evhome-grid,.local-mod-selection-grid{grid-template-columns:1fr}
+  .ev-two-col,.admin-evhome-grid,.local-mod-selection-grid,.car-curves-grid{grid-template-columns:1fr}
   .ev-banner-right{align-items:flex-start;width:100%}
 }
 @media(max-width:560px){

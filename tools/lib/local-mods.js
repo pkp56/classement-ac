@@ -10,9 +10,33 @@ const DEFAULT_ROOTS=Object.freeze([
 function configuredRoots(env=process.env){
   return env.AC_CONTENT_ROOTS===undefined?[...DEFAULT_ROOTS]:env.AC_CONTENT_ROOTS.split(';').map(s=>s.trim()).filter(Boolean);
 }
-const text=(v,max=300)=>{
+function decodeHtmlEntities(value){
+  const named={amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",nbsp:' '};
+  return String(value).replace(/&(#(?:x[0-9a-f]+|\d+)|[a-z]+);/gi,(entity,token)=>{
+    if(token[0]==='#'){
+      const hex=token[1].toLowerCase()==='x';
+      const code=Number.parseInt(token.slice(hex?2:1),hex?16:10);
+      if(Number.isInteger(code)&&code>=0&&code<=0x10ffff&&!(code>=0xd800&&code<=0xdfff))return String.fromCodePoint(code);
+      return entity;
+    }
+    const key=token.toLowerCase();
+    return Object.prototype.hasOwnProperty.call(named,key)?named[key]:entity;
+  });
+}
+const text=(v,max=300,multiline=false)=>{
   if(typeof v!=='string'&&typeof v!=='number')return '';
-  return String(v).replace(/<[^>]*>/g,'').replace(/[\x00-\x1f\x7f]/g,' ').trim().slice(0,max);
+  const linebreak=multiline?'\n':' ';
+  const plain=String(v)
+    .replace(/<br\s*\/?>/gi,linebreak)
+    .replace(/<\/(?:p|div|li|h[1-6])\s*>/gi,linebreak)
+    .replace(/<[^>]*>/g,'');
+  const clean=decodeHtmlEntities(plain)
+    .replace(/\r\n?/g,'\n')
+    .replace(/[\x00-\x09\x0b\x0c\x0e-\x1f\x7f]/g,' ')
+    .replace(/[ \t]+\n/g,'\n')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
+  return (multiline?clean:clean.replace(/\n/g,' ')).slice(0,max);
 };
 const CAR_SPEC_FIELDS=Object.freeze([
   ['bhp','Puissance',['bhp','power']],
@@ -23,6 +47,24 @@ const CAR_SPEC_FIELDS=Object.freeze([
   ['pwratio','Rapport poids / puissance',['pwratio','powerWeight','power_to_weight']],
   ['range','Autonomie',['range']]
 ]);
+function carCurve(value,metric){
+  if(!Array.isArray(value))return [];
+  return value.slice(0,120).map(point=>{
+    const rpm=Array.isArray(point)?point[0]:point&&typeof point==='object'?point.rpm:undefined;
+    const reading=Array.isArray(point)?point[1]:point&&typeof point==='object'
+      ?(point.value??point[metric]??point.power??point.torque??point.bhp)
+      :undefined;
+    const x=typeof rpm==='number'?rpm:(typeof rpm==='string'&&rpm.trim()?Number(rpm):NaN);
+    const y=typeof reading==='number'?reading:(typeof reading==='string'&&reading.trim()?Number(reading):NaN);
+    return Number.isFinite(x)&&x>=0&&x<=20000&&Number.isFinite(y)&&y>=0&&y<=10000
+      ?{rpm:x,value:y}
+      :null;
+  }).filter(Boolean);
+}
+function carUrl(value){
+  const url=text(value,500);
+  return /^https?:\/\/[^\s"'<>]+$/i.test(url)?url:'';
+}
 function carMetadata(meta,id){
   const rawSpecs=meta&&meta.specs&&typeof meta.specs==='object'&&!Array.isArray(meta.specs)?meta.specs:{};
   const specs={};
@@ -37,11 +79,15 @@ function carMetadata(meta,id){
     brand:text(meta&&meta.brand),
     category:text(meta&&(meta.class||meta.category)),
     year:text(meta&&meta.year,32),
+    country:text(meta&&meta.country,120),
     author:text(meta&&meta.author),
     version:text(meta&&meta.version,80),
-    description:text(meta&&meta.description,1200),
+    url:carUrl(meta&&meta.url),
+    description:text(meta&&meta.description,4000,true),
     tags,
     specs,
+    powerCurve:carCurve(meta&&meta.powerCurve,'power'),
+    torqueCurve:carCurve(meta&&meta.torqueCurve,'torque'),
     source:'local',
     metadataAvailable:!!meta
   };

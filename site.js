@@ -1548,20 +1548,43 @@ function carSheet(){
   const cars=eventCarSheets(ev);
   if(!cars.length)return `<div class="section-head"><div><div class="eyebrow">Événement GDSP</div><h1>Fiche Voiture</h1></div></div><div class="cir-empty"><b>Aucune voiture n’est encore associée à cet événement.</b><br>La fiche apparaîtra dès qu’une voiture sera cochée dans Administration → Événements.</div>${adminAuth?`<p style="margin-top:12px"><button type="button" class="btn secondary" onclick="adminTab='events';go('admin')">Configurer le plateau →</button></p>`:''}`;
   const labels={bhp:'Puissance',torque:'Couple',weight:'Poids',topspeed:'Vitesse maximale',acceleration:'Accélération',pwratio:'Rapport poids / puissance',range:'Autonomie'};
+  const numberText=value=>Number(value).toLocaleString('fr-FR',{maximumFractionDigits:1});
   return `<div class="car-sheet-list">${cars.map((car,index)=>{
     const initials=String(car.brand||car.name||'AC').trim().split(/\s+/).map(part=>part[0]).slice(0,3).join('').toUpperCase();
     const specs=Object.entries(car.specs||{}).filter(([key,value])=>labels[key]&&value);
-    const heroMeta=[['Constructeur',car.brand||'Non précisé'],['Catégorie',car.category||'Non précisée'],['Année',car.year||'Non précisée'],['Auteur du mod',car.author||'Non communiqué'],['Version',car.version||'Non précisée']];
+    const heroMeta=[['Constructeur',car.brand||'Non précisé'],['Catégorie',car.category||'Non précisée'],['Année',car.year||'Non précisée'],['Pays',car.country||'Non précisé'],['Auteur du mod',car.author||'Non communiqué'],['Version',car.version||'Non précisée']];
     const specKpi=(label,value,sub,cls='')=>`<div class="cir-kpi ${cls}"><span>${label}</span><strong>${esc(value||'—')}</strong><small>${esc(sub||'Fiche du mod local')}</small></div>`;
     const description=car.description?`<div class="cir-panel"><div class="eyebrow">Présentation du mod</div><h3>Description</h3><p class="cir-src">${renderEventRichText(car.description)}</p></div>`:'';
     const tags=car.tags&&car.tags.length?`<div class="car-sheet-tags">${car.tags.map(tag=>`<span class="tag">${esc(tag)}</span>`).join('')}</div>`:'';
+    const curveCard=(key,title,unit,color)=>{
+      const points=(Array.isArray(car[key])?car[key]:[]).filter(point=>point&&Number.isFinite(point.rpm)&&Number.isFinite(point.value));
+      if(points.length<2)return '';
+      const ordered=points.slice().sort((a,b)=>a.rpm-b.rpm);
+      const minRpm=ordered[0].rpm,maxRpm=ordered[ordered.length-1].rpm;
+      const peak=ordered.reduce((best,point)=>point.value>best.value?point:best,ordered[0]);
+      const maxValue=Math.max(0,...ordered.map(point=>point.value));
+      const yMax=Math.max(1,Math.ceil(maxValue/5))*5;
+      const left=52,right=620,top=16,bottom=170,plotHeight=bottom-top;
+      const xAt=rpm=>left+(rpm-minRpm)/(maxRpm-minRpm||1)*(right-left);
+      const yAt=value=>bottom-value/yMax*plotHeight;
+      const grid=[0,0.5,1].map(fraction=>{
+        const y=top+plotHeight*fraction,value=yMax*(1-fraction);
+        return `<g class="car-curve-gridline"><line x1="${left}" y1="${y}" x2="${right}" y2="${y}"/><text x="${left-8}" y="${y+4}" text-anchor="end">${esc(numberText(value))}</text></g>`;
+      }).join('');
+      const coordinates=ordered.map(point=>`${xAt(point.rpm).toFixed(2)},${yAt(point.value).toFixed(2)}`).join(' ');
+      const curveId=`car-curve-${index}-${key}`;
+      return `<div class="car-curve-card"><div class="car-curve-head"><h4>${title}</h4><span>${ordered.length} points</span></div><p class="car-curve-peak"><b>Pic : ${esc(numberText(peak.value))} ${unit}</b> à ${esc(numberText(peak.rpm))} tr/min</p><svg class="car-curve-svg" viewBox="0 0 640 210" role="img" aria-label="${esc(title+' de '+car.name)}"><title id="${curveId}">${esc(title+' de '+car.name)}</title>${grid}<polyline points="${coordinates}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${xAt(peak.rpm).toFixed(2)}" cy="${yAt(peak.value).toFixed(2)}" r="4" fill="${color}"/><text class="car-curve-xlabel" x="${left}" y="202">${esc(numberText(minRpm))}</text><text class="car-curve-xlabel" x="${right}" y="202" text-anchor="end">${esc(numberText(maxRpm))} tr/min</text></svg><details class="car-curve-details"><summary>Afficher les ${ordered.length} valeurs</summary><div class="table-wrap"><table class="cir-surfaces car-curve-table"><thead><tr><th>tr/min</th><th>${unit}</th></tr></thead><tbody>${ordered.map(point=>`<tr><td>${esc(numberText(point.rpm))}</td><td>${esc(numberText(point.value))}</td></tr>`).join('')}</tbody></table></div></details></div>`;
+    };
+    const curveCards=[curveCard('powerCurve','Puissance moteur','bhp','#9c3021'),curveCard('torqueCurve','Couple moteur','Nm','#315b66')].filter(Boolean);
+    const curveBlock=curveCards.length?`<div class="cir-panel car-curves-panel"><div class="eyebrow">Données moteur</div><h3>Courbes moteur</h3><div class="car-curves-grid">${curveCards.join('')}</div></div>`:'';
+    const modLink=car.url?`<p class="cir-src"><a href="${esc(car.url)}" target="_blank" rel="noopener noreferrer">Page du mod ↗</a></p>`:'';
     const metadataNotice=car.metadataAvailable
       ?`<p class="cir-src">Données importées du fichier <code>ui_car.json</code> du mod local.</p>`
       :`<div class="cir-empty">Les métadonnées <code>ui_car.json</code> ne sont pas disponibles pour cette voiture. La fiche conserve le modèle et les informations renseignées dans l’événement ; les caractéristiques restent à compléter.</div>`;
     return `<section class="car-sheet-card"><div class="cir-hero car-sheet-hero"><div class="cir-hero-txt"><div><div class="cir-kicker"><span class="cir-flag">${cars.length>1?'Voiture '+(index+1):'Plateau engagé'}</span><span class="cir-status">${esc(car.brand||'Mod Assetto Corsa')}</span></div><h2>${esc(car.name)}</h2><div class="cir-hero-sub">${esc([car.brand,car.category,car.year].filter(Boolean).join(' · ')||'Fiche du véhicule engagé')}</div><dl class="cir-hero-meta">${heroMeta.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></div><div class="cir-hero-actions"><span class="cir-date-chip"><i>MOD</i> Assetto Corsa local</span><span class="cir-winner"><small>Modèle</small>${esc(car.id||car.name)}</span></div></div><div class="car-sheet-mark"><b>${esc(initials)}</b><span>FICHE VOITURE</span></div></div>`
       +`<div class="cir-kpis">${specKpi('Constructeur',car.brand||car.name,'Marque du mod')}${specKpi('Puissance',car.specs?.bhp,'ui_car.json','gold')}${specKpi('Poids',car.specs?.weight,'ui_car.json','green')}${specKpi('Catégorie',car.category,'Classe du mod','red')}</div>`
-      +`${metadataNotice}${tags}${description}`
-      +`<div class="cir-cols"><div class="cir-panel"><div class="eyebrow">Fiche technique</div><h3>Caractéristiques du mod</h3>${specs.length?`<div class="table-wrap"><table class="cir-surfaces"><tbody>${specs.map(([key,value])=>`<tr><td class="muted"><b>${esc(labels[key])}</b></td><td>${esc(value)}</td></tr>`).join('')}</tbody></table></div>`:`<div class="cir-empty">Aucune caractéristique technique n’est renseignée dans le mod.</div>`}</div><div class="cir-panel"><div class="eyebrow">Événement</div><h3>Voiture engagée</h3><div class="cir-optimal"><span>Événement</span><b>${esc(ev.name||'GDSP')}</b></div><p class="cir-src">L’identifiant affiché est le nom du dossier du mod, pas son chemin sur le PC serveur.</p></div></div></section>`;
+      +`${metadataNotice}${tags}${description}${curveBlock}`
+      +`<div class="cir-cols"><div class="cir-panel"><div class="eyebrow">Fiche technique</div><h3>Caractéristiques du mod</h3>${specs.length?`<div class="table-wrap"><table class="cir-surfaces"><tbody>${specs.map(([key,value])=>`<tr><td class="muted"><b>${esc(labels[key])}</b></td><td>${esc(value)}</td></tr>`).join('')}</tbody></table></div>`:`<div class="cir-empty">Aucune caractéristique technique n’est renseignée dans le mod.</div>`}</div><div class="cir-panel"><div class="eyebrow">Événement</div><h3>Voiture engagée</h3><div class="cir-optimal"><span>Événement</span><b>${esc(ev.name||'GDSP')}</b></div><p class="cir-src">L’identifiant affiché est le nom du dossier du mod, pas son chemin sur le PC serveur.</p>${modLink}</div></div></section>`;
   }).join('')}</div>`;
 }
 
@@ -3476,19 +3499,39 @@ function localModChoices(){
   if(saved.track&&!tracks.some(x=>x.id===saved.track.id))tracks.push({...saved.track,unavailable:true});
   return {cars,tracks,saved};
 }
+function localCarCurveSnapshot(value,metric){
+  if(!Array.isArray(value))return [];
+  return value.slice(0,120).map(point=>{
+    const rpm=Array.isArray(point)?point[0]:point&&typeof point==='object'?point.rpm:undefined;
+    const reading=Array.isArray(point)?point[1]:point&&typeof point==='object'
+      ?(point.value??point[metric]??point.power??point.torque??point.bhp)
+      :undefined;
+    const x=typeof rpm==='number'?rpm:(typeof rpm==='string'&&rpm.trim()?Number(rpm):NaN);
+    const y=typeof reading==='number'?reading:(typeof reading==='string'&&reading.trim()?Number(reading):NaN);
+    return Number.isFinite(x)&&x>=0&&x<=20000&&Number.isFinite(y)&&y>=0&&y<=10000
+      ?{rpm:x,value:y}
+      :null;
+  }).filter(Boolean).sort((a,b)=>a.rpm-b.rpm);
+}
 function localCarSnapshot(car){
   const source=car&&typeof car==='object'?car:{};
   const specs=source.specs&&typeof source.specs==='object'?source.specs:{};
   const allowedSpecs=['bhp','torque','weight','topspeed','acceleration','pwratio','range'];
   const safeSpecs={};
   allowedSpecs.forEach(key=>{if(typeof specs[key]==='string'&&specs[key].trim())safeSpecs[key]=specs[key].trim().slice(0,100);});
+  const url=String(source.url||'').trim().slice(0,500);
   return {
     id:String(source.id||'').slice(0,128),name:String(source.name||source.id||'Voiture').trim().slice(0,300),
     brand:String(source.brand||'').trim().slice(0,200),category:String(source.category||'').trim().slice(0,200),
-    year:String(source.year||'').trim().slice(0,32),author:String(source.author||'').trim().slice(0,200),
-    version:String(source.version||'').trim().slice(0,80),description:String(source.description||'').trim().slice(0,1200),
+    year:String(source.year||'').trim().slice(0,32),country:String(source.country||'').trim().slice(0,120),
+    author:String(source.author||'').trim().slice(0,200),version:String(source.version||'').trim().slice(0,80),
+    url:/^https?:\/\//i.test(url)&&isSafeHttpUrl(url)?url:'',
+    description:String(source.description||'').trim().slice(0,4000),
     tags:Array.isArray(source.tags)?source.tags.slice(0,12).map(tag=>String(tag||'').trim().slice(0,80)).filter(Boolean):[],
-    specs:safeSpecs,metadataAvailable:source.metadataAvailable===true
+    specs:safeSpecs,
+    powerCurve:localCarCurveSnapshot(source.powerCurve,'power'),
+    torqueCurve:localCarCurveSnapshot(source.torqueCurve,'torque'),
+    metadataAvailable:source.metadataAvailable===true
   };
 }
 function selectedLocalCarIds(){
