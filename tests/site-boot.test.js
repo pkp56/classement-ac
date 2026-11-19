@@ -1171,3 +1171,33 @@ for(const drive of [false,true])test(`actualisation ${drive?'Drive':'locale'} en
   await sandbox.refreshEventCircuit(0,{});
   assert.equal(writes,1,'un échec ne doit pas remplacer la fiche');
 });
+
+test('Onglets du tracé : splits et positions réels survivent à la sauvegarde, sans mélanger les variantes',async()=>{
+  const {sandbox,calls}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const run=src=>vm.runInContext(src,sandbox);
+  const fiche=JSON.parse(fs.readFileSync(path.join(root,'data/circuits.json'))).rounds[0];
+  const raw={TrackName:fiche.driverFolder,TrackConfig:fiche.layoutKey,Cars:[{CarId:0,Driver:{Name:'Alice',Guid:'aa'}},{CarId:1,Driver:{Name:'Bob',Guid:'bb'}}],Result:[{CarId:0},{CarId:1}]};
+  const lap=(CarId,Sectors,Cuts=0)=>({CarId,Sectors,Cuts,LapTime:Sectors.reduce((a,b)=>a+b,0)});
+  const event={Type:'COLLISION_WITH_CAR',CarId:0,OtherCarId:1,ImpactSpeed:30};
+  const rows=[
+    {...raw,Type:'QUALIFY',Laps:[lap(0,[24000,31000,25000]),lap(0,[900,900,900],1)]},
+    {...raw,Type:'RACE',Laps:[lap(1,[25000,27000,26000])],Events:[{...event,RelPosition:{X:1,Z:2}},{...event,WorldPosition:{X:10,Z:20}}]},
+    {...raw,TrackConfig:'other',Type:'RACE',Laps:[lap(1,[1000,1000,1000])]},
+  ];
+  run('sessions=[];adminToken="ok"');
+  rows.forEach((r,i)=>{sandbox.json=JSON.stringify({...r,Date:`2026-09-09T2${i}:00:00Z`});assert.equal(run('importSessionJson(json,"",{silent:true})'),true)});
+  await run('saveRemote()');
+  sandbox.saved=calls.findLast(c=>c.body?.sessions)?.body.sessions;
+  sandbox.fixtureRound=fiche;
+  run(`sessions=saved; circuitsCache={rounds:[fixtureRound]};eventContext={name:'Open',data:{}};page='circuit';setCircMode('sectors')`);
+  const html=run('circuit()');
+  assert.match(html,/S1<\/td><td>0:24\.000<\/td><td>Alice<small>Qualification/);
+  assert.match(html,/S2<\/td><td>0:27\.000<\/td><td>Bob<small>Course/);
+  assert.match(html,/S3<\/td><td>0:25\.000<\/td><td>Alice/);
+  run("setCircMode('collisions')");
+  const collisions=run('circuit()');
+  assert.match(collisions,/Position indisponible/);
+  assert.equal((collisions.match(/<g class="cir-crash /g)||[]).length,1);
+  assert.match(collisions,/<text [^>]+>2<\/text><title>Alice \/ Bob/);
+});

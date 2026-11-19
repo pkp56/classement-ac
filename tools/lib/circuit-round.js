@@ -29,7 +29,7 @@ function project(pts) {
     // z vers le bas : le nord reste en haut, le sens du tour est préservé.
     x: x => +(offX + (x - minX) * scale).toFixed(1),
     y: z => +(offY + (z - minZ) * scale).toFixed(1),
-    scale
+    scale, originX: offX - minX * scale, originY: offY - minZ * scale
   };
 }
 
@@ -90,6 +90,7 @@ function buildOutline(track, opts = {}) {
 
   return {
     path: d,
+    worldProjection: { scale:P.scale, originX:P.originX, originY:P.originY },
     samples: picked.map(p=>[+(p.d/totalDist).toFixed(5),P.x(p.x),P.y(p.z),+p.y.toFixed(1)]),
     start: { x: P.x(points[0].x), y: P.y(points[0].z) },
     sectors,

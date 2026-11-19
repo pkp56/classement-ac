@@ -161,3 +161,9 @@ Ne jamais remplacer `.env` ni le publier sur GitHub. Ouvrir http://gdsp.duckdns.
 - Débrancher une source puis rescanner : l'événement conserve sa sélection historique.
 
 Tests du dépôt : `npm.cmd test`. Pas de migration de base de données nécessaire.
+
+### Alimenter les onglets du tracé
+
+**Records par secteur** compare, secteur par secteur, les temps des tours sans coupe dans les JSON de qualification et de course du tracé, pour l’événement ouvert. **Carte des collisions** liste les contacts entre voitures et affiche un repère numéroté quand le JSON contient une `WorldPosition` et que la fiche possède la projection du tracé. `RelPosition` seule ne permet pas de localiser le contact sur le circuit.
+
+Pour des sessions enregistrées avant cette mise à jour, réimporte manuellement les JSON de résultats d’origine : l’ancien import ne sauvegardait ni `Laps[].Sectors` ni `Events[].WorldPosition`. Il n’est pas nécessaire de supprimer les sessions avant de les réimporter. Pour placer les repères sur une ancienne fiche de mod importée, actualise aussi cette fiche depuis l’administration Circuits, avec son `fast_lane.ai`.

@@ -1897,6 +1897,52 @@ function circuitElevSvg(profile){
     + `<path class="line" d="${p.path}"/></svg>`;
 }
 
+// Les coordonnées relatives décrivent le point d’impact sur la voiture, pas sur le tracé.
+function contactPosition(event){
+  const p=event.WorldPosition;
+  return p&&Number.isFinite(p.X)&&Number.isFinite(p.Z) ? {X:p.X,Z:p.Z} : null;
+}
+function projectContact(event,outline){
+  const pos=contactPosition(event), p=outline?.worldProjection;
+  if(!pos||!p)return null;
+  const x=p.originX+p.scale*pos.X, y=p.originY+p.scale*pos.Z;
+  return Number.isFinite(x)&&Number.isFinite(y)?{x,y}:null;
+}
+function circuitSessionStats(round,profile,allRounds,source,mode){
+  const norm=normalizeCircuitTrackName;
+  const trackNames=r=>[r.driverFolder,r.localTrackId,r.trackId,r.track,r.shortName,r.name,...(CIRCUIT_TRACK_ALIASES[r.driverFolder]||[])].map(norm).filter(Boolean);
+  const aliases=new Set(trackNames(round));
+  const layout=r=>r.localLayoutId??r.layoutId??(r.layoutKey||null);
+  const key=profile.key??layout(round);
+  const variants=new Set(allRounds.filter(r=>trackNames(r).some(t=>aliases.has(t)))
+    .flatMap(r=>[layout(r),...(Array.isArray(r.profiles)?r.profiles.map(p=>p.key):[])]).filter(k=>k!=null).map(norm));
+  const records=[],contacts=[];
+  for(const session of source){
+    if(!['QUALIFY','RACE'].includes(session.type)||!aliases.has(norm(session.track)))continue;
+    if(session.trackConfig!=null && key!=null){
+      if(norm(session.trackConfig)!==norm(key))continue;
+    }else if(variants.size>1){
+      // Ancien import sans variante : ne pas attribuer un record à deux tracés.
+      continue;
+    }
+    const drivers=new Map((session.results||[]).map(r=>[r.id,r.name]));
+    const label=session.type==='RACE'?'Course':'Qualification';
+    if(mode==='sectors')for(const lap of session.laps||[]){
+      if(!drivers.has(lap.id)||lap.cuts>0||!(lap.time>0)||!Array.isArray(lap.sectors))continue;
+      lap.sectors.forEach((ms,i)=>{
+        if(Number.isFinite(ms)&&ms>0&&ms<=lap.time&&(!records[i]||ms<records[i].ms))
+          records[i]={ms,name:drivers.get(lap.id),label};
+      });
+    }
+    if(mode==='collisions')for(const event of session.events||[]){
+      if((event.type && event.type!=='COLLISION_WITH_CAR')||!(event.a||event.aid)||!(event.b||event.bid))continue;
+      contacts.push({a:event.a||drivers.get(event.aid)||'Pilote inconnu',b:event.b||drivers.get(event.bid)||'Pilote inconnu',speed:event.speed,
+        point:projectContact(event,profile.outline||round.outline),label});
+    }
+  }
+  return {records,contacts};
+}
+
 /**
  * Tracé interactif.
  * mode = corners | collisions | sectors
@@ -1911,10 +1957,10 @@ function circuitMap(round, profile, mode, opts = {}){
     + `<title>Virage ${c.id}${c.name ? ' · ' + esc(c.name) : ''} · ${Math.round(c.dist)} m</title></g>`).join('');
   const sectorDots = (o.sectors || []).map(s =>
     `<circle class="cir-sector-dot" cx="${s.x}" cy="${s.y}" r="8"><title>${esc(s.label || 'Secteur')} · ${Math.round(s.dist || 0)} m</title></circle>`).join('');
-  const crashPins = (round.demoCollisions || []).filter(c => c.point).map((c, i) =>
+  const crashPins = (opts.contacts || []).map((c, i) => !c.point ? '' :
     `<g class="cir-crash ${c.speed > 25 ? 'hard' : ''}"><circle cx="${c.point.x}" cy="${c.point.y}" r="${c.speed > 25 ? 11 : 8}"/>`
     + `<text x="${c.point.x}" y="${c.point.y + 4}" text-anchor="middle">${i + 1}</text>`
-    + `<title>${esc(c.a)} / ${esc(c.b)} · ${c.speed} km/h · ${esc(c.corner || '')}</title></g>`).join('');
+    + `<title>${esc(c.a)} / ${esc(c.b)} · ${Number.isFinite(c.speed)?frNum(c.speed,1)+' km/h · ':''}${esc(c.label)}</title></g>`).join('');
   const pins = mode === 'collisions' ? crashPins : (mode === 'sectors' ? '' : corners);
   return `<svg viewBox="${o.viewBox || '0 0 1000 560'}" role="${compact?'img':'group'}" aria-label="Tracé ${esc(round.name)}">`
     + `<path class="cir-map-glow" d="${o.path}"/>`
@@ -2051,17 +2097,13 @@ function circuit(){
     + `</div>`;
 
   // --- Inspecteur (3 modes) ---
+  const {records,contacts}=mode==='corners'?{}:circuitSessionStats(round,activeProfile,rounds,sessions,mode);
   const inspector = mode === 'collisions' ? (() => {
-    const list = round.demoCollisions || [];
-    if (!list.length) {
-      return `<div class="cir-inspector"><div class="eyebrow">Contacts</div><h3>Carte des collisions</h3>`
-        + `<div class="cir-empty">Aucune collision de démonstration disponible pour ce circuit. Les contacts réels apparaîtront avec les sessions importées.</div></div>`;
-    }
-    return `<div class="cir-inspector"><div class="eyebrow">Contacts (démonstration)</div><h3>Carte des collisions</h3>`
-      + `<p class="cir-src">Positions issues du fichier de démonstration du mod. Les contacts réels arriveront avec les sessions importées.</p>`
-      + `<ul class="cir-crash-list">${list.map((c, i) => `<li><span class="cir-crash-num ${c.speed > 25 ? 'hard' : ''}">${i + 1}</span>`
-        + `<span><b>${esc(c.a)}</b> / ${esc(c.b)}<small>${esc(c.corner || '')}${c.lap ? ` · tour ${c.lap}` : ''} ${c.clock ? '· ' + esc(c.clock) : ''}</small></span>`
-        + `<b class="cir-speed">${c.speed ? frNum(c.speed, 1) + ' km/h' : ''}</b></li>`).join('')}</ul></div>`;
+    return `<div class="cir-inspector"><div class="eyebrow">Contacts serveur</div><h3>Carte des collisions</h3>`
+      + (!contacts.length?`<div class="cir-empty">Aucun contact entre voitures enregistré pour ce tracé.</div>`:
+        `<ul class="cir-crash-list">${contacts.map((c,i)=>`<li><span class="cir-crash-num ${c.speed>25?'hard':''}">${i+1}</span>`
+          + `<span><b>${esc(c.a)}</b> / ${esc(c.b)}<small>${c.label}${c.point?'':' · Position indisponible'}</small></span>`
+          + `<b class="cir-speed">${Number.isFinite(c.speed)?frNum(c.speed,1)+' km/h':''}</b></li>`).join('')}</ul>`)+`</div>`;
   })() : mode === 'sectors' ? (() => {
     const measuredSplits = Array.isArray(round.sectorSplits) ? round.sectorSplits : [];
     const fractionalSplits = Array.isArray(round.sectorFractions) ? round.sectorFractions : [];
@@ -2088,7 +2130,11 @@ function circuit(){
     const lengthLabel = round.lengthM
       ? `${nb(round.lengthM, 0)} m mesurés`
       : (round.officialLengthM ? `${nb(round.officialLengthM, 0)} m annoncés` : 'Mesure indisponible');
-    return `<div class="cir-inspector"><div class="eyebrow">Chronométrie</div><h3>Découpage des secteurs</h3>`
+    return `<div class="cir-inspector"><div class="eyebrow">Chronométrie</div><h3>Records par secteur</h3>`
+      + (records.length?`<table class="cir-sector-table"><thead><tr><th>Secteur</th><th>Meilleur temps</th><th>Pilote</th></tr></thead><tbody>${Array.from({length:Math.max(sourceSplits.length,records.length)},(_,i)=>{
+        const r=records[i];return `<tr><td>S${i+1}</td><td>${r?fmt(r.ms):'—'}</td><td>${r?esc(r.name)+'<small>'+r.label+'</small>':'—'}</td></tr>`;
+      }).join('')}</tbody></table>`:`<div class="cir-empty">Aucun chrono de secteur valide dans les qualifications et courses importées.</div>`)
+      + `<h4>Découpage des secteurs</h4>`
       + `<p class="cir-src">${sectorSource}</p>`
       + (hasSectors
         ? `<table class="cir-sector-table"><tbody>${rows}</tbody></table>`
@@ -2150,7 +2196,7 @@ function circuit(){
     + `<div class="cir-map-head"><div class="cir-map-tabs">${tabs}</div>`
     + sectorLegend
     + `<div class="cir-map-stage"><div class="cir-map-tag">${round.direction === 'clockwise' ? 'Sens horaire' : 'Sens anti-horaire'} · tracé extrait du fast_lane.ai</div>`
-    + `${round.outline&&round.outline.path?circuitMap(round, activeProfile, mode):'<div class="cir-empty">Tracé indisponible : le fichier <code>fast_lane.ai</code> manque ou est illisible.</div>'}`
+    + `${round.outline&&round.outline.path?circuitMap(round, activeProfile, mode, {contacts}):'<div class="cir-empty">Tracé indisponible : le fichier <code>fast_lane.ai</code> manque ou est illisible.</div>'}`
     + `<div class="cir-map-hint">${cornerCount} ${markerLabel} · ${round.lengthM?nb(round.lengthM,0)+' m mesurés':'mesure indisponible'}</div></div>`
     + `${round.outline?.path?`<div class="cir-readout">${scrub}<output>Survolez le tracé ou le profil, ou déplacez le curseur.</output></div>`:''}<div class="cir-elev"><div class="cir-elev-top"><span>Profil altimétrique sur un tour</span><b>${elev ? frNum(elev.delta, 1) + " m d'amplitude" : '—'}</b></div>${elev?circuitElevSvg(activeProfile):'<div class="cir-empty">Profil indisponible sans le tracé fast_lane.ai.</div>'}</div>`
     + `</gdsp-track-guide>`;
@@ -2557,13 +2603,13 @@ async function doSaveRemote(){
 async function saveRemote(){
   if(!adminToken)throw new Error('Non connecté administrateur.');
   // Minifier le payload : les données tour-par-tour (laps) représentent 90%+ de la taille.
-  // On ne garde que les champs nécessaires aux calculs (id/time/cuts) ; on supprime
-  // skin, sector, lapNumber, etc. Pour events (collisions), on garde seulement aid/bid/speed.
+  // Conserver les splits et les coordonnées monde nécessaires aux onglets du tracé.
   const minSessions=sessions.map(ss=>{
     const o={...ss};
     if(Array.isArray(o.laps)){
       o.laps=o.laps.map(l=>{
         const lp={id:l.id,time:l.time,cuts:l.cuts||0};
+        if(Array.isArray(l.sectors))lp.sectors=l.sectors;
         if(l.timestamp!=null)lp.timestamp=l.timestamp;
         else if(l.Timestamp!=null)lp.timestamp=l.Timestamp;
         return lp;
@@ -2572,6 +2618,7 @@ async function saveRemote(){
     if(Array.isArray(o.events)){
       o.events=o.events.map(e=>{
         const ev={type:e.type||'COLLISION_WITH_CAR',aid:e.aid,bid:e.bid,speed:e.speed,a:e.a,b:e.b,timestamp:e.timestamp};
+        if(contactPosition(e))ev.WorldPosition=contactPosition(e);
         if(e.RelPosition||e.relPos)ev.RelPosition=e.RelPosition||e.relPos;
         return ev;
       });
@@ -2619,11 +2666,12 @@ function importSessionJson(text,fileName){
     function clean(v){return String(v||'').replace(/7656119\d{10}/g,m=>pseudonymizeGuid(m))}
     const cars={};(j.Cars||[]).forEach(c=>cars[c.CarId]=driverFrom(c));
     const results=(j.Result||[]).map(r=>{const meta=cars[r.CarId]||driverFrom(r);return {id:meta.id,name:meta.name,team:meta.team||'',skin:meta.skin||'',grid:r.GridPosition,laps:r.NumLaps||0,best:r.BestLap,time:r.TotalTime,disqualified:!!r.Disqualified,hasPenalty:!!r.HasPenalty,penaltyTime:r.PenaltyTime||0,lapPenalty:r.LapPenalty||0}}).filter(r=>!(r.model==='dodge_monaco_police'||/broadcast/i.test(r.name)));
-    const laps=(j.Laps||[]).map(l=>{const meta=cars[l.CarId];if(!meta)return null;return {id:meta.id,time:l.LapTime,cuts:l.Cuts||0,timestamp:l.Timestamp}}).filter(Boolean);
-    const events=(j.Events||[]).filter(e=>e.Type==='COLLISION_WITH_CAR'&&j.Type==='RACE').map(e=>{const a=cars[e.CarId],b=cars[e.OtherCarId];if(!a||!b)return null;const ev={type:'COLLISION_WITH_CAR',a:a.name,b:b.name,aid:a.id,bid:b.id,speed:e.ImpactSpeed,timestamp:e.Timestamp};if(e.RelPosition)ev.RelPosition=e.RelPosition;return ev}).filter(Boolean);
+    const laps=(j.Laps||[]).map(l=>{const meta=cars[l.CarId];if(!meta)return null;return {id:meta.id,time:l.LapTime,sectors:Array.isArray(l.Sectors)?l.Sectors:undefined,cuts:l.Cuts||0,timestamp:l.Timestamp}}).filter(Boolean);
+    const events=(j.Events||[]).filter(e=>e.Type==='COLLISION_WITH_CAR').map(e=>{const a=cars[e.CarId],b=cars[e.OtherCarId];if(!a||!b)return null;const ev={type:'COLLISION_WITH_CAR',a:a.name,b:b.name,aid:a.id,bid:b.id,speed:e.ImpactSpeed,timestamp:e.Timestamp};if(contactPosition(e))ev.WorldPosition=contactPosition(e);
+      if(e.RelPosition)ev.RelPosition=e.RelPosition;return ev}).filter(Boolean);
     let raceStart=null;
     if(j.Type==='RACE'){const c=[];laps.forEach(l=>{if(typeof l.timestamp==='number'&&typeof l.time==='number'&&40000<l.time<600000)c.push(l.timestamp-l.time/1000)});if(c.length)raceStart=Math.min(...c)}
-    const sess={date:j.Date,track:j.TrackName,type:j.Type,results,laps,events,raceStart};
+    const sess={date:j.Date,track:j.TrackName,trackConfig:j.TrackConfig,type:j.Type,results,laps,events,raceStart};
     const idx=sessions.findIndex(x=>x.date===j.Date&&x.type===j.Type);
     if(idx>=0)sessions[idx]=sess;else sessions.push(sess);
     sessions.sort((a,b)=>a.date.localeCompare(b.date));
@@ -4225,18 +4273,19 @@ importSessionJson=function(text,fileName,opts){
     const laps=toArr(j.Laps).map(l=>{
       if(!l)return null;
       const meta=cars[l.CarId];if(!meta)return null;
-      return {id:meta.id,time:l.LapTime,cuts:l.Cuts||0,timestamp:l.Timestamp}
+      return {id:meta.id,time:l.LapTime,sectors:Array.isArray(l.Sectors)?l.Sectors:undefined,cuts:l.Cuts||0,timestamp:l.Timestamp}
     }).filter(Boolean);
-    const events=toArr(j.Events).filter(e=>e&&e.Type==='COLLISION_WITH_CAR'&&j.Type==='RACE').map(e=>{
+    const events=toArr(j.Events).filter(e=>e&&e.Type==='COLLISION_WITH_CAR').map(e=>{
       const a=cars[e.CarId],b=cars[e.OtherCarId];if(!a||!b)return null;
       const ev={type:'COLLISION_WITH_CAR',a:a.name,b:b.name,aid:a.id,bid:b.id,speed:e.ImpactSpeed,timestamp:e.Timestamp};
+      if(contactPosition(e))ev.WorldPosition=contactPosition(e);
       if(e.RelPosition)ev.RelPosition=e.RelPosition;
       return ev;
     }).filter(Boolean);
     let raceStart=null;
     if(j.Type==='RACE'){const c=[];laps.forEach(l=>{if(typeof l.timestamp==='number'&&typeof l.time==='number'&&l.time>40000&&l.time<600000)c.push(l.timestamp-l.time/1000)});if(c.length)raceStart=Math.min(...c)}
     if(!j.Date){if(!opts.silent)alert('Date manquante dans le JSON, session ignorée.');return false}
-    const sess={date:j.Date,track:j.TrackName||'',type:j.Type,results,laps,events,raceStart};
+    const sess={date:j.Date,track:j.TrackName||'',trackConfig:j.TrackConfig,type:j.Type,results,laps,events,raceStart};
     const idx=sessions.findIndex(x=>x.date===j.Date&&x.type===j.Type);
     if(idx>=0)sessions[idx]=sess;else sessions.push(sess);
     sessions.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
