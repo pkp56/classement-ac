@@ -202,3 +202,5 @@ data/global-exclusions.json.*
 # Archives PostgreSQL privées : ne jamais versionner les sauvegardes
 *.dump
 GDSP-Backups/
+
+/assets/mod-previews/

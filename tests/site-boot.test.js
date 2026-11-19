@@ -916,7 +916,9 @@ test('Manche locale sans fast_lane.ai : l’entrée calendrier est conservée sa
 });
 
 test('Création depuis le catalogue : identifiants, calendrier et fiche locale inclus dans le POST initial',async()=>{
+  const image='assets/mod-previews/'+'f'.repeat(64)+'.jpg';
   const {sandbox,getElementById,calls}=makeBrowser([], (url,opts)=>{
+    if(url==='/api/admin/cars/import-liveries')return response({liveries:[{name:'GT Racing',image,number:'12'}]});
     if(url==='/api/admin/circuits/import-local')return response({ok:true,round:{
       id:'local:2027-04-01:track/layout',name:'Circuit variante · fiche',date:'2027-04-01',round:1,label:'M1',
       driverFolder:'track',trackId:'track',layoutId:'layout',status:'upcoming',officialLength:'3200',officialLengthM:3200,
@@ -939,6 +941,7 @@ test('Création depuis le catalogue : identifiants, calendrier et fiche locale i
   assert.equal(body.data.eventInfo.car,'Voiture GT');
   assert.equal(body.data.carSheets[0].specs.bhp,'250 ch');
   assert.equal(body.data.carSheets[0].category,'GT historique');
+  assert.equal(body.data.carSheets[0].liveries[0].image,image);
   assert.equal(body.data.customCalendar['2027-04-01'].track,'track');
   assert.equal(body.data.circuitRounds[0].name,'Circuit variante · fiche');
   assert.equal(body.data.circuitRounds[0].round,1);

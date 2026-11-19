@@ -18,10 +18,8 @@ const VIEW = { w: 1000, h: 560, pad: 34 };
 
 /** Projection x/z -> viewBox, en conservant le sens de rotation. */
 function project(pts) {
-  const xs = pts.map(p => p.x);
-  const zs = pts.map(p => p.z);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minZ = Math.min(...zs), maxZ = Math.max(...zs);
+  let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+  for(const {x,z} of pts){minX=Math.min(minX,x);maxX=Math.max(maxX,x);minZ=Math.min(minZ,z);maxZ=Math.max(maxZ,z);}
   const w = VIEW.w - VIEW.pad * 2;
   const h = VIEW.h - VIEW.pad * 2;
   const scale = Math.min(w / (maxX - minX || 1), h / (maxZ - minZ || 1));
@@ -53,23 +51,26 @@ function buildOutline(track, opts = {}) {
   if (picked[picked.length - 1] !== points[n - 1]) picked.push(points[n - 1]);
 
   const d = picked.map((p, i) => `${i ? 'L' : 'M'}${P.x(p.x)} ${P.y(p.z)}`).join(' ') + ' Z';
-  const at = frac => {
-    const idx = Math.min(n - 1, Math.max(0, Math.round((Number(frac) || 0) * (n - 1))));
-    return { x: P.x(points[idx].x), y: P.y(points[idx].z) };
+  // Les fractions des sections et virages sont des distances, pas des indices.
+  const totalDist = track.lengthM || points[n-1].d || 1;
+  const atDistance = fraction => {
+    const target=fraction*totalDist;
+    let lo=0,hi=n-1;
+    while(lo<hi){const m=(lo+hi)>>1;if(points[m].d<target)lo=m+1;else hi=m;}
+    return lo && target-points[lo-1].d<points[lo].d-target ? lo-1 : lo;
   };
-
-  const totalDist = points[n - 1].d || 1;
 
   const cornerNorms = Array.isArray(opts.cornerNorms) ? opts.cornerNorms : [];
   const corners = cornerNorms.map((norm, i) => {
     const clamped = Math.min(0.9999, Math.max(0, Number(norm) || 0));
-    const idx = Math.min(n - 1, Math.max(0, Math.round(clamped * (n - 1))));
+    const idx = atDistance(clamped);
     const pt = points[idx];
     return {
       id: i + 1,
       x: P.x(pt.x),
       y: P.y(pt.z),
       dist: Math.round(pt.d),
+      altitude: +pt.y.toFixed(1),
       norm: +clamped.toFixed(4)
     };
   });
@@ -77,7 +78,7 @@ function buildOutline(track, opts = {}) {
   // Bornes internes : [0, .28, .65, 1] => 2 repères (S1, S2).
   const bounds = Array.isArray(opts.sectors) && opts.sectors.length > 2 ? opts.sectors : [];
   const sectors = bounds.slice(1, -1).map((f, i) => {
-    const idx = Math.min(n - 1, Math.max(0, Math.round(f * (n - 1))));
+    const idx = atDistance(f);
     return {
       x: P.x(points[idx].x),
       y: P.y(points[idx].z),
@@ -89,6 +90,7 @@ function buildOutline(track, opts = {}) {
 
   return {
     path: d,
+    samples: picked.map(p=>[+(p.d/totalDist).toFixed(5),P.x(p.x),P.y(p.z),+p.y.toFixed(1)]),
     start: { x: P.x(points[0].x), y: P.y(points[0].z) },
     sectors,
     corners,
@@ -104,8 +106,8 @@ function buildProfile(track) {
   const picked = pts.filter((_, i) => i % stride === 0);
   if (picked[picked.length - 1] !== pts[pts.length - 1]) picked.push(pts[pts.length - 1]);
   const ys = picked.map(p => p.y);
-  const min = Math.min(...ys);
-  const max = Math.max(...ys);
+  const min = track.elevMin ?? Math.min(...ys);
+  const max = track.elevMax ?? Math.max(...ys);
   const H = 120;
 
   // Lissage léger pour éviter le bruit de la télémétrie.
@@ -115,7 +117,7 @@ function buildProfile(track) {
   });
 
   const pathD = smooth.map((y, i) => {
-    const x = +((i / (smooth.length - 1)) * VIEW.w).toFixed(1);
+    const x = +((picked[i].d / (pts[pts.length-1].d || 1)) * VIEW.w).toFixed(1);
     const yy = +(H - ((y - min) / (max - min || 1)) * (H - 8) - 4).toFixed(1);
     return `${i ? 'L' : 'M'}${x} ${yy}`;
   }).join(' ');
