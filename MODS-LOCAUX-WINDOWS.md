@@ -45,6 +45,16 @@ Les sélections sauvegardent les identifiants, les noms et les données de fiche
 
 Si un mod est présent sur plusieurs disques, priorité au premier emplacement : C:, puis D:, puis E:. Une variante de circuit reste distincte de ses autres tracés. Un dossier sans métadonnées exploitables est affiché avec son identifiant et la mention « nom de dossier » ; ce n'est pas une validation que le mod est jouable.
 
+### Actualiser une fiche déjà publiée
+
+Ouvrir l’événement voulu, puis **Administration → Événements → Actualiser les circuits**. Sur la ligne de la manche, cliquer sur **Actualiser depuis Mod local** ou **Actualiser depuis Drive**. La source est celle de la fiche : inutile de recopier le lien Drive ou de créer une nouvelle manche. Le serveur relit les fichiers, recalcule le tracé, le profil, les secteurs et les surfaces disponibles, et enregistre la fiche dans cet événement. Le numéro, la date et les résultats sont conservés. Un mod absent ou une erreur de lecture empêchant l’import n’efface pas la fiche précédente. Pour une manche sans source identifiable, utiliser le secours manuel **Administration → Circuits**.
+
+Le bouton **Actualiser les voitures et circuits** de l’onglet Gestion ne fait qu’analyser le catalogue. Il n’y a pas de surveillance automatique des disques ni de Drive : après modification des fichiers, actualiser la manche concernée. Les visiteurs verront sa nouvelle fiche en rechargeant l’événement.
+
+### Traduire les descriptions des mods
+
+Dans **Administration → Événements → Traduction**, le texte original de chaque description importée (voiture ou circuit) reste consultable. Saisir le français, puis cliquer sur **Enregistrer la traduction** sous le champ concerné. Vider le champ et enregistrer pour revenir à l’original. La traduction est propre à l’événement et indépendante du prochain import ; aucun fichier du mod ou de Drive n’est modifié. Si une ancienne fiche n’a pas de description, actualiser d’abord le circuit ou la sélection des voitures. Une description doit être présente dans le fichier UI du mod.
+
 ### Limites de cette version
 
 - Catalogue de **métadonnées** (noms, identifiants, marque, pays, longueur lorsqu'ils sont disponibles), pas de galerie de photos ou de distribution des mods.
