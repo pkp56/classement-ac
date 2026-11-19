@@ -147,6 +147,21 @@ test('duplicate legacy Lola event is suppressed and tombstoned when deleted', as
   assert.ok(putCall && putCall.body.pointsConfig._deleted === true, 'PUT tombstone must mark pointsConfig._deleted');
 });
 
+test('Administration → Événements can rename an event without changing its URL slug',async()=>{
+  const {sandbox,getElementById,calls}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const slug=fixture.event.slug,newName='International Series Lola T290 — Saison de démonstration';
+  sandbox.prompt=()=>newName;
+  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin';adminTab='events';page='admin';render()",sandbox);
+  await vm.runInContext(`renameEvent(${JSON.stringify(slug)})`,sandbox);
+  const put=calls.find(call=>call.url==='/api/events/'+slug&&call.method==='PUT');
+  assert.equal(put.body.name,newName);
+  assert.equal(vm.runInContext('eventContext.name',sandbox),newName);
+  assert.equal(vm.runInContext(`events.find(event=>event.slug===${JSON.stringify(slug)}).name`,sandbox),newName);
+  assert.match(getElementById('app').innerHTML,/Modifier le titre/);
+  assert.match(getElementById('app').innerHTML,/International Series Lola T290 — Saison de démonstration/);
+});
+
 test('Commission tab lets admin add and remove championship points for a driver', async () => {
   const { sandbox, getElementById } = makeBrowser();
   await new Promise(resolve => setTimeout(resolve, 0));
@@ -489,7 +504,7 @@ test('Pilotes redesigned driver sheet renders 70s racing roundel, Lola livery, K
   assert.match(sheetHtml, /delta-pill (up|down|eq)/);
 });
 
-test('Unified Event tab displays active event name in header nav, groups Accueil/Classements/Résultats/Pilotes, and persists custom Accueil info & gallery', async () => {
+test('Unified Event tab includes Circuit and Voiture, and persists rich Accueil content, editable sporting rules, and gallery', async () => {
   const lolaSlug = fixture.event.slug;
   let storedLolaData = null;
   const upcomingEv = {
@@ -535,7 +550,7 @@ test('Unified Event tab displays active event name in header nav, groups Accueil
   assert.doesNotMatch(navHtml, />RÉSULTATS<\/button>/);
   assert.doesNotMatch(navHtml, />PILOTES<\/button>/);
 
-  // 2) Opening the Event tab renders the Event Banner, 4 sub-tabs, Calendar, and Provisional Podium
+  // 2) Every event exposes Circuit and Voiture alongside its existing tabs.
   await vm.runInContext("go('event')", sandbox);
   const evHomeHtml = getElementById('app').innerHTML;
   assert.match(evHomeHtml, /class="ev-shell"/);
@@ -543,19 +558,26 @@ test('Unified Event tab displays active event name in header nav, groups Accueil
   assert.match(evHomeHtml, /Accueil <span class="ev-subtab-badge">Affiche &amp; Infos<\/span>/);
   assert.match(evHomeHtml, /Classements <span class="ev-subtab-badge">/);
   assert.match(evHomeHtml, /Résultats <span class="ev-subtab-badge">/);
+  assert.match(evHomeHtml, /Circuit <span class="ev-subtab-badge">/);
+  assert.match(evHomeHtml, /Voiture <span class="ev-subtab-badge">/);
   assert.match(evHomeHtml, /Pilotes <span class="ev-subtab-badge">/);
   assert.match(evHomeHtml, /Calendrier des manches/);
   assert.match(evHomeHtml, /Podium provisoire/);
 
-  // 3) Admin can customize Event Accueil briefing/links, upcoming calendar round, and gallery images — and saveRemote() preserves them
+  // 3) Admin can customize rich text, rule lines, links, calendar, and gallery; saves preserve them.
   vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin';adminTab='events';page='admin';render()", sandbox);
   getElementById('evinfo-car').value = 'Lola T290 · 1972';
   getElementById('evinfo-schedule').value = 'Mercredi 21h15';
-  getElementById('evinfo-briefing').value = 'Briefing spécial championnat historique.';
-  getElementById('evinfo-format').value = '4 sprints + 2 endurances';
+  getElementById('evinfo-briefing').value = 'Briefing spécial championnat historique. [Consignes](https://example.com/briefing).';
+  getElementById('evinfo-format').value = '4 sprints + 2 endurances · https://example.com/format';
   getElementById('evinfo-rules').value = 'https://example.com/reglement.pdf';
   getElementById('evinfo-skins').value = 'https://example.com/skins.zip';
   getElementById('evinfo-discord').value = 'https://discord.gg/kDZXwRgRS';
+  getElementById('evinfo-rules-count').value = '2';
+  getElementById('evinfo-rule-label-0').value = 'Distance minimale';
+  getElementById('evinfo-rule-value-0').value = '75 % pour marquer';
+  getElementById('evinfo-rule-label-1').value = 'Règlement particulier';
+  getElementById('evinfo-rule-value-1').value = '[Lire le règlement](https://example.com/reglement-sportif)';
   await vm.runInContext('saveEventInfoForm()', sandbox);
 
   const galDataUrl = 'data:image/jpeg;base64,Z2FsbGVyeWltZw==';
@@ -567,13 +589,21 @@ test('Unified Event tab displays active event name in header nav, groups Accueil
   await vm.runInContext('saveRemote()', sandbox);
 
   const lastPost = calls.filter(c => c.url === `/api/events/${lolaSlug}/data` && c.method === 'POST').at(-1);
-  assert.equal(lastPost.body.eventInfo.briefing, 'Briefing spécial championnat historique.');
+  assert.equal(lastPost.body.eventInfo.briefing, 'Briefing spécial championnat historique. [Consignes](https://example.com/briefing).');
+  assert.deepEqual(lastPost.body.eventInfo.sportingRules,[
+    {label:'Distance minimale',value:'75 % pour marquer'},
+    {label:'Règlement particulier',value:'[Lire le règlement](https://example.com/reglement-sportif)'}
+  ]);
   assert.equal(lastPost.body.galleryImages.length, 1);
   assert.equal(lastPost.body.galleryImages[0].caption, 'Départ à Riverside');
 
   await vm.runInContext("go('event')", sandbox);
   const updatedEvHome = getElementById('app').innerHTML;
   assert.match(updatedEvHome, /Briefing spécial championnat historique\./);
+  assert.match(updatedEvHome, /href="https:\/\/example\.com\/briefing"[^>]*>Consignes<\/a>/);
+  assert.match(updatedEvHome, /href="https:\/\/example\.com\/format"/);
+  assert.match(updatedEvHome, /Distance minimale/);
+  assert.match(updatedEvHome, /href="https:\/\/example\.com\/reglement-sportif"[^>]*>Lire le règlement<\/a>/);
   assert.match(updatedEvHome, /Mercredi 21h15/);
   assert.match(updatedEvHome, /Règlement de l&#39;événement/);
   assert.match(updatedEvHome, /Pack Skins \/ Téléchargement/);
@@ -602,6 +632,18 @@ test('Unified Event tab displays active event name in header nav, groups Accueil
 
 
 
+
+test('Les liens des encadrés sont cliquables sans laisser passer du HTML ou un protocole dangereux',async()=>{
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const html=vm.runInContext("renderEventRichText('Ligne 1\\n[Consignes](https://example.com/rules) et https://example.com/format. [Refusé](javascript:alert(1)) <img src=x onerror=alert(1)>')",sandbox);
+  assert.match(html,/<br>/);
+  assert.match(html,/href="https:\/\/example\.com\/rules"/);
+  assert.match(html,/href="https:\/\/example\.com\/format"/);
+  assert.doesNotMatch(html,/href="javascript:/i);
+  assert.doesNotMatch(html,/<img\b/i);
+  assert.match(html,/&lt;img/);
+});
 
 test('Commission round selector retains the displayed selection after switching and rerendering', async () => {
   const { sandbox } = makeBrowser();
@@ -650,6 +692,10 @@ test('Permanent event landing URL restores the intended event and supports Back 
   assert.match(getElementById('app').innerHTML,/href="\/evenements\//);
   await sandbox.switchEvent(fixture.event.slug);
   assert.equal(location.pathname,'/evenements/'+encodeURIComponent(fixture.event.slug));
+  location.pathname='/evenements/'+encodeURIComponent(fixture.event.slug)+'/voiture';
+  await handlers.popstate();
+  assert.equal(vm.runInContext('page',sandbox),'voiture');
+  assert.match(getElementById('app').innerHTML,/FICHE VOITURE/);
 });
 
 test('Temporary events outage preserves GDSP hub, Global navigation and admin login; retry recovers', async () => {
@@ -756,11 +802,16 @@ test('Catalogue local : menus même sans événements, variantes et sélections 
   getElementById('local-mod-track').value='old/layout';
   const selection=vm.runInContext('readLocalModSelection()',sandbox);
   assert.equal(selection.cars[0].id,'missing');assert.equal(selection.track.layoutId,'layout');
+  sandbox.document.querySelectorAll=selector=>selector==='#local-mod-cars input[data-local-car-id]'?[
+    {value:'lola',checked:false},{value:'missing',checked:true}
+  ]:[];
+  const checkboxSelection=vm.runInContext('readLocalModSelection()',sandbox);
+  assert.deepEqual(Array.from(checkboxSelection.cars,car=>car.id),['missing'],'la sélection par cases à cocher doit conserver uniquement les voitures cochées');
 });
 
 test('Catalogue local : sélection et calendrier persistés sans effacer les sessions ou la commission',async()=>{
   let remote=null;
-  const catalog={scannedAt:'2026-11-11T12:00:00Z',sources:[],cars:[{id:'lola',name:'Lola',brand:'Lola'}],tracks:[{id:'spa/short',trackId:'spa',layoutId:'short',name:'Spa court'}],warnings:[]};
+  const catalog={scannedAt:'2026-11-11T12:00:00Z',sources:[],cars:[{id:'lola',name:'Lola T290',brand:'Lola',category:'Prototype historique',year:'1972',author:'GDSP',version:'2.1',description:'Prototype historique',tags:['Vintage'],specs:{bhp:'300 bhp',weight:'650 kg'},metadataAvailable:true}],tracks:[{id:'spa/short',trackId:'spa',layoutId:'short',name:'Spa court'}],warnings:[]};
   const {sandbox,getElementById,calls}=makeBrowser([], (url,opts)=>{
     if(url.startsWith('/api/admin/local-mods'))return response(catalog);
     if(url==='/api/admin/circuits/import-local')return response({ok:true,round:{id:'local:2027-03-10:spa/short',date:'2027-03-10',name:'Spa court fiche',driverFolder:'spa',status:'upcoming'},warnings:[]});
@@ -782,7 +833,9 @@ test('Catalogue local : sélection et calendrier persistés sans effacer les ses
   getElementById('local-mod-cars').selectedOptions=[{value:'lola'}];getElementById('local-mod-track').value='spa/short';
   await vm.runInContext('saveLocalModSelection()',sandbox);
   assert.equal(remote.data.modSelection.track.layoutId,'short');
-  assert.equal(remote.data.eventInfo.car,'Lola');
+  assert.equal(remote.data.eventInfo.car,'Lola T290');
+  assert.equal(remote.data.carSheets[0].specs.bhp,'300 bhp');
+  assert.equal(remote.data.carSheets[0].year,'1972');
   assert.equal(JSON.stringify(remote.data.sessions),originalSessions);assert.equal(JSON.stringify(remote.data.penMap),originalPen);
   getElementById('local-mod-cars').selectedOptions=[{value:'lola'}];getElementById('local-mod-track').value='spa/short';getElementById('local-mod-date').value='2027-03-10';
   await vm.runInContext('addLocalModRound()',sandbox);
@@ -797,6 +850,12 @@ test('Catalogue local : sélection et calendrier persistés sans effacer les ses
   assert.equal(saved.customCalendar['2027-03-10'].trackName,'Spa court');
   assert.equal(saved.circuitRounds[0].name,'Fiche conservée depuis Drive');
   assert.equal(saved.circuitRounds[1].name,'Spa court fiche');
+  await vm.runInContext("setEventSubTab('voiture')",sandbox);
+  const carSheetHtml=getElementById('app').innerHTML;
+  assert.match(carSheetHtml,/FICHE VOITURE/);
+  assert.match(carSheetHtml,/Lola T290/);
+  assert.match(carSheetHtml,/300 bhp/);
+  assert.match(carSheetHtml,/1972/);
 });
 
 test('Manche locale sans fast_lane.ai : l’entrée calendrier est conservée sans fausse fiche Circuit',async()=>{
@@ -831,17 +890,59 @@ test('Création depuis le catalogue : identifiants, calendrier et fiche locale i
     return null;
   });
   await new Promise(resolve=>setImmediate(resolve));
-  sandbox.initialCatalog={scannedAt:'2026-11-11',sources:[],cars:[{id:'car',name:'Voiture'}],tracks:[{id:'track/layout',trackId:'track',layoutId:'layout',name:'Circuit variante'}],warnings:[]};
+  sandbox.initialCatalog={scannedAt:'2026-11-11',sources:[],cars:[{id:'car',name:'Voiture GT',brand:'Constructeur',category:'GT historique',year:'1974',specs:{bhp:'250 ch',weight:'900 kg'},metadataAvailable:true}],tracks:[{id:'track/layout',trackId:'track',layoutId:'layout',name:'Circuit variante'}],warnings:[]};
   vm.runInContext('localModsCatalog=initialCatalog;adminAuth=true',sandbox);
   getElementById('local-mod-cars').selectedOptions=[{value:'car'}];
   getElementById('local-mod-track').value='track/layout';getElementById('local-mod-date').value='2027-04-01';
   const prompts=['Nouvel open','open','nouvel-open','0.5','25,18,15','0'];sandbox.prompt=()=>prompts.shift();
   await vm.runInContext('createEventPrompt()',sandbox);
   const body=calls.find(c=>c.url==='/api/events'&&c.method==='POST').body;
-  assert.equal(body.data.modSelection.cars[0].id,'car');assert.equal(body.data.modSelection.track.layoutId,'layout');
+  assert.equal(body.data.modSelection.cars[0].id,'car');assert.equal(body.data.modSelection.cars[0].name,'Voiture GT');assert.equal(body.data.modSelection.track.layoutId,'layout');
+  assert.equal(body.data.eventInfo.car,'Voiture GT');
+  assert.equal(body.data.carSheets[0].specs.bhp,'250 ch');
+  assert.equal(body.data.carSheets[0].category,'GT historique');
   assert.equal(body.data.customCalendar['2027-04-01'].track,'track');
   assert.equal(body.data.circuitRounds[0].name,'Circuit variante · fiche');
   assert.equal(body.data.circuitRounds[0].round,1);
+});
+
+test('Événement non-Lola : Circuit est créé dès la sélection même sans fast_lane.ai, et Voiture reste accessible sans plateau',async()=>{
+  const cup={slug:'gt-open-2027',name:'GT Open 2027',kind:'open',points_config:{},data:{
+    modSelection:{version:1,cars:[],track:{id:'spa/gp',trackId:'spa',layoutId:'gp',name:'Spa Grand Prix',country:'Belgique'}}
+  }};
+  const {sandbox,getElementById}=makeBrowser([cup],url=>url==='/api/events/gt-open-2027'?response(cup):null);
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext("loadEvent('gt-open-2027')",sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  vm.runInContext("page='event';render()",sandbox);
+  const homeHtml=getElementById('app').innerHTML;
+  assert.match(homeHtml,/Circuit <span class="ev-subtab-badge">M1/);
+  assert.match(homeHtml,/Voiture <span class="ev-subtab-badge">À définir/);
+  await vm.runInContext("setEventSubTab('circuit')",sandbox);
+  const circuitHtml=getElementById('app').innerHTML;
+  assert.match(circuitHtml,/Spa Grand Prix/);
+  assert.match(circuitHtml,/Fiche technique à compléter/);
+  assert.match(circuitHtml,/fast_lane\.ai/);
+  await vm.runInContext("setEventSubTab('voiture')",sandbox);
+  assert.match(getElementById('app').innerHTML,/Aucune voiture n’est encore associée/);
+});
+
+test('Circuit : la manche planifiée sans fiche locale conserve sa variante et les dates répétées',async()=>{
+  const cup={slug:'historic-open-2027',name:'Historic Open 2027',kind:'open',points_config:{},data:{
+    customCalendar:{
+      '2027-04-01':{track:'spa',layout:'gp',trackName:'Spa Grand Prix'},
+      '2027-05-01':{track:'spa',layout:'gp',trackName:'Spa Grand Prix'}
+    },
+    modSelection:{version:1,cars:[],track:{id:'spa/gp',trackId:'spa',layoutId:'gp',name:'Spa Grand Prix'}}
+  }};
+  const {sandbox}=makeBrowser([cup],url=>url==='/api/events/historic-open-2027'?response(cup):null);
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext("loadEvent('historic-open-2027')",sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  const circuitRounds=vm.runInContext('circuitsCache.rounds',sandbox);
+  assert.equal(circuitRounds.length,2,'deux dates sur le même tracé doivent donner deux manches');
+  assert.deepEqual(Array.from(circuitRounds,round=>round.date),['2027-04-01','2027-05-01']);
+  assert.ok(circuitRounds.every(round=>round.layoutId==='gp'&&round.technicalUnavailable));
 });
 
 test('Circuit : résultats QUALIFY/RACE importés font passer la manche à Disputée sans recalculer les classements',async()=>{

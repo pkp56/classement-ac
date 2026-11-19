@@ -101,7 +101,7 @@ const PROFILE_TIPS={
 };
 function gdspTip(html,mod=''){return `<span class="gdsp-tip${mod?' '+mod:''}"><i class="gdsp-i">?</i><span class="gdsp-bubble">${html}</span></span>`}
 
-function isEventPage(p){return p==='event'||p==='classement'||p==='manches'||p==='pilotes'||p==='circuit'}
+function isEventPage(p){return p==='event'||p==='classement'||p==='manches'||p==='pilotes'||p==='circuit'||p==='voiture'}
 function nav(){
   const activeTop=(page==='gpilote'||page==='global')?'global'
     :(page==='hub'||page==='accueil')?'accueil'
@@ -143,7 +143,7 @@ async function detectLiveTiming(){
 async function go(x){
   // Pré-charger un événement par défaut si on va sur une page événementielle (event/classement/manches/pilotes)
   // sans avoir d'eventContext (ex: on arrive sur un lien profond, ou on clique sur l'onglet Événement depuis le hub).
-  const eventPages=['event','classement','manches','pilotes','circuit'];
+  const eventPages=['event','classement','manches','pilotes','circuit','voiture'];
   if(backendMulti && eventPages.includes(x) && !eventContext){
     const last=localStorage.getItem('gdsp_last_event');
     const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
@@ -153,7 +153,7 @@ async function go(x){
       try{await loadEvent(target.slug)}catch(e){}
     }
   }
-  if(x==='event'||x==='classement'||x==='manches'||x==='circuit')driverId='';
+  if(x==='event'||x==='classement'||x==='manches'||x==='circuit'||x==='voiture')driverId='';
   page=x;window.scrollTo(0,0);
   // 'accueil' et 'hub' = la VRAIE page d'accueil GDSP (hero 65/35, Règlements, Stats, Discord) en mode multi
   if((x==='accueil'||x==='hub')&&backendMulti){page='hub';if(window.history&&window.location)window.history.pushState({},'', '/');render();return}
@@ -173,14 +173,11 @@ async function go(x){
 function goHome(){go('accueil')}
 function setEventSubTab(tab){
   if(!isEventPage(tab))return;
-  // L'onglet Circuit est ouvert à tous les événements, mais reste masqué
-  // tant qu'aucune manche n'existe (voir hasCircuitData).
-  if(tab==='circuit'&&!hasCircuitData())return;
   if(tab!=='pilotes')driverId='';
   page=tab;
   render();
-  if(tab==='circuit')syncCircuitHistory();
-  else if(window.history&&window.location&&/\/circuit\/?$/.test(window.location.pathname)){
+  if(tab==='circuit'||tab==='voiture')syncEventSubTabHistory(tab);
+  else if(window.history&&window.location&&/\/(circuit|voiture)\/?$/.test(window.location.pathname)){
     const slug=(eventContext&&eventContext.slug)||currentSlug;
     if(slug)window.history.pushState({},'','/evenements/'+encodeURIComponent(slug));
   }
@@ -306,9 +303,9 @@ async function retryBackend(){
   await detectBackend();
   await detectLiveTiming().catch(()=>{});
   if(!backendError){
-    const match=window.location&&window.location.pathname.match(/^\/evenements\/([^/]+)\/?$/);
+    const match=window.location&&window.location.pathname.match(/^\/evenements\/([^/]+)(?:\/(circuit|voiture))?\/?$/);
     const target=match?decodeURIComponent(match[1]):currentSlug;
-    if(target){try{await loadEvent(target);if(match)page='event'}catch(error){backendError='Impossible de charger cet événement. Réessayez.'}}
+    if(target){try{await loadEvent(target);if(match)page=match[2]||'event'}catch(error){backendError='Impossible de charger cet événement. Réessayez.'}}
   }
   render();
 }
@@ -1390,6 +1387,47 @@ function getEventInfo(evCtx){
     discordUrl:isSafeHttpUrl(raw.discordUrl)?raw.discordUrl.trim():'https://discord.gg/kDZXwRgRS'
   };
 }
+function renderEventRichText(value){
+  const input=String(value??'').replace(/\r\n?/g,'\n');
+  const pattern=/\[([^\]\n]{1,120})\]\(([^)\s]+)\)|(https?:\/\/[^\s<>"']+)/gi;
+  const addText=text=>esc(text).replace(/\n/g,'<br>');
+  let html='',offset=0,match;
+  while((match=pattern.exec(input))){
+    html+=addText(input.slice(offset,match.index));
+    if(match[1]!==undefined){
+      const href=String(match[2]||'').replace(/[.,!?;:]+$/,'');
+      if(isSafeHttpUrl(href))html+=`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(match[1])}</a>`;
+      else html+=addText(match[0]);
+    }else{
+      const raw=match[3],href=raw.replace(/[.,!?;:]+$/,''),tail=raw.slice(href.length);
+      if(isSafeHttpUrl(href))html+=`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(href)}</a>${addText(tail)}`;
+      else html+=addText(raw);
+    }
+    offset=pattern.lastIndex;
+  }
+  return html+addText(input.slice(offset));
+}
+function defaultSportingRules(ev,infoObj,cfg){
+  const points=cfg&&Array.isArray(cfg.pointsScale)?cfg.pointsScale:DEFAULT_POINTS.pointsScale;
+  const joker=ev&&ev.kind==='open'
+    ?'Sans Joker (open)'
+    :(shouldDropWorstJoker()?'1 pire manche décomptée':(Number(cfg&&cfg.jokerCount)>0?`${cfg.jokerCount} meilleures manches`:'Toutes les manches'));
+  return [
+    {label:'Catégorie',value:infoObj.car},
+    {label:'Top 5 barème',value:points.slice(0,5).join(' · ')+' pts…'},
+    {label:'Course longue (1h)',value:cfg&&cfg.doubleLongRaces!==false?'Points doublés (×2)':'Barème standard'},
+    {label:'Bonus Pole Qualif',value:cfg&&cfg.polePoints?'+'+cfg.polePoints+' point':'Aucun'},
+    {label:'Règle Joker',value:joker}
+  ];
+}
+function eventSportingRules(ev,infoObj,cfg){
+  const saved=ev&&ev.data&&ev.data.eventInfo&&ev.data.eventInfo.sportingRules;
+  const source=Array.isArray(saved)?saved:defaultSportingRules(ev,infoObj,cfg);
+  return source.slice(0,12).filter(row=>row&&typeof row==='object').map(row=>({
+    label:String(row.label||'').trim().slice(0,100),
+    value:String(row.value||'').trim().slice(0,500)
+  })).filter(row=>row.label||row.value);
+}
 function getEventGallery(evCtx){
   const ctx=evCtx||eventContext;
   const arr=(ctx&&ctx.data&&Array.isArray(ctx.data.galleryImages))?ctx.data.galleryImages:[];
@@ -1434,25 +1472,17 @@ function eventHome(){
   if(infoObj.skinsUrl)linksArr.push({icon:'🎨',label:'Pack Skins / Téléchargement',hint:'Ressources événement',url:infoObj.skinsUrl});
   if(infoObj.discordUrl)linksArr.push({icon:'💬',label:'Salon Discord GDSP',hint:'Inscriptions, briefing & annonces',url:infoObj.discordUrl});
 
-  const jokerRuleTxt=ev.kind==='open'
-    ?'Sans Joker (open)'
-    :(shouldDropWorstJoker()?'1 pire manche décomptée':(Number(cfg.jokerCount)>0?`${cfg.jokerCount} meilleures manches`:'Toutes les manches'));
-
+  const sportingRows=eventSportingRules(ev,infoObj,cfg);
   const infoGridHtml=`<div class="ev-two-col">`
     +`<div class="panel"><div class="eyebrow">Présentation de l'événement</div><h2 style="margin-top:4px">Briefing &amp; Infos pratiques</h2>`
-    +`<p class="note" style="font-size:14px;color:#3d4745">${esc(infoObj.briefing).replace(/\n/g,'<br>')}</p>`
-    +`<p class="note" style="margin-top:10px"><b>📅 Rendez-vous :</b> ${esc(infoObj.schedule)}</p>`
+    +`<p class="note" style="font-size:14px;color:#3d4745">${renderEventRichText(infoObj.briefing)}</p>`
+    +`<p class="note" style="margin-top:10px"><b>📅 Rendez-vous :</b> ${renderEventRichText(infoObj.schedule)}</p>`
     +(linksArr.length?`<div class="ev-links">${linksArr.map(l=>`<a class="ev-link-item" href="${esc(l.url)}" target="_blank" rel="noopener"><span>${l.icon} &nbsp; ${esc(l.label)}</span><small>${esc(l.hint)} ↗</small></a>`).join('')}</div>`:'')
     +`</div>`
     +`<div class="panel"><div class="eyebrow">Règlement sportif</div><h2 style="margin-top:4px">Format &amp; Barème</h2>`
-    +`<p class="note">${esc(infoObj.formatText)}</p>`
-    +`<ul class="ev-spec-list">`
-    +`<li><span>Catégorie</span><b>${esc(infoObj.car)}</b></li>`
-    +`<li><span>Top 5 barème</span><b>${(cfg.pointsScale||DEFAULT_POINTS.pointsScale).slice(0,5).join(' · ')} pts…</b></li>`
-    +`<li><span>Course longue (1h)</span><b>${cfg.doubleLongRaces!==false?'Points doublés (×2)':'Barème standard'}</b></li>`
-    +`<li><span>Bonus Pole Qualif</span><b>${cfg.polePoints?'+'+cfg.polePoints+' point':'Aucun'}</b></li>`
-    +`<li><span>Règle Joker</span><b>${esc(jokerRuleTxt)}</b></li>`
-    +`</ul></div></div>`;
+    +`<p class="note">${renderEventRichText(infoObj.formatText)}</p>`
+    +(sportingRows.length?`<ul class="ev-spec-list">${sportingRows.map(row=>`<li><span>${esc(row.label)}</span><b>${renderEventRichText(row.value)}</b></li>`).join('')}</ul>`:`<p class="note">Aucune ligne de règlement sportif configurée.</p>`)
+    +`</div></div>`;
 
   const galleryHtml=gallery.length
     ?`<div class="section-head" style="margin-top:10px"><div><div class="eyebrow">En piste &amp; dans les stands</div><h2>Galerie de l'événement</h2></div><span class="muted">Cliquer sur une image pour agrandir</span></div>`
@@ -1496,6 +1526,45 @@ function eventHome(){
 
   return `<div class="ev-home-wrap"><div class="ev-home-poster">${posterBlock}${adminPosterHint}</div>${kpisHtml}${infoGridHtml}${galleryHtml}<div class="ev-two-col">${calendarPanel}${podiumPanel}</div></div>`;
 }
+function eventCarSheets(evCtx){
+  const ctx=evCtx||eventContext||{},data=ctx.data||{};
+  if(Array.isArray(data.carSheets)&&data.carSheets.length)return data.carSheets.slice(0,12).map(localCarSnapshot);
+  const selected=data.modSelection&&Array.isArray(data.modSelection.cars)?data.modSelection.cars:[];
+  if(selected.length)return selected.slice(0,12).map(localCarSnapshot);
+  const manual=String(data.eventInfo&&data.eventInfo.car||'').trim();
+  if(manual)return manual.split(/\s*\/\s*/).filter(Boolean).slice(0,12).map((name,index)=>({
+    id:'event-car-'+(index+1),name,brand:'',category:'',year:'',author:'',version:'',description:'',tags:[],specs:{},metadataAvailable:false
+  }));
+  const isLola=!ctx.slug||ctx.slug===LEGACY_DEFAULT_SLUG||ctx.slug===ACTIVE_LOLA_SLUG;
+  return isLola?[{id:'lola-t290',name:'Lola T290',brand:'Lola',category:'Prototypes historiques',year:'',author:'',version:'',description:'',tags:[],specs:{},metadataAvailable:false}]:[];
+}
+function carTabBadge(){
+  const cars=eventCarSheets(eventContext);
+  return cars.length?`${cars.length} modèle${cars.length>1?'s':''}`:'À définir';
+}
+function carSheet(){
+  if(backendMulti&&!eventContext)return hub();
+  const ev=eventContext||{slug:LEGACY_DEFAULT_SLUG,name:'International Series Lola T290',kind:'championship',data:{}};
+  const cars=eventCarSheets(ev);
+  if(!cars.length)return `<div class="section-head"><div><div class="eyebrow">Événement GDSP</div><h1>Fiche Voiture</h1></div></div><div class="cir-empty"><b>Aucune voiture n’est encore associée à cet événement.</b><br>La fiche apparaîtra dès qu’une voiture sera cochée dans Administration → Événements.</div>${adminAuth?`<p style="margin-top:12px"><button type="button" class="btn secondary" onclick="adminTab='events';go('admin')">Configurer le plateau →</button></p>`:''}`;
+  const labels={bhp:'Puissance',torque:'Couple',weight:'Poids',topspeed:'Vitesse maximale',acceleration:'Accélération',pwratio:'Rapport poids / puissance',range:'Autonomie'};
+  return `<div class="car-sheet-list">${cars.map((car,index)=>{
+    const initials=String(car.brand||car.name||'AC').trim().split(/\s+/).map(part=>part[0]).slice(0,3).join('').toUpperCase();
+    const specs=Object.entries(car.specs||{}).filter(([key,value])=>labels[key]&&value);
+    const heroMeta=[['Constructeur',car.brand||'Non précisé'],['Catégorie',car.category||'Non précisée'],['Année',car.year||'Non précisée'],['Auteur du mod',car.author||'Non communiqué'],['Version',car.version||'Non précisée']];
+    const specKpi=(label,value,sub,cls='')=>`<div class="cir-kpi ${cls}"><span>${label}</span><strong>${esc(value||'—')}</strong><small>${esc(sub||'Fiche du mod local')}</small></div>`;
+    const description=car.description?`<div class="cir-panel"><div class="eyebrow">Présentation du mod</div><h3>Description</h3><p class="cir-src">${renderEventRichText(car.description)}</p></div>`:'';
+    const tags=car.tags&&car.tags.length?`<div class="car-sheet-tags">${car.tags.map(tag=>`<span class="tag">${esc(tag)}</span>`).join('')}</div>`:'';
+    const metadataNotice=car.metadataAvailable
+      ?`<p class="cir-src">Données importées du fichier <code>ui_car.json</code> du mod local.</p>`
+      :`<div class="cir-empty">Les métadonnées <code>ui_car.json</code> ne sont pas disponibles pour cette voiture. La fiche conserve le modèle et les informations renseignées dans l’événement ; les caractéristiques restent à compléter.</div>`;
+    return `<section class="car-sheet-card"><div class="cir-hero car-sheet-hero"><div class="cir-hero-txt"><div><div class="cir-kicker"><span class="cir-flag">${cars.length>1?'Voiture '+(index+1):'Plateau engagé'}</span><span class="cir-status">${esc(car.brand||'Mod Assetto Corsa')}</span></div><h2>${esc(car.name)}</h2><div class="cir-hero-sub">${esc([car.brand,car.category,car.year].filter(Boolean).join(' · ')||'Fiche du véhicule engagé')}</div><dl class="cir-hero-meta">${heroMeta.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></div><div class="cir-hero-actions"><span class="cir-date-chip"><i>MOD</i> Assetto Corsa local</span><span class="cir-winner"><small>Modèle</small>${esc(car.id||car.name)}</span></div></div><div class="car-sheet-mark"><b>${esc(initials)}</b><span>FICHE VOITURE</span></div></div>`
+      +`<div class="cir-kpis">${specKpi('Constructeur',car.brand||car.name,'Marque du mod')}${specKpi('Puissance',car.specs?.bhp,'ui_car.json','gold')}${specKpi('Poids',car.specs?.weight,'ui_car.json','green')}${specKpi('Catégorie',car.category,'Classe du mod','red')}</div>`
+      +`${metadataNotice}${tags}${description}`
+      +`<div class="cir-cols"><div class="cir-panel"><div class="eyebrow">Fiche technique</div><h3>Caractéristiques du mod</h3>${specs.length?`<div class="table-wrap"><table class="cir-surfaces"><tbody>${specs.map(([key,value])=>`<tr><td class="muted"><b>${esc(labels[key])}</b></td><td>${esc(value)}</td></tr>`).join('')}</tbody></table></div>`:`<div class="cir-empty">Aucune caractéristique technique n’est renseignée dans le mod.</div>`}</div><div class="cir-panel"><div class="eyebrow">Événement</div><h3>Voiture engagée</h3><div class="cir-optimal"><span>Événement</span><b>${esc(ev.name||'GDSP')}</b></div><p class="cir-src">L’identifiant affiché est le nom du dossier du mod, pas son chemin sur le PC serveur.</p></div></div></section>`;
+  }).join('')}</div>`;
+}
+
 function renderEventShell(){
   if(backendMulti&&!eventContext)return hub();
   const ev=eventContext||{slug:LEGACY_DEFAULT_SLUG,name:'International Series Lola T290',kind:'championship'};
@@ -1508,8 +1577,8 @@ function renderEventShell(){
     ?'<span class="tag archive">SAISON ARCHIVÉE</span>'
     :(rs.length===0?'<span class="tag" style="background:#d7a347;color:#102a32">CHAMPIONNAT À VENIR</span>':'<span class="tag live">CHAMPIONNAT EN COURS</span>');
 
-  const activeSub=page==='classement'?'classement':page==='manches'?'manches':page==='pilotes'?'pilotes':(page==='circuit'&&hasCircuitData())?'circuit':'event';
-  const subBody=activeSub==='classement'?ranking():activeSub==='manches'?manche():activeSub==='pilotes'?drivers():activeSub==='circuit'?circuit():eventHome();
+  const activeSub=page==='classement'?'classement':page==='manches'?'manches':page==='pilotes'?'pilotes':page==='circuit'?'circuit':page==='voiture'?'voiture':'event';
+  const subBody=activeSub==='classement'?ranking():activeSub==='manches'?manche():activeSub==='pilotes'?drivers():activeSub==='circuit'?circuit():activeSub==='voiture'?carSheet():eventHome();
 
   return `<div class="ev-shell">`
     +`<div class="ev-banner"><div><div class="ev-banner-kicker">${badgeHtml}<span style="font-size:11px;letter-spacing:1.8px;color:#d7a347;font-weight:700;text-transform:uppercase">Espace événement GDSP</span></div><h1>${esc(ev.name)}</h1><div class="ev-banner-meta">${rs.length?`${rs.length} manche(s) importée(s) · ${ds.length} pilote(s) engagé(s)`:'Saison en préparation · Inscriptions sur Discord'} · Coefficient Global ×${Number(cfg.globalCoef??1).toFixed(1)}</div></div>`
@@ -1518,7 +1587,8 @@ function renderEventShell(){
     +`<button type="button" class="ev-subtab ${activeSub==='event'?'active':''}" onclick="setEventSubTab('event')">Accueil <span class="ev-subtab-badge">Affiche &amp; Infos</span></button>`
     +`<button type="button" class="ev-subtab ${activeSub==='classement'?'active':''}" onclick="setEventSubTab('classement')">Classements <span class="ev-subtab-badge">${ds.length||0}</span></button>`
     +`<button type="button" class="ev-subtab ${activeSub==='manches'?'active':''}" onclick="setEventSubTab('manches')">Résultats <span class="ev-subtab-badge">${rs.length} M.</span></button>`
-    +(hasCircuitData()?`<button type="button" class="ev-subtab ${activeSub==='circuit'?'active':''}" onclick="setEventSubTab('circuit')">Circuit <span class="ev-subtab-badge">${esc(circuitBadgeLabel())}</span></button>`:'')
+    +`<button type="button" class="ev-subtab ${activeSub==='circuit'?'active':''}" onclick="setEventSubTab('circuit')">Circuit <span class="ev-subtab-badge">${esc(circuitBadgeLabel())}</span></button>`
+    +`<button type="button" class="ev-subtab ${activeSub==='voiture'?'active':''}" onclick="setEventSubTab('voiture')">Voiture <span class="ev-subtab-badge">${esc(carTabBadge())}</span></button>`
     +`<button type="button" class="ev-subtab ${activeSub==='pilotes'?'active':''}" onclick="setEventSubTab('pilotes')">Pilotes <span class="ev-subtab-badge">${ds.length||0}</span></button>`
     +`</div></div>`
     +`<div class="ev-subcontent">${subBody}</div>`;
@@ -1593,13 +1663,68 @@ function mergeCircuitRounds(base, extra){
     return { ...r, round: n, label: r.label || `M${n}` };
   });
 }
+function eventCircuitPlaceholders(existingRounds){
+  const data=(eventContext&&eventContext.data)||{},found=[];
+  const calendar=data.customCalendar&&typeof data.customCalendar==='object'?data.customCalendar:(customCalendar||{});
+  const sameTrack=(a,b)=>{
+    const aTrack=String(a.trackId||a.driverFolder||a.localTrackId||'').toLowerCase();
+    const bTrack=String(b.trackId||b.driverFolder||b.localTrackId||'').toLowerCase();
+    const aLayout=String(a.layoutId||a.localLayoutId||'').toLowerCase();
+    const bLayout=String(b.layoutId||b.localLayoutId||'').toLowerCase();
+    const aDate=String(a.date||'').slice(0,10),bDate=String(b.date||'').slice(0,10);
+    return !!aTrack&&aTrack===bTrack&&(!aLayout||!bLayout||aLayout===bLayout)&&(!aDate||!bDate||aDate===bDate);
+  };
+  const add=(candidate)=>{
+    const trackId=String(candidate.trackId||candidate.track||'').trim();
+    const id=String(candidate.id||trackId+(candidate.layoutId?'/'+candidate.layoutId:''));
+    if(!trackId||!id)return;
+    const item={...candidate,id,trackId,layoutId:String(candidate.layoutId||''),name:String(candidate.name||candidate.trackName||id),date:String(candidate.date||'').slice(0,10)};
+    const duplicate=found.find(old=>sameTrack(old,item));
+    if(duplicate){
+      for(const key of ['layoutId','name','date','country','length'])if(!duplicate[key]&&item[key])duplicate[key]=item[key];
+      return;
+    }
+    found.push(item);
+  };
+  Object.entries(calendar).sort(([a],[b])=>String(a).localeCompare(String(b))).forEach(([day,value])=>{
+    if(!value||typeof value!=='object')return;
+    const rawId=String(value.id||value.trackId||value.track||'');
+    const parts=rawId.split('/');
+    const trackId=String(value.trackId||parts[0]||'');
+    const layoutId=String(value.layoutId||value.layout||(parts.length>1?parts.slice(1).join('/'):''));
+    add({id:rawId||trackId+(layoutId?'/'+layoutId:''),trackId,layoutId,name:value.trackName||value.name||value.track||rawId,date:day,country:value.country||'',length:value.length||''});
+  });
+  const selected=data.modSelection&&data.modSelection.track;
+  if(selected&&typeof selected==='object'){
+    const rawId=String(selected.id||selected.trackId||'');
+    const parts=rawId.split('/');
+    const trackId=String(selected.trackId||parts[0]||'');
+    const layoutId=String(selected.layoutId||(parts.length>1?parts.slice(1).join('/'):''));
+    add({...selected,id:rawId||trackId+(layoutId?'/'+layoutId:''),trackId,layoutId,name:selected.name||rawId});
+  }
+  const pending=found.filter(candidate=>!existingRounds.some(round=>{
+    if(candidate.date&&String(round.date||'').slice(0,10)===candidate.date)return true;
+    return sameTrack(round,candidate);
+  }));
+  let next=existingRounds.reduce((max,row)=>Math.max(max,Number(row&&row.round)||0),0)+1;
+  return pending.sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name,'fr')).map(candidate=>{
+    const number=next++;
+    return {
+      id:`selection:${candidate.date||'undated'}:${candidate.id}`,round:number,label:`M${number}`,
+      name:candidate.name,shortName:candidate.name,date:candidate.date||null,status:'upcoming',
+      trackId:candidate.trackId,layoutId:candidate.layoutId,layout:candidate.layoutId||'Configuration à confirmer',
+      driverFolder:candidate.trackId,localTrackId:candidate.trackId,localLayoutId:candidate.layoutId,
+      country:String(candidate.country||''),lengthStr:String(candidate.length||''),source:'Catalogue local Assetto Corsa',
+      metadataAvailable:false,technicalUnavailable:true
+    };
+  });
+}
 async function circuitsData(){
   if (circuitsCache) return circuitsCache;
   if (circuitsError) return null;
   let base = null, err = '';
-  // `data/circuits.json` décrit le championnat Lola T290. Les autres événements
-  // n'ont que les manches importées depuis l'administration : y mêler le
-  // calendrier Lola afficherait six circuits qui ne les concernent pas.
+  // Le calendrier statique décrit uniquement Lola T290 ; les autres événements
+  // n'affichent que leurs fiches importées et leurs sélections de circuit.
   if (isLolaEvent()) {
     try {
       const r = await authFetch('/data/circuits.json', { cache: 'no-store' });
@@ -1611,13 +1736,13 @@ async function circuitsData(){
     }
   }
   const extra = importedCircuitRounds();
-  // Les manches importées suffisent à afficher l'onglet même sans fichier statique.
-  if (!base && !extra.length) { circuitsError = err || 'Aucun circuit pour cet événement'; return null; }
   const merged = mergeCircuitRounds((base && base.rounds) || [], extra);
-  if (!merged.length) { circuitsError = err || 'Aucun circuit pour cet événement'; return null; }
+  const placeholders=eventCircuitPlaceholders(merged);
+  const allRounds=merged.concat(placeholders).sort((a,b)=>(Number(a.round)||999)-(Number(b.round)||999));
+  if (isLolaEvent()&&!base&&!allRounds.length&&err) { circuitsError=err; return null; }
   const sessionRounds=rounds();
-  const withResults=merged.map(r=>{
-    const resultGroup=circuitRoundResultsGroup(r,merged,sessionRounds);
+  const withResults=allRounds.map(r=>{
+    const resultGroup=circuitRoundResultsGroup(r,allRounds,sessionRounds);
     if(!resultGroup)return r;
     return {...r,status:'done',resultsImported:true,date:r.date||String(resultGroup.date||'').slice(0,10)};
   });
@@ -1762,32 +1887,10 @@ function setCircMode(mode){
 function navEventTitle(name){
   return String(name || '').replace(/\s+/g, ' ').trim() || 'Championnat';
 }
-/**
- * L'onglet Circuit doit-il apparaître pour l'événement courant ?
- *
- * Vrai dès qu'au moins une manche existe : le calendrier statique pour le
- * championnat Lola T290, ou les manches importées depuis l'administration
- * pour n'importe quel autre événement.
- *
- * Le calendrier n'étant pas encore chargé au premier rendu, la fonction
- * déclenche le chargement et renvoie `true` de façon optimiste : sans cela
- * l'onglet n'apparaîtrait jamais. Si le chargement révèle qu'il n'y a
- * aucune manche, il disparaît au rendu suivant.
- */
+/* L'onglet Circuit fait partie de l'espace de chaque événement, même avant
+ * l'import d'une fiche : la page explique alors comment renseigner le tracé. */
 function hasCircuitData(){
-  if (circuitsError) return false;
-  const imported = importedCircuitRounds().length;
-  if (isLolaEvent()) return true;          // le championnat a son calendrier
-  if (imported) return true;               // manches importées
-  if (circuitsCache) return false;         // chargé : vraiment aucun circuit
-  if (!circuitsPending) {
-    circuitsPending = circuitsData().finally(() => {
-      circuitsPending = null;
-      // Re-rendu pour faire apparaître/disparaître l'onglet une fois su.
-      if (page === 'event' || page === 'circuit') render();
-    });
-  }
-  return true;
+  return !(typeof backendMulti!=='undefined'&&backendMulti&&!eventContext);
 }
 function isLolaEvent(){
   const slug = eventContext && eventContext.slug;
@@ -1826,6 +1929,7 @@ function circuit(){
   }
 
   const rounds = data.rounds || [];
+  if(!rounds.length)return `<div class="section-head"><div><div class="eyebrow">Reconnaissance &amp; direction de course</div><h1>Fiche Circuit</h1></div></div><div class="cir-empty"><b>Aucun tracé n’est encore associé à cet événement.</b><br>L’onglet est prêt : sélectionne un circuit dans Administration → Événements, ou importe une fiche Drive depuis Administration → Circuits.</div>${adminAuth?`<div class="controls" style="margin-top:12px"><button type="button" class="btn secondary" onclick="adminTab='events';go('admin')">Choisir un circuit →</button><button type="button" class="btn secondary" onclick="adminTab='circuits';go('admin')">Importer / corriger une fiche →</button></div>`:''}`;
   const idx = Math.max(0, Math.min(rounds.length - 1, circuitRound() - 1));
   const round = rounds[idx];
   const alt = circuitAlt();
@@ -1835,6 +1939,9 @@ function circuit(){
     : round;
   const mode = circMode();
   const isDone = round.status === 'done';
+  const technicalNotice=round.technicalUnavailable
+    ?`<div class="cir-empty" style="margin-bottom:14px"><b>Fiche technique à compléter.</b> Le circuit et sa variante sont enregistrés, mais les fichiers techniques du mod local sont absents ou incomplets. Le calendrier et l’onglet restent disponibles. ${adminAuth?`<button type="button" class="btn secondary small" style="margin-left:8px" onclick="adminTab='circuits';go('admin')">Ouvrir le secours Drive →</button>`:''}</div>`
+    :'';
 
   // --- Bandeau des manches : une pastille cliquable par manche ---
   const calendar = rounds.map((r, i) => {
@@ -2022,7 +2129,7 @@ function circuit(){
     + techRows.map(([k, v]) => `<tr><td class="muted" style="white-space:nowrap">${esc(k)}</td><td><b>${esc(v)}</b></td></tr>`).join('')
     + `</tbody></table></div></div>`;
 
-  return `<div class="cir-roundbar">${calendar}</div>`
+  return technicalNotice+`<div class="cir-roundbar">${calendar}</div>`
     + `<div class="cir-toolbar"><div class="cir-select"><span>Manche</span><b>${esc(round.label)} · ${esc(round.name)} (${esc(round.country)})</b></div>${variantButtons}</div>`
     + `<div class="cir-hero cir-hero-photo" style="${heroStyle}">`
       + `<div class="cir-hero-txt"><div>`
@@ -2392,6 +2499,7 @@ async function saveRemote(){
   if(Array.isArray(baseData.galleryImages)&&baseData.galleryImages.length)payload.galleryImages=baseData.galleryImages;
   if(baseData.eventInfo&&typeof baseData.eventInfo==='object')payload.eventInfo=baseData.eventInfo;
   if(baseData.modSelection&&typeof baseData.modSelection==='object')payload.modSelection=baseData.modSelection;
+  if(Array.isArray(baseData.carSheets)&&baseData.carSheets.length)payload.carSheets=baseData.carSheets;
   // Fiches circuit importées (Drive ou mod local) : sans cette ligne, chaque
   // sauvegarde de l'événement les effacerait.
   if(Array.isArray(baseData.circuitRounds)&&baseData.circuitRounds.length)payload.circuitRounds=baseData.circuitRounds;
@@ -2593,8 +2701,6 @@ function adminTabs(x){adminTab=x;render()}
 
 // Event creation (multi only)
 async function createEventPrompt(){
-  const chosenMods=readLocalModSelection();
-  const plannedDate=document.getElementById('local-mod-date')?.value||'';
   const name=prompt('Nom du championnat/open (ex: Open de Spa 2026) ?');if(!name)return;
   const kind=prompt('Type : "championship", "open" ou "archive" ?','open');if(!['championship','open','archive'].includes(kind))return alert('Type invalide.');
   const slugIn=prompt('Identifiant URL (lettres minuscules, chiffres, tirets, ex: open-spa-2026) ?',name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''));if(!slugIn)return;
@@ -2604,6 +2710,10 @@ async function createEventPrompt(){
   const long2=confirm('Les courses d\'1 heure (une seule course par manche) donnent-elles le double de points ? OK=oui');
   const joker=+prompt('Nombre de meilleures manches retenues pour le Joker (0 = toutes les manches) ?','5')||0;
   const cfg={pointsScale:scale,polePoints:1,doubleLongRaces:long2,longRaceMinutes:60,minPercentDistance:0.75,jokerCount:joker,globalCoef:+coefS||1};
+  // Lire les cases au dernier moment : elles représentent exactement le plateau
+  // choisi pour ce nouvel événement, sans dépendre d'une ancienne sélection.
+  const chosenMods=readLocalModSelection()||{version:1,cars:[],track:null};
+  const plannedDate=document.getElementById('local-mod-date')?.value||'';
 
   let localCircuitImport=null,localCircuitError='';
   if(chosenMods?.track){
@@ -2617,7 +2727,10 @@ async function createEventPrompt(){
   const initialData={};
   if(chosenMods&&(chosenMods.cars.length||chosenMods.track)){
     initialData.modSelection=chosenMods;
-    if(chosenMods.cars.length)initialData.eventInfo={car:chosenMods.cars.map(c=>c.name).join(' / ')};
+    if(chosenMods.cars.length){
+      initialData.eventInfo={car:chosenMods.cars.map(c=>c.name).join(' / ')};
+      initialData.carSheets=chosenMods.cars.map(localCarSnapshot);
+    }
     if(plannedDate&&chosenMods.track)initialData.customCalendar={[plannedDate]:{track:chosenMods.track.trackId,layout:chosenMods.track.layoutId,trackName:chosenMods.track.name}};
     if(localCircuitImport?.round){
       const fiche={...localCircuitImport.round,round:1,label:'M1'};
@@ -2639,6 +2752,26 @@ async function createEventPrompt(){
     }
   }
   alert(message);
+}
+async function renameEvent(slug){
+  if(!adminAuth||!backendMulti||!slug)return;
+  const listed=events.find(e=>e.slug===slug);
+  const currentName=(listed&&listed.name)||(eventContext&&eventContext.slug===slug&&eventContext.name)||slug;
+  const entered=prompt('Nouveau titre de l’événement (son identifiant URL ne changera pas) :',currentName);
+  if(entered===null)return;
+  const name=String(entered).trim();
+  if(!name||name.length>120){alert('Le titre doit contenir entre 1 et 120 caractères.');return;}
+  try{
+    const response=await apiPut('/api/events/'+encodeURIComponent(slug),{name});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok){alert(result.error||('HTTP '+response.status));return;}
+    if(listed){listed.name=name;listed.updated_at=new Date().toISOString();}
+    else events.push({slug,name,kind:'championship',updated_at:new Date().toISOString()});
+    if(currentSlug===slug&&eventContext&&eventContext.slug===slug)eventContext.name=name;
+    render();
+    const status=document.getElementById('event-poster-status');
+    if(status)status.textContent=`✓ Titre mis à jour : ${name} (identifiant URL conservé : ${slug}).`;
+  }catch(error){alert('Modification du titre impossible : '+(error.message||error));}
 }
 async function deleteEvent(slug){
   if(!backendMulti||!slug)return;
@@ -2734,9 +2867,8 @@ function circuitsAdminSet(field,value){
 }
 function renderCircuitsAdmin(){
   const draft=circuitImportDraft();
-  return `<h2>Importer un circuit depuis Google Drive</h2>
-  <p class="note">Partagez le dossier du mod sur Drive en <b>« Tout le monde disposant du lien »</b>, puis collez son adresse ci-dessous.
-  L'import lit <code>fast_lane.ai</code> (tracé, altitude, virages), <code>surfaces.ini</code>, <code>overlays.ini</code> (secteurs) et <code>ui_track.json</code>.</p>
+  return `<h2>Secours manuel &amp; correction de fiche Circuit</h2>
+  <p class="note">L’import automatique depuis les mods locaux reste prioritaire à la création d’un événement ou d’une manche. Cet outil Drive est conservé comme <b>solution de secours</b> si le mod n’est pas présent sur le PC serveur, et pour <b>corriger ou remplacer une fiche</b> existante. Partagez le dossier en « Tout le monde disposant du lien », puis collez son adresse. Fichiers lus : <code>fast_lane.ai</code>, <code>surfaces.ini</code>, <code>overlays.ini</code> et <code>ui_track.json</code>.</p>
   <div class="grid" style="grid-template-columns:1fr;gap:14px;margin-top:14px">
     <div class="panel">
       <h3>1 · Dossier du circuit</h3>
@@ -2756,7 +2888,7 @@ function renderCircuitsAdmin(){
     </div>
     <div class="panel">
       <h3>2 · Enregistrement</h3>
-      <p class="note">L'analyse produit une fiche de manche complète. Enregistrez-la pour l'ajouter à <code>data/circuits.json</code>.</p>
+      <p class="note">L’analyse produit une fiche complète. « Ajouter à l’onglet Circuit » l’enregistre dans l’événement courant (sans redéploiement) ; le même numéro de manche ou le même nom remplace sa fiche actuelle. « Télécharger » sert à archiver le JSON ou à préparer une modification du calendrier statique.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn" onclick="circuitImportSave()">💾 Ajouter à l'onglet Circuit</button>
         <button class="btn secondary" onclick="circuitImportDownload()">⬇ Télécharger le JSON</button>
@@ -3173,6 +3305,38 @@ async function saveEventHomePatch(slug,mutator,okMessage){
   }
 }
 
+function renderEventSportingRuleRows(rows){
+  const rules=Array.isArray(rows)?rows.slice(0,12):[];
+  return `<input type="hidden" id="evinfo-rules-count" value="${rules.length}">`
+    +rules.map((row,index)=>`<div class="admin-rule-row"><label>Intitulé<input id="evinfo-rule-label-${index}" type="text" maxlength="100" value="${esc(row&&row.label||'')}" placeholder="Ex. Départ"></label><label>Règle / valeur<input id="evinfo-rule-value-${index}" type="text" maxlength="500" value="${esc(row&&row.value||'')}" placeholder="Texte ou lien Markdown"></label><button type="button" class="btn secondary small" aria-label="Retirer cette ligne" onclick="removeEventSportingRule(${index})">Retirer</button></div>`).join('');
+}
+function readEventSportingRulesEditor(){
+  const countEl=document.getElementById('evinfo-rules-count');
+  if(!countEl)return null;
+  const count=Number(countEl.value);
+  if(!Number.isInteger(count)||count<0)return null;
+  const value=id=>{const el=document.getElementById(id);return el&&typeof el.value==='string'?el.value.trim():'';};
+  return Array.from({length:Math.min(count,12)},(_,index)=>({
+    label:value(`evinfo-rule-label-${index}`).slice(0,100),
+    value:value(`evinfo-rule-value-${index}`).slice(0,500)
+  }));
+}
+function addEventSportingRule(){
+  const rows=readEventSportingRulesEditor();
+  if(!rows)return;
+  if(rows.length>=12){alert('Maximum 12 lignes de règlement sportif.');return;}
+  rows.push({label:'',value:''});
+  const box=document.getElementById('evinfo-sporting-rules');
+  if(box){box.innerHTML=renderEventSportingRuleRows(rows);const field=document.getElementById(`evinfo-rule-label-${rows.length-1}`);if(field&&field.focus)field.focus();}
+}
+function removeEventSportingRule(index){
+  const rows=readEventSportingRulesEditor();
+  if(!rows)return;
+  if(index<0||index>=rows.length)return;
+  rows.splice(index,1);
+  const box=document.getElementById('evinfo-sporting-rules');
+  if(box)box.innerHTML=renderEventSportingRuleRows(rows);
+}
 async function saveEventInfoForm(){
   if(!currentSlug&&backendMulti)return;
   const slug=currentSlug||LEGACY_DEFAULT_SLUG;
@@ -3186,6 +3350,12 @@ async function saveEventInfoForm(){
     skinsUrl:val('evinfo-skins'),
     discordUrl:val('evinfo-discord')
   };
+  const ruleDraft=readEventSportingRulesEditor();
+  const oldRules=eventContext?.data?.eventInfo?.sportingRules;
+  const defaultRules=defaultSportingRules(eventContext,{...getEventInfo(eventContext),car:info.car||getEventInfo(eventContext).car},pointsConfig());
+  info.sportingRules=ruleDraft===null
+    ?(Array.isArray(oldRules)?oldRules:defaultRules)
+    :ruleDraft.filter(row=>row.label||row.value);
   for(const k of ['rulesUrl','skinsUrl','discordUrl']){
     if(info[k]&&!isSafeHttpUrl(info[k])){
       alert('URL invalide pour '+k+' (doit commencer par https://, http:// ou /).');
@@ -3268,13 +3438,38 @@ function localModChoices(){
   if(saved.track&&!tracks.some(x=>x.id===saved.track.id))tracks.push({...saved.track,unavailable:true});
   return {cars,tracks,saved};
 }
+function localCarSnapshot(car){
+  const source=car&&typeof car==='object'?car:{};
+  const specs=source.specs&&typeof source.specs==='object'?source.specs:{};
+  const allowedSpecs=['bhp','torque','weight','topspeed','acceleration','pwratio','range'];
+  const safeSpecs={};
+  allowedSpecs.forEach(key=>{if(typeof specs[key]==='string'&&specs[key].trim())safeSpecs[key]=specs[key].trim().slice(0,100);});
+  return {
+    id:String(source.id||'').slice(0,128),name:String(source.name||source.id||'Voiture').trim().slice(0,300),
+    brand:String(source.brand||'').trim().slice(0,200),category:String(source.category||'').trim().slice(0,200),
+    year:String(source.year||'').trim().slice(0,32),author:String(source.author||'').trim().slice(0,200),
+    version:String(source.version||'').trim().slice(0,80),description:String(source.description||'').trim().slice(0,1200),
+    tags:Array.isArray(source.tags)?source.tags.slice(0,12).map(tag=>String(tag||'').trim().slice(0,80)).filter(Boolean):[],
+    specs:safeSpecs,metadataAvailable:source.metadataAvailable===true
+  };
+}
+function selectedLocalCarIds(){
+  const checkboxes=typeof document.querySelectorAll==='function'
+    ?Array.from(document.querySelectorAll('#local-mod-cars input[data-local-car-id]')||[]):[];
+  if(checkboxes.length)return new Set(checkboxes.filter(input=>input.checked).map(input=>input.value));
+  const legacy=document.getElementById('local-mod-cars');
+  return new Set(Array.from(legacy&&legacy.selectedOptions||[],option=>option.value));
+}
+function updateLocalModCount(){
+  const count=document.getElementById('local-mod-car-count');
+  if(count)count.textContent=String(selectedLocalCarIds().size);
+}
 function readLocalModSelection(){
-  const carsSelect=document.getElementById('local-mod-cars'),trackSelect=document.getElementById('local-mod-track');
-  if(!carsSelect||!carsSelect.selectedOptions||!trackSelect)return null;
-  const choices=localModChoices();
-  const ids=new Set(Array.from(carsSelect.selectedOptions,o=>o.value));
-  return {version:1,cars:choices.cars.filter(c=>ids.has(c.id)).map(c=>({id:c.id,name:c.name,brand:c.brand||''})),
-    track:(()=>{const t=choices.tracks.find(t=>t.id===trackSelect.value);return t?{id:t.id,trackId:t.trackId,layoutId:t.layoutId,name:t.name}:null;})()};
+  const carsBox=document.getElementById('local-mod-cars'),trackSelect=document.getElementById('local-mod-track');
+  if(!carsBox||!trackSelect)return null;
+  const choices=localModChoices(),ids=selectedLocalCarIds();
+  return {version:1,cars:choices.cars.filter(car=>ids.has(car.id)).map(localCarSnapshot),
+    track:(()=>{const t=choices.tracks.find(item=>item.id===trackSelect.value);return t?{id:t.id,trackId:t.trackId,layoutId:t.layoutId,name:t.name,country:t.country||'',length:t.length||'',metadataAvailable:t.metadataAvailable===true}:null;})()};
 }
 async function requestLocalCircuitImport(track,dateKey,roundNumber){
   const id=String(track?.id||'');
@@ -3316,13 +3511,41 @@ function upsertLocalCircuitRound(data,incoming){
 function filterLocalModOptions(input,selectId){
   const query=input.value.toLocaleLowerCase('fr');
   const select=document.getElementById(selectId);
-  if(select)for(const option of select.options)option.hidden=!!option.value&&!option.selected&&!option.textContent.toLocaleLowerCase('fr').includes(query);
+  if(!select)return;
+  const rows=typeof select.querySelectorAll==='function'?Array.from(select.querySelectorAll('.local-mod-car-option')||[]):[];
+  if(rows.length){
+    rows.forEach(row=>{
+      const check=row.querySelector('input[type="checkbox"]');
+      row.hidden=!!query&&!(check&&check.checked)&&!row.textContent.toLocaleLowerCase('fr').includes(query);
+    });
+    return;
+  }
+  if(select.options)for(const option of select.options)option.hidden=!!option.value&&!option.selected&&!option.textContent.toLocaleLowerCase('fr').includes(query);
 }
 async function saveLocalModSelection(){
   if(!adminAuth||!currentSlug)return;
   const selected=readLocalModSelection();if(!selected)return;
   try{
-    await saveEventHomePatch(currentSlug,data=>{data.modSelection=selected;if(selected.cars.length)data.eventInfo={...(data.eventInfo||{}),car:selected.cars.map(c=>c.name).join(' / ')};},'✓ Voitures et circuit enregistrés pour cet événement.');
+    await saveEventHomePatch(currentSlug,data=>{
+      const previousCars=Array.isArray(data.modSelection?.cars)?data.modSelection.cars:[];
+      const previousName=previousCars.map(car=>car.name).filter(Boolean).join(' / ');
+      const previousSheets=Array.isArray(data.carSheets)?data.carSheets:[];
+      data.modSelection=selected;
+      if(selected.cars.length){
+        data.eventInfo={...(data.eventInfo||{}),car:selected.cars.map(car=>car.name).join(' / ')};
+        data.carSheets=selected.cars.map(car=>{
+          const fresh=localCarSnapshot(car);
+          const old=previousSheets.find(sheet=>sheet&&sheet.id===fresh.id);
+          return !fresh.metadataAvailable&&old?old:fresh;
+        });
+      }else{
+        delete data.carSheets;
+        if(data.eventInfo&&data.eventInfo.car===previousName){
+          delete data.eventInfo.car;
+          if(!Object.values(data.eventInfo).some(Boolean))delete data.eventInfo;
+        }
+      }
+    },'✓ Sélection des voitures, fiche(s) locale(s) et circuit enregistrés pour cet événement.');
   }catch(error){alert('Enregistrement impossible : '+error.message);}
 }
 async function addLocalModRound(){
@@ -3357,15 +3580,16 @@ async function addLocalModRound(){
 }
 function renderLocalModsPanel(){
   const {cars,tracks,saved}=localModChoices();
-  const statuses={available:'Accessible',missing:'Absent (ignoré)',unreadable:'Lecture refusée / erreur', 'not-scanned':'Pas encore analysé'};
-  const sourceName=id=>{const p=localModsCatalog?.sources?.find(s=>s.id===id)?.path||'';return /^[a-z]:/i.test(p)?p.slice(0,2):id;};
+  const statuses={available:'Accessible',missing:'Absent (ignoré)',unreadable:'Lecture refusée / erreur','not-scanned':'Pas encore analysé'};
+  const sourceName=id=>{const p=localModsCatalog?.sources?.find(s=>s.id===id)?.path||'';return /^[a-z]:/i.test(p)?p.slice(0,2):(id||'catalogue local');};
   const suffix=item=>item.unavailable?' — disponibilité à vérifier':(' — '+sourceName(item.source)+(item.metadataAvailable?'':' · nom de dossier'));
-  return `<section class="panel" style="margin:16px 0;background:#f4ecd8"><div class="eyebrow">Mods installés · catalogue du PC serveur</div><h3>Voitures et circuits locaux (C: / D: / E:)</h3><p class="note">Lecture seule des dossiers configurés. Aucun téléchargement de mod, déplacement ou configuration automatique de CM / ACSM. Les disques absents sont ignorés. Les premières sources ont priorité sur les doublons.</p>
+  const selectedCount=(saved.cars||[]).length;
+  return `<section class="panel" style="margin:16px 0;background:#f4ecd8"><div class="eyebrow">Mods installés · catalogue du PC serveur</div><h3>Préparer le plateau et le circuit</h3><p class="note">Lecture seule des dossiers configurés. Aucun mod n’est téléchargé, déplacé ou configuré. Les disques absents sont ignorés ; les premières sources ont priorité sur les doublons.</p>
     <div class="controls"><button type="button" class="btn secondary" onclick="loadLocalMods(false)" ${localModsBusy?'disabled':''}>Charger le catalogue</button><button type="button" class="btn" onclick="loadLocalMods(true)" ${localModsBusy?'disabled':''}>${localModsBusy?'Analyse en cours…':'Actualiser les voitures et circuits'}</button></div><p class="note" role="status">${esc(localModsMessage)}</p>
     ${localModsCatalog?`<p class="note">${localModsCatalog.cars.length} voitures · ${localModsCatalog.tracks.length} circuits / variantes${localModsCatalog.scannedAt?' · analysés le '+esc(new Date(localModsCatalog.scannedAt).toLocaleString('fr-FR')):''}</p><ul class="note">${localModsCatalog.sources.map(s=>`<li>${esc(s.path)} : ${esc(statuses[s.status]||s.status)}</li>`).join('')}</ul>${localModsCatalog.warnings.length?`<details><summary>Avertissements de lecture (${localModsCatalog.warnings.length})</summary><ul class="note">${localModsCatalog.warnings.map(w=>'<li>'+esc(w)+'</li>').join('')}</ul></details>`:''}`:''}
-    <div class="grid"><label>Voitures (plusieurs : Ctrl + clic)<input type="search" placeholder="Rechercher une voiture…" oninput="filterLocalModOptions(this,'local-mod-cars')"><select id="local-mod-cars" aria-label="Voitures de l’événement" multiple size="6" style="width:100%">${cars.map(c=>`<option value="${esc(c.id)}" ${(saved.cars||[]).some(x=>x.id===c.id)?'selected':''}>${esc(c.name+' ['+c.id+']'+suffix(c))}</option>`).join('')}</select></label>
-    <label>Circuit / variante<input type="search" placeholder="Rechercher un circuit…" oninput="filterLocalModOptions(this,'local-mod-track')"><select id="local-mod-track" aria-label="Circuit et variante" style="width:100%"><option value="">— Sans circuit sélectionné —</option>${tracks.map(t=>`<option value="${esc(t.id)}" ${saved.track?.id===t.id?'selected':''}>${esc(t.name+' ['+t.id+']'+suffix(t))}</option>`).join('')}</select><br>Date de la manche (optionnelle à la création)<input type="date" id="local-mod-date"></label></div>
-    <p class="note">La sélection ci-dessus est utilisée par « Créer un événement ». À la création d’un événement ou d’une manche, la fiche Circuit complète est importée automatiquement depuis les mods locaux lorsque <code>fast_lane.ai</code> est disponible. Si des fichiers manquent, l’entrée au calendrier est tout de même conservée. Pour l’événement courant, choisis une date puis clique sur « Ajouter la manche sélectionnée ».</p>
+    <div class="grid local-mod-selection-grid"><div><label for="local-mod-car-search">Voitures à engager (<span id="local-mod-car-count">${selectedCount}</span> sélectionnée(s))</label><input id="local-mod-car-search" type="search" placeholder="Rechercher une voiture…" oninput="filterLocalModOptions(this,'local-mod-cars')"><div id="local-mod-cars" class="local-mod-car-list" role="group" aria-label="Voitures de l’événement">${cars.length?cars.map(car=>`<label class="local-mod-car-option"><input type="checkbox" data-local-car-id value="${esc(car.id)}" ${(saved.cars||[]).some(item=>item.id===car.id)?'checked':''} onchange="updateLocalModCount()"><span><b>${esc(car.name)}</b><small>${esc(car.brand||car.category||'Voiture')} · ${esc(car.id)}${suffix(car)}</small></span></label>`).join(''):'<span class="note">Aucune voiture chargée. Clique sur « Actualiser » pour analyser les mods installés.</span>'}</div><p class="note">Coche simplement une ou plusieurs voitures : cette sélection sera reprise lors de la création de l’événement.</p></div>
+      <label>Circuit / variante<input type="search" placeholder="Rechercher un circuit…" oninput="filterLocalModOptions(this,'local-mod-track')"><select id="local-mod-track" aria-label="Circuit et variante" style="width:100%"><option value="">— Sans circuit sélectionné —</option>${tracks.map(track=>`<option value="${esc(track.id)}" ${saved.track?.id===track.id?'selected':''}>${esc(track.name+' ['+track.id+']'+suffix(track))}</option>`).join('')}</select><br>Date de la manche (optionnelle à la création)<input type="date" id="local-mod-date"></label></div>
+    <p class="note">À la création d’un événement ou d’une manche, la fiche Circuit est importée automatiquement lorsque les fichiers techniques du mod sont disponibles. Si le tracé est incomplet, l’événement et sa fiche Circuit de base restent accessibles. Pour l’événement courant, choisis une date puis clique sur « Ajouter la manche sélectionnée ».</p>
     ${currentSlug?`<div class="controls"><button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button></div>`:''}</section>`;
 }
 
@@ -3396,6 +3620,7 @@ function renderEventsAdmin(){
       <td style="white-space:nowrap;text-align:right">
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           <button class="btn secondary small" onclick="switchEvent('${safe}')">Ouvrir</button>
+          <button class="btn secondary small" onclick="renameEvent('${safe}')">Modifier le titre</button>
           ${posterBtns}
           ${actions}
           <button class="btn secondary small" style="border-color:#9c3021;color:#9c3021" onclick="deleteEvent('${safe}')">Supprimer</button>
@@ -3405,6 +3630,8 @@ function renderEventsAdmin(){
   };
   const currentPoster=getEventPoster(eventContext);
   const rawInfo=(eventContext&&eventContext.data&&eventContext.data.eventInfo)||{};
+  const currentInfo=getEventInfo(eventContext);
+  const sportingRulesForEditor=Array.isArray(rawInfo.sportingRules)?rawInfo.sportingRules:defaultSportingRules(eventContext,currentInfo,pointsConfig());
   const gallery=getEventGallery(eventContext);
   const evHomeEditor=(currentSlug&&eventContext)?`<div class="panel" style="margin-top:18px;background:#f4ecd8">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
@@ -3419,7 +3646,9 @@ function renderEventsAdmin(){
       <label>Voiture / Catégorie<input id="evinfo-car" type="text" value="${esc(rawInfo.car||'')}" placeholder="Ex : Lola T290 · Prototypes historiques"></label>
       <label>Horaires / Rendez-vous<input id="evinfo-schedule" type="text" value="${esc(rawInfo.schedule||'')}" placeholder="Ex : Mercredi 21h00 · Essais 20h30"></label>
       <label style="grid-column:1 / -1">Présentation / Briefing de l'événement<textarea id="evinfo-briefing" rows="3" placeholder="Texte d'accueil affiché sur l'onglet Accueil de l'événement…">${esc(rawInfo.briefing||'')}</textarea></label>
+      <p class="note" style="grid-column:1 / -1;margin:0">Les textes des encadrés acceptent des liens : collez une URL <code>https://…</code> ou utilisez la forme <code>[texte du lien](https://…)</code>.</p>
       <label style="grid-column:1 / -1">Précision format sportif (optionnel)<input id="evinfo-format" type="text" value="${esc(rawInfo.formatText||'')}" placeholder="Laisser vide pour le résumé automatique du barème"></label>
+      <div style="grid-column:1 / -1"><div class="eyebrow">Lignes du règlement sportif</div><p class="note" style="margin:4px 0 8px">Modifie les intitulés et valeurs affichés dans l’encadré public. Une URL dans la valeur devient cliquable. Jusqu’à 12 lignes.</p><div id="evinfo-sporting-rules" class="admin-sporting-rules">${renderEventSportingRuleRows(sportingRulesForEditor)}</div><button type="button" class="btn secondary small" style="margin-top:8px" onclick="addEventSportingRule()">+ Ajouter une ligne de règlement</button></div>
       <label>Lien Règlement PDF (optionnel)<input id="evinfo-rules" type="text" value="${esc(rawInfo.rulesUrl||'')}" placeholder="https://..."></label>
       <label>Lien Pack Skins / Mod (optionnel)<input id="evinfo-skins" type="text" value="${esc(rawInfo.skinsUrl||'')}" placeholder="https://..."></label>
       <label style="grid-column:1 / -1">Lien Discord / Inscription (optionnel)<input id="evinfo-discord" type="text" value="${esc(rawInfo.discordUrl||'')}" placeholder="https://discord.gg/kDZXwRgRS"></label>
@@ -3936,13 +4165,17 @@ function render(){
   // En mode multi, 'accueil' = LA PAGE D'ACCUEIL GDSP (hero 65/35, Règlements, Stats, Discord)
   if(page==='accueil'&&backendMulti){app.innerHTML=hub();updateTableScrollHints();return}
   if(isEventPage(page)){
-    if(page==='circuit'&&!circuitsCache&&!circuitsError){
-      if(!circuitsPending){
-        circuitsPending=circuitsData().finally(()=>{circuitsPending=null});
+    if((page==='event'||page==='circuit'||page==='voiture')&&!circuitsCache&&!circuitsError){
+      const started=!circuitsPending;
+      if(started)circuitsPending=circuitsData().finally(()=>{
+        circuitsPending=null;
+        if(page==='event'||page==='circuit'||page==='voiture')render();
+      });
+      if(page==='circuit'){
+        app.innerHTML=`<div class="panel"><p class="note">Chargement de la fiche circuit…</p></div>`;
+        if(!started)circuitsPending.then(()=>{if(page==='circuit')render()});
+        return;
       }
-      app.innerHTML=`<div class="panel"><p class="note">Chargement de la fiche circuit…</p></div>`;
-      circuitsPending.then(()=>{if(page==='circuit')render()});
-      return;
     }
     app.innerHTML=renderEventShell();updateTableScrollHints();return;
   }
@@ -3950,16 +4183,18 @@ function render(){
   app.innerHTML=(renderers[page]||home)();
   updateTableScrollHints();
 }
-// URL dédiée de l'onglet circuit (permet un lien direct et le bouton Retour).
-function circuitUrl(){
+// URL dédiée aux fiches Circuit et Voiture (lien direct et navigation Retour).
+function eventSubTabUrl(tab){
   const slug=(eventContext&&eventContext.slug)||currentSlug;
-  return slug?'/evenements/'+encodeURIComponent(slug)+'/circuit':null;
+  return slug?'/evenements/'+encodeURIComponent(slug)+'/'+(tab==='voiture'?'voiture':'circuit'):null;
 }
-function syncCircuitHistory(){
-  const target=circuitUrl();
+function circuitUrl(){return eventSubTabUrl('circuit')}
+function syncEventSubTabHistory(tab){
+  const target=eventSubTabUrl(tab);
   if(!target||!window.history||!window.location)return;
   if(window.location.pathname!==target)window.history.pushState({},'',target);
 }
+function syncCircuitHistory(){syncEventSubTabHistory('circuit')}
 
 // ---------- BOOTSTRAP ----------
 (async()=>{
@@ -4006,9 +4241,9 @@ function syncCircuitHistory(){
       if(target&&!eventContext)await loadEvent(target.slug);
     }else{
       const path=window.location?window.location.pathname:'/';
-      const match=path.match(/^\/evenements\/([^/]+)(\/circuit)?\/?$/);
+      const match=path.match(/^\/evenements\/([^/]+)(?:\/(circuit|voiture))?\/?$/);
       if(match){
-        try{await loadEvent(decodeURIComponent(match[1]));page=match[2]?'circuit':'event'}
+        try{await loadEvent(decodeURIComponent(match[1]));page=match[2]||'event'}
         catch(error){return} // Preserve the server's error page rather than showing another event.
       }else{
         page='hub';
@@ -4045,9 +4280,9 @@ function syncCircuitHistory(){
 
 // Permanent landing pages: Back/Forward restores the event without adding history entries.
 if(window.addEventListener)window.addEventListener('popstate',async()=>{
-  const match=window.location.pathname.match(/^\/evenements\/([^/]+)(\/circuit)?\/?$/);
+  const match=window.location.pathname.match(/^\/evenements\/([^/]+)(?:\/(circuit|voiture))?\/?$/);
   if(match){
-    try{await loadEvent(decodeURIComponent(match[1]));page=match[2]?'circuit':'event';driverId='';render()}
+    try{await loadEvent(decodeURIComponent(match[1]));page=match[2]||'event';driverId='';render()}
     catch(error){window.location.reload()}
   }else if(window.location.pathname==='/'){page='hub';render()}
 });

@@ -216,14 +216,19 @@ test('Une manche importée suffit à rendre l\'onglet visible sur un autre évé
   assert.equal(site.hasCircuitData(), true);
 });
 
-test('Sans aucune manche, l\'onglet reste masqué une fois le chargement terminé', () => {
+test('Les événements non-Lola conservent l’onglet Circuit avant l’import d’une manche', () => {
   const site = loadSiteFns(['hasCircuitData', 'isLolaEvent'], {
+    backendMulti: true,
     eventContext: { slug: 'alpha-romeo-cup', data: {} },
     circuitsCache: { rounds: [] }, circuitsError: '', circuitsPending: null,
     importedCircuitRounds: () => [],
     render: () => {}, page: 'event'
   });
-  assert.equal(site.hasCircuitData(), false);
+  assert.equal(site.hasCircuitData(), true);
+});
+test('Le Circuit reste masqué tant qu’aucun événement n’est sélectionné', () => {
+  const site = loadSiteFns(['hasCircuitData'],{backendMulti:true,eventContext:null});
+  assert.equal(site.hasCircuitData(),false);
 });
 
 test('Le championnat Lola garde son onglet même sans manche importée', () => {
