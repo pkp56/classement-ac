@@ -814,7 +814,15 @@ test('Catalogue local : sélection et calendrier persistés sans effacer les ses
   const catalog={scannedAt:'2026-11-11T12:00:00Z',sources:[],cars:[{id:'lola',name:'Lola T290',brand:'Lola',category:'Prototype historique',year:'1972',author:'GDSP',version:'2.1',description:'Prototype historique',tags:['Vintage'],specs:{bhp:'300 bhp',weight:'650 kg'},metadataAvailable:true}],tracks:[{id:'spa/short',trackId:'spa',layoutId:'short',name:'Spa court'}],warnings:[]};
   const {sandbox,getElementById,calls}=makeBrowser([], (url,opts)=>{
     if(url.startsWith('/api/admin/local-mods'))return response(catalog);
-    if(url==='/api/admin/circuits/import-local')return response({ok:true,round:{id:'local:2027-03-10:spa/short',date:'2027-03-10',name:'Spa court fiche',driverFolder:'spa',status:'upcoming'},warnings:[]});
+    if(url==='/api/admin/circuits/import-local')return response({ok:true,round:{
+      id:'local:2027-03-10:spa/short',date:'2027-03-10',name:'Spa court fiche',shortName:'Spa court',round:1,label:'M1',
+      driverFolder:'spa',trackId:'spa',layoutId:'short',layout:'Short',country:'Belgique',countryCode:'BEL',status:'upcoming',source:'Mod local Assetto Corsa',
+      officialLength:'4.260 km',officialLengthM:4260,lengthM:4258,lengthStr:'4,258 km',width:'10 m',year:'2026',author:'GDSP',version:'1.0',
+      outline:{path:'M34 34 L500 80 Z',viewBox:'0 0 1000 560',start:{x:34,y:34},sectors:[],corners:[]},profile:{path:'M0 100 L1000 0',min:0,max:100,delta:100},profiles:{},
+      sectorSplits:[{label:'S1',from:0,to:4258}],surfaces:[{key:'ROAD',label:'Asphalte',grip:99,valid:true,pit:false,note:'Surface de course principale'}],
+      surfaceFile:'short/data/surfaces.ini',overlaysFile:'short/overlays.ini',description:'Circuit local',tags:['historic'],trackUrl:'https://example.com/spa',
+      importWarnings:['surfaces.ini absent du mod sélectionné'],importedFiles:['short/ai/fast_lane.ai','ui/short/ui_track.json']
+    },warnings:['surfaces.ini absent du mod sélectionné']});
     if(remote&&url==='/api/events/'+fixture.event.slug)return response(remote);
     if(remote&&url==='/api/events/'+fixture.event.slug+'/data'&&opts.method==='POST'){
       remote.data=JSON.parse(opts.body);return response({ok:true});
@@ -844,12 +852,22 @@ test('Catalogue local : sélection et calendrier persistés sans effacer les ses
   assert.equal(remote.data.circuitRounds[0].source,'Google Drive');
   assert.equal(remote.data.circuitRounds[1].name,'Spa court fiche');
   assert.equal(remote.data.circuitRounds[1].round,8,'la fiche locale ne remplace ni la fiche Drive ni les six fiches statiques Lola');
+  assert.equal(remote.data.circuitRounds[1].officialLengthM,4260);
+  assert.equal(remote.data.circuitRounds[1].surfaces[0].label,'Asphalte');
+  assert.equal(remote.data.circuitRounds[1].importedFiles[0],'short/ai/fast_lane.ai');
   await vm.runInContext('saveRemote()',sandbox);
   const saved=calls.filter(c=>c.url.endsWith('/data')&&c.method==='POST').at(-1).body;
   assert.equal(saved.modSelection.track.id,'spa/short');
   assert.equal(saved.customCalendar['2027-03-10'].trackName,'Spa court');
   assert.equal(saved.circuitRounds[0].name,'Fiche conservée depuis Drive');
   assert.equal(saved.circuitRounds[1].name,'Spa court fiche');
+  assert.equal(saved.circuitRounds[1].officialLength,'4.260 km');
+  assert.equal(saved.circuitRounds[1].officialLengthM,4260);
+  assert.equal(saved.circuitRounds[1].description,'Circuit local');
+  assert.deepEqual(Array.from(saved.circuitRounds[1].tags),['historic']);
+  assert.equal(saved.circuitRounds[1].trackUrl,'https://example.com/spa');
+  assert.deepEqual(Array.from(saved.circuitRounds[1].surfaces, row=>row.label),['Asphalte']);
+  assert.deepEqual(Array.from(saved.circuitRounds[1].importWarnings),['surfaces.ini absent du mod sélectionné']);
   await vm.runInContext("setEventSubTab('voiture')",sandbox);
   const carSheetHtml=getElementById('app').innerHTML;
   assert.match(carSheetHtml,/FICHE VOITURE/);
@@ -885,7 +903,13 @@ test('Manche locale sans fast_lane.ai : l’entrée calendrier est conservée sa
 
 test('Création depuis le catalogue : identifiants, calendrier et fiche locale inclus dans le POST initial',async()=>{
   const {sandbox,getElementById,calls}=makeBrowser([], (url,opts)=>{
-    if(url==='/api/admin/circuits/import-local')return response({ok:true,round:{id:'local:2027-04-01:track/layout',name:'Circuit variante · fiche',date:'2027-04-01',driverFolder:'track',status:'upcoming'},warnings:[]});
+    if(url==='/api/admin/circuits/import-local')return response({ok:true,round:{
+      id:'local:2027-04-01:track/layout',name:'Circuit variante · fiche',date:'2027-04-01',round:1,label:'M1',
+      driverFolder:'track',trackId:'track',layoutId:'layout',status:'upcoming',officialLength:'3200',officialLengthM:3200,
+      description:'Circuit historique',tags:['historic'],trackUrl:'https://example.com/track',
+      surfaces:[{key:'ROAD',label:'Asphalte',grip:99,valid:true,pit:false,note:'Surface de course principale'}],
+      importWarnings:['fast_lane.ai absent'],importedFiles:['ui/layout/ui_track.json']
+    },warnings:['fast_lane.ai absent']});
     if(url==='/api/events'&&opts.method==='POST')return response({error:'Arrêt du scénario de test après capture'},409);
     return null;
   });
@@ -904,6 +928,11 @@ test('Création depuis le catalogue : identifiants, calendrier et fiche locale i
   assert.equal(body.data.customCalendar['2027-04-01'].track,'track');
   assert.equal(body.data.circuitRounds[0].name,'Circuit variante · fiche');
   assert.equal(body.data.circuitRounds[0].round,1);
+  assert.equal(body.data.circuitRounds[0].officialLengthM,3200);
+  assert.equal(body.data.circuitRounds[0].description,'Circuit historique');
+  assert.deepEqual(Array.from(body.data.circuitRounds[0].tags),['historic']);
+  assert.equal(body.data.circuitRounds[0].surfaces[0].label,'Asphalte');
+  assert.deepEqual(Array.from(body.data.circuitRounds[0].importedFiles),['ui/layout/ui_track.json']);
 });
 
 test('Événement non-Lola : Circuit est créé dès la sélection même sans fast_lane.ai, et Voiture reste accessible sans plateau',async()=>{
@@ -921,7 +950,7 @@ test('Événement non-Lola : Circuit est créé dès la sélection même sans fa
   await vm.runInContext("setEventSubTab('circuit')",sandbox);
   const circuitHtml=getElementById('app').innerHTML;
   assert.match(circuitHtml,/Spa Grand Prix/);
-  assert.match(circuitHtml,/Fiche technique à compléter/);
+  assert.match(circuitHtml,/Fiche technique partielle/);
   assert.match(circuitHtml,/fast_lane\.ai/);
   await vm.runInContext("setEventSubTab('voiture')",sandbox);
   assert.match(getElementById('app').innerHTML,/Aucune voiture n’est encore associée/);
@@ -943,6 +972,30 @@ test('Circuit : la manche planifiée sans fiche locale conserve sa variante et l
   assert.equal(circuitRounds.length,2,'deux dates sur le même tracé doivent donner deux manches');
   assert.deepEqual(Array.from(circuitRounds,round=>round.date),['2027-04-01','2027-05-01']);
   assert.ok(circuitRounds.every(round=>round.layoutId==='gp'&&round.technicalUnavailable));
+});
+
+test('Circuit local partiel : affiche les métadonnées et les avertissements sans carte vide ni HTML',async()=>{
+  const {sandbox,getElementById}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext(`eventContext={slug:'local-track-open',name:'Open circuit local',kind:'open',pointsConfig:{},data:{}};currentSlug='local-track-open';page='circuit';circuitsCache={totalCount:1,completedCount:0,seasonBest:null,rounds:[{
+    id:'local:undated:test-track/gp',round:1,label:'M1',name:'Test Track GP',shortName:'Test Track',status:'upcoming',date:null,country:'France',countryCode:'FRA',city:'Hillion',layout:'Grand Prix',layoutKey:'gp',trackId:'test-track',layoutId:'gp',driverFolder:'test-track',
+    direction:'clockwise',pitboxes:'24',width:'10 m',year:'2026',author:'GDSP',version:'1.0',format:'À confirmer',source:'Mod local Assetto Corsa',driveName:'test-track',officialLength:'4.260 km',officialLengthM:4260,lengthM:null,lengthStr:'4,260 km (ui_track.json)',elevation:null,outline:null,profile:null,profiles:{},sectorSplits:[{label:'S1',from:0,to:2130},{label:'S2',from:2130,to:4260}],sectorFractions:[{label:'S1',from:0,to:0.5},{label:'S2',from:0.5,to:1}],sectorCount:2,cornerCount:0,surfaces:[{key:'ROAD',label:'Asphalte',grip:99,valid:true,pit:false,note:'Surface de course principale'}],surfaceFile:'gp/data/surfaces.ini',overlaysFile:'gp/overlays.ini',technicalUnavailable:true,description:'Description <img src=x onerror=alert(1)>',tags:['historique','mod local'],trackUrl:'https://example.com/track',importWarnings:['fast_lane.ai absent : tracé non dessiné'],importedFiles:['ui/gp/ui_track.json','gp/data/surfaces.ini']
+  }]};render()`,sandbox);
+  const html=getElementById('app').innerHTML;
+  assert.match(html,/Fiche technique partielle/);
+  assert.match(html,/Tracé indisponible/);
+  assert.match(html,/Description &lt;img/);
+  assert.doesNotMatch(html,/<img src=x/);
+  assert.match(html,/href="https:\/\/example\.com\/track"/);
+  assert.match(html,/fast_lane\.ai absent/);
+  assert.match(html,/ui\/gp\/ui_track\.json/);
+  assert.match(html,/Asphalte/);
+  assert.match(html,/4\.260 km/);
+  vm.runInContext("setCircMode('sectors')",sandbox);
+  const sectorHtml=getElementById('app').innerHTML;
+  assert.match(sectorHtml,/Bornes lues dans les fichiers locaux disponibles/);
+  assert.match(sectorHtml,/2 130 m/);
+  assert.match(sectorHtml,/m annoncés/);
 });
 
 test('Circuit : résultats QUALIFY/RACE importés font passer la manche à Disputée sans recalculer les classements',async()=>{

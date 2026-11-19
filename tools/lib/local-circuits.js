@@ -5,7 +5,7 @@
 // identifiants de dossiers, jamais des chemins de fichiers.
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { buildRound } = require('./circuit-round');
+const { buildRound, buildSectorSplits } = require('./circuit-round');
 const drive = require('./drive-circuits');
 const { configuredRoots, within } = require('./local-mods');
 
@@ -53,7 +53,33 @@ function validDate(value) {
 }
 
 function safeTrackText(value, max = 300) {
-  return typeof value === 'string' ? value.replace(/<[^>]*>/g, '').trim().slice(0, max) : '';
+  if (typeof value !== 'string' && typeof value !== 'number') return '';
+  return String(value)
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|div|li|h[1-6])\s*>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, max);
+}
+
+function safeTrackTags(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 20).map(tag => safeTrackText(tag, 80)).filter(Boolean);
+}
+
+function safeTrackUrl(value) {
+  const url = safeTrackText(value, 500);
+  return /^https?:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
 }
 
 function unique(items) {
@@ -93,22 +119,45 @@ async function findFile(candidates, rootReal, maxBytes) {
 function layoutDirectories(trackDir, layoutId) {
   const candidates = [];
   if (layoutId) {
-    candidates.push(path.join(trackDir, layoutId));
-    candidates.push(path.join(trackDir, 'layouts', layoutId));
+    // Les mods AC ne rangent pas tous leurs fichiers de variante au même
+    // endroit : certains ont `tracks/id/layout`, d'autres `data/layout` ou
+    // `layouts/layout/data`. On ne parcourt que ces chemins connus, sous la
+    // racine autorisée, sans suivre de liens sortants.
+    candidates.push(
+      path.join(trackDir, layoutId),
+      path.join(trackDir, 'layouts', layoutId),
+      path.join(trackDir, 'data', layoutId),
+      path.join(trackDir, 'data', 'layouts', layoutId),
+      path.join(trackDir, layoutId, 'data'),
+      path.join(trackDir, 'layouts', layoutId, 'data'),
+      path.join(trackDir, 'data', layoutId, 'data')
+    );
   }
-  candidates.push(trackDir);
+  candidates.push(trackDir, path.join(trackDir, 'data'));
   return unique(candidates);
 }
 
 function lineCandidates(trackDir, layoutId, dataDirs) {
   const candidates = [];
+  if (layoutId) {
+    // Une variante sélectionnée doit passer avant un éventuel fast_lane.ai
+    // générique à la racine du circuit.
+    candidates.push(
+      path.join(trackDir, layoutId, 'fast_lane.ai'),
+      path.join(trackDir, layoutId, 'ai', 'fast_lane.ai'),
+      path.join(trackDir, 'layouts', layoutId, 'fast_lane.ai'),
+      path.join(trackDir, 'layouts', layoutId, 'ai', 'fast_lane.ai'),
+      path.join(trackDir, 'data', layoutId, 'fast_lane.ai'),
+      path.join(trackDir, 'data', layoutId, 'ai', 'fast_lane.ai'),
+      path.join(trackDir, 'data', 'layouts', layoutId, 'fast_lane.ai'),
+      path.join(trackDir, 'data', 'layouts', layoutId, 'ai', 'fast_lane.ai'),
+      path.join(trackDir, 'ai', layoutId, 'fast_lane.ai'),
+      path.join(trackDir, 'ai', 'layouts', layoutId, 'fast_lane.ai')
+    );
+  }
   for (const dir of dataDirs) {
     candidates.push(path.join(dir, 'fast_lane.ai'));
     candidates.push(path.join(dir, 'ai', 'fast_lane.ai'));
-  }
-  if (layoutId) {
-    candidates.push(path.join(trackDir, 'ai', layoutId, 'fast_lane.ai'));
-    candidates.push(path.join(trackDir, 'layouts', layoutId, 'ai', 'fast_lane.ai'));
   }
   return unique(candidates);
 }
@@ -165,15 +214,36 @@ function fileLabel(fileInfo, trackDir) {
   return relative.split(path.sep).join('/');
 }
 
+function parseOfficialLength(value) {
+  const raw = safeTrackText(value, 80).replace(',', '.');
+  const match = raw.match(/^(\d+(?:\.\d+)?)\s*(km|kilomet(?:er|re)s?|m|met(?:er|re)s?)?$/i);
+  if (!match) return null;
+  const number = Number(match[1]);
+  if (!Number.isFinite(number) || number <= 0) return null;
+  return Math.round(/^km|^kilomet/i.test(match[2] || '') ? number * 1000 : number);
+}
+
+function formatOfficialLength(value, meters) {
+  if (meters) return `${(meters / 1000).toFixed(3).replace('.', ',')} km (ui_track.json)`;
+  return safeTrackText(value, 80) || null;
+}
+
 function buildMetadata(ui, { trackId, layoutId, name, date, round }) {
   const uiName = safeTrackText(ui && (ui.name || ui.Name));
   const selectedName = safeTrackText(name);
   const resolvedName = uiName || selectedName || trackId;
   const uiLayout = safeTrackText(ui && (ui.layout || ui.Layout || ui.layoutName || ui.LayoutName));
-  const tags = ui && (ui.geotags || ui.Geotags);
+  const geotags = ui && (ui.geotags || ui.Geotags);
   const gps = safeTrackText(ui && (ui.geographicLocation || ui.GeographicLocation))
-    || (Array.isArray(tags) ? tags.map(safeTrackText).filter(Boolean).join(' · ') : '');
+    || (Array.isArray(geotags) ? geotags.map(tag => safeTrackText(tag, 80)).filter(Boolean).join(' · ') : safeTrackText(geotags, 160));
+  const tags = safeTrackTags(ui && (ui.tags || ui.Tags));
   const number = Number.isInteger(Number(round)) && Number(round) > 0 ? Number(round) : null;
+  const officialLength = safeTrackText(ui && (ui.length || ui.Length), 80);
+  const officialLengthM = parseOfficialLength(officialLength);
+  const description = safeTrackText(ui && (ui.description || ui.Description), 1200);
+  const trackUrl = safeTrackUrl(ui && (ui.url || ui.URL));
+  const rawPitboxes = ui && (ui.pitboxes ?? ui.Pitboxes);
+  const pitboxes = safeTrackText(rawPitboxes, 16);
 
   return {
     id: `local:${date || 'undated'}:${trackId}${layoutId ? '/' + layoutId : ''}`,
@@ -187,16 +257,21 @@ function buildMetadata(ui, { trackId, layoutId, name, date, round }) {
     trackId,
     layoutId: layoutId || '',
     country: safeTrackText(ui && (ui.country || ui.Country)) || 'À confirmer',
-    countryCode: safeTrackText(ui && (ui.countryCode || ui.CountryCode)),
+    countryCode: safeTrackText(ui && (ui.countryCode || ui.CountryCode), 12),
     city: safeTrackText(ui && (ui.city || ui.City)) || null,
     gps: gps || null,
-    year: (ui && (ui.year ?? ui.Year)) ?? null,
+    year: safeTrackText(ui && (ui.year ?? ui.Year), 32) || null,
     author: safeTrackText(ui && (ui.author || ui.Author)) || null,
-    version: safeTrackText(ui && (ui.version || ui.Version)) || null,
+    version: safeTrackText(ui && (ui.version || ui.Version), 80) || null,
+    description: description || null,
+    tags,
+    officialLength: officialLength || null,
+    officialLengthM,
+    trackUrl: trackUrl || null,
     direction: /anticlock/i.test(String(ui && (ui.run || ui.Run) || '')) ? 'counterclockwise' : 'clockwise',
-    pitboxes: (ui && (ui.pitboxes ?? ui.Pitboxes)) ?? null,
+    pitboxes: pitboxes || null,
     width: safeTrackText(ui && (ui.width || ui.Width)) || null,
-    format: null,
+    format: safeTrackText(ui && (ui.format || ui.Format)) || 'À confirmer',
     status: 'upcoming',
     date: date || null,
     dateLabel: null,
@@ -204,17 +279,50 @@ function buildMetadata(ui, { trackId, layoutId, name, date, round }) {
     stats: null,
     localTrackId: trackId,
     localLayoutId: layoutId || '',
-    driveName: trackId,
+    driveName: safeTrackText(ui && (ui.trackId || ui.id)) || trackId,
     source: 'Mod local Assetto Corsa',
     hero: null,
     importedAt: new Date().toISOString()
   };
 }
 
+function metadataOnlyRound(metadata, { trackDir, surfaces, sectors, surfaceFile, overlaysFile, warnings, files }) {
+  const bounds = sectors.length
+    ? [0, ...sectors.map(item => item.from).filter(value => value > 0 && value < 1), 1]
+    : [];
+  const sectorSplits = metadata.officialLengthM && bounds.length > 1
+    ? buildSectorSplits(bounds, metadata.officialLengthM)
+    : [];
+  return {
+    ...metadata,
+    lengthM: null,
+    lengthStr: formatOfficialLength(metadata.officialLength, metadata.officialLengthM),
+    measuredLengthM: null,
+    elevation: null,
+    outline: null,
+    profile: null,
+    profiles: {},
+    sectorSplits,
+    sectorFractions: sectors.map((sector, index) => ({
+      label: sector.label || `S${index + 1}`,
+      from: sector.from,
+      to: sector.to
+    })),
+    sectorCount: sectorSplits.length || sectors.length,
+    cornerCount: 0,
+    surfaces,
+    surfaceFile: surfaceFile && !surfaceFile.tooLarge ? fileLabel(surfaceFile, trackDir) : null,
+    overlaysFile: overlaysFile && !overlaysFile.tooLarge ? fileLabel(overlaysFile, trackDir) : null,
+    technicalUnavailable: true,
+    importWarnings: warnings.slice(0, 20),
+    importedFiles: Object.values(files).map(file => file.name).filter(Boolean)
+  };
+}
+
 /**
  * Importe une fiche locale complète quand `fast_lane.ai` est présent.
- * Une absence de fichier renvoie `round: null` et des avertissements :
- * l'appelant peut tout de même enregistrer l'entrée au calendrier.
+ * Si la ligne rapide manque, les métadonnées UI et les surfaces disponibles
+ * restent enregistrées dans une fiche partielle au lieu d'être abandonnées.
  */
 async function importLocalCircuit({ roots = configuredRoots(), trackId, layoutId = '', name, date, round } = {}) {
   if (!safeSegment(trackId)) throw httpError('Identifiant de circuit invalide.');
@@ -226,6 +334,18 @@ async function importLocalCircuit({ roots = configuredRoots(), trackId, layoutId
 
   const warnings = [];
   let metadataFallback = null;
+  const fileScore = candidate => (candidate.ui ? 5 : 0)
+    + (candidate.uiFile && !candidate.uiFile.tooLarge ? 2 : 0)
+    + (candidate.surfacesFile && !candidate.surfacesFile.tooLarge ? 2 : 0)
+    + (candidate.overlaysFile && !candidate.overlaysFile.tooLarge ? 1 : 0);
+  const fileEntries = (trackDir, { lineFile, surfacesFile, overlaysFile, uiFile }) => {
+    const files = {};
+    for (const [key, file] of Object.entries({ line: lineFile, surfaces: surfacesFile, overlays: overlaysFile, ui: uiFile })) {
+      if (file && !file.tooLarge) files[key] = { name: fileLabel(file, trackDir) };
+    }
+    return files;
+  };
+
   for (const configuredRoot of roots) {
     let rootReal;
     try {
@@ -247,37 +367,34 @@ async function importLocalCircuit({ roots = configuredRoots(), trackId, layoutId
     const orderedDataDirs = unique(dataDirs);
 
     const uiCandidates = layoutId
-      ? [path.join(trackDir, 'ui', layoutId, 'ui_track.json'), path.join(trackDir, 'ui', 'ui_track.json')]
-      : [path.join(trackDir, 'ui', 'ui_track.json')];
+      ? [
+          path.join(trackDir, 'ui', layoutId, 'ui_track.json'),
+          path.join(trackDir, layoutId, 'ui', 'ui_track.json'),
+          path.join(trackDir, 'layouts', layoutId, 'ui', 'ui_track.json'),
+          path.join(trackDir, 'ui', 'ui_track.json'),
+          path.join(trackDir, 'ui_track.json')
+        ]
+      : [path.join(trackDir, 'ui', 'ui_track.json'), path.join(trackDir, 'ui_track.json')];
     const uiFile = await findFile(uiCandidates, rootReal, MAX_UI_BYTES);
     const uiWarnings = [];
+    if (!uiFile) uiWarnings.push('ui_track.json absent du mod sélectionné');
     const ui = await readJson(uiFile, uiWarnings);
-    if (!metadataFallback) {
-      metadataFallback = {
-        trackDir,
-        ui,
-        name: safeTrackText(name) || trackId,
-        warnings: uiWarnings
-      };
-    }
+    const surfacesFile = await findFile(textCandidates(orderedDataDirs, 'surfaces.ini'), rootReal, MAX_TEXT_BYTES);
+    const overlaysFile = await findFile(textCandidates(orderedDataDirs, 'overlays.ini'), rootReal, MAX_TEXT_BYTES);
+    const fallback = { trackDir, ui, uiFile, surfacesFile, overlaysFile, uiWarnings, dataDirs: orderedDataDirs };
+    if (!metadataFallback || fileScore(fallback) > fileScore(metadataFallback)) metadataFallback = fallback;
 
     const lineFile = await findFile(lineCandidates(trackDir, layoutId, orderedDataDirs), rootReal, MAX_LINE_BYTES);
     if (!lineFile) continue;
     if (lineFile.tooLarge) {
-      warnings.push('fast_lane.ai trop volumineux : fiche technique non importée');
+      warnings.push('fast_lane.ai trop volumineux : fiche géométrique non importée');
       continue;
     }
 
-    const files = { line: { name: fileLabel(lineFile, trackDir) } };
-    const surfacesFile = await findFile(textCandidates(orderedDataDirs, 'surfaces.ini'), rootReal, MAX_TEXT_BYTES);
-    const overlaysFile = await findFile(textCandidates(orderedDataDirs, 'overlays.ini'), rootReal, MAX_TEXT_BYTES);
+    const files = fileEntries(trackDir, { lineFile, surfacesFile, overlaysFile, uiFile });
     const selectedWarnings = [...uiWarnings];
     const surfaces = await readIni(surfacesFile, 'surfaces.ini', selectedWarnings, drive.readSurfaces);
     const sectors = await readIni(overlaysFile, 'overlays.ini', selectedWarnings, drive.readSectorSplits);
-    if (surfacesFile && !surfacesFile.tooLarge) files.surfaces = { name: fileLabel(surfacesFile, trackDir) };
-    if (overlaysFile && !overlaysFile.tooLarge) files.overlays = { name: fileLabel(overlaysFile, trackDir) };
-    if (uiFile && !uiFile.tooLarge) files.ui = { name: fileLabel(uiFile, trackDir) };
-
     if (!sectors.length) selectedWarnings.push('aucun secteur officiel détecté : la chronométrie utilisera les 3 tiers du tour');
     if (!surfaces.length) selectedWarnings.push('aucune surface lue : la fiche Briefing restera vide');
 
@@ -303,30 +420,46 @@ async function importLocalCircuit({ roots = configuredRoots(), trackId, layoutId
         cornerNorms: corners.map(corner => corner.norm)
       });
       full.surfaces = surfaces;
-      full.surfaceFile = surfacesFile ? fileLabel(surfacesFile, trackDir) : null;
-      full.overlaysFile = overlaysFile ? fileLabel(overlaysFile, trackDir) : null;
-      return {
-        round: full,
-        source: 'local',
-        files,
-        warnings: selectedWarnings
-      };
+      full.surfaceFile = surfacesFile && !surfacesFile.tooLarge ? fileLabel(surfacesFile, trackDir) : null;
+      full.overlaysFile = overlaysFile && !overlaysFile.tooLarge ? fileLabel(overlaysFile, trackDir) : null;
+      full.importWarnings = selectedWarnings.slice(0, 20);
+      full.importedFiles = Object.values(files).map(file => file.name).filter(Boolean);
+      return { round: full, source: 'local', files, warnings: selectedWarnings };
     } catch (error) {
-      selectedWarnings.push(`fast_lane.ai illisible : ${errorHint(error)}`);
-      return { round: null, source: 'local', files, warnings: selectedWarnings };
+      const message = `fast_lane.ai illisible : ${errorHint(error)}`;
+      warnings.push(message);
+      if (metadataFallback === fallback) metadataFallback.uiWarnings.push(message);
     }
   }
 
   if (metadataFallback) {
-    warnings.push(...metadataFallback.warnings);
-    warnings.push('fast_lane.ai absent du mod sélectionné : fiche technique non importée');
-    return { round: null, source: 'local', files: {}, warnings };
+    const { trackDir, ui, uiFile, surfacesFile, overlaysFile } = metadataFallback;
+    const fallbackWarnings = [...new Set([...metadataFallback.uiWarnings, ...warnings])];
+    const surfaces = await readIni(surfacesFile, 'surfaces.ini', fallbackWarnings, drive.readSurfaces);
+    const sectors = await readIni(overlaysFile, 'overlays.ini', fallbackWarnings, drive.readSectorSplits);
+    if (!sectors.length) fallbackWarnings.push('aucun secteur officiel détecté : la chronométrie utilisera les 3 tiers du tour');
+    if (!surfaces.length) fallbackWarnings.push('aucune surface lue : la fiche Briefing restera vide');
+    if (!warnings.some(message => /fast_lane\.ai/i.test(message))) {
+      fallbackWarnings.push('fast_lane.ai absent du mod sélectionné : la géométrie du tracé ne peut pas être affichée');
+    }
+    const files = fileEntries(trackDir, { surfacesFile, overlaysFile, uiFile });
+    const metadata = buildMetadata(ui || {}, { trackId, layoutId, name, date: plannedDate, round });
+    if (ui || surfaces.length || sectors.length) {
+      const partial = metadataOnlyRound(metadata, {
+        trackDir, surfaces, sectors, surfaceFile: surfacesFile, overlaysFile, warnings: fallbackWarnings, files
+      });
+      return { round: partial, source: 'local', files, warnings: fallbackWarnings };
+    }
+    return { round: null, source: 'local', files, warnings: fallbackWarnings };
   }
+
   return {
     round: null,
     source: 'local',
     files: {},
-    warnings: ['Circuit absent des racines de mods configurées : seule l’entrée au calendrier sera conservée.']
+    warnings: warnings.length
+      ? [...warnings, 'Circuit absent des racines de mods configurées : seule l’entrée au calendrier sera conservée.']
+      : ['Circuit absent des racines de mods configurées : seule l’entrée au calendrier sera conservée.']
   };
 }
 

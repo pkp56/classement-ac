@@ -59,6 +59,12 @@ test('surfaces.ini : le nom vient de KEY=, pas du nom de section', () => {
   assert.deepEqual(rows.map(r => r.grip), [99, 60, 95]);
   assert.deepEqual(rows.map(r => r.valid), [true, false, true]);
   assert.deepEqual(rows.map(r => r.pit), [false, false, true]);
+  assert.deepEqual(rows.map(r => r.label), ['Asphalte', 'Herbe', 'Stands']);
+  assert.deepEqual(rows.map(r => r.note), [
+    'Surface de course principale',
+    'Hors piste — adhérence très faible',
+    'Voie des stands — vitesse limitée'
+  ]);
 });
 
 test('surfaces.ini réel du mod Sebring fournit des grips plausibles', () => {

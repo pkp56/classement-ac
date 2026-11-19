@@ -1940,7 +1940,12 @@ function circuit(){
   const mode = circMode();
   const isDone = round.status === 'done';
   const technicalNotice=round.technicalUnavailable
-    ?`<div class="cir-empty" style="margin-bottom:14px"><b>Fiche technique à compléter.</b> Le circuit et sa variante sont enregistrés, mais les fichiers techniques du mod local sont absents ou incomplets. Le calendrier et l’onglet restent disponibles. ${adminAuth?`<button type="button" class="btn secondary small" style="margin-left:8px" onclick="adminTab='circuits';go('admin')">Ouvrir le secours Drive →</button>`:''}</div>`
+    ?`<div class="cir-empty" style="margin-bottom:14px"><b>Fiche technique partielle.</b> Les métadonnées disponibles sont conservées. Sans <code>fast_lane.ai</code>, le tracé et le profil altimétrique ne peuvent pas être dessinés. ${adminAuth?`<button type="button" class="btn secondary small" style="margin-left:8px" onclick="adminTab='circuits';go('admin')">Compléter avec le secours Drive →</button>`:''}</div>`
+    :'';
+  const importWarnings=Array.isArray(round.importWarnings)?round.importWarnings.slice(0,20):[];
+  const importedFiles=Array.isArray(round.importedFiles)?round.importedFiles.filter(Boolean):[];
+  const importDetails=(importWarnings.length||importedFiles.length)
+    ?`<details class="cir-panel" style="margin-bottom:14px"><summary>Sources de la fiche · ${importedFiles.length} fichier(s), ${importWarnings.length} avertissement(s)</summary>${importedFiles.length?`<ul class="cir-src">${importedFiles.map(file=>`<li><code>${esc(file)}</code></li>`).join('')}</ul>`:''}${importWarnings.length?`<ul class="cir-src">${importWarnings.map(warning=>`<li>${esc(warning)}</li>`).join('')}</ul>`:''}</details>`
     :'';
 
   // --- Bandeau des manches : une pastille cliquable par manche ---
@@ -2003,24 +2008,37 @@ function circuit(){
         + `<span><b>${esc(c.a)}</b> / ${esc(c.b)}<small>${esc(c.corner || '')}${c.lap ? ` · tour ${c.lap}` : ''} ${c.clock ? '· ' + esc(c.clock) : ''}</small></span>`
         + `<b class="cir-speed">${c.speed ? frNum(c.speed, 1) + ' km/h' : ''}</b></li>`).join('')}</ul></div>`;
   })() : mode === 'sectors' ? (() => {
-    const splits = round.outline ? (round.outline.sectors || []) : [];
-    // `splits` ne contient que les bornes internes ; le dernier tronçon va
-    // jusqu'à la ligne d'arrivée, d'où le +1 (3 secteurs pour 2 bornes).
-    const bounds = [0, ...splits.map(s => s.at), 1];
-    const marks = [0, ...splits.map(s => s.dist), round.lengthM || 0];
-    const rows = splits.concat([null]).map((s, i) => {
-      const from = marks[i] ?? 0;
-      const to = marks[i + 1] ?? (round.lengthM || 0);
-      const pct = (bounds[i + 1] ?? 1) * 100;
-      return `<tr><td><b>Secteur ${i + 1}</b><small>${nb(from, 0)} m → ${nb(to, 0)} m</small></td>`
-        + `<td class="cir-sector-time">${frNum(pct, 0)} %</td><td class="muted">${nb(to - from, 0)} m</td></tr>`;
+    const measuredSplits = Array.isArray(round.sectorSplits) ? round.sectorSplits : [];
+    const fractionalSplits = Array.isArray(round.sectorFractions) ? round.sectorFractions : [];
+    const useMeters = measuredSplits.length > 0;
+    const sourceSplits = useMeters ? measuredSplits : fractionalSplits;
+    const totalLength = Number(round.lengthM || round.officialLengthM) || null;
+    const rows = sourceSplits.map((split, i) => {
+      const from = Number(split.from) || 0;
+      const to = Number(split.to) || 0;
+      const fromM = useMeters ? from : (totalLength ? Math.round(from * totalLength) : null);
+      const toM = useMeters ? to : (totalLength ? Math.round(to * totalLength) : null);
+      const share = useMeters && totalLength ? (to - from) / totalLength * 100 : (to - from) * 100;
+      const distance = fromM == null || toM == null
+        ? `${frNum(from * 100, 0)} % → ${frNum(to * 100, 0)} % du tour`
+        : `${nb(fromM, 0)} m → ${nb(toM, 0)} m`;
+      const distanceValue = fromM == null || toM == null ? '—' : `${nb(toM - fromM, 0)} m`;
+      return `<tr><td><b>${esc(split.label || `Secteur ${i + 1}`)}</b><small>${distance}</small></td>`
+        + `<td class="cir-sector-time">${frNum(share, 0)} %</td><td class="muted">${distanceValue}</td></tr>`;
     }).join('');
+    const hasSectors = sourceSplits.length > 0;
+    const sectorSource = round.technicalUnavailable
+      ? (hasSectors ? 'Bornes lues dans les fichiers locaux disponibles ; aucun tracé n’est présent pour placer les repères.' : 'Découpage indisponible sans le fichier overlays.ini.')
+      : (round.overlaysFile ? `Bornes issues du fichier <code>${esc(round.overlaysFile)}</code> du mod.` : 'Découpage estimé en trois tiers du tour.');
+    const lengthLabel = round.lengthM
+      ? `${nb(round.lengthM, 0)} m mesurés`
+      : (round.officialLengthM ? `${nb(round.officialLengthM, 0)} m annoncés` : 'Mesure indisponible');
     return `<div class="cir-inspector"><div class="eyebrow">Chronométrie</div><h3>Découpage des secteurs</h3>`
-      + `<p class="cir-src">${splits.length ? `Bornes issues du fichier <code>${esc(round.overlaysFile || 'overlays.ini')}</code> du mod.` : 'Ce circuit ne fournit pas de découpage par secteur : la chronométrie utilise les 3 tiers du tour.'}</p>`
-      + (splits.length
+      + `<p class="cir-src">${sectorSource}</p>`
+      + (hasSectors
         ? `<table class="cir-sector-table"><tbody>${rows}</tbody></table>`
-        : `<div class="cir-empty">Pas de secteurs officiels dans le mod.</div>`)
-      + `<div class="cir-optimal"><span>Longueur mesurée (fast_lane.ai)</span><b>${nb(round.lengthM || 0, 0)} m</b></div></div>`;
+        : `<div class="cir-empty">Pas de secteurs disponibles pour ce circuit.</div>`)
+      + `<div class="cir-optimal"><span>Longueur du tracé</span><b>${lengthLabel}</b></div></div>`;
   })() : (() => {
     const corners = (round.outline && round.outline.corners) || [];
     const named = round.namedCorners;
@@ -2032,8 +2050,11 @@ function circuit(){
         + `</ul></div>`;
     }
     if (!corners.length) {
+      const missingLine = round.technicalUnavailable
+        ? 'Le fichier fast_lane.ai est absent ou illisible : aucun repère de virage ne peut être calculé.'
+        : 'Aucun virage détecté sur la ligne rapide de ce mod.';
       return `<div class="cir-inspector"><div class="eyebrow">Repères du tracé</div><h3>Points du circuit</h3>`
-        + `<div class="cir-empty">Aucun virage détecté sur la ligne rapide de ce mod.</div></div>`;
+        + `<div class="cir-empty">${missingLine}</div></div>`;
     }
     return `<div class="cir-inspector"><div class="eyebrow">Repères du tracé</div><h3>Points du circuit</h3>`
       + `<p class="cir-src">${corners.length} virages relevés sur la ligne rapide (<code>fast_lane.ai</code>), numérotés depuis la ligne de départ.</p>`
@@ -2054,12 +2075,16 @@ function circuit(){
   // tour en 3 secteurs). Le nombre de secteurs est donc pins + 1, et l'on se
   // fie à `sectorSplits` (source de vérité) quand il est disponible.
   const sectorPins = (round.outline && round.outline.sectors) || [];
+  const partialSectorPins = !sectorPins.length && round.technicalUnavailable && Array.isArray(round.sectorSplits)
+    ? round.sectorSplits.slice(0, -1).map(split => ({ label: split.label, dist: split.to }))
+    : [];
+  const displayedSectorPins = sectorPins.length ? sectorPins : partialSectorPins;
   const sectorCount = Array.isArray(round.sectorSplits) && round.sectorSplits.length
     ? round.sectorSplits.length
-    : (sectorPins.length ? sectorPins.length + 1 : 0);
+    : (displayedSectorPins.length ? displayedSectorPins.length + 1 : 0);
   const sectorLegend = `<div class="cir-map-legend">`
-    + (sectorPins.length
-        ? sectorPins.map((s, i) => `<span class="lg lg-${(i % 3) + 1}">${esc(s.label || 'Secteur')} · ${nb(s.dist, 0)} m</span>`).join('')
+    + (displayedSectorPins.length
+        ? displayedSectorPins.map((s, i) => `<span class="lg lg-${(i % 3) + 1}">${esc(s.label || 'Secteur')} · ${nb(s.dist, 0)} m</span>`).join('')
         : `<span class="lg lg-1">Départ / arrivée</span>`)
     + `</div></div>`;
 
@@ -2067,9 +2092,9 @@ function circuit(){
     + `<div class="cir-map-head"><div class="cir-map-tabs">${tabs}</div>`
     + sectorLegend
     + `<div class="cir-map-stage"><div class="cir-map-tag">${round.direction === 'clockwise' ? 'Sens horaire' : 'Sens anti-horaire'} · tracé extrait du fast_lane.ai</div>`
-    + `${circuitMap(round, activeProfile, mode)}`
-    + `<div class="cir-map-hint">${cornerCount} virages · ${nb(round.lengthM || 0, 0)} m mesurés</div></div>`
-    + `<div class="cir-elev"><div class="cir-elev-top"><span>Profil altimétrique sur un tour</span><b>${elev ? frNum(elev.delta, 1) + " m d'amplitude" : '—'}</b></div>${circuitElevSvg(activeProfile)}</div>`
+    + `${round.outline&&round.outline.path?circuitMap(round, activeProfile, mode):'<div class="cir-empty">Tracé indisponible : le fichier <code>fast_lane.ai</code> manque ou est illisible.</div>'}`
+    + `<div class="cir-map-hint">${cornerCount} virages · ${round.lengthM?nb(round.lengthM,0)+' m mesurés':'mesure indisponible'}</div></div>`
+    + `<div class="cir-elev"><div class="cir-elev-top"><span>Profil altimétrique sur un tour</span><b>${elev ? frNum(elev.delta, 1) + " m d'amplitude" : '—'}</b></div>${elev?circuitElevSvg(activeProfile):'<div class="cir-empty">Profil indisponible sans le tracé fast_lane.ai.</div>'}</div>`
     + `</div>`;
 
   // --- Briefing surfaces ---
@@ -2111,15 +2136,22 @@ function circuit(){
     + `<button type="button" class="btn secondary small" onclick="openCircuitRoundResult(${idx})">Voir les résultats →</button></div></div>`;
 
   // --- Détail technique de la manche ---
+  const officialLengthLabel=round.officialLengthM
+    ?`${nb(round.officialLengthM,0)} m${round.officialLength?` (${round.officialLength})`:''}`
+    :(round.officialLength||'Non indiquée');
   const techRows = [
     ['Manche', `${round.label} · ${round.name}`],
     ['Configuration du mod', round.layout + (round.layoutKey ? ` (${round.layoutKey})` : '')],
-    ['Longueur officielle', round.lengthStr || '—'],
-    ['Longueur mesurée', round.lengthM ? `${nb(round.lengthM, 0)} m` : '—'],
+    ['Longueur annoncée (ui_track.json)', officialLengthLabel],
+    ['Longueur mesurée (fast_lane.ai)', round.lengthM ? `${nb(round.lengthM, 0)} m` : 'Non mesurée'],
     ['Largeur', round.width || '—'],
     ['Sens de rotation', round.direction === 'clockwise' ? 'Horaire' : 'Anti-horaire'],
     ['Stands', round.pitboxes ? `${round.pitboxes} places` : '—'],
+    ['Pays / code', round.countryCode ? `${round.country} (${round.countryCode})` : (round.country || '—')],
+    ['Ville', round.city || '—'],
+    ['Coordonnées', round.gps || '—'],
     ['Année du tracé', round.year || 'Non précisée'],
+    ['Auteur du mod', round.author || 'Non communiqué'],
     ['Version du mod', round.version || 'Non précisée'],
     ['Dossier du mod', round.driveName || '—'],
     ['Source du tracé', round.source || '—']
@@ -2128,8 +2160,13 @@ function circuit(){
     + `<div class="table-wrap"><table class="cir-surfaces"><tbody>`
     + techRows.map(([k, v]) => `<tr><td class="muted" style="white-space:nowrap">${esc(k)}</td><td><b>${esc(v)}</b></td></tr>`).join('')
     + `</tbody></table></div></div>`;
+  const trackTags=Array.isArray(round.tags)?round.tags.filter(Boolean):[];
+  const trackUrl=isSafeHttpUrl(round.trackUrl)?round.trackUrl:'';
+  const metadataPanel=(round.description||trackTags.length||trackUrl)
+    ?`<div class="cir-panel"><div class="eyebrow">Métadonnées du mod</div><h3>À propos du circuit</h3>${round.description?`<p class="cir-src">${renderEventRichText(round.description)}</p>`:''}${trackTags.length?`<div class="car-sheet-tags">${trackTags.map(tag=>`<span class="tag">${esc(tag)}</span>`).join('')}</div>`:''}${trackUrl?`<a class="btn secondary small" href="${esc(trackUrl)}" target="_blank" rel="noopener noreferrer">Page du mod ↗</a>`:''}</div>`
+    :'';
 
-  return technicalNotice+`<div class="cir-roundbar">${calendar}</div>`
+  return technicalNotice+importDetails+`<div class="cir-roundbar">${calendar}</div>`
     + `<div class="cir-toolbar"><div class="cir-select"><span>Manche</span><b>${esc(round.label)} · ${esc(round.name)} (${esc(round.country)})</b></div>${variantButtons}</div>`
     + `<div class="cir-hero cir-hero-photo" style="${heroStyle}">`
       + `<div class="cir-hero-txt"><div>`
@@ -2148,7 +2185,8 @@ function circuit(){
       + `<div class="cir-map-legend big">${sectorCount ? `Chronométrie · ${sectorCount} secteurs (${esc(round.overlaysFile || 'overlays.ini')})` : 'Pas de découpage officiel par secteur'}</div></div>`
     + `<div class="cir-map-grid">${mapBlock}${inspector}</div>`
     + `<div class="cir-cols">${briefing}${sectorsTable}</div>`
-    + `<div class="cir-cols" style="grid-template-columns:1fr">${tech}</div>`;
+    + `<div class="cir-cols" style="grid-template-columns:1fr">${tech}</div>`
+    + (metadataPanel?`<div class="cir-cols" style="grid-template-columns:1fr">${metadataPanel}</div>`:'');
 }
 
 // ---------- Pages Manches / Pilotes ----------
@@ -2745,7 +2783,7 @@ async function createEventPrompt(){
   await switchEvent(slugIn);
   let message='Événement créé. Tu peux maintenant importer ses JSON.';
   if(chosenMods?.track){
-    if(localCircuitImport?.round)message=`Événement créé. La fiche Circuit locale a été importée automatiquement.${localCircuitImportDetails(localCircuitImport)} Tu peux maintenant importer les résultats JSON.`;
+    if(localCircuitImport?.round)message=`Événement créé. ${localCircuitImport.round.technicalUnavailable?'Une fiche Circuit partielle avec les métadonnées disponibles a été enregistrée.':'La fiche Circuit locale a été importée automatiquement.'}${localCircuitImportDetails(localCircuitImport)} Tu peux maintenant importer les résultats JSON.`;
     else{
       const warning=localCircuitImportIssue(localCircuitImport,localCircuitError);
       message=`Événement créé. La fiche Circuit n’a pas pu être importée (${warning}).${plannedDate?' L’entrée au calendrier est conservée.':''}`;
@@ -3489,7 +3527,10 @@ function localCircuitImportIssue(result,error){
 }
 function localCircuitImportDetails(result){
   const warnings=Array.isArray(result?.warnings)?result.warnings:[];
-  return warnings.length?` Avertissements : ${warnings.slice(0,2).join(' ; ')}${warnings.length>2?'…':''}`:'';
+  const completeness=result?.round?.technicalUnavailable
+    ?' Les métadonnées disponibles sont conservées, mais le tracé ou le profil technique manque.'
+    :'';
+  return completeness+(warnings.length?` Avertissements : ${warnings.slice(0,2).join(' ; ')}${warnings.length>2?'…':''}`:'');
 }
 function nextCircuitRoundNumber(data){
   let highest=isLolaEvent()?6:0;
@@ -3561,7 +3602,9 @@ async function addLocalModRound(){
   catch(error){localImportError=error.message||String(error);}
   const importIssue=localCircuitImportIssue(localImport,localImportError);
   const savedMessage=localImport?.round
-    ?`✓ Manche ajoutée au calendrier et fiche Circuit locale importée.${localCircuitImportDetails(localImport)}`
+    ?localImport.round.technicalUnavailable
+      ?`✓ Manche ajoutée au calendrier avec une fiche Circuit partielle.${localCircuitImportDetails(localImport)}`
+      :`✓ Manche ajoutée au calendrier et fiche Circuit locale importée.${localCircuitImportDetails(localImport)}`
     :`✓ Manche ajoutée au calendrier. Fiche Circuit indisponible : ${importIssue}`;
 
   const previousCalendar=customCalendar;
