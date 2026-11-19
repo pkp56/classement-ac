@@ -572,6 +572,7 @@ test('Unified Event tab includes Circuit and Voiture, and persists rich Accueil 
   getElementById('evinfo-format').value = '4 sprints + 2 endurances · https://example.com/format';
   getElementById('evinfo-rules').value = 'https://example.com/reglement.pdf';
   getElementById('evinfo-skins').value = 'https://example.com/skins.zip';
+  getElementById('evinfo-registration').value = 'https://example.org/inscription';
   getElementById('evinfo-discord').value = 'https://discord.gg/kDZXwRgRS';
   getElementById('evinfo-rules-count').value = '2';
   getElementById('evinfo-rule-label-0').value = 'Distance minimale';
@@ -599,6 +600,7 @@ test('Unified Event tab includes Circuit and Voiture, and persists rich Accueil 
 
   await vm.runInContext("go('event')", sandbox);
   const updatedEvHome = getElementById('app').innerHTML;
+  assert.match(updatedEvHome, /Pilotes engagés<\/span><a class="ev-register" href="https:\/\/example.org\/inscription" target="_blank"/);
   assert.match(updatedEvHome, /Briefing spécial championnat historique\./);
   assert.match(updatedEvHome, /href="https:\/\/example\.com\/briefing"[^>]*>Consignes<\/a>/);
   assert.match(updatedEvHome, /href="https:\/\/example\.com\/format"/);
@@ -1046,6 +1048,13 @@ test('Circuit : résultats QUALIFY/RACE importés font passer la manche à Dispu
   vm.runInContext("sessions.splice(0,sessions.length,{date:'2027-04-14T21:00:00Z',track:'spa',type:'PRACTICE',results:[{id:'p1',name:'Pilote test'}]});circuitsCache=null",sandbox);
   await vm.runInContext('circuitsData()',sandbox);
   assert.equal(vm.runInContext('circuitsCache.rounds[0].status',sandbox),'upcoming','PRACTICE ne suffit pas à déclarer une manche disputée');
+  const upcoming=vm.runInContext('circuit()',sandbox);
+  assert.match(upcoming,/Cal\.<\/i> 14 avril 2027/);
+  assert.match(upcoming,/À venir · 14 avril 2027/);
+  vm.runInContext("eventContext.data.circuitRounds[0].date=null;eventContext.data.customCalendar={'2027-04-14':{track:'spa',layout:'gp'}};circuitsCache=null",sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  assert.match(vm.runInContext('circuit()',sandbox),/Cal\.<\/i> 14 avril 2027/);
+  assert.equal(vm.runInContext("circuitDateLabel({status:'upcoming'})",sandbox),'Date à confirmer');
 });
 
 test('Global incomplet : garde les données en mémoire, propose un nouvel essai sans faux classement',async()=>{

@@ -1385,6 +1385,7 @@ function getEventInfo(evCtx){
     formatText:String(raw.formatText||'').trim()||defaultFormat,
     rulesUrl:isSafeHttpUrl(raw.rulesUrl)?raw.rulesUrl.trim():'',
     skinsUrl:isSafeHttpUrl(raw.skinsUrl)?raw.skinsUrl.trim():'',
+    registrationUrl:isSafeHttpUrl(raw.registrationUrl)?raw.registrationUrl.trim():'',
     discordUrl:isSafeHttpUrl(raw.discordUrl)?raw.discordUrl.trim():'https://discord.gg/kDZXwRgRS'
   };
 }
@@ -1463,7 +1464,7 @@ function eventHome(){
 
   const kpisHtml=`<div class="ev-kpis">`
     +`<div class="ev-kpi"><span class="label">Progression saison</span><strong>${totalExpected?`${String(rs.length).padStart(2,'0')} / ${String(totalExpected).padStart(2,'0')}`:String(rs.length).padStart(2,'0')}</strong><small>${rs.length?`${rs.length} manche(s) disputée(s)`:'Coup d’envoi à venir'}</small></div>`
-    +`<div class="ev-kpi gold"><span class="label">Pilotes engagés</span><strong>${ds.length||'Inscriptions'}</strong><small>${ds.length?'Classés ou ayant pris un départ':'Ouvertes sur le Discord GDSP'}</small></div>`
+    +`<div class="ev-kpi gold"><span class="label">Pilotes engagés</span><a class="ev-register" href="${esc(infoObj.registrationUrl||infoObj.discordUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Ouvrir les inscriptions (nouvel onglet)" title="Ouvrir les inscriptions"><span aria-hidden="true">↗</span></a><strong>${ds.length||'Inscriptions'}</strong><small>${ds.length?'Classés ou ayant pris un départ':infoObj.registrationUrl?'Accéder aux inscriptions':'Ouvertes sur le Discord GDSP'}</small></div>`
     +`<div class="ev-kpi green"><span class="label">Voiture / Plateau</span><strong style="font-size:21px;line-height:1.2">${esc(carMain)}</strong><small>${esc(carSub)}</small></div>`
     +`<div class="ev-kpi red"><span class="label">Coefficient Global</span><strong>×${Number(cfg.globalCoef??1).toFixed(1)}</strong><small>${cfg.polePoints?`+${cfg.polePoints} pt pole · `:''}${Math.round((cfg.minPercentDistance||0.75)*100)} % distance min.</small></div>`
     +`</div>`;
@@ -1610,7 +1611,7 @@ function renderEventShell(){
   const subBody=activeSub==='classement'?ranking():activeSub==='manches'?manche():activeSub==='pilotes'?drivers():activeSub==='circuit'?circuit():activeSub==='voiture'?carSheet():eventHome();
 
   return `<div class="ev-shell">`
-    +`<div class="ev-banner"><div><div class="ev-banner-kicker">${badgeHtml}<span style="font-size:11px;letter-spacing:1.8px;color:#d7a347;font-weight:700;text-transform:uppercase">Espace événement GDSP</span></div><h1>${esc(ev.name)}</h1><div class="ev-banner-meta">${rs.length?`${rs.length} manche(s) importée(s) · ${ds.length} pilote(s) engagé(s)`:'Saison en préparation · Inscriptions sur Discord'} · Coefficient Global ×${Number(cfg.globalCoef??1).toFixed(1)}</div></div>`
+    +`<div class="ev-banner"><div><div class="ev-banner-kicker">${badgeHtml}<span style="font-size:11px;letter-spacing:1.8px;color:#d7a347;font-weight:700;text-transform:uppercase">Espace événement GDSP</span></div><h1>${esc(ev.name)}</h1><div class="ev-banner-meta">${rs.length?`${rs.length} manche(s) importée(s) · ${ds.length} pilote(s) engagé(s)`:'Saison en préparation · Inscriptions sur l’accueil de l’événement'} · Coefficient Global ×${Number(cfg.globalCoef??1).toFixed(1)}</div></div>`
     +`</div>`
     +`<div class="ev-subtabs">`
     +`<button type="button" class="ev-subtab ${activeSub==='event'?'active':''}" onclick="setEventSubTab('event')">Accueil <span class="ev-subtab-badge">Affiche &amp; Infos</span></button>`
@@ -1770,6 +1771,21 @@ async function circuitsData(){
   }
   const extra = importedCircuitRounds();
   const merged = mergeCircuitRounds((base && base.rounds) || [], extra);
+  // Une ancienne fiche importée sans date peut déjà avoir sa manche au calendrier.
+  // Ne l’associer que si le couple circuit/variante identifie une seule manche.
+  const planned=Object.entries(eventContext?.data?.customCalendar||customCalendar||{});
+  for(const r of merged){
+    if(r.date||r.dateLabel||r.status==='done')continue;
+    const matches=(row,entry)=>{
+      const [id,layout]=String(entry?.trackId||entry?.track||'').split('/');
+      const variant=entry?.layoutId||entry?.layout||layout||'';
+      const rowVariant=row.layoutId||row.layoutKey||'';
+      return (!variant||!rowVariant||variant===rowVariant)&&circuitTrackAliases(row).some(alias=>
+        [id,entry?.trackName].some(value=>value&&normalizeCircuitTrackName(value)===alias));
+    };
+    const days=planned.filter(([,entry])=>matches(r,entry));
+    if(days.length===1&&merged.filter(row=>matches(row,days[0][1])).length===1)r.date=days[0][0];
+  }
   const placeholders=eventCircuitPlaceholders(merged);
   const allRounds=merged.concat(placeholders).sort((a,b)=>(Number(a.round)||999)-(Number(b.round)||999));
   if (isLolaEvent()&&!base&&!allRounds.length&&err) { circuitsError=err; return null; }
@@ -1942,11 +1958,11 @@ function circuitStatusLabel(round){
   return round.status === 'done' ? 'Disputée' : 'À venir';
 }
 function circuitDateLabel(round){
-  if (round.status !== 'done') return 'Date à confirmer';
   if (round.dateLabel) return round.dateLabel;
-  if (round.date) {
-    const d = new Date(round.date);
-    return date(d);
+  const day=String(round.date||'').slice(0,10);
+  if(/^\d{4}-\d{2}-\d{2}$/.test(day)){
+    const d=new Date(day+'T00:00:00Z');
+    if(Number.isFinite(d.getTime())&&d.toISOString().startsWith(day))return d.toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
   }
   return 'Date à confirmer';
 }
@@ -1988,7 +2004,7 @@ function circuit(){
       i === idx ? 'selected' : ''].filter(Boolean).join(' ');
     return `<button type="button" class="${cls}" onclick="setCircuitRound(${r.round})" title="${esc(r.name)}">`
       + `<b>${esc(r.label)}</b><span>${esc(r.shortName || r.name)}</span>`
-      + `<span class="cir-round-state">${r.status === 'done' ? 'Disputée' : 'À venir'}</span></button>`;
+      + `<span class="cir-round-state">${esc(circuitStatusLabel(r))} · ${esc(circuitDateLabel(r))}</span></button>`;
   }).join('');
 
   // --- Variantes (Österreichring uniquement) ---
@@ -2168,7 +2184,7 @@ function circuit(){
   const entries = round.stats
     ? `${round.stats.races || 0} course${(round.stats.races || 0) > 1 ? 's' : ''}`
     : (round.resultsImported ? 'Sessions importées' : (round.status === 'done' ? (round.format || '—') : 'Aucune session importée'));
-  const sectorsTable = `<div class="cir-panel"><div class="eyebrow">Chronométrie &amp; repères de la manche</div><h3>${esc(round.label)} · ${esc(isDone ? circuitDateLabel(round) : 'À venir')}</h3>`
+  const sectorsTable = `<div class="cir-panel"><div class="eyebrow">Chronométrie &amp; repères de la manche</div><h3>${esc(round.label)} · ${esc(circuitDateLabel(round))}</h3>`
     + `<p class="cir-src" style="margin:0 0 10px">${esc(round.format)}${isDone ? ' · ' + esc(entries) : ''}${round.stats && round.stats.drivers ? ` · ${round.stats.drivers} pilotes classés` : ''}${round.winner ? ` · vainqueur ${esc(round.winner)}` : ''}.</p>`
     + lapRows
     + `<div class="cir-optimal"><span>${isLolaEvent() ? 'Tour le plus rapide de la saison' : 'Tour le plus rapide'}</span><b>${seasonBest ? esc(seasonBest.time) : '—'}</b></div>`
@@ -3429,6 +3445,7 @@ async function saveEventInfoForm(){
     formatText:val('evinfo-format'),
     rulesUrl:val('evinfo-rules'),
     skinsUrl:val('evinfo-skins'),
+    registrationUrl:val('evinfo-registration'),
     discordUrl:val('evinfo-discord')
   };
   const ruleDraft=readEventSportingRulesEditor();
@@ -3437,7 +3454,7 @@ async function saveEventInfoForm(){
   info.sportingRules=ruleDraft===null
     ?(Array.isArray(oldRules)?oldRules:defaultRules)
     :ruleDraft.filter(row=>row.label||row.value);
-  for(const k of ['rulesUrl','skinsUrl','discordUrl']){
+  for(const k of ['rulesUrl','skinsUrl','discordUrl','registrationUrl']){
     if(info[k]&&!isSafeHttpUrl(info[k])){
       alert('URL invalide pour '+k+' (doit commencer par https://, http:// ou /).');
       return;
@@ -3871,7 +3888,8 @@ function renderEventsAdmin(){
       <div style="grid-column:1 / -1"><div class="eyebrow">Lignes du règlement sportif</div><p class="note" style="margin:4px 0 8px">Modifie les intitulés et valeurs affichés dans l’encadré public. Une URL dans la valeur devient cliquable. Jusqu’à 12 lignes.</p><div id="evinfo-sporting-rules" class="admin-sporting-rules">${renderEventSportingRuleRows(sportingRulesForEditor)}</div><button type="button" class="btn secondary small" style="margin-top:8px" onclick="addEventSportingRule()">+ Ajouter une ligne de règlement</button></div>
       <label>Lien Règlement PDF (optionnel)<input id="evinfo-rules" type="text" value="${esc(rawInfo.rulesUrl||'')}" placeholder="https://..."></label>
       <label>Lien Pack Skins / Mod (optionnel)<input id="evinfo-skins" type="text" value="${esc(rawInfo.skinsUrl||'')}" placeholder="https://..."></label>
-      <label style="grid-column:1 / -1">Lien Discord / Inscription (optionnel)<input id="evinfo-discord" type="text" value="${esc(rawInfo.discordUrl||'')}" placeholder="https://discord.gg/kDZXwRgRS"></label>
+      <label>Lien d’inscription (encadré Pilotes engagés)<input id="evinfo-registration" type="text" value="${esc(rawInfo.registrationUrl||'')}" placeholder="https://…"><small>Si vide, l’icône ouvre le lien Discord.</small></label>
+      <label>Lien Discord (optionnel)<input id="evinfo-discord" type="text" value="${esc(rawInfo.discordUrl||'')}" placeholder="https://discord.gg/kDZXwRgRS"></label>
     </div>
     <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button type="button" class="btn small" onclick="saveEventInfoForm()">💾 Enregistrer la présentation</button>
