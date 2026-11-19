@@ -1225,3 +1225,31 @@ test('Direction de course : enregistrer une équipe conserve le nom et les résu
   assert.deepEqual(post.body.manualDrivers[driver.id],{name:driver.name,team:'Écurie Armor'});
   assert.equal(run('allDrivers()[0].team'),'Écurie Armor');assert.ok(post.body.sessions.length);
 });
+
+test('Gestion du paddock : onglet Circuit retiré, 2 onglets dans Événements et thème du site appliqué',async()=>{
+  const {sandbox}=makeBrowser();await new Promise(r=>setImmediate(r));
+  const run=src=>vm.runInContext(src,sandbox);
+  run("adminAuth=true;adminToken='ok';adminTab='general';page='admin'");
+  const generalHtml=run('admin()');
+  assert.match(generalHtml,/class="adm-shell"[\s\S]*class="adm-banner"[\s\S]*class="adm-nav"/);
+  assert.match(generalHtml,/Événements[\s\S]+Serveurs AssettoHosting[\s\S]+Exclusions globales/);
+  assert.doesNotMatch(generalHtml,/adminOpenTool\('circuits'\)/);
+  run("adminTab='events'");
+  const catalogHtml=run('admin()');
+  assert.match(catalogHtml,/id="adm-ev-tab-catalog"[^>]*aria-selected="true"/);
+  assert.match(catalogHtml,/id="adm-ev-panel-catalog"[^>]*>/);
+  assert.doesNotMatch(catalogHtml,/id="adm-ev-panel-catalog"[^>]*hidden/);
+  assert.match(catalogHtml,/id="adm-ev-panel-editor"[^>]*hidden/);
+  assert.match(catalogHtml,/Catalogue des événements[\s\S]+Création &amp; modification d’événement/);
+  run("openEventsSubTab('editor')");
+  const editorHtml=run('admin()');
+  assert.match(editorHtml,/id="adm-ev-tab-editor"[^>]*aria-selected="true"/);
+  assert.match(editorHtml,/id="adm-ev-panel-catalog"[^>]*hidden/);
+  assert.doesNotMatch(editorHtml,/id="adm-ev-panel-editor"[^>]*hidden/);
+  assert.match(editorHtml,/Préparer le plateau et le circuit[\s\S]+Onglet Accueil public/);
+  const paddockCss=fs.readFileSync(path.join(root,'assets/admin-paddock.css'),'utf8');
+  assert.match(paddockCss,/var\(--ink\)/);
+  assert.match(paddockCss,/Impact/);
+  assert.match(paddockCss,/\.adm-tabpanel\[hidden\]\s*\{\s*display:none/);
+  assert.doesNotMatch(paddockCss,/#213b36|Georgia/);
+});
