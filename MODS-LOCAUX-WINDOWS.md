@@ -36,10 +36,12 @@ Cette ligne est facultative pour les trois chemins ci-dessus. Ne pas remplacer l
 2. Affichage des sources accessibles / absentes, compte des voitures et des circuits / variantes, avertissements éventuels.
 3. Rechercher et sélectionner une ou plusieurs voitures (Ctrl + clic dans la liste) et un circuit / variante.
 4. Utiliser **Créer un événement** : la sélection est enregistrée avec l'événement ; si une date et un circuit ont été choisis, une première manche prévue est ajoutée.
-5. Pour un événement existant, utiliser **Enregistrer la sélection**. La présentation « Voiture / Plateau » est actualisée avec les noms des voitures choisies.
+5. Pour un événement existant, utiliser **Enregistrer la sélection**. La présentation « Voiture / Plateau » est actualisée avec les voitures choisies.
 6. Pour un championnat à plusieurs manches, choisir le circuit et la date de chaque manche, puis **Ajouter la manche sélectionnée**. Cette opération ne modifie pas les résultats déjà importés.
 
-Les sélections sauvegardent les identifiants et les noms. Elles restent présentes si un disque est débranché ou un mod supprimé ; le menu les signale alors « disponibilité à vérifier ». Un rescan n'efface jamais l'historique des événements. Le catalogue est gardé en mémoire : après redémarrage Node, il faut relancer une analyse. Les choix des événements, eux, restent dans la base.
+Pour l’onglet **Voiture**, le scanner lit aussi `cars/<identifiant>/ui/ui_car.json` : nom, marque, classe, année, pays, auteur, version, URL, description, tags et caractéristiques. Les courbes `powerCurve` et `torqueCurve` sont conservées et affichées en graphiques avec leurs valeurs détaillées. Après une nouvelle analyse, il faut enregistrer de nouveau la sélection d’un événement existant pour actualiser sa fiche sauvegardée.
+
+Les sélections sauvegardent les identifiants, les noms et les données de fiche retenues. Elles restent présentes si un disque est débranché ou un mod supprimé ; le menu les signale alors « disponibilité à vérifier ». Un rescan n'efface jamais l'historique des événements. Le catalogue est gardé en mémoire : après redémarrage Node, il faut relancer une analyse. Les choix des événements, eux, restent dans la base.
 
 Si un mod est présent sur plusieurs disques, priorité au premier emplacement : C:, puis D:, puis E:. Une variante de circuit reste distincte de ses autres tracés. Un dossier sans métadonnées exploitables est affiché avec son identifiant et la mention « nom de dossier » ; ce n'est pas une validation que le mod est jouable.
 

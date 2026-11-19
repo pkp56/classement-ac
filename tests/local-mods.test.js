@@ -51,6 +51,29 @@ test('ui_car.json expose une fiche locale limitée aux champs techniques utiles,
   assert.equal(car.metadataAvailable,true);
   assert(!JSON.stringify(car).includes(c));
 });
+test('ui_car.json conserve les champs Drive, le texte lisible et les courbes moteur locales',async t=>{
+  const {c,write}=await fixture(t);
+  await write(c,'cars/actk_lola_t290/ui/ui_car.json',{
+    name:'Lola T290',brand:'Lola',description:"Lola&#39;s prototype.<br><br>Lucas fuel injection.",class:'race',
+    tags:['#ACL Prototypes','rwd'],torqueCurve:[[0,0],[7000,230],[9000,209.09]],
+    powerCurve:[[0,0],[8000,247.245],[9000,260]],year:1972,country:'Great Britain',author:'ACTK',
+    url:'http://www.assetto-fr.tk',version:'v2.1',
+    specs:{bhp:'260 bhp',torque:'230Nm',weight:'610kg',topspeed:'280+km/h',acceleration:null,pwratio:'2.41kg/cv'}
+  });
+  await write(c,'cars/unsafe_url/ui/ui_car.json',{name:'Unsafe URL',url:'javascript:alert(1)',powerCurve:[[-1,2],[1000,-1],[20001,10],[2000,100]]});
+  const result=await scanCatalog([c]);
+  const car=result.cars.find(item=>item.id==='actk_lola_t290');
+  assert.equal(car.name,'Lola T290');assert.equal(car.category,'race');assert.equal(car.year,'1972');
+  assert.equal(car.country,'Great Britain');assert.equal(car.author,'ACTK');assert.equal(car.version,'v2.1');
+  assert.equal(car.url,'http://www.assetto-fr.tk');
+  assert.equal(car.description,"Lola's prototype.\n\nLucas fuel injection.");
+  assert.deepEqual(car.specs,{bhp:'260 bhp',torque:'230Nm',weight:'610kg',topspeed:'280+km/h',pwratio:'2.41kg/cv'});
+  assert.deepEqual(car.powerCurve,[{rpm:0,value:0},{rpm:8000,value:247.245},{rpm:9000,value:260}]);
+  assert.deepEqual(car.torqueCurve,[{rpm:0,value:0},{rpm:7000,value:230},{rpm:9000,value:209.09}]);
+  const unsafe=result.cars.find(item=>item.id==='unsafe_url');
+  assert.equal(unsafe.url,'');assert.deepEqual(unsafe.powerCurve,[{rpm:2000,value:100}]);
+  assert(!JSON.stringify(result.cars).includes(c));
+});
 test('nom de dossier conservé si métadonnées absentes, invalides ou trop grandes',async t=>{
   const {c,d,write}=await fixture(t);
   await fs.mkdir(path.join(c,'cars/no-ui'),{recursive:true});

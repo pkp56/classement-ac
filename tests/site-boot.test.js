@@ -811,7 +811,7 @@ test('Catalogue local : menus même sans événements, variantes et sélections 
 
 test('Catalogue local : sélection et calendrier persistés sans effacer les sessions ou la commission',async()=>{
   let remote=null;
-  const catalog={scannedAt:'2026-11-11T12:00:00Z',sources:[],cars:[{id:'lola',name:'Lola T290',brand:'Lola',category:'Prototype historique',year:'1972',author:'GDSP',version:'2.1',description:'Prototype historique',tags:['Vintage'],specs:{bhp:'300 bhp',weight:'650 kg'},metadataAvailable:true}],tracks:[{id:'spa/short',trackId:'spa',layoutId:'short',name:'Spa court'}],warnings:[]};
+  const catalog={scannedAt:'2026-11-11T12:00:00Z',sources:[],cars:[{id:'lola',name:'Lola T290',brand:'Lola',category:'race',year:'1972',country:'Great Britain',author:'ACTK',version:'v2.1',url:'http://www.assetto-fr.tk',description:"Lola's historic prototype.\n\nLucas fuel injection.",tags:['#ACL Prototypes','rwd'],specs:{bhp:'260 bhp',torque:'230Nm',weight:'610kg',topspeed:'280+km/h',pwratio:'2.41kg/cv'},powerCurve:[[0,0],[8000,247.245],[9000,260]],torqueCurve:[[0,0],[7000,230],[9000,209.09]],metadataAvailable:true}],tracks:[{id:'spa/short',trackId:'spa',layoutId:'short',name:'Spa court'}],warnings:[]};
   const {sandbox,getElementById,calls}=makeBrowser([], (url,opts)=>{
     if(url.startsWith('/api/admin/local-mods'))return response(catalog);
     if(url==='/api/admin/circuits/import-local')return response({ok:true,round:{
@@ -842,8 +842,13 @@ test('Catalogue local : sélection et calendrier persistés sans effacer les ses
   await vm.runInContext('saveLocalModSelection()',sandbox);
   assert.equal(remote.data.modSelection.track.layoutId,'short');
   assert.equal(remote.data.eventInfo.car,'Lola T290');
-  assert.equal(remote.data.carSheets[0].specs.bhp,'300 bhp');
+  assert.equal(remote.data.carSheets[0].specs.bhp,'260 bhp');
+  assert.equal(remote.data.carSheets[0].specs.torque,'230Nm');
   assert.equal(remote.data.carSheets[0].year,'1972');
+  assert.equal(remote.data.carSheets[0].country,'Great Britain');
+  assert.equal(remote.data.carSheets[0].url,'http://www.assetto-fr.tk');
+  assert.deepEqual(remote.data.carSheets[0].powerCurve,[{rpm:0,value:0},{rpm:8000,value:247.245},{rpm:9000,value:260}]);
+  assert.deepEqual(remote.data.carSheets[0].torqueCurve,[{rpm:0,value:0},{rpm:7000,value:230},{rpm:9000,value:209.09}]);
   assert.equal(JSON.stringify(remote.data.sessions),originalSessions);assert.equal(JSON.stringify(remote.data.penMap),originalPen);
   getElementById('local-mod-cars').selectedOptions=[{value:'lola'}];getElementById('local-mod-track').value='spa/short';getElementById('local-mod-date').value='2027-03-10';
   await vm.runInContext('addLocalModRound()',sandbox);
@@ -872,8 +877,17 @@ test('Catalogue local : sélection et calendrier persistés sans effacer les ses
   const carSheetHtml=getElementById('app').innerHTML;
   assert.match(carSheetHtml,/FICHE VOITURE/);
   assert.match(carSheetHtml,/Lola T290/);
-  assert.match(carSheetHtml,/300 bhp/);
+  assert.match(carSheetHtml,/260 bhp/);
+  assert.match(carSheetHtml,/610kg/);
+  assert.match(carSheetHtml,/Great Britain/);
   assert.match(carSheetHtml,/1972/);
+  assert.match(carSheetHtml,/Courbes moteur/);
+  assert.match(carSheetHtml,/Puissance moteur/);
+  assert.match(carSheetHtml,/Couple moteur/);
+  assert.match(carSheetHtml,/230 Nm/);
+  assert.match(carSheetHtml,/href="http:\/\/www\.assetto-fr\.tk"/);
+  assert.match(carSheetHtml,/Lucas fuel injection/);
+  assert.match(carSheetHtml,/Afficher les 3 valeurs/);
 });
 
 test('Manche locale sans fast_lane.ai : l’entrée calendrier est conservée sans fausse fiche Circuit',async()=>{
