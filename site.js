@@ -17,6 +17,7 @@ let ahConfig = null;              // {server, uuid} when event is bound to an AH
 let page='accueil', ranktab='pilotes', eventtab='resultats', round=0, sessionIndex=1, driverId='', globalDriverId='', compareA='', compareB='';
 let sessions=[], penMap={}, manualDrivers=null, customCalendar=null;
 let adminAuth=false, adminUser='', adminTab='import', selectedRaceAdj=null;
+let eventAdminPane='home';
 // Les anciens jetons persistants ne sont plus réutilisés : reconnexion requise.
 localStorage.removeItem('gdsp_admin_token');
 sessionStorage.removeItem('gdsp_admin_token');
@@ -228,6 +229,7 @@ function renderEventSwitcher(){
 
 async function switchEvent(slug){
   if(!slug){goHome();return} // choix "— Changer…" vide → retour accueil GDSP
+  eventAdminPane='home';
   await loadEvent(slug);
   if(window.history&&window.location)window.history.pushState({},'', '/evenements/'+encodeURIComponent(slug));
   page='event'; // ouvrir sur l'onglet Accueil de l'événement sélectionné
@@ -1528,15 +1530,21 @@ function eventHome(){
 }
 function eventCarSheets(evCtx){
   const ctx=evCtx||eventContext||{},data=ctx.data||{};
-  if(Array.isArray(data.carSheets)&&data.carSheets.length)return data.carSheets.slice(0,12).map(localCarSnapshot);
+  const savedTranslations=data.carTranslations&&typeof data.carTranslations==='object'&&!Array.isArray(data.carTranslations)?data.carTranslations:{};
+  const withTranslation=source=>{
+    const car=localCarSnapshot(source);
+    const translated=savedTranslations[car.id];
+    return {...car,descriptionFr:String(typeof translated==='string'?translated:'').trim().slice(0,4000)};
+  };
+  if(Array.isArray(data.carSheets)&&data.carSheets.length)return data.carSheets.slice(0,12).map(withTranslation);
   const selected=data.modSelection&&Array.isArray(data.modSelection.cars)?data.modSelection.cars:[];
-  if(selected.length)return selected.slice(0,12).map(localCarSnapshot);
+  if(selected.length)return selected.slice(0,12).map(withTranslation);
   const manual=String(data.eventInfo&&data.eventInfo.car||'').trim();
-  if(manual)return manual.split(/\s*\/\s*/).filter(Boolean).slice(0,12).map((name,index)=>({
+  if(manual)return manual.split(/\s*\/\s*/).filter(Boolean).slice(0,12).map((name,index)=>withTranslation({
     id:'event-car-'+(index+1),name,brand:'',category:'',year:'',author:'',version:'',description:'',tags:[],specs:{},metadataAvailable:false
   }));
   const isLola=!ctx.slug||ctx.slug===LEGACY_DEFAULT_SLUG||ctx.slug===ACTIVE_LOLA_SLUG;
-  return isLola?[{id:'lola-t290',name:'Lola T290',brand:'Lola',category:'Prototypes historiques',year:'',author:'',version:'',description:'',tags:[],specs:{},metadataAvailable:false}]:[];
+  return isLola?[withTranslation({id:'lola-t290',name:'Lola T290',brand:'Lola',category:'Prototypes historiques',year:'',author:'',version:'',description:'',tags:[],specs:{},metadataAvailable:false})]:[];
 }
 function carTabBadge(){
   const cars=eventCarSheets(eventContext);
@@ -1554,7 +1562,11 @@ function carSheet(){
     const specs=Object.entries(car.specs||{}).filter(([key,value])=>labels[key]&&value);
     const heroMeta=[['Constructeur',car.brand||'Non précisé'],['Catégorie',car.category||'Non précisée'],['Année',car.year||'Non précisée'],['Pays',car.country||'Non précisé'],['Auteur du mod',car.author||'Non communiqué'],['Version',car.version||'Non précisée']];
     const specKpi=(label,value,sub,cls='')=>`<div class="cir-kpi ${cls}"><span>${label}</span><strong>${esc(value||'—')}</strong><small>${esc(sub||'Fiche du mod local')}</small></div>`;
-    const description=car.description?`<div class="cir-panel"><div class="eyebrow">Présentation du mod</div><h3>Description</h3><p class="cir-src">${renderEventRichText(car.description)}</p></div>`:'';
+    const displayedDescription=String(car.descriptionFr||car.description||'').trim();
+    const descriptionTitle=car.descriptionFr?'Description en français':'Description du mod';
+    const description=displayedDescription?`<div class="cir-panel"><div class="eyebrow">Présentation du mod</div><h3>${descriptionTitle}</h3><p class="cir-src">${renderEventRichText(displayedDescription)}</p></div>`:'';
+    const imageUrl=car.imageUrl||'';
+    const imageMark=`<span class="car-sheet-title-mark">${imageUrl?`<img src="${esc(imageUrl)}" alt="Aperçu de ${esc(car.name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><b class="car-sheet-title-fallback" style="display:none">${esc(initials)}</b>`:`<b class="car-sheet-title-fallback">${esc(initials)}</b>`}</span>`;
     const tags=car.tags&&car.tags.length?`<div class="car-sheet-tags">${car.tags.map(tag=>`<span class="tag">${esc(tag)}</span>`).join('')}</div>`:'';
     const curveCard=(key,title,unit,color)=>{
       const points=(Array.isArray(car[key])?car[key]:[]).filter(point=>point&&Number.isFinite(point.rpm)&&Number.isFinite(point.value));
@@ -1581,7 +1593,7 @@ function carSheet(){
     const metadataNotice=car.metadataAvailable
       ?`<p class="cir-src">Données importées du fichier <code>ui_car.json</code> du mod local.</p>`
       :`<div class="cir-empty">Les métadonnées <code>ui_car.json</code> ne sont pas disponibles pour cette voiture. La fiche conserve le modèle et les informations renseignées dans l’événement ; les caractéristiques restent à compléter.</div>`;
-    return `<section class="car-sheet-card"><div class="cir-hero car-sheet-hero"><div class="cir-hero-txt"><div><div class="cir-kicker"><span class="cir-flag">${cars.length>1?'Voiture '+(index+1):'Plateau engagé'}</span><span class="cir-status">${esc(car.brand||'Mod Assetto Corsa')}</span></div><h2>${esc(car.name)}</h2><div class="cir-hero-sub">${esc([car.brand,car.category,car.year].filter(Boolean).join(' · ')||'Fiche du véhicule engagé')}</div><dl class="cir-hero-meta">${heroMeta.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></div><div class="cir-hero-actions"><span class="cir-date-chip"><i>MOD</i> Assetto Corsa local</span><span class="cir-winner"><small>Modèle</small>${esc(car.id||car.name)}</span></div></div><div class="car-sheet-mark"><b>${esc(initials)}</b><span>FICHE VOITURE</span></div></div>`
+    return `<section class="car-sheet-card"><div class="cir-hero car-sheet-hero"><div class="cir-hero-txt"><div><div class="cir-kicker"><span class="cir-flag">${cars.length>1?'Voiture '+(index+1):'Plateau engagé'}</span><span class="cir-status">${esc(car.brand||'Mod Assetto Corsa')}</span></div><h2 class="car-sheet-title">${imageMark}<span>${esc(car.name)}</span></h2><div class="cir-hero-sub">${esc([car.brand,car.category,car.year].filter(Boolean).join(' · ')||'Fiche du véhicule engagé')}</div><dl class="cir-hero-meta">${heroMeta.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></div><div class="cir-hero-actions"><span class="cir-date-chip"><i>MOD</i> Assetto Corsa local</span><span class="cir-winner"><small>Modèle</small>${esc(car.id||car.name)}</span></div></div><div class="car-sheet-mark"><b>${esc(initials)}</b><span>FICHE VOITURE</span></div></div>`
       +`<div class="cir-kpis">${specKpi('Constructeur',car.brand||car.name,'Marque du mod')}${specKpi('Puissance',car.specs?.bhp,'ui_car.json','gold')}${specKpi('Poids',car.specs?.weight,'ui_car.json','green')}${specKpi('Catégorie',car.category,'Classe du mod','red')}</div>`
       +`${metadataNotice}${tags}${description}${curveBlock}`
       +`<div class="cir-cols"><div class="cir-panel"><div class="eyebrow">Fiche technique</div><h3>Caractéristiques du mod</h3>${specs.length?`<div class="table-wrap"><table class="cir-surfaces"><tbody>${specs.map(([key,value])=>`<tr><td class="muted"><b>${esc(labels[key])}</b></td><td>${esc(value)}</td></tr>`).join('')}</tbody></table></div>`:`<div class="cir-empty">Aucune caractéristique technique n’est renseignée dans le mod.</div>`}</div><div class="cir-panel"><div class="eyebrow">Événement</div><h3>Voiture engagée</h3><div class="cir-optimal"><span>Événement</span><b>${esc(ev.name||'GDSP')}</b></div><p class="cir-src">L’identifiant affiché est le nom du dossier du mod, pas son chemin sur le PC serveur.</p>${modLink}</div></div></section>`;
@@ -1990,9 +2002,11 @@ function circuit(){
 
   // --- Hero ---
   const heroImage = (round.heroByVariant && round.heroByVariant[activeProfile.key]) || round.hero || null;
-  // Un circuit importé n'a pas de photo : fond uni plutôt qu'une image 404.
-  const heroStyle = heroImage
-    ? `background-image:linear-gradient(90deg,#0f252c 0%,#0f252cf2 38%,#0f252c66 58%,#0f252c22 78%),url('/${esc(heroImage)}')`
+  const rawHero=String(heroImage||'').trim();
+  const safeHero=isSafePosterSrc(rawHero)?rawHero:(/^[a-z0-9_./-]+$/i.test(rawHero)&&!rawHero.startsWith('//')?'/'+rawHero:'');
+  // Un circuit importé sans image d’aperçu conserve un fond dégradé, sans requête 404.
+  const heroStyle = safeHero
+    ? `background-image:linear-gradient(90deg,#0f252c 0%,#0f252cf2 38%,#0f252c66 58%,#0f252c22 78%),url('${esc(safeHero)}')`
     : 'background-image:linear-gradient(135deg,#0f252c 0%,#143a44 60%,#1c5a63 100%)';
   const heroMeta = [
     ['Plateau', isLolaEvent() ? 'Lola T290' : ((eventContext && eventContext.name) || '—')],
@@ -2758,7 +2772,13 @@ function renderTelemetryAdmin(){
     +`<code>[SCRIPT_2]</code><br><code>SCRIPT = ${esc(location.origin)}/csp/telemetry.lua</code><br><code>REQUIRED = 0</code></p>`
     +`<p class="note">Si l'écran affiche <b>« carburant NON LU »</b> après quelques tours, c'est le message du script qu'il faut transmettre : il indique exactement ce que la version de CSP n'expose pas.</p></div>`;
 }
-function adminTabs(x){adminTab=x;render()}
+function adminTabs(x){
+  adminTab=x;render();
+  if(x!=='circuits'||!eventContext||circuitsCache)return;
+  if(circuitsPending){circuitsPending.then(()=>{if(adminTab==='circuits')render()},()=>{});return;}
+  const pending=circuitsData();circuitsPending=pending;
+  pending.then(()=>{if(circuitsPending===pending)circuitsPending=null;if(adminTab==='circuits')render()},()=>{if(circuitsPending===pending)circuitsPending=null});
+}
 
 // Event creation (multi only)
 async function createEventPrompt(){
@@ -2924,12 +2944,42 @@ function circuitImportDraft(){
 }
 function circuitsAdminSet(field,value){
   const d=circuitImportDraft();d[field]=value;
-  try{localStorage.setItem(CIR_IMPORT_KEY,JSON.stringify(d))}catch(e){}
+  try{
+    localStorage.setItem(CIR_IMPORT_KEY,JSON.stringify(d));
+    if(['driveUrl','name','round','targetRound'].includes(field))localStorage.removeItem(CIR_IMPORT_KEY+'_result');
+  }catch(e){}
+}
+function circuitTargetKey(round){
+  const number=Number(round&&round.round);
+  return Number.isInteger(number)&&number>0?'round:'+number:'';
+}
+function circuitAdminTargets(){
+  const byRound=new Map();
+  const add=round=>{
+    const key=circuitTargetKey(round);
+    if(key&&round&&round.name&&!byRound.has(key))byRound.set(key,round);
+  };
+  importedCircuitRounds().forEach(add);
+  if(circuitsCache&&Array.isArray(circuitsCache.rounds))circuitsCache.rounds.forEach(add);
+  return [...byRound.entries()].map(([key,round])=>({key,round}))
+    .sort((a,b)=>(Number(a.round.round)||999)-(Number(b.round.round)||999)||String(a.round.name).localeCompare(String(b.round.name),'fr'));
+}
+function circuitImportTargetChanged(value){
+  const key=String(value||'');
+  const target=circuitAdminTargets().find(item=>item.key===key);
+  const d=circuitImportDraft();
+  d.targetRound=target?String(target.round.round):'';
+  if(target)d.round=String(target.round.round);
+  try{localStorage.setItem(CIR_IMPORT_KEY,JSON.stringify(d));localStorage.removeItem(CIR_IMPORT_KEY+'_result')}catch(e){}
+  if(target){const input=document.getElementById('cir-round');if(input)input.value=d.round;}
+  const result=document.getElementById('cir-import-result');
+  if(result)result.innerHTML=target?`<p class="note">La fiche ${esc(target.round.label||'M'+target.round.round)} · ${esc(target.round.name)} sera ciblée. Relance l’analyse Drive.</p>`:'';
 }
 function renderCircuitsAdmin(){
   const draft=circuitImportDraft();
+  const targets=circuitAdminTargets();
   return `<h2>Secours manuel &amp; correction de fiche Circuit</h2>
-  <p class="note">L’import automatique depuis les mods locaux reste prioritaire à la création d’un événement ou d’une manche. Cet outil Drive est conservé comme <b>solution de secours</b> si le mod n’est pas présent sur le PC serveur, et pour <b>corriger ou remplacer une fiche</b> existante. Partagez le dossier en « Tout le monde disposant du lien », puis collez son adresse. Fichiers lus : <code>fast_lane.ai</code>, <code>surfaces.ini</code>, <code>overlays.ini</code> et <code>ui_track.json</code>.</p>
+  <p class="note">L’import automatique depuis les mods locaux reste prioritaire à la création d’un événement ou d’une manche. Pour actualiser une fiche, choisis-la dans la liste, colle le dossier Drive partagé et relance l’analyse : l’enregistrement remplace cette manche sans créer de doublon, en conservant sa date et ses résultats. Fichiers lus : <code>fast_lane.ai</code>, <code>surfaces.ini</code>, <code>overlays.ini</code>, <code>ui_track.json</code> et l’image <code>preview.*</code> (ou <code>badge.*</code> en secours, dans le dossier ou <code>ui/</code>).</p>
   <div class="grid" style="grid-template-columns:1fr;gap:14px;margin-top:14px">
     <div class="panel">
       <h3>1 · Dossier du circuit</h3>
@@ -2944,14 +2994,20 @@ function renderCircuitsAdmin(){
           placeholder="Manche n°"
           value="${esc(draft.round||'')}" oninput="circuitsAdminSet('round',this.value)">
       </div>
+      <label style="display:block;margin-top:10px">Fiche existante à actualiser (facultatif)
+        <select id="cir-target" class="admin-input" style="width:100%;margin-top:4px" onchange="circuitImportTargetChanged(this.value)">
+          <option value="">— Nouvelle fiche / remplacement par numéro —</option>
+          ${targets.map(({key,round})=>`<option value="${esc(key)}" ${Number(draft.targetRound)===Number(round.round)?'selected':''}>${esc(round.label||'M'+round.round)} · ${esc(round.name)}${round.date?' · '+esc(date(round.date)):''}</option>`).join('')}
+        </select>
+      </label>
       <div style="margin-top:12px"><button class="btn" onclick="circuitImportRun()">📥 Analyser le dossier Drive</button></div>
       <div id="cir-import-result" style="margin-top:12px"></div>
     </div>
     <div class="panel">
       <h3>2 · Enregistrement</h3>
-      <p class="note">L’analyse produit une fiche complète. « Ajouter à l’onglet Circuit » l’enregistre dans l’événement courant (sans redéploiement) ; le même numéro de manche ou le même nom remplace sa fiche actuelle. « Télécharger » sert à archiver le JSON ou à préparer une modification du calendrier statique.</p>
+      <p class="note">L’analyse produit la fiche, son tracé et, si le dossier Drive contient une image, son image d’en-tête. En choisissant une fiche existante ci-dessus, l’import la remplace exactement ; sa date, son statut et ses résultats sont conservés. Sans cible, le même numéro de manche ou le même nom met à jour la fiche correspondante. « Télécharger » sert à archiver le JSON ou à préparer une modification du calendrier statique.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" onclick="circuitImportSave()">💾 Ajouter à l'onglet Circuit</button>
+        <button class="btn" onclick="circuitImportSave()">💾 ${draft.targetRound?'Actualiser la fiche Circuit sélectionnée':'Ajouter / remplacer la fiche Circuit'}</button>
         <button class="btn secondary" onclick="circuitImportDownload()">⬇ Télécharger le JSON</button>
         <button class="btn secondary" onclick="circuitImportReset()">Réinitialiser</button>
       </div>
@@ -2965,8 +3021,9 @@ function renderCircuitsAdmin(){
         <li><code>surfaces.ini</code> — grip et validité des surfaces.</li>
         <li><code>overlays.ini</code> — bornes de secteurs.</li>
         <li><code>ui_track.json</code> — nom et identifiant du circuit.</li>
+        <li><code>preview.*</code> — image d’en-tête (ou <code>badge.*</code> en secours).</li>
       </ul>
-      <p class="note">Le dossier doit contenir ces fichiers directement (pas dans un sous-dossier).</p>
+      <p class="note">Les fichiers sont cherchés à la racine du dossier Drive et dans son sous-dossier <code>ui/</code>. Les autres sous-dossiers ne sont pas parcourus.</p>
     </div>
   </div>`;
 }
@@ -2975,15 +3032,22 @@ async function circuitImportRun(){
   const draft=circuitImportDraft();
   const url=(draft.driveUrl||'').trim();
   if(!url){if(box)box.innerHTML=`<p class="note" style="color:#9c3021">Collez d'abord l'adresse du dossier Drive.</p>`;return}
+  const target=circuitAdminTargets().find(item=>item.key==='round:'+Number(draft.targetRound));
+  const targetRound=target?Number(target.round.round):null;
+  try{localStorage.removeItem(CIR_IMPORT_KEY+'_result')}catch(e){}
   if(box)box.innerHTML=`<p class="note">Lecture du dossier Drive… (quelques secondes)</p>`;
   try{
     const r=await authFetch('/api/admin/circuits/import',{
       method:'POST',
       headers:Object.assign({'Content-Type':'application/json'},{}),
-      body:JSON.stringify({driveUrl:url,name:(draft.name||'').trim()||undefined,round:draft.round?Number(draft.round):undefined})
+      body:JSON.stringify({driveUrl:url,name:(draft.name||'').trim()||undefined,round:targetRound||(draft.round?Number(draft.round):undefined)})
     });
     const payload=await r.json().catch(()=>({error:'Réponse illisible du serveur'}));
     if(!r.ok) throw new Error(payload.error||('HTTP '+r.status));
+    payload.targetRound=targetRound;
+    payload.targetName=target?target.round.name:'';
+    payload.targetSnapshot=target?Object.fromEntries(['id','round','label','date','dateLabel','status','winner','stats','resultsImported','hero']
+      .filter(key=>Object.prototype.hasOwnProperty.call(target.round,key)).map(key=>[key,target.round[key]])):null;
     circuitImportShow(payload);
   }catch(e){
     if(box)box.innerHTML=`<p class="note" style="color:#9c3021">✗ ${esc(e.message)}</p>`;
@@ -2994,7 +3058,8 @@ function circuitImportShow(payload){
   const r=payload.round||{};
   const box=document.getElementById('cir-import-result');
   if(!box)return;
-  const files=Object.entries(payload.files||{}).map(([k,v])=>`<li><code>${esc(v.name)}</code> — ${esc({line:'tracé',surfaces:'surfaces',overlays:'secteurs',ui:'métadonnées'}[k]||k)}</li>`).join('');
+  const files=Object.entries(payload.files||{}).map(([k,v])=>`<li><code>${esc(v.name)}</code> — ${esc({line:'tracé',surfaces:'surfaces',overlays:'secteurs',ui:'métadonnées',hero:'image d’en-tête'}[k]||k)}</li>`).join('');
+  const heroPreview=isSafePosterSrc(r.hero)?`<img src="${esc(r.hero)}" alt="Aperçu de l’image du circuit" style="display:block;max-width:280px;max-height:150px;object-fit:cover;border:1px solid #c9bba1;margin:10px 0">`:'';
   const warn=(payload.warnings||[]).length
     ? `<ul class="note" style="color:#8a6a1f">${payload.warnings.map(w=>`<li>⚠ ${esc(w)}</li>`).join('')}</ul>`
     : `<p class="note" style="color:#3b6341">✓ Tous les fichiers attendus ont été lus.</p>`;
@@ -3008,6 +3073,7 @@ function circuitImportShow(payload){
       <tr><td class="muted">Secteurs</td><td><b>${r.sectorCount||(r.sectorSplits||[]).length||3}</b></td></tr>
       <tr><td class="muted">Surfaces</td><td><b>${(r.surfaces||[]).length}</b></td></tr>
     </tbody></table>
+    ${heroPreview}
     ${files?`<p class="note" style="margin-top:10px">Fichiers lus :</p><ul class="note">${files}</ul>`:''}
     ${warn}
   </div>`;
@@ -3024,6 +3090,20 @@ function circuitImportDownload(){
   document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
   if(box)box.innerHTML=`<p class="note" style="color:#3b6341">✓ Fichier téléchargé. Ajoutez-le à <code>data/circuits.json</code> (tableau <code>rounds</code>) puis committez.</p>`;
+}
+function validCircuitRoundNumber(value){
+  const number=Number(value);
+  return Number.isInteger(number)&&number>0?number:null;
+}
+function mergeCircuitRefresh(previous,incoming){
+  const merged={...previous,...incoming};
+  if(!validCircuitRoundNumber(incoming.round)&&validCircuitRoundNumber(previous.round))merged.round=previous.round;
+  if(!incoming.label&&previous.label)merged.label=previous.label;
+  for(const key of ['date','dateLabel','status','winner','stats','resultsImported']){
+    if(Object.prototype.hasOwnProperty.call(previous,key))merged[key]=previous[key];
+  }
+  if(!incoming.hero&&previous.hero)merged.hero=previous.hero;
+  return merged;
 }
 async function circuitImportSave(){
   const box=document.getElementById('cir-save-result');
@@ -3042,15 +3122,19 @@ async function circuitImportSave(){
     const ev=await r.json();
     const data=Object.assign({},(ev&&ev.data)||eventContext.data||{});
     const existing=Array.isArray(data.circuitRounds)?data.circuitRounds.slice():[];
-    // Remplacement par numéro de manche, sinon par nom.
-    const sameRound=r=>Number.isFinite(Number(incoming.round))&&Number.isFinite(Number(r.round))&&Number(r.round)===Number(incoming.round);
-    const sameName=r=>String(r.name||'').toLowerCase()===String(incoming.name||'').toLowerCase();
-    const idx=existing.findIndex(r=>sameRound(r)||sameName(r));
-    let added=true;
-    if(idx>=0){existing[idx]=Object.assign({},existing[idx],incoming);added=false}
-    else existing.push(incoming);
-    existing.sort((a,b)=>(Number(a.round)||999)-(Number(b.round)||999));
-    data.circuitRounds=existing;
+    const targetRound=validCircuitRoundNumber(payload.targetRound);
+    if(targetRound){incoming.round=targetRound;incoming.label=incoming.label||`M${targetRound}`;}
+    const sameRound=row=>validCircuitRoundNumber(incoming.round)!==null&&validCircuitRoundNumber(row&&row.round)===validCircuitRoundNumber(incoming.round);
+    const sameName=row=>!!String(incoming.name||'').trim()&&String(row&&row.name||'').trim().toLowerCase()===String(incoming.name||'').trim().toLowerCase();
+    const isMatch=targetRound?sameRound:(row=>sameRound(row)||sameName(row));
+    const previous=existing.find(isMatch);
+    const nextRounds=existing.filter(row=>!isMatch(row));
+    const targetSnapshot=targetRound&&payload.targetSnapshot&&typeof payload.targetSnapshot==='object'?payload.targetSnapshot:null;
+    const stateToPreserve=previous||targetSnapshot;
+    const updated=!!previous||!!targetRound;
+    nextRounds.push(stateToPreserve?mergeCircuitRefresh(stateToPreserve,incoming):incoming);
+    nextRounds.sort((a,b)=>(Number(a.round)||999)-(Number(b.round)||999)||String(a.name||'').localeCompare(String(b.name||''),'fr'));
+    data.circuitRounds=nextRounds;
 
     const put=await authFetch('/api/events/'+encodeURIComponent(currentSlug)+'/data',{
       method:'POST',
@@ -3066,7 +3150,7 @@ async function circuitImportSave(){
     eventContext.data=data;
     circuitsCache=null;circuitsError='';
     try{localStorage.removeItem(CIR_IMPORT_KEY+'_result')}catch(e){}
-    say(added?'✓ Manche ajoutée à l\'onglet Circuit.':'✓ Manche mise à jour dans l\'onglet Circuit.','#3b6341');
+    say(updated?`✓ Fiche Circuit ${incoming.label||''} actualisée dans l’onglet Circuit.`:'✓ Nouvelle manche ajoutée à l’onglet Circuit.','#3b6341');
     setTimeout(()=>{circuitsData().then(()=>render())},600);
   }catch(e){
     say('✗ Échec : '+esc(e.message),'#9c3021');
@@ -3124,7 +3208,7 @@ function isSafePosterSrc(src){
   const s=src.trim();
   if(!s)return false;
   if(/^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(s))return true;
-  if(/^(\/[a-z0-9_\-./?=&]+|https?:\/\/[^\s"'<>]+)$/i.test(s))return true;
+  if(/^(\/[a-z0-9_\-./?=&%]+|https?:\/\/[^\s"'<>]+)$/i.test(s))return true;
   return false;
 }
 function loadLocalPosterMap(){
@@ -3520,8 +3604,12 @@ function localCarSnapshot(car){
   const safeSpecs={};
   allowedSpecs.forEach(key=>{if(typeof specs[key]==='string'&&specs[key].trim())safeSpecs[key]=specs[key].trim().slice(0,100);});
   const url=String(source.url||'').trim().slice(0,500);
+  const id=String(source.id||'').slice(0,128);
+  const expectedImageUrl='/api/local-mods/car-image?id='+encodeURIComponent(id);
+  const imageUrl=String(source.imageUrl||'').trim();
   return {
-    id:String(source.id||'').slice(0,128),name:String(source.name||source.id||'Voiture').trim().slice(0,300),
+    id,name:String(source.name||source.id||'Voiture').trim().slice(0,300),
+    imageUrl:imageUrl===expectedImageUrl?imageUrl:'',
     brand:String(source.brand||'').trim().slice(0,200),category:String(source.category||'').trim().slice(0,200),
     year:String(source.year||'').trim().slice(0,32),country:String(source.country||'').trim().slice(0,120),
     author:String(source.author||'').trim().slice(0,200),version:String(source.version||'').trim().slice(0,80),
@@ -3679,6 +3767,47 @@ function renderLocalModsPanel(){
     ${currentSlug?`<div class="controls"><button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button></div>`:''}</section>`;
 }
 
+function setEventAdminPane(pane){
+  eventAdminPane=pane==='translations'?'translations':'home';
+  render();
+}
+function renderCarTranslationsAdmin(){
+  const cars=eventCarSheets(eventContext);
+  if(!cars.length)return `<div class="cir-empty"><b>Aucune voiture n’est associée à cet événement.</b><br>Choisis d’abord les voitures dans la section « Préparer le plateau » ci-dessus.</div>`;
+  const rows=cars.map((car,index)=>`<article class="car-translation-card">
+    <div class="car-translation-title"><b>${esc(car.name)}</b><span class="muted">${esc(car.id||'')}</span></div>
+    <label>Texte original du mod (anglais, conservé)<textarea rows="4" readonly aria-label="Texte anglais original pour ${esc(car.name)}">${esc(car.description||'')}</textarea></label>
+    <label>Traduction française manuelle<textarea id="car-translation-fr-${index}" rows="4" maxlength="4000" placeholder="Saisis la traduction française…">${esc(car.descriptionFr||'')}</textarea></label>
+  </article>`).join('');
+  return `<div class="car-translation-editor"><p class="note">Le texte importé du mod reste inchangé. Écris ici la traduction française ; elle sera affichée sur la fiche Voiture lorsqu’elle n’est pas vide. Aucun service de traduction automatique n’est utilisé.</p>
+    <div class="car-translation-list">${rows}</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px"><button type="button" class="btn small" onclick="saveCarTranslations()">💾 Enregistrer les traductions</button><span id="car-translation-status" class="note" role="status"></span></div>
+  </div>`;
+}
+async function saveCarTranslations(){
+  if(!currentSlug&&backendMulti)return;
+  const slug=currentSlug||LEGACY_DEFAULT_SLUG;
+  const cars=eventCarSheets(eventContext);
+  const current=eventContext?.data?.carTranslations;
+  const translations=current&&typeof current==='object'&&!Array.isArray(current)?{...current}:{};
+  cars.forEach((car,index)=>{
+    const input=document.getElementById(`car-translation-fr-${index}`);
+    if(!input||typeof input.value!=='string')return;
+    const value=input.value.trim().slice(0,4000);
+    if(value)translations[car.id]=value;
+    else delete translations[car.id];
+  });
+  try{
+    await saveEventHomePatch(slug,data=>{
+      if(Object.keys(translations).length)data.carTranslations=translations;
+      else delete data.carTranslations;
+    },'✓ Traductions des fiches Voiture enregistrées.');
+  }catch(error){
+    const status=document.getElementById('car-translation-status');
+    if(status)status.textContent='✗ '+(error.message||error);
+    else alert('Erreur : '+(error.message||error));
+  }
+}
 function renderEventsAdmin(){
 
   const fileInput=`<input type="file" id="event-poster-input" accept="image/*" style="display:none" onchange="handleEventPosterFile(event)"><input type="file" id="event-gallery-input" accept="image/*" style="display:none" onchange="handleEventGalleryFile(event)">`;
@@ -3727,6 +3856,11 @@ function renderEventsAdmin(){
         ${currentPoster?`<button type="button" class="btn secondary small" onclick="removeEventPoster('${currentSlug.replace(/'/g,"\\'")}')">Retirer l'affiche</button>`:''}
       </div>
     </div>
+    <div class="tabs admin-event-tabs" role="tablist" aria-label="Outils de l’événement">
+      <button type="button" class="${eventAdminPane==='home'?'active':''}" onclick="setEventAdminPane('home')">Présentation</button>
+      <button type="button" class="${eventAdminPane==='translations'?'active':''}" onclick="setEventAdminPane('translations')">Traduction des voitures</button>
+    </div>
+    ${eventAdminPane==='translations'?renderCarTranslationsAdmin():`
     ${currentPoster?`<img src="${esc(currentPoster)}" alt="Aperçu affiche" style="display:block;max-width:440px;width:100%;height:auto;border:1px solid #c9bba1;margin-bottom:14px">`:''}
     <div class="admin-evhome-grid">
       <label>Voiture / Catégorie<input id="evinfo-car" type="text" value="${esc(rawInfo.car||'')}" placeholder="Ex : Lola T290 · Prototypes historiques"></label>
@@ -3751,6 +3885,7 @@ function renderEventsAdmin(){
       </div>
       ${gallery.length?`<div class="admin-gal-thumbs">${gallery.map((g,idx)=>`<div class="admin-gal-thumb"><button type="button" class="admin-gal-del" title="Retirer" onclick="removeEventGalleryImage(${idx})">✕</button><img src="${esc(g.src)}" alt="${esc(g.caption||'Photo')}"><div class="muted" style="font-size:10px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.caption||'Sans légende')}</div></div>`).join('')}</div>`:''}
     </div>
+    `}
   </div>`:'';
   return renderLocalModsPanel()+topBar+table(['','Événement','Courant','Coeff','Affiche','Mis à jour',''],events.map(row))+evHomeEditor;
 }

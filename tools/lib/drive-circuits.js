@@ -13,7 +13,8 @@
  *   fast_lane.ai   → tracé + profil d'altitude + virages  (obligatoire)
  *   surfaces.ini   → grip et validité des surfaces       (optionnel)
  *   overlays.ini   → bornes de secteurs                  (optionnel)
- *   ui_track.json  → nom du circuit, longueur, virages   (optionnel)
+ *   ui_track.json  → nom du circuit, longueur, virages   (optionnel, racine ou ui/)
+ *   preview.*     → image d’en-tête (badge.* en secours, racine ou ui/)
  */
 
 const https = require('https');
@@ -309,6 +310,12 @@ const WANTED = {
   overlays: /^overlays\.ini$/i,
   ui: /^ui_track\.json$/i
 };
+const HERO_IMAGE_NAMES=['preview.png','preview.jpg','preview.jpeg','preview.webp','badge.png','badge.jpg','badge.jpeg','badge.webp'];
+function driveViewUrl(fileId){
+  return /^[A-Za-z0-9_-]{1,200}$/.test(String(fileId||''))
+    ?`https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`
+    :null;
+}
 
 /**
  * Importe un circuit depuis un dossier Drive public.
@@ -318,7 +325,7 @@ const WANTED = {
  * @returns {Promise<object>} `{ round, source, files, warnings }` — la manche
  *   prête à être fusionnée dans `data/circuits.json`.
  */
-async function importFromDrive(folderInput, opts = {}) {
+async function importFromDrive(folderInput, opts = {}, dependencies = {}) {
   const folderId = driveId(folderInput);
   if (!folderId) {
     const err = new Error("Lien Drive invalide : collez l'URL du dossier (…/folders/…) ou son identifiant.");
@@ -326,16 +333,28 @@ async function importFromDrive(folderInput, opts = {}) {
     throw err;
   }
 
-  const listing = await listPublicFolder(folderId);
-  const find = re => listing.find(f => re.test(f.name));
-  const lineFile = find(WANTED.line);
+  const listFolder=dependencies.listPublicFolder||listPublicFolder;
+  const downloadFile=dependencies.downloadPublicFile||downloadPublicFile;
+  const rootListing=await listFolder(folderId);
+  const warnings=[];
+  const rootFiles=rootListing.filter(file=>file&&!file.isFolder);
+  const uiDirectory=rootListing.find(file=>file&&file.isFolder&&/^ui$/i.test(file.name));
+  let uiFiles=[];
+  if(uiDirectory){
+    try{
+      uiFiles=(await listFolder(uiDirectory.id)).filter(file=>file&&!file.isFolder).map(file=>({...file,name:`ui/${file.name}`}));
+    }catch(error){warnings.push(`sous-dossier ui inaccessible : ${error.message}`);}
+  }
+  const allFiles=[...rootFiles,...uiFiles];
+  const baseName=file=>String(file&&file.name||'').split('/').pop();
+  const find=re=>allFiles.find(file=>re.test(baseName(file)));
+  const lineFile=find(WANTED.line);
   if (!lineFile) {
     const err = new Error('Aucun fast_lane.ai trouvé dans ce dossier Drive. Vérifiez qu\'il est bien partagé et non vide.');
     err.status = 422;
     throw err;
   }
 
-  const warnings = [];
   const fileMap = { line: lineFile };
   for (const [key, re] of Object.entries(WANTED)) {
     if (key === 'line') continue;
@@ -343,30 +362,34 @@ async function importFromDrive(folderInput, opts = {}) {
     if (f) fileMap[key] = f;
     else warnings.push(`${re.source.replace(/\^|\\|\$|\//g, '').replace(/\./g, '.')} absent du dossier Drive`);
   }
+  const heroFile=HERO_IMAGE_NAMES.map(name=>find(new RegExp('^'+name.replace('.','\\.')+'$','i'))).find(Boolean)||null;
+  if(heroFile&&driveViewUrl(heroFile.id))fileMap.hero=heroFile;
+  else if(heroFile)warnings.push('identifiant de l’image Drive invalide : image d’en-tête ignorée');
+  else warnings.push('Aucune image d’en-tête (preview.* ou badge.*) trouvée dans le dossier Drive ou son sous-dossier ui : fond dégradé utilisé.');
 
   // --- tracé
-  const lineBuf = await downloadPublicFile(lineFile.id);
+  const lineBuf = await downloadFile(lineFile.id);
   const track = decodeFastLane(lineBuf);
   const corners = detectCorners(track.points);
 
   // --- surfaces
   let surfaces = [];
   if (fileMap.surfaces) {
-    try { surfaces = readSurfaces((await downloadPublicFile(fileMap.surfaces.id)).toString('utf8')); }
+    try { surfaces = readSurfaces((await downloadFile(fileMap.surfaces.id)).toString('utf8')); }
     catch (e) { warnings.push(`surfaces.ini illisible : ${e.message}`); }
   }
 
   // --- secteurs
   let sectors = [];
   if (fileMap.overlays) {
-    try { sectors = readSectorSplits((await downloadPublicFile(fileMap.overlays.id)).toString('utf8')); }
+    try { sectors = readSectorSplits((await downloadFile(fileMap.overlays.id)).toString('utf8')); }
     catch (e) { warnings.push(`overlays.ini illisible : ${e.message}`); }
   }
 
   // --- ui_track.json
   let ui = null;
   if (fileMap.ui) {
-    try { ui = JSON.parse((await downloadPublicFile(fileMap.ui.id)).toString('utf8')); }
+    try { ui = JSON.parse((await downloadFile(fileMap.ui.id)).toString('utf8')); }
     catch (e) { warnings.push(`ui_track.json illisible : ${e.message}`); }
   }
 
@@ -404,7 +427,7 @@ async function importFromDrive(folderInput, opts = {}) {
     driveFolderId: folderId,
     driveName: (ui && (ui.trackId || ui.id)) || null,
     source: `Google Drive · ${folderId}`,
-    hero: null,
+    hero: heroFile&&driveViewUrl(heroFile.id),
     importedAt: new Date().toISOString()
   };
 

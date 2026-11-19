@@ -50,6 +50,7 @@ async function addCompleteLayout(write, prefix = 'tracks/test-track/gp') {
   await write(`${prefix}/overlays.ini`, [
     '[SECTOR_0]', 'START=0', '[SECTOR_1]', 'START=0.4', '[SECTOR_2]', 'START=0.72'
   ].join('\n'));
+  await write('tracks/test-track/ui/gp/preview.png', 'test-track-preview');
   await write('tracks/test-track/ui/gp/ui_track.json', JSON.stringify({
     name: 'Test Track GP', layout: 'Grand Prix', country: 'France', countryCode: 'FRA', city: 'Hillion',
     geotags: ['48.5° N', '2.7° W'], year: 2026, author: 'GDSP',
@@ -67,6 +68,7 @@ test('la fiche locale réutilise le tracé, les surfaces, les secteurs et les m�
     date: '2027-04-14', round: 2
   });
   assert.equal(result.source, 'local');
+  assert.equal(result.round.hero, '/api/local-mods/track-image?trackId=test-track&layoutId=gp');
   assert.equal(result.round.round, 2);
   assert.equal(result.round.label, 'M2');
   assert.equal(result.round.name, 'Test Track GP');

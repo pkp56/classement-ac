@@ -141,6 +141,43 @@ test('Les secteurs produits couvrent le tour sans trou', () => {
   assert.deepEqual(buildSectorSplits([], 1000), []);
 });
 
+test('L’import Drive récupère aussi ui/preview.png et l’utilise comme image d’en-tête', async () => {
+  const line = JSON.parse(fs.readFileSync(path.join(ROOT, 'maquette-circuit/assets/tracks/tremblant/line.json'), 'utf8'));
+  const lineBuffer = Buffer.alloc(16 + line.data.length * 20);
+  lineBuffer.writeInt32LE(7, 0);
+  lineBuffer.writeInt32LE(line.data.length, 4);
+  line.data.forEach(([x, y, z], index) => {
+    const offset = 16 + index * 20;
+    lineBuffer.writeFloatLE(x, offset);
+    lineBuffer.writeFloatLE(y, offset + 4);
+    lineBuffer.writeFloatLE(z, offset + 8);
+  });
+  const folderId='1PE4sTPInE1ZGmoxEkiEA4Ne1UzhWfqvJ';
+  const folderFiles=[
+    {id:'line-file',name:'fast_lane.ai'},
+    {id:'surface-file',name:'surfaces.ini'},
+    {id:'overlay-file',name:'overlays.ini'},
+    {id:'ui-folder',name:'ui',isFolder:true}
+  ];
+  const uiFiles=[{id:'ui-json',name:'ui_track.json'},{id:'preview-image',name:'preview.png'}];
+  const downloaded={
+    'line-file':lineBuffer,
+    'surface-file':Buffer.from('[SURFACE_0]\nKEY=ROAD\nFRICTION=0.99\nIS_VALID_TRACK=1'),
+    'overlay-file':Buffer.from('[SECTOR_0]\nSTART=0\n[SECTOR_1]\nSTART=0.5'),
+    'ui-json':Buffer.from(JSON.stringify({name:'Circuit Drive',country:'France',trackId:'drive-track'}))
+  };
+  const result=await drive.importFromDrive(folderId,{round:4},{
+    listPublicFolder:async id=>id===folderId?folderFiles:uiFiles,
+    downloadPublicFile:async id=>downloaded[id]
+  });
+  assert.equal(result.round.round,4);
+  assert.equal(result.round.name,'Circuit Drive');
+  assert.equal(result.round.hero,'https://drive.google.com/uc?export=view&id=preview-image');
+  assert.equal(result.files.ui.name,'ui/ui_track.json');
+  assert.deepEqual(result.files.hero,{id:'preview-image',name:'ui/preview.png'});
+  assert.ok(!result.warnings.some(warning=>/image d’en-tête/.test(warning)));
+});
+
 // --------------------------------------------------------- ouverture aux events
 
 /**

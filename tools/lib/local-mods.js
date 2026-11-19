@@ -65,6 +65,9 @@ function carUrl(value){
   const url=text(value,500);
   return /^https?:\/\/[^\s"'<>]+$/i.test(url)?url:'';
 }
+function carImageUrl(id){
+  return '/api/local-mods/car-image?id='+encodeURIComponent(String(id||''));
+}
 function carMetadata(meta,id){
   const rawSpecs=meta&&meta.specs&&typeof meta.specs==='object'&&!Array.isArray(meta.specs)?meta.specs:{};
   const specs={};
@@ -76,6 +79,7 @@ function carMetadata(meta,id){
   return {
     id,
     name:text(meta&&meta.name)||id,
+    imageUrl:carImageUrl(id),
     brand:text(meta&&meta.brand),
     category:text(meta&&(meta.class||meta.category)),
     year:text(meta&&meta.year,32),
@@ -152,8 +156,78 @@ async function scanCatalog(roots,{maxEntries=10000}={}){
   const sort=(a,b)=>a.name.localeCompare(b.name,'fr')||a.id.localeCompare(b.id);
   return {scannedAt:new Date().toISOString(),sources:sources.map(({real,...s})=>s),cars:[...cars.values()].sort(sort),tracks:[...tracks.values()].sort(sort),warnings};
 }
+const UI_IMAGE_CANDIDATES=['preview.png','preview.jpg','preview.jpeg','preview.webp','badge.png','badge.jpg','badge.jpeg','badge.webp'];
+const MAX_PUBLIC_MOD_IMAGE_BYTES=8*1024*1024;
+function safeModSegment(value,{optional=false}={}){
+  return optional&&value===''||typeof value==='string'&&value.length>0&&value.length<=128
+    &&value!=='.'&&value!=='..'&&!/[\\/\0]/.test(value);
+}
+async function imageInUiDirectory(root,uiPath){
+  try{
+    const uiDir=await fs.realpath(uiPath);
+    if(!within(uiDir,root)||!(await fs.stat(uiDir)).isDirectory())return null;
+    const names=await fs.readdir(uiDir);
+    for(const candidate of UI_IMAGE_CANDIDATES){
+      const actual=names.find(name=>name.toLowerCase()===candidate);
+      if(!actual)continue;
+      const file=await fs.realpath(path.join(uiDir,actual));
+      if(!within(file,root))continue;
+      const stat=await fs.stat(file);
+      if(stat.isFile()&&stat.size>0&&stat.size<=MAX_PUBLIC_MOD_IMAGE_BYTES)return {path:file};
+    }
+  }catch(error){if(!['ENOENT','ENOTDIR','ELOOP'].includes(error.code))return null;}
+  return null;
+}
+async function findCarImage(roots,id){
+  if(!safeModSegment(id))return null;
+  for(const configuredRoot of roots){
+    try{
+      const root=await fs.realpath(configuredRoot);
+      if(!(await fs.stat(root)).isDirectory())continue;
+      const carDir=await fs.realpath(path.join(root,'cars',id));
+      if(!within(carDir,root)||!(await fs.stat(carDir)).isDirectory())continue;
+      const image=await imageInUiDirectory(root,path.join(carDir,'ui'));
+      if(image)return image;
+    }catch(error){if(!['ENOENT','ENOTDIR','ELOOP'].includes(error.code))continue;}
+  }
+  return null;
+}
+async function findTrackImage(roots,trackId,layoutId=''){
+  if(!safeModSegment(trackId)||!safeModSegment(layoutId,{optional:true}))return null;
+  for(const configuredRoot of roots){
+    try{
+      const root=await fs.realpath(configuredRoot);
+      if(!(await fs.stat(root)).isDirectory())continue;
+      const trackDir=await fs.realpath(path.join(root,'tracks',trackId));
+      if(!within(trackDir,root)||!(await fs.stat(trackDir)).isDirectory())continue;
+      const uiDirs=layoutId
+        ?[path.join(trackDir,'ui',layoutId),path.join(trackDir,layoutId,'ui'),path.join(trackDir,'layouts',layoutId,'ui'),path.join(trackDir,'ui')]
+        :[path.join(trackDir,'ui')];
+      for(const uiDir of uiDirs){
+        const image=await imageInUiDirectory(root,uiDir);
+        if(image)return image;
+      }
+    }catch(error){if(!['ENOENT','ENOTDIR','ELOOP'].includes(error.code))continue;}
+  }
+  return null;
+}
 function mountLocalMods(app,{roots=configuredRoots(),authorize}){
   let catalog=null,pending=null;
+  const sendModImage=async(res,image)=>{
+    if(!image){res.status(404).end();return;}
+    res.sendFile(image.path,{headers:{'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'}},error=>{
+      if(error&&!res.headersSent)res.status(404).end();
+    });
+  };
+  app.get('/api/local-mods/car-image',async(req,res)=>{
+    const id=typeof req.query.id==='string'?req.query.id:'';
+    await sendModImage(res,await findCarImage(roots,id));
+  });
+  app.get('/api/local-mods/track-image',async(req,res)=>{
+    const trackId=typeof req.query.trackId==='string'?req.query.trackId:'';
+    const layoutId=typeof req.query.layoutId==='string'?req.query.layoutId:'';
+    await sendModImage(res,await findTrackImage(roots,trackId,layoutId));
+  });
   app.get('/api/admin/local-mods',async(req,res)=>{
     res.set('Cache-Control','no-store');if(!await authorize(req,res))return;
     res.json(catalog||{scannedAt:null,sources:roots.map((p,i)=>({id:'source-'+(i+1),path:p,status:'not-scanned'})),cars:[],tracks:[],warnings:[]});
@@ -167,4 +241,4 @@ function mountLocalMods(app,{roots=configuredRoots(),authorize}){
     }catch(e){res.status(500).json({error:'Impossible de lire le catalogue local.'});}
   });
 }
-module.exports={DEFAULT_ROOTS,configuredRoots,scanCatalog,mountLocalMods,within};
+module.exports={DEFAULT_ROOTS,configuredRoots,scanCatalog,mountLocalMods,within,findCarImage,findTrackImage};

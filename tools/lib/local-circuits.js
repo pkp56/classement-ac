@@ -7,7 +7,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { buildRound, buildSectorSplits } = require('./circuit-round');
 const drive = require('./drive-circuits');
-const { configuredRoots, within } = require('./local-mods');
+const { configuredRoots, within, findTrackImage } = require('./local-mods');
 
 const MAX_LINE_BYTES = 8 * 1024 * 1024;
 const MAX_LINE_POINTS = 200000;
@@ -228,7 +228,10 @@ function formatOfficialLength(value, meters) {
   return safeTrackText(value, 80) || null;
 }
 
-function buildMetadata(ui, { trackId, layoutId, name, date, round }) {
+function localTrackImageUrl(trackId,layoutId){
+  return '/api/local-mods/track-image?trackId='+encodeURIComponent(trackId)+'&layoutId='+encodeURIComponent(layoutId||'');
+}
+function buildMetadata(ui, { trackId, layoutId, name, date, round, hero }) {
   const uiName = safeTrackText(ui && (ui.name || ui.Name));
   const selectedName = safeTrackText(name);
   const resolvedName = uiName || selectedName || trackId;
@@ -281,7 +284,7 @@ function buildMetadata(ui, { trackId, layoutId, name, date, round }) {
     localLayoutId: layoutId || '',
     driveName: safeTrackText(ui && (ui.trackId || ui.id)) || trackId,
     source: 'Mod local Assetto Corsa',
-    hero: null,
+    hero: hero || null,
     importedAt: new Date().toISOString()
   };
 }
@@ -408,12 +411,14 @@ async function importLocalCircuit({ roots = configuredRoots(), trackId, layoutId
       const sectorBounds = sectors.length
         ? [0, ...sectors.map(item => item.from).filter(value => value > 0 && value < 1), 1]
         : [0, 1 / 3, 2 / 3, 1];
+      const trackImage=await findTrackImage(roots,trackId,layoutId);
       const metadata = buildMetadata(ui || {}, {
         trackId,
         layoutId,
         name,
         date: plannedDate,
-        round
+        round,
+        hero:trackImage?localTrackImageUrl(trackId,layoutId):null
       });
       const full = buildRound(track, metadata, {
         sectors: sectorBounds,
@@ -443,7 +448,8 @@ async function importLocalCircuit({ roots = configuredRoots(), trackId, layoutId
       fallbackWarnings.push('fast_lane.ai absent du mod sélectionné : la géométrie du tracé ne peut pas être affichée');
     }
     const files = fileEntries(trackDir, { surfacesFile, overlaysFile, uiFile });
-    const metadata = buildMetadata(ui || {}, { trackId, layoutId, name, date: plannedDate, round });
+    const trackImage=await findTrackImage(roots,trackId,layoutId);
+    const metadata = buildMetadata(ui || {}, { trackId, layoutId, name, date: plannedDate, round, hero:trackImage?localTrackImageUrl(trackId,layoutId):null });
     if (ui || surfaces.length || sectors.length) {
       const partial = metadataOnlyRound(metadata, {
         trackDir, surfaces, sectors, surfaceFile: surfacesFile, overlaysFile, warnings: fallbackWarnings, files

@@ -74,6 +74,35 @@ test('ui_car.json conserve les champs Drive, le texte lisible et les courbes mot
   assert.equal(unsafe.url,'');assert.deepEqual(unsafe.powerCurve,[{rpm:2000,value:100}]);
   assert(!JSON.stringify(result.cars).includes(c));
 });
+test('les images locales voiture/circuit sont servies en lecture seule avec les images de secours',async t=>{
+  const {c,write}=await fixture(t);
+  await write(c,'cars/lola/ui/ui_car.json',{name:'Lola T290'});
+  await write(c,'cars/lola/ui/preview.png','car-preview');
+  await write(c,'cars/badge-only/ui/badge.png','car-badge');
+  await write(c,'tracks/spa/ui/gp/preview.webp','track-variant-preview');
+  await write(c,'tracks/spa/ui/badge.png','track-badge');
+  const catalog=await scanCatalog([c]);
+  assert.equal(catalog.cars.find(car=>car.id==='lola').imageUrl,'/api/local-mods/car-image?id=lola');
+  const app=express();
+  mountLocalMods(app,{roots:[c],authorize:async()=>true});
+  const server=http.createServer(app);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const base='http://127.0.0.1:'+server.address().port+'/api/local-mods';
+  const read=async url=>{
+    const response=await fetch(url);
+    return {response,body:await response.text()};
+  };
+  let image=await read(base+'/car-image?id=lola');
+  assert.equal(image.response.status,200);assert.match(image.response.headers.get('content-type'),/image\/png/);assert.equal(image.body,'car-preview');
+  image=await read(base+'/car-image?id=badge-only');
+  assert.equal(image.response.status,200);assert.equal(image.body,'car-badge');
+  image=await read(base+'/track-image?trackId=spa&layoutId=gp');
+  assert.equal(image.response.status,200);assert.match(image.response.headers.get('content-type'),/image\/webp/);assert.equal(image.body,'track-variant-preview');
+  image=await read(base+'/track-image?trackId=spa&layoutId=missing');
+  assert.equal(image.response.status,200);assert.equal(image.body,'track-badge');
+  assert.equal((await fetch(base+'/car-image?id=..%2Fsecret')).status,404);
+  assert.equal((await fetch(base+'/track-image?trackId=..%2Fsecret')).status,404);
+});
 test('nom de dossier conservé si métadonnées absentes, invalides ou trop grandes',async t=>{
   const {c,d,write}=await fixture(t);
   await fs.mkdir(path.join(c,'cars/no-ui'),{recursive:true});

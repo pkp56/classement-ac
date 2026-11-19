@@ -300,6 +300,14 @@ nav button.nav-event-tab.active{background:rgba(156,48,33,.32);border-color:#d7a
 .admin-evhome-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
 .admin-evhome-grid label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#586260}
 .admin-evhome-grid input,.admin-evhome-grid textarea{padding:9px 11px;background:#fbf7ec;border:1px solid #b3a78e;color:var(--ink);font:inherit;font-size:13px;font-weight:400;letter-spacing:0;text-transform:none}
+.admin-event-tabs{margin:10px 0 14px}
+.car-translation-editor>.note{margin:0 0 12px}
+.car-translation-list{display:grid;gap:12px}
+.car-translation-card{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;background:#fbf7ec;border:1px solid #d8ccb4}
+.car-translation-title{grid-column:1/-1;display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.car-translation-card label{display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#586260}
+.car-translation-card textarea{width:100%;min-height:105px;resize:vertical;padding:9px 11px;background:#fffdf8;border:1px solid #b3a78e;color:var(--ink);font:inherit;font-size:13px;font-weight:400;letter-spacing:0;text-transform:none}
+.car-translation-card textarea[readonly]{background:#f0eadc;color:#6d726c}
 .local-mod-selection-grid{grid-template-columns:minmax(0,1.15fr) minmax(260px,.85fr);gap:18px}
 .local-mod-selection-grid>div,.local-mod-selection-grid>label{min-width:0}
 .local-mod-selection-grid>div>label{display:block;font-size:12px;font-weight:700;color:#586260;margin-bottom:5px}
@@ -316,6 +324,11 @@ nav button.nav-event-tab.active{background:rgba(156,48,33,.32);border-color:#d7a
 .admin-rule-row label{display:flex;flex-direction:column;gap:4px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#586260}
 .admin-rule-row input{width:100%;min-width:0;padding:8px 10px;background:#fffdf8;border:1px solid #b3a78e;color:var(--ink);font:inherit;font-size:12px;font-weight:400;letter-spacing:0;text-transform:none}
 .car-sheet-card+.car-sheet-card{margin-top:30px;padding-top:22px;border-top:2px solid var(--ink)}
+.car-sheet-title{display:flex;align-items:center;gap:14px}
+.car-sheet-title-mark{position:relative;display:inline-flex;flex:0 0 72px;width:72px;height:72px;align-items:center;justify-content:center;overflow:hidden;border:1px solid rgba(215,163,71,.7);background:#18343b}
+.car-sheet-title-mark img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.car-sheet-title-fallback{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-family:Impact,'Arial Narrow',sans-serif;font-size:26px;letter-spacing:1px;color:#d7a347}
+.car-sheet-title>span:last-child{min-width:0}
 .car-sheet-mark{align-self:end;justify-self:end;margin:0 30px 56px 0;background:rgba(15,37,44,.78);border:1px solid rgba(215,163,71,.6);padding:16px 20px;text-align:center;color:#f4ecd8;min-width:150px}
 .car-sheet-mark b{display:block;font-family:Impact,'Arial Narrow',sans-serif;font-size:46px;font-weight:400;letter-spacing:2px;color:#d7a347;line-height:1}
 .car-sheet-mark span{display:block;margin-top:8px;font-size:9px;letter-spacing:1.6px;text-transform:uppercase;font-weight:700}
@@ -332,13 +345,15 @@ nav button.nav-event-tab.active{background:rgba(156,48,33,.32);border-color:#d7a
 .admin-gal-del{position:absolute;top:8px;right:8px;background:var(--red);color:#fff;border:0;width:22px;height:22px;font-size:11px;font-weight:700;cursor:pointer;line-height:1}
 @media(max-width:920px){
   .ev-kpis,.ev-gallery{grid-template-columns:repeat(2,1fr)}
-  .ev-two-col,.admin-evhome-grid,.local-mod-selection-grid,.car-curves-grid{grid-template-columns:1fr}
+  .ev-two-col,.admin-evhome-grid,.local-mod-selection-grid,.car-curves-grid,.car-translation-card{grid-template-columns:1fr}
   .ev-banner-right{align-items:flex-start;width:100%}
 }
 @media(max-width:560px){
   .ev-kpis,.ev-gallery{grid-template-columns:1fr}
   .ev-subtab{padding:12px 13px 10px;font-size:15px}
   .admin-rule-row{grid-template-columns:1fr}
+  .car-sheet-title{gap:10px}
+  .car-sheet-title-mark{flex-basis:56px;width:56px;height:56px}
   .car-sheet-mark{display:none}
 }
 .drv-global-level .drv-car-stage{display:flex;align-items:center;justify-content:center;min-height:220px}.drv-global-level .drv-car-stage .lvl-badge{object-fit:contain;max-width:100%}

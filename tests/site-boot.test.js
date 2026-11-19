@@ -74,7 +74,7 @@ function makeBrowser(extraEvents = [], extraFetch = null, browserOptions = {}) {
   vm.runInContext(fs.readFileSync(path.join(root,'assets/global-rating.js'),'utf8'), sandbox);
   vm.runInContext(siteSource, sandbox);
   vm.runInContext(patchSource, sandbox);
-  return { sandbox, getElementById, calls, storage };
+  return { sandbox, getElementById, calls, storage, event };
 }
 
 test('site opens at the GDSP home, then Results renders the loaded championship and commission column', async () => {
@@ -633,6 +633,36 @@ test('Unified Event tab includes Circuit and Voiture, and persists rich Accueil 
 
 
 
+test('Administration → Événements offre la traduction manuelle des descriptions et la fiche publique privilégie le français',async()=>{
+  const {sandbox,getElementById,calls,event}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  event.data.carSheets=[
+    {id:'lola_t290',name:'Lola T290',brand:'Lola',description:'An English description of the Lola.',descriptionFr:'Ancienne traduction',imageUrl:'/api/local-mods/car-image?id=lola_t290',metadataAvailable:true,specs:{},tags:[]},
+    {id:'ks_porsche_911',name:'Porsche 911',description:'A second English description.',metadataAvailable:true,specs:{},tags:[]}
+  ];
+  event.data.carTranslations={lola_t290:'Ancienne traduction'};
+  await vm.runInContext(`loadEvent(${JSON.stringify(event.slug)})`,sandbox);
+  vm.runInContext("adminAuth=true;adminToken='tok';adminTab='events';page='admin';setEventAdminPane('translations')",sandbox);
+  const adminHtml=getElementById('app').innerHTML;
+  assert.match(adminHtml,/Traduction des voitures/);
+  assert.match(adminHtml,/Texte original du mod \(anglais, conservé\)/);
+  assert.match(adminHtml,/An English description of the Lola\./);
+  assert.match(adminHtml,/readonly/);
+  getElementById('car-translation-fr-0').value='Prototype historique de Lola.';
+  await vm.runInContext('saveCarTranslations()',sandbox);
+  const post=calls.filter(call=>call.url==='/api/events/'+event.slug+'/data'&&call.method==='POST').at(-1);
+  assert.equal(post.body.carTranslations.lola_t290,'Prototype historique de Lola.');
+  assert.equal(post.body.carSheets[0].description,'An English description of the Lola.','le texte anglais doit rester inchangé');
+  await vm.runInContext("setEventSubTab('voiture')",sandbox);
+  const publicHtml=getElementById('app').innerHTML;
+  assert.match(publicHtml,/Description en français/);
+  assert.match(publicHtml,/Prototype historique de Lola\./);
+  assert.doesNotMatch(publicHtml,/An English description of the Lola\./);
+  assert.match(publicHtml,/A second English description\./,'sans traduction, la description originale reste visible');
+  assert.match(publicHtml,/src="\/api\/local-mods\/car-image\?id=lola_t290"/);
+  assert.match(publicHtml,/class="car-sheet-title"/);
+});
+
 test('Les liens des encadrés sont cliquables sans laisser passer du HTML ou un protocole dangereux',async()=>{
   const {sandbox}=makeBrowser();
   await new Promise(resolve=>setImmediate(resolve));
@@ -986,6 +1016,41 @@ test('Circuit : la manche planifiée sans fiche locale conserve sa variante et l
   assert.equal(circuitRounds.length,2,'deux dates sur le même tracé doivent donner deux manches');
   assert.deepEqual(Array.from(circuitRounds,round=>round.date),['2027-04-01','2027-05-01']);
   assert.ok(circuitRounds.every(round=>round.layoutId==='gp'&&round.technicalUnavailable));
+});
+
+test('Administration → Circuits permet de choisir une fiche Drive à actualiser sans doublon ni perte de date/résultats',async()=>{
+  const driveResult={round:{round:3,label:'M3',name:'Circuit actualisé',date:null,status:'upcoming',winner:null,stats:null,hero:'https://drive.google.com/uc?export=view&id=preview-image',source:'Google Drive'},files:{},warnings:[]};
+  const {sandbox,getElementById,calls,event,storage}=makeBrowser([],async url=>url==='/api/admin/circuits/import'?response(driveResult):null,{
+    setTimeout:(callback,delay,...args)=>delay>=500?0:setTimeout(callback,delay,...args)
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext(`loadEvent(${JSON.stringify(event.slug)})`,sandbox);
+  const previous={
+    id:'static:spa/gp',round:3,label:'M3',name:'Ancien nom du circuit',date:'2027-04-01',dateLabel:'1 avril 2027',status:'done',
+    winner:'Pilote vainqueur',stats:{races:2,drivers:14},resultsImported:true,hero:'/ancienne-image.png',source:'Calendrier statique'
+  };
+  sandbox.localStorage.setItem('gdsp_circuit_import_draft',JSON.stringify({driveUrl:'https://drive.google.com/drive/folders/example',round:'3'}));
+  vm.runInContext(`circuitsCache={rounds:[${JSON.stringify(previous)}]};adminAuth=true;adminToken='tok';adminTab='circuits';page='admin';render()`,sandbox);
+  assert.match(getElementById('app').innerHTML,/Fiche existante à actualiser/);
+  assert.match(getElementById('app').innerHTML,/option value="round:3"/);
+  vm.runInContext("circuitImportTargetChanged('round:3')",sandbox);
+  vm.runInContext('render()',sandbox);
+  assert.match(getElementById('app').innerHTML,/<option value="round:3" selected>M3 · Ancien nom du circuit/);
+  await vm.runInContext('circuitImportRun()',sandbox);
+  const importCall=calls.find(call=>call.url==='/api/admin/circuits/import');
+  assert.equal(importCall.body.round,3);
+  const savedPayload=JSON.parse(storage.get('gdsp_circuit_import_draft_result'));
+  assert.equal(savedPayload.targetRound,3);
+  assert.equal(savedPayload.targetSnapshot.id,previous.id,'une manche statique absente du stockage événement reste ciblable');
+  await vm.runInContext('circuitImportSave()',sandbox);
+  const post=calls.filter(call=>call.url==='/api/events/'+event.slug+'/data'&&call.method==='POST').at(-1);
+  assert.equal(post.body.circuitRounds.length,1,'l’actualisation ne doit pas créer une seconde fiche');
+  const updated=post.body.circuitRounds[0];
+  assert.equal(updated.id,previous.id);assert.equal(updated.round,3);assert.equal(updated.name,'Circuit actualisé');
+  assert.equal(updated.date,previous.date);assert.equal(updated.dateLabel,previous.dateLabel);assert.equal(updated.status,previous.status);
+  assert.equal(updated.winner,previous.winner);assert.deepEqual(updated.stats,previous.stats);assert.equal(updated.resultsImported,true);
+  assert.equal(updated.hero,driveResult.round.hero,'l’image nouvellement importée remplace l’ancienne');
+  assert.match(getElementById('cir-save-result').innerHTML,/actualisée dans l’onglet Circuit/);
 });
 
 test('Circuit local partiel : affiche les métadonnées et les avertissements sans carte vide ni HTML',async()=>{
