@@ -1201,3 +1201,27 @@ test('Onglets du tracé : splits et positions réels survivent à la sauvegarde,
   assert.equal((collisions.match(/<g class="cir-crash /g)||[]).length,1);
   assert.match(collisions,/<text [^>]+>2<\/text><title>Alice \/ Bob/);
 });
+
+test('Direction de course : espaces distincts, imports conservés et miniatures propres à l’événement',async()=>{
+  const {sandbox,calls}=makeBrowser();await new Promise(r=>setImmediate(r));
+  const run=src=>vm.runInContext(src,sandbox);
+  run("adminAuth=true;adminToken='ok';adminTab='desk';page='admin'");
+  assert.match(run('admin()'),/Événement sélectionné[\s\S]+Administration générale[\s\S]+Télémétrie/);
+  assert.match(run('admin()'),/Pilotes[\s\S]+Équipes/);
+  run("adminTab='import'");assert.match(run('admin()'),/ahImport\(\)[\s\S]+bulkImport\(event\)/);
+  const id=run('allDrivers()[0].id');sandbox.id=id;
+  const src='data:image/jpeg;base64,dGVzdA==';sandbox.file={files:[{type:'image/jpeg',size:10,dataUrl:src}]};
+  await run('updateDriverPhoto(id,file)');await run('saveRemote()');
+  assert.equal(calls.filter(c=>c.url.endsWith('/data')).at(-1).body.driverPhotos[id],src);
+  assert.ok(run('driverGrid(allDrivers())').includes(src));
+  run("eventContext={slug:'autre',name:'Autre',kind:'open',data:{}};");assert.equal(run('driverPhoto(id)'),'');
+});
+
+test('Direction de course : enregistrer une équipe conserve le nom et les résultats du pilote',async()=>{
+  const {sandbox,calls}=makeBrowser();await new Promise(r=>setImmediate(r));
+  const run=src=>vm.runInContext(src,sandbox);run("adminAuth=true;adminToken='ok';adminTab='teams';page='admin'");
+  const driver=run('allDrivers()[0]');sandbox.button={parentElement:{dataset:{id:driver.id},querySelector:()=>({value:'  Écurie Armor  '})}};
+  await run('saveDriverTeam(button)');const post=calls.findLast(c=>c.url.endsWith('/data'));
+  assert.deepEqual(post.body.manualDrivers[driver.id],{name:driver.name,team:'Écurie Armor'});
+  assert.equal(run('allDrivers()[0].team'),'Écurie Armor');assert.ok(post.body.sessions.length);
+});
