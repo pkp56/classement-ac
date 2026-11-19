@@ -589,7 +589,7 @@ function hub(){
         <h3 class="hub-side-h">📊 &nbsp; En un coup d'œil</h3>
         <div class="hub-stats">
           <div class="hub-stat-card"><div class="hub-stat-lbl">Championnats</div><strong>${String(champs.length).padStart(2,'0')}</strong></div>
-          <div class="hub-stat-card"><div class="hub-stat-lbl">Événements</div><strong>${String(endurances.length+cups.length+opens.length+fiestas.length+trackdays.length).padStart(2,'0')}</strong></div>
+          <div class="hub-stat-card"><div class="hub-stat-lbl">Événements</div><strong>${String(champs.length+endurances.length+cups.length+opens.length+fiestas.length+trackdays.length).padStart(2,'0')}</strong></div>
           <div class="hub-stat-card"><div class="hub-stat-lbl">Archives</div><strong>${String(archives.length).padStart(2,'0')}</strong></div>
           <div class="hub-stat-card"><div class="hub-stat-lbl">Pilotes</div><strong>${pilotsCount||'—'}</strong></div>
         </div>

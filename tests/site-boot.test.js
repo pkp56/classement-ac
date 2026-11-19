@@ -1303,6 +1303,8 @@ test('Event kinds endurance, cup, fiesta, trackday : hub, switcher, poids Global
   await new Promise(resolve => setImmediate(resolve));
 
   const hubHtml = getElementById('app').innerHTML;
+  assert.match(hubHtml, /Championnats<\/div><strong>02<\/strong>/);
+  assert.match(hubHtml, /Événements<\/div><strong>07<\/strong>/);
   assert.match(hubHtml, /Endurances[\s\S]+Cups & trophées[\s\S]+Opens & week-ends[\s\S]+Fiestas[\s\S]+Trackdays/);
   assert.match(hubHtml, /coeff 0\.75/);
   assert.match(hubHtml, /coeff 0\.0/);
