@@ -763,6 +763,7 @@ test('Catalogue local : sélection et calendrier persistés sans effacer les ses
   const catalog={scannedAt:'2026-11-11T12:00:00Z',sources:[],cars:[{id:'lola',name:'Lola',brand:'Lola'}],tracks:[{id:'spa/short',trackId:'spa',layoutId:'short',name:'Spa court'}],warnings:[]};
   const {sandbox,getElementById,calls}=makeBrowser([], (url,opts)=>{
     if(url.startsWith('/api/admin/local-mods'))return response(catalog);
+    if(url==='/api/admin/circuits/import-local')return response({ok:true,round:{id:'local:2027-03-10:spa/short',date:'2027-03-10',name:'Spa court fiche',driverFolder:'spa',status:'upcoming'},warnings:[]});
     if(remote&&url==='/api/events/'+fixture.event.slug)return response(remote);
     if(remote&&url==='/api/events/'+fixture.event.slug+'/data'&&opts.method==='POST'){
       remote.data=JSON.parse(opts.body);return response({ok:true});
@@ -772,6 +773,9 @@ test('Catalogue local : sélection et calendrier persistés sans effacer les ses
   await new Promise(resolve=>setImmediate(resolve));
   await vm.runInContext(`loadEvent(${JSON.stringify(fixture.event.slug)})`,sandbox);
   remote={slug:fixture.event.slug,data:JSON.parse(vm.runInContext('JSON.stringify(eventContext.data)',sandbox))};
+  const driveFiche={id:'drive-existing-round',round:7,label:'M7',name:'Fiche conservée depuis Drive',source:'Google Drive'};
+  remote.data.circuitRounds=[driveFiche];
+  vm.runInContext(`eventContext.data.circuitRounds=${JSON.stringify([driveFiche])}`,sandbox);
   const originalSessions=JSON.stringify(remote.data.sessions),originalPen=JSON.stringify(remote.data.penMap);
   vm.runInContext("adminAuth=true;adminToken='tok';adminTab='events';page='admin'",sandbox);
   await vm.runInContext('loadLocalMods(true)',sandbox);
@@ -783,14 +787,49 @@ test('Catalogue local : sélection et calendrier persistés sans effacer les ses
   getElementById('local-mod-cars').selectedOptions=[{value:'lola'}];getElementById('local-mod-track').value='spa/short';getElementById('local-mod-date').value='2027-03-10';
   await vm.runInContext('addLocalModRound()',sandbox);
   assert.equal(remote.data.customCalendar['2027-03-10'].layout,'short');
+  assert.equal(remote.data.circuitRounds[0].name,'Fiche conservée depuis Drive');
+  assert.equal(remote.data.circuitRounds[0].source,'Google Drive');
+  assert.equal(remote.data.circuitRounds[1].name,'Spa court fiche');
+  assert.equal(remote.data.circuitRounds[1].round,8,'la fiche locale ne remplace ni la fiche Drive ni les six fiches statiques Lola');
   await vm.runInContext('saveRemote()',sandbox);
   const saved=calls.filter(c=>c.url.endsWith('/data')&&c.method==='POST').at(-1).body;
   assert.equal(saved.modSelection.track.id,'spa/short');
   assert.equal(saved.customCalendar['2027-03-10'].trackName,'Spa court');
+  assert.equal(saved.circuitRounds[0].name,'Fiche conservée depuis Drive');
+  assert.equal(saved.circuitRounds[1].name,'Spa court fiche');
 });
 
-test('Création depuis le catalogue : identifiants de voiture et layout inclus dans le POST initial',async()=>{
-  const {sandbox,getElementById,calls}=makeBrowser([], (url,opts)=>url==='/api/events'&&opts.method==='POST'?response({error:'Arrêt du scénario de test après capture'},409):null);
+test('Manche locale sans fast_lane.ai : l’entrée calendrier est conservée sans fausse fiche Circuit',async()=>{
+  let remote=null;
+  const catalog={scannedAt:'2026-11-11T12:00:00Z',sources:[],cars:[],tracks:[{id:'track/layout',trackId:'track',layoutId:'layout',name:'Circuit incomplet'}],warnings:[]};
+  const {sandbox,getElementById}=makeBrowser([], (url,opts)=>{
+    if(url.startsWith('/api/admin/local-mods'))return response(catalog);
+    if(url==='/api/admin/circuits/import-local')return response({ok:true,round:null,warnings:['fast_lane.ai absent du mod sélectionné : fiche technique non importée']});
+    if(remote&&url==='/api/events/'+fixture.event.slug)return response(remote);
+    if(remote&&url==='/api/events/'+fixture.event.slug+'/data'&&opts.method==='POST'){
+      remote.data=JSON.parse(opts.body);return response({ok:true});
+    }
+    return null;
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext(`loadEvent(${JSON.stringify(fixture.event.slug)})`,sandbox);
+  remote={slug:fixture.event.slug,data:JSON.parse(vm.runInContext('JSON.stringify(eventContext.data)',sandbox))};
+  vm.runInContext("adminAuth=true;adminToken='tok'",sandbox);
+  await vm.runInContext('loadLocalMods(true)',sandbox);
+  getElementById('local-mod-cars').selectedOptions=[];
+  getElementById('local-mod-track').value='track/layout';
+  getElementById('local-mod-date').value='2027-04-01';
+  await vm.runInContext('addLocalModRound()',sandbox);
+  assert.equal(remote.data.customCalendar['2027-04-01'].track,'track');
+  assert.equal(remote.data.circuitRounds,undefined);
+});
+
+test('Création depuis le catalogue : identifiants, calendrier et fiche locale inclus dans le POST initial',async()=>{
+  const {sandbox,getElementById,calls}=makeBrowser([], (url,opts)=>{
+    if(url==='/api/admin/circuits/import-local')return response({ok:true,round:{id:'local:2027-04-01:track/layout',name:'Circuit variante · fiche',date:'2027-04-01',driverFolder:'track',status:'upcoming'},warnings:[]});
+    if(url==='/api/events'&&opts.method==='POST')return response({error:'Arrêt du scénario de test après capture'},409);
+    return null;
+  });
   await new Promise(resolve=>setImmediate(resolve));
   sandbox.initialCatalog={scannedAt:'2026-11-11',sources:[],cars:[{id:'car',name:'Voiture'}],tracks:[{id:'track/layout',trackId:'track',layoutId:'layout',name:'Circuit variante'}],warnings:[]};
   vm.runInContext('localModsCatalog=initialCatalog;adminAuth=true',sandbox);
@@ -801,6 +840,41 @@ test('Création depuis le catalogue : identifiants de voiture et layout inclus d
   const body=calls.find(c=>c.url==='/api/events'&&c.method==='POST').body;
   assert.equal(body.data.modSelection.cars[0].id,'car');assert.equal(body.data.modSelection.track.layoutId,'layout');
   assert.equal(body.data.customCalendar['2027-04-01'].track,'track');
+  assert.equal(body.data.circuitRounds[0].name,'Circuit variante · fiche');
+  assert.equal(body.data.circuitRounds[0].round,1);
+});
+
+test('Circuit : résultats QUALIFY/RACE importés font passer la manche à Disputée sans recalculer les classements',async()=>{
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const fiche={
+    id:'local:2027-04-14:spa/gp',round:1,label:'M1',name:'Spa Grand Prix',shortName:'Spa',
+    driverFolder:'spa',trackId:'spa',layoutId:'gp',date:'2027-04-14',status:'upcoming',
+    layout:'Grand Prix',layoutKey:'gp',country:'Belgique',city:'Spa',countryCode:'BEL',
+    direction:'clockwise',pitboxes:24,width:'10 m',lengthM:7000,lengthStr:'7,000 km',
+    elevation:{min:0,max:100,delta:100},profile:{path:'M0 100 L1000 0',closed:'M0 100 L1000 0 L1000 120 L0 120 Z',min:0,max:100,delta:100},
+    outline:{path:'M34 34 L500 80 L34 34 Z',viewBox:'0 0 1000 560',start:{x:34,y:34},sectors:[],corners:[]},
+    profiles:{},sectorSplits:[{label:'S1',from:0,to:7000}],surfaces:[],stats:null,format:null,
+    source:'Mod local Assetto Corsa',hero:null
+  };
+  const sessions=[
+    {date:'2027-04-14T20:00:00Z',track:'spa',type:'QUALIFY',results:[{id:'p1',name:'Pilote test',best:90000}]},
+    {date:'2027-04-14T21:00:00Z',track:'spa',type:'RACE',results:[{id:'p1',name:'Pilote test',best:91000,time:100000}]}
+  ];
+  vm.runInContext(`eventContext={slug:'spa-cup',name:'Open de Spa',kind:'open',pointsConfig:{},data:{circuitRounds:[${JSON.stringify(fiche)}]}};currentSlug='spa-cup';sessions.length=0;sessions.push(...${JSON.stringify(sessions)});circuitsCache=null;circuitsError=''`,sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  assert.equal(vm.runInContext('circuitsCache.rounds[0].status',sandbox),'done');
+  assert.equal(vm.runInContext('circuitsCache.rounds[0].resultsImported',sandbox),true);
+  assert.equal(vm.runInContext('circuitsCache.completedCount',sandbox),1);
+  const html=vm.runInContext('circuit()',sandbox);
+  assert.match(html,/Disputée/);
+  assert.match(html,/Résultats disponibles/);
+  assert.match(html,/disponibles dans l’onglet Résultats/);
+  assert.doesNotMatch(html,/Manche<\/small>à venir/i);
+  assert.doesNotMatch(html,/n'a pas encore été disputée/);
+  vm.runInContext("sessions.splice(0,sessions.length,{date:'2027-04-14T21:00:00Z',track:'spa',type:'PRACTICE',results:[{id:'p1',name:'Pilote test'}]});circuitsCache=null",sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  assert.equal(vm.runInContext('circuitsCache.rounds[0].status',sandbox),'upcoming','PRACTICE ne suffit pas à déclarer une manche disputée');
 });
 
 test('Global incomplet : garde les données en mémoire, propose un nouvel essai sans faux classement',async()=>{
