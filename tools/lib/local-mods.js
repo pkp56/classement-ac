@@ -10,7 +10,42 @@ const DEFAULT_ROOTS=Object.freeze([
 function configuredRoots(env=process.env){
   return env.AC_CONTENT_ROOTS===undefined?[...DEFAULT_ROOTS]:env.AC_CONTENT_ROOTS.split(';').map(s=>s.trim()).filter(Boolean);
 }
-const text=v=>typeof v==='string'?v.replace(/<[^>]*>/g,'').trim().slice(0,300):'';
+const text=(v,max=300)=>{
+  if(typeof v!=='string'&&typeof v!=='number')return '';
+  return String(v).replace(/<[^>]*>/g,'').replace(/[\x00-\x1f\x7f]/g,' ').trim().slice(0,max);
+};
+const CAR_SPEC_FIELDS=Object.freeze([
+  ['bhp','Puissance',['bhp','power']],
+  ['torque','Couple',['torque']],
+  ['weight','Poids',['weight']],
+  ['topspeed','Vitesse maximale',['topspeed','topSpeed','top_speed']],
+  ['acceleration','Accélération',['acceleration']],
+  ['pwratio','Rapport poids / puissance',['pwratio','powerWeight','power_to_weight']],
+  ['range','Autonomie',['range']]
+]);
+function carMetadata(meta,id){
+  const rawSpecs=meta&&meta.specs&&typeof meta.specs==='object'&&!Array.isArray(meta.specs)?meta.specs:{};
+  const specs={};
+  for(const [key,_label,aliases] of CAR_SPEC_FIELDS){
+    const value=aliases.map(alias=>text(rawSpecs[alias],100)).find(Boolean);
+    if(value)specs[key]=value;
+  }
+  const tags=Array.isArray(meta&&meta.tags)?meta.tags.slice(0,12).map(tag=>text(tag,80)).filter(Boolean):[];
+  return {
+    id,
+    name:text(meta&&meta.name)||id,
+    brand:text(meta&&meta.brand),
+    category:text(meta&&(meta.class||meta.category)),
+    year:text(meta&&meta.year,32),
+    author:text(meta&&meta.author),
+    version:text(meta&&meta.version,80),
+    description:text(meta&&meta.description,1200),
+    tags,
+    specs,
+    source:'local',
+    metadataAvailable:!!meta
+  };
+}
 function within(file,root){const relative=path.relative(root,file);return relative===''||(!path.isAbsolute(relative)&&relative!=='..'&&!relative.startsWith('..'+path.sep));}
 async function scanCatalog(roots,{maxEntries=10000}={}){
   const sources=[],allowed=[],warnings=[],cars=new Map(),tracks=new Map();
@@ -45,7 +80,7 @@ async function scanCatalog(roots,{maxEntries=10000}={}){
       const meta=await json(path.join(source.real,'cars',id,'ui','ui_car.json'));
       const key=id.toLowerCase();
       if(cars.has(key)){cars.get(key).alsoAvailableIn.push(source.id);continue;}
-      cars.set(key,{id,name:text(meta?.name)||id,brand:text(meta?.brand),category:text(meta?.class),source:source.id,alsoAvailableIn:[],metadataAvailable:!!meta});
+      cars.set(key,{...carMetadata(meta,id),source:source.id,alsoAvailableIn:[]});
     }
     for(const trackId of await dirs(path.join(source.real,'tracks'))){
       if(++visited>maxEntries)break;

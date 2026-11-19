@@ -35,6 +35,22 @@ test('catalogue multi-disques, priorité, doublons et variantes distinctes',asyn
   assert.equal(r.sources[2].status,'missing');
   assert(!JSON.stringify(r.cars).includes(c));assert(!JSON.stringify(r.tracks).includes(d));
 });
+test('ui_car.json expose une fiche locale limitée aux champs techniques utiles, sans HTML ni chemin disque',async t=>{
+  const {c,write}=await fixture(t);
+  await write(c,'cars/lola_t290/ui/ui_car.json',{
+    name:'Lola <b>T290</b>',brand:'Lola',class:'Prototype historique',year:1972,author:'GDSP',version:'2.1',
+    description:'Prototype <script>alert(1)</script> de course',tags:['Historic','Group 5'],
+    specs:{bhp:'300 bhp',torque:'320 Nm',weight:'650 kg',topspeed:'280 km/h',acceleration:'3.5 s',pwratio:'2.1 kg/hp',ignored:{secret:'no'}}
+  });
+  const result=await scanCatalog([c]);
+  const car=result.cars[0];
+  assert.equal(car.name,'Lola T290');assert.equal(car.brand,'Lola');assert.equal(car.category,'Prototype historique');
+  assert.equal(car.year,'1972');assert.equal(car.author,'GDSP');assert.equal(car.version,'2.1');
+  assert.equal(car.description,'Prototype alert(1) de course');assert.deepEqual(car.tags,['Historic','Group 5']);
+  assert.deepEqual(car.specs,{bhp:'300 bhp',torque:'320 Nm',weight:'650 kg',topspeed:'280 km/h',acceleration:'3.5 s',pwratio:'2.1 kg/hp'});
+  assert.equal(car.metadataAvailable,true);
+  assert(!JSON.stringify(car).includes(c));
+});
 test('nom de dossier conservé si métadonnées absentes, invalides ou trop grandes',async t=>{
   const {c,d,write}=await fixture(t);
   await fs.mkdir(path.join(c,'cars/no-ui'),{recursive:true});
