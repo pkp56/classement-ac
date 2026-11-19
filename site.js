@@ -324,6 +324,7 @@ async function loadEvent(slug){
     const ev=await r.json();
     if(!ev||!ev.slug||!ev.name||isEventMarkedDeleted(ev)){console.warn('loadEvent: event invalide ou supprimé',ev);return null}
     eventContext={slug:ev.slug,name:ev.name,kind:ev.kind||'championship',pointsConfig:ev.points_config||{},data:ev.data||{}};
+    if(currentSlug!==ev.slug)eventSheetTab='settings';
     currentSlug=ev.slug;
     // Les manches importées vivent dans l'événement : on recharge le calendrier.
     circuitsCache=null;circuitsError='';
@@ -1554,7 +1555,8 @@ function carSheet(){
     const specs=Object.entries(car.specs||{}).filter(([key,value])=>labels[key]&&value);
     const heroMeta=[['Constructeur',car.brand||'Non précisé'],['Catégorie',car.category||'Non précisée'],['Année',car.year||'Non précisée'],['Pays',car.country||'Non précisé'],['Auteur du mod',car.author||'Non communiqué'],['Version',car.version||'Non précisée']];
     const specKpi=(label,value,sub,cls='')=>`<div class="cir-kpi ${cls}"><span>${label}</span><strong>${esc(value||'—')}</strong><small>${esc(sub||'Fiche du mod local')}</small></div>`;
-    const description=car.description?`<div class="cir-panel"><div class="eyebrow">Présentation du mod</div><h3>Description</h3><p class="cir-src">${renderEventRichText(car.description)}</p></div>`:'';
+    const carText=sheetDescription('car',car);
+    const description=carText?`<div class="cir-panel"><div class="eyebrow">Présentation du mod</div><h3>Description</h3><p class="cir-src">${renderEventRichText(carText)}</p></div>`:'';
     const tags=car.tags&&car.tags.length?`<div class="car-sheet-tags">${car.tags.map(tag=>`<span class="tag">${esc(tag)}</span>`).join('')}</div>`:'';
     const curveCard=(key,title,unit,color)=>{
       const points=(Array.isArray(car[key])?car[key]:[]).filter(point=>point&&Number.isFinite(point.rpm)&&Number.isFinite(point.value));
@@ -1686,8 +1688,8 @@ function mergeCircuitRounds(base, extra){
     return { ...r, round: n, label: r.label || `M${n}` };
   });
 }
-function eventCircuitPlaceholders(existingRounds){
-  const data=(eventContext&&eventContext.data)||{},found=[];
+function eventCircuitPlaceholders(existingRounds,data=eventContext?.data||{}){
+  const found=[];
   const calendar=data.customCalendar&&typeof data.customCalendar==='object'?data.customCalendar:(customCalendar||{});
   const sameTrack=(a,b)=>{
     const aTrack=String(a.trackId||a.driverFolder||a.localTrackId||'').toLowerCase();
@@ -2185,8 +2187,9 @@ function circuit(){
     + `</tbody></table></div></div>`;
   const trackTags=Array.isArray(round.tags)?round.tags.filter(Boolean):[];
   const trackUrl=isSafeHttpUrl(round.trackUrl)?round.trackUrl:'';
-  const metadataPanel=(round.description||trackTags.length||trackUrl)
-    ?`<div class="cir-panel"><div class="eyebrow">Métadonnées du mod</div><h3>À propos du circuit</h3>${round.description?`<p class="cir-src">${renderEventRichText(round.description)}</p>`:''}${trackTags.length?`<div class="car-sheet-tags">${trackTags.map(tag=>`<span class="tag">${esc(tag)}</span>`).join('')}</div>`:''}${trackUrl?`<a class="btn secondary small" href="${esc(trackUrl)}" target="_blank" rel="noopener noreferrer">Page du mod ↗</a>`:''}</div>`
+  const circuitText=sheetDescription('track',round);
+  const metadataPanel=(circuitText||trackTags.length||trackUrl)
+    ?`<div class="cir-panel"><div class="eyebrow">Métadonnées du mod</div><h3>À propos du circuit</h3>${circuitText?`<p class="cir-src">${renderEventRichText(circuitText)}</p>`:''}${trackTags.length?`<div class="car-sheet-tags">${trackTags.map(tag=>`<span class="tag">${esc(tag)}</span>`).join('')}</div>`:''}${trackUrl?`<a class="btn secondary small" href="${esc(trackUrl)}" target="_blank" rel="noopener noreferrer">Page du mod ↗</a>`:''}</div>`
     :'';
 
   return technicalNotice+importDetails+`<div class="cir-roundbar">${calendar}</div>`
@@ -2560,6 +2563,7 @@ async function saveRemote(){
   if(Array.isArray(baseData.galleryImages)&&baseData.galleryImages.length)payload.galleryImages=baseData.galleryImages;
   if(baseData.eventInfo&&typeof baseData.eventInfo==='object')payload.eventInfo=baseData.eventInfo;
   if(baseData.modSelection&&typeof baseData.modSelection==='object')payload.modSelection=baseData.modSelection;
+  if(baseData.sheetTranslations)payload.sheetTranslations=baseData.sheetTranslations;
   if(Array.isArray(baseData.carSheets)&&baseData.carSheets.length)payload.carSheets=baseData.carSheets;
   // Fiches circuit importées (Drive ou mod local) : sans cette ligne, chaque
   // sauvegarde de l'événement les effacerait.
@@ -3679,7 +3683,101 @@ function renderLocalModsPanel(){
     ${currentSlug?`<div class="controls"><button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button></div>`:''}</section>`;
 }
 
+// Les traductions appartiennent à l'événement, pas au catalogue ni au mod.
+function sheetTextKey(kind,row){
+  return kind+':'+(kind==='car'?row.id:(row.driveFolderId||row.id||row.name));
+}
+function sheetDescription(kind,row){
+  return eventContext?.data?.sheetTranslations?.[sheetTextKey(kind,row)]||row.description||'';
+}
+let eventSheetTab='settings',adminCircuitBase=null,adminCircuitError='';
+async function openEventSheetTab(tab){
+  eventSheetTab=tab;render();
+  if(tab==='settings'||!isLolaEvent()||adminCircuitBase)return;
+  try{
+    const res=await apiGet('/data/circuits.json');
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const base=await res.json();
+    if(!Array.isArray(base.rounds))throw new Error('Calendrier invalide');
+    adminCircuitBase=base.rounds;adminCircuitError='';
+  }catch(e){adminCircuitError=e.message;}
+  render();
+}
+function adminSheetRounds(data){
+  const merged=mergeCircuitRounds(isLolaEvent()?(adminCircuitBase||[]):[],data.circuitRounds||[]);
+  return merged.concat(eventCircuitPlaceholders(merged,data));
+}
+function renderEventSheetTools(){
+  if(!currentSlug||!eventContext)return '';
+  const tabs=[['settings','Gestion'],['translation','Traduction'],['refresh','Actualiser les circuits']];
+  const nav=`<div class="tabs">${tabs.map(([key,label])=>`<button type="button" class="${key===eventSheetTab?'active':''}" onclick="openEventSheetTab('${key}')">${label}</button>`).join('')}</div>`;
+  if(eventSheetTab==='settings')return nav;
+  if(isLolaEvent()&&!adminCircuitBase)return nav+`<p class="note">${adminCircuitError?'Calendrier indisponible : '+esc(adminCircuitError)+'. Cliquez à nouveau sur l’onglet pour réessayer.':'Chargement du calendrier…'}</p>`;
+  const data=eventContext.data||{},rows=adminSheetRounds(data);
+  const heading=`<h3>${esc(eventContext.name)}</h3><p id="event-poster-status" class="note" role="status"></p>`;
+  if(eventSheetTab==='refresh')return nav+heading+'<p>Relire les fichiers du circuit et publier la fiche de cette manche, sans ajouter de manche au calendrier.</p>'+ (rows.map((r,i)=>{
+    const source=r.driveFolderId?'Drive':r.localTrackId||r.trackId?'Mod local':'';
+    return `<div class="admin-round"><b>${esc(r.label)} · ${esc(r.name)}</b> ${esc(r.date||'')} · ${source?`<button type="button" class="btn secondary small" onclick="refreshEventCircuit(${i},this)">Actualiser depuis ${source}</button>`:'Source inconnue : utilisez Administration → Circuits.'}</div>`;
+  }).join('')||'<p>Aucune manche associée.</p>');
+  const entries=[...eventCarSheets(eventContext).map(r=>['car',r]),...rows.map(r=>['track',r])];
+  const seen=new Set();
+  const forms=entries.map(([kind,r])=>{
+    const key=sheetTextKey(kind,r),value=data.sheetTranslations?.[key]||'';
+    if(seen.has(key)||(!r.description&&!value))return '';seen.add(key);
+    return `<section class="admin-round"><h3>${kind==='car'?'Voiture':'Circuit'} · ${esc(r.name)}</h3><details open><summary>Texte original du mod</summary><p style="white-space:pre-wrap">${esc(r.description||'')}</p></details><label>Traduction française<textarea class="admin-input" style="display:block;width:100%" rows="5" maxlength="6000" data-key="${esc(key)}">${esc(value)}</textarea></label><button type="button" class="btn" onclick="saveSheetTranslation(this)">Enregistrer la traduction</button></section>`;
+  }).join('');
+  return nav+heading+'<p>La fiche publique affiche le français. Videz le champ pour revenir au texte original.</p>'+(forms||'<p>Aucune description importée à traduire.</p>');
+}
+async function saveSheetTranslation(button){
+  if(!adminAuth||!currentSlug)return;
+  const field=button.parentElement.querySelector('textarea'),key=field.dataset.key,value=field.value.trim().slice(0,6000);
+  button.disabled=true;
+  try{
+    await saveEventHomePatch(currentSlug,data=>{
+      const texts={...data.sheetTranslations};
+      if(value)texts[key]=value;else delete texts[key];
+      data.sheetTranslations=texts;
+    },'Traduction enregistrée.');
+  }catch(e){alert('Traduction non enregistrée : '+e.message);}finally{button.disabled=false;}
+}
+async function refreshEventCircuit(index,button){
+  if(!adminAuth||!currentSlug)return;
+  const slug=currentSlug,old=adminSheetRounds(eventContext.data)[index];
+  if(!old)return;
+  button.disabled=true;button.textContent='Lecture en cours…';
+  try{
+    let result;
+    if(old.driveFolderId){
+      const res=await apiPost('/api/admin/circuits/import',{driveUrl:old.driveFolderId,round:old.round});
+      result=await res.json();if(!res.ok)throw new Error(result.error||'Import Drive impossible');
+    }else{
+      result=await requestLocalCircuitImport({trackId:old.localTrackId||old.trackId,layoutId:old.localLayoutId||old.layoutId||'',name:old.name},old.date,old.round);
+    }
+    if(!result.round)throw new Error(localCircuitImportIssue(result));
+    if(old.outline&&result.round.technicalUnavailable)throw new Error('Tracé illisible : la fiche complète existante est conservée.');
+    await saveEventHomePatch(slug,data=>{
+      const target=currentSlug===slug&&adminSheetRounds(data).find(r=>r.round===old.round);
+      if(!target||sheetTextKey('track',target)!==sheetTextKey('track',old)||target.date!==old.date)throw new Error('La manche a changé. Rechargez l’événement.');
+      const rows=[...(data.circuitRounds||[])];
+      let i=rows.findIndex(r=>Number(r.round)===old.round);
+      if(i<0)i=rows.findIndex(r=>!Number(r.round)&&sheetTextKey('track',r)===sheetTextKey('track',old)&&r.name===old.name);
+      const fresh={...result.round,round:old.round,label:target.label,technicalUnavailable:!!result.round.technicalUnavailable,
+        sectorFractions:result.round.sectorFractions||[],importWarnings:result.warnings||[],importedFiles:Object.values(result.files||{}).map(f=>f.name)};
+      for(const k of ['date','dateLabel','status','winner','stats','format','hero','id'])if(target[k]!=null)fresh[k]=target[k];
+      if(Array.isArray(target.profiles)&&target.profiles.length){
+        fresh.layoutKey=target.layoutKey;
+        fresh.profiles=target.profiles.map(p=>p.key!==target.layoutKey?p:{...p,lengthM:fresh.lengthM,lengthStr:fresh.lengthStr,elevation:fresh.elevation,outline:fresh.outline,profile:fresh.profile});
+      }
+      if(i<0)rows.push(fresh);else rows[i]={...rows[i],...fresh};
+      data.circuitRounds=rows;
+    },'Fiche actualisée.'+localCircuitImportDetails(result));
+    if(currentSlug===slug){circuitsCache=null;circuitsError='';}
+  }catch(e){alert('Fiche non actualisée : '+e.message);}finally{button.disabled=false;button.textContent='Actualiser depuis '+(old.driveFolderId?'Drive':'Mod local');}
+}
+
 function renderEventsAdmin(){
+  const sheetTools=renderEventSheetTools();
+  if(sheetTools&&eventSheetTab!=='settings')return sheetTools;
 
   const fileInput=`<input type="file" id="event-poster-input" accept="image/*" style="display:none" onchange="handleEventPosterFile(event)"><input type="file" id="event-gallery-input" accept="image/*" style="display:none" onchange="handleEventGalleryFile(event)">`;
   const topBar=`${fileInput}<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px"><button class="btn" onclick="createEventPrompt()">+ Créer un événement</button>${currentSlug&&eventContext?`<button class="btn secondary" onclick="triggerEventPosterUpload('${currentSlug.replace(/'/g,"\\'")}')">🖼️ ${hasEventPoster(eventContext)?'Changer':'Insérer'} l'affiche de l'événement courant (${esc(eventContext.name)})</button><button class="btn secondary" onclick="deleteCurrentEvent()">Supprimer l'événement courant</button>`:''}</div><div id="event-poster-status" class="note" style="margin-bottom:12px"></div>`;
@@ -3752,7 +3850,7 @@ function renderEventsAdmin(){
       ${gallery.length?`<div class="admin-gal-thumbs">${gallery.map((g,idx)=>`<div class="admin-gal-thumb"><button type="button" class="admin-gal-del" title="Retirer" onclick="removeEventGalleryImage(${idx})">✕</button><img src="${esc(g.src)}" alt="${esc(g.caption||'Photo')}"><div class="muted" style="font-size:10px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.caption||'Sans légende')}</div></div>`).join('')}</div>`:''}
     </div>
   </div>`:'';
-  return renderLocalModsPanel()+topBar+table(['','Événement','Courant','Coeff','Affiche','Mis à jour',''],events.map(row))+evHomeEditor;
+  return sheetTools+renderLocalModsPanel()+topBar+table(['','Événement','Courant','Coeff','Affiche','Mis à jour',''],events.map(row))+evHomeEditor;
 }
 
 function renderChampPointsPanel(){

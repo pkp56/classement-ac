@@ -1,4 +1,6 @@
 'use strict';
+
+const { safeTrackText } = require('./track-text');
 /**
  * Import d'un circuit depuis un dossier Google Drive partagé par lien.
  *
@@ -401,6 +403,7 @@ async function importFromDrive(folderInput, opts = {}) {
     dateLabel: null,
     winner: null,
     stats: null,
+    description: safeTrackText(ui && (ui.description || ui.Description), 1200) || null,
     driveFolderId: folderId,
     driveName: (ui && (ui.trackId || ui.id)) || null,
     source: `Google Drive · ${folderId}`,

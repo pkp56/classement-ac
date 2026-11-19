@@ -1117,3 +1117,44 @@ test('les tableaux débordants sont signalés et accessibles au clavier uniqueme
   assert.equal(overflowing.getAttribute('role'),null);
   assert.equal(overflowing.getAttribute('tabindex'),null);
 });
+
+test('traduction par événement : original conservé, sauvegarde ordinaire et retour à l’original', async()=>{
+  const {sandbox,calls}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const run=code=>vm.runInContext(code,sandbox);
+  await run(`loadEvent(${JSON.stringify(fixture.event.slug)})`);
+  run(`adminAuth=true;adminToken='test';eventContext.data.carSheets=[{id:'gt',description:'English text'}];`);
+  const button={parentElement:{querySelector:()=>({dataset:{key:'car:gt'},value:'Texte français <b>'})}};
+  await sandbox.saveSheetTranslation(button);
+  assert.match(run('carSheet()'),/Texte français &lt;b&gt;/);
+  assert.equal(run('eventCarSheets()[0].description'),'English text');
+  await run('saveRemote()');
+  assert.equal(calls.at(-1).body.sheetTranslations['car:gt'],'Texte français <b>');
+  button.parentElement.querySelector=()=>({dataset:{key:'car:gt'},value:' '});
+  await sandbox.saveSheetTranslation(button);
+  assert.match(run('carSheet()'),/English text/);
+});
+
+for(const drive of [false,true])test(`actualisation ${drive?'Drive':'locale'} en place, puis source absente`,async()=>{
+  const slug='open-test',url='/api/events/'+slug;
+  const old={id:'fiche',name:'GP',round:2,date:'2027-05-01',status:'done',...(drive?{driveFolderId:'dossier'}:{trackId:'test',layoutId:'gp'})};
+  const ev={slug,name:'Open',data:{sessions:[],penMap:{},circuitRounds:[old],sheetTranslations:{'track:fiche':'Traduction'}}};
+  let available=true,writes=0;
+  const {sandbox,calls}=makeBrowser([],async(path,opts)=>{
+    if(path===url)return response(ev);
+    if(path===url+'/data'){ev.data=JSON.parse(opts.body);writes++;return response({ok:true});}
+    if(path==='/api/admin/circuits/import'+(drive?'':'-local'))return response(available?{round:{name:'GP actualisé',description:'New text',status:'upcoming',date:null},files:{},warnings:[]}:{round:null,warnings:['Circuit absent']});
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext(`loadEvent('${slug}')`,sandbox);
+  vm.runInContext("adminAuth=true;adminToken='test'",sandbox);
+  await sandbox.refreshEventCircuit(0,{});
+  assert.equal(writes,1);
+  assert.deepEqual(ev.data.circuitRounds.map(r=>[r.id,r.round,r.date,r.status,r.description]),[['fiche',2,'2027-05-01','done','New text']]);
+  const args=calls.find(c=>c.url.startsWith('/api/admin/circuits/import')).body;
+  assert.equal(drive?args.driveUrl:args.layoutId,drive?'dossier':'gp');
+  assert.equal(ev.data.sheetTranslations['track:fiche'],'Traduction');
+  available=false;
+  await sandbox.refreshEventCircuit(0,{});
+  assert.equal(writes,1,'un échec ne doit pas remplacer la fiche');
+});
