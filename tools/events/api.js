@@ -31,6 +31,20 @@
 
 const crypto = require('crypto');
 
+const EVENT_KIND_META = Object.freeze({
+  championship: { label: 'Championnat', globalCoef: 1.0 },
+  endurance: { label: 'Endurance', globalCoef: 1.0 },
+  cup: { label: 'Cup', globalCoef: 0.75 },
+  open: { label: 'Open', globalCoef: 0.5 },
+  fiesta: { label: 'Fiesta', globalCoef: 0 },
+  trackday: { label: 'Trackday', globalCoef: 0 },
+  archive: { label: 'Archive', globalCoef: 1.0 }
+});
+const VALID_KINDS = Object.freeze(Object.keys(EVENT_KIND_META));
+function defaultGlobalCoefForKind(kind) {
+  return Object.hasOwn(EVENT_KIND_META, kind) ? EVENT_KIND_META[kind].globalCoef : 1.0;
+}
+
 const DEFAULT_POINTS = {
   pointsScale: [41, 38, 35, 32, 30, 28, 26, 24, 22, 20, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1],
   polePoints: 1,
@@ -169,7 +183,7 @@ const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS gdsp_events (
   slug          TEXT PRIMARY KEY,
   name          TEXT NOT NULL,
-  kind          TEXT NOT NULL CHECK (kind IN ('championship','open','archive')),
+  kind          TEXT NOT NULL CHECK (kind IN ('championship','endurance','cup','open','fiesta','trackday','archive')),
   points_config JSONB NOT NULL DEFAULT '{}'::jsonb,
   data          JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -186,6 +200,11 @@ class EventStore {
   }
   async init() {
     await this.pool.query(SCHEMA_SQL);
+    await this.pool.query(
+      `ALTER TABLE gdsp_events DROP CONSTRAINT IF EXISTS gdsp_events_kind_check;
+       ALTER TABLE gdsp_events ADD CONSTRAINT gdsp_events_kind_check
+         CHECK (kind IN ('championship','endurance','cup','open','fiesta','trackday','archive'));`
+    );
     // Reprise de l'ancienne table mono-championnat, si elle existe encore.
     const legacy = await this.pool.query(`SELECT to_regclass('public.gdsp_championship_data') AS tbl`);
     if (legacy.rows[0] && legacy.rows[0].tbl) {
@@ -206,7 +225,15 @@ class EventStore {
     const { rows } = await this.pool.query(
       `SELECT slug, name, kind, points_config, updated_at
          FROM gdsp_events
-        ORDER BY kind = 'championship' DESC, kind = 'open' DESC, updated_at DESC`
+        ORDER BY CASE kind
+          WHEN 'championship' THEN 1
+          WHEN 'endurance' THEN 2
+          WHEN 'cup' THEN 3
+          WHEN 'open' THEN 4
+          WHEN 'fiesta' THEN 5
+          WHEN 'trackday' THEN 6
+          ELSE 7
+        END, updated_at DESC`
     );
     return rows;
   }
@@ -410,8 +437,8 @@ function mountEventRoutes(app, deps) {
     const kind = String(body.kind || 'championship');
     if (!validSlug(slug)) return res.status(400).json({ error: 'Identifiant (slug) invalide. Utilisez lettres, chiffres et tirets.' });
     if (!name || name.length > 120) return res.status(400).json({ error: 'Nom manquant ou trop long.' });
-    if (!['championship', 'open', 'archive'].includes(kind)) return res.status(400).json({ error: 'Type invalide.' });
-    const pointsConfig = Object.assign({}, DEFAULT_POINTS, { globalCoef: kind === 'open' ? 0.5 : 1.0 }, body.pointsConfig || {});
+    if (!VALID_KINDS.includes(kind)) return res.status(400).json({ error: 'Type invalide.' });
+    const pointsConfig = Object.assign({}, DEFAULT_POINTS, { globalCoef: defaultGlobalCoefForKind(kind) }, body.pointsConfig || {});
     const data = isNonEmptyObject(body.data) ? body.data : {};
     try {
       const store = await storeOrDelegate(next,res);
@@ -429,17 +456,24 @@ function mountEventRoutes(app, deps) {
     const user = admin(req, res);
     if (!user) return undefined;
     if (!validSlug(req.params.slug)) return res.status(400).json({ error: 'Slug invalide.' });
-    const body = req.body || {};
+    const body = Object.assign({}, req.body || {});
     if (typeof body.name === 'string') {
       body.name = body.name.trim();
       if (!body.name || body.name.length > 120) return res.status(400).json({ error: 'Nom invalide.' });
     }
-    if (typeof body.kind === 'string' && !['championship', 'open', 'archive'].includes(body.kind)) {
+    if (typeof body.kind === 'string' && !VALID_KINDS.includes(body.kind)) {
       return res.status(400).json({ error: 'Type invalide.' });
     }
     try {
       const store = await storeOrDelegate(next,res);
       if (!store) return undefined;
+      if (typeof body.kind === 'string' && body.kind !== 'archive' && !body.pointsConfig) {
+        const existing = await store.get(req.params.slug);
+        if (!existing) return res.status(404).json({ error: 'Événement introuvable.' });
+        body.pointsConfig = Object.assign({}, existing.points_config || DEFAULT_POINTS, {
+          globalCoef: defaultGlobalCoefForKind(body.kind)
+        });
+      }
       const result = await store.update(req.params.slug, body, user);
       if (result.error) return res.status(400).json({ error: result.error });
       if (!result.event) return res.status(404).json({ error: 'Événement introuvable.' });
@@ -500,6 +534,9 @@ function mountEventRoutes(app, deps) {
 }
 
 module.exports = {
+  EVENT_KIND_META,
+  VALID_KINDS,
+  defaultGlobalCoefForKind,
   DEFAULT_POINTS,
   LEGACY_SLUG,
   TOKEN_TTL_SECONDS,

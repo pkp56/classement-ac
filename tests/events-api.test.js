@@ -45,7 +45,7 @@ function fakePool(seed = []) {
     rows,
     async query(sql, params = []) {
       calls.push({ sql, params });
-      if (/^CREATE|^SELECT to_regclass/.test(sql.trim())) return { rows: [{ tbl: null }], rowCount: 0 };
+      if (/^CREATE|^ALTER|^SELECT to_regclass/.test(sql.trim())) return { rows: [{ tbl: null }], rowCount: 0 };
       if (/^SELECT championship/.test(sql.trim())) return { rows: [] };
       if (/^SELECT slug, name, kind, points_config, updated_at/.test(sql.trim())) {
         return { rows: rows.map(r => ({ slug: r.slug, name: r.name, kind: r.kind, points_config: r.points_config, updated_at: r.updated_at })) };
@@ -553,4 +553,49 @@ test('sans backend : accueil, page événement et sitemap sortent depuis la base
   // 4. Un slug inexistant reste un 404 : inutile d'interroger un backend mort.
   const missing = await get('/evenements/inexistant-xyz');
   assert.equal(missing.status, 404);
+});
+
+test('Sortes endurance, cup, fiesta et trackday : init SQL, création et changement avec poids Global', async () => {
+  const pool = fakePool([{ slug: 'existant', name: 'Existant', kind: 'championship', points_config: { expectedRounds: 6, globalCoef: 1 }, data: {} }]);
+  const store = await new EventStore(pool).init();
+  assert.ok(pool.calls.some(c => /ALTER TABLE gdsp_events DROP CONSTRAINT IF EXISTS gdsp_events_kind_check/.test(c.sql)));
+  assert.ok(pool.calls.some(c => /CHECK \(kind IN \('championship','endurance','cup','open','fiesta','trackday','archive'\)\)/.test(c.sql)));
+
+  const harness = fakeApp();
+  harness.mount(harness.app, { getStore: async () => store });
+  const auth = { authorization: `Bearer ${signAdminToken('gdspadmin', ENV)}` };
+
+  for (const [kind, expectedCoef] of [['endurance', 1.0], ['cup', 0.75], ['open', 0.5], ['fiesta', 0], ['trackday', 0]]) {
+    const slug = `ev-${kind}`;
+    const res = await harness.call('post', '/api/events', {
+      headers: auth, body: { slug, name: `Test ${kind}`, kind }
+    });
+    assert.equal(res.statusCode, 200);
+    const stored = pool.rows.find(r => r.slug === slug);
+    assert.equal(stored.kind, kind);
+    assert.equal(stored.points_config.globalCoef, expectedCoef);
+  }
+
+  // PUT kind met à jour globalCoef automatiquement tout en conservant le reste de points_config
+  const cupPut = await harness.call('put', '/api/events/:slug', {
+    headers: auth, body: { __param: 'existant', kind: 'cup' }
+  });
+  assert.equal(cupPut.statusCode, 200);
+  assert.equal(cupPut.body.event.kind, 'cup');
+  assert.equal(cupPut.body.event.points_config.globalCoef, 0.75);
+  assert.equal(cupPut.body.event.points_config.expectedRounds, 6);
+
+  const trackdayPut = await harness.call('put', '/api/events/:slug', {
+    headers: auth, body: { __param: 'existant', kind: 'trackday' }
+  });
+  assert.equal(trackdayPut.statusCode, 200);
+  assert.equal(trackdayPut.body.event.kind, 'trackday');
+  assert.equal(trackdayPut.body.event.points_config.globalCoef, 0);
+
+  // Archiver préserve le globalCoef existant
+  const archivePut = await harness.call('put', '/api/events/:slug', {
+    headers: auth, body: { __param: 'existant', kind: 'archive' }
+  });
+  assert.equal(archivePut.statusCode, 200);
+  assert.equal(archivePut.body.event.points_config.globalCoef, 0);
 });

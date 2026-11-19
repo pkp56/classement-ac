@@ -25,6 +25,39 @@ let adminToken=null;
 const authFetch=(...args)=>window.gdspAuth.fetch(...args);
 const app=document.getElementById('app');
 
+// ---------- Sortes d'événements et poids Global ----------
+const EVENT_KINDS=[
+  {id:'championship',label:'Championnat',plural:'Championnats',hubTitle:'Championnats en cours',tag:'CHAMPIONNAT',banner:'CHAMPIONNAT EN COURS',upcoming:'CHAMPIONNAT À VENIR',cls:'live',coef:1},
+  {id:'endurance',label:'Endurance',plural:'Endurances',hubTitle:'Endurances',tag:'ENDURANCE',banner:'ENDURANCE EN COURS',upcoming:'ENDURANCE À VENIR',cls:'endurance',coef:1},
+  {id:'cup',label:'Cup',plural:'Cups',hubTitle:'Cups & trophées',tag:'CUP',banner:'CUP GDSP',upcoming:'CUP À VENIR',cls:'cup',coef:0.75},
+  {id:'open',label:'Open',plural:'Opens',hubTitle:'Opens & week-ends',tag:'OPEN',banner:'OPEN GDSP',upcoming:'OPEN À VENIR',cls:'open',coef:0.5},
+  {id:'fiesta',label:'Fiesta',plural:'Fiestas',hubTitle:'Fiestas',tag:'FIESTA',banner:'FIESTA GDSP',upcoming:'FIESTA À VENIR',cls:'fiesta',coef:0},
+  {id:'trackday',label:'Trackday',plural:'Trackdays',hubTitle:'Trackdays',tag:'TRACKDAY',banner:'TRACKDAY GDSP',upcoming:'TRACKDAY À VENIR',cls:'trackday',coef:0},
+  {id:'archive',label:'Archive',plural:'Archives',hubTitle:'Saisons archivées',tag:'ARCHIVE',banner:'SAISON ARCHIVÉE',upcoming:'SAISON ARCHIVÉE',cls:'archive',coef:1}
+];
+const EVENT_KIND_MAP=Object.fromEntries(EVENT_KINDS.map(k=>[k.id,k]));
+function eventKindMeta(kind){return EVENT_KIND_MAP[kind]||EVENT_KIND_MAP.championship;}
+function eventKindTagHtml(kind,opts={}){
+  const m=eventKindMeta(kind);
+  let txt=m.tag;
+  if(opts.banner)txt=opts.upcoming&&m.upcoming?m.upcoming:m.banner;
+  else if(opts.admin&&kind==='archive')txt='ARCHIVÉ';
+  return `<span class="tag ${m.cls}">${txt}</span>`;
+}
+function formatGlobalCoef(val){
+  const n=Number(val);
+  if(!Number.isFinite(n))return '1.0';
+  return Number.isInteger(n*10)?n.toFixed(1):String(n);
+}
+function eventGlobalWeight(ev){
+  const raw=ev&&ev.points_config&&ev.points_config.globalCoef;
+  if(raw!==undefined&&raw!==null&&raw!==''){
+    const n=Number(raw);
+    if(Number.isFinite(n)&&n>=0)return n;
+  }
+  return eventKindMeta(ev&&ev.kind).coef;
+}
+
 // ---------- Points config par défaut (Lola T290 2026) ----------
 const DEFAULT_POINTS = {
   pointsScale: [41,38,35,32,30,28,26,24,22,20,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1],
@@ -110,6 +143,7 @@ function nav(){
   const evObj=(eventContext&&eventContext.name?eventContext:null)
     ||events.find(e=>e.slug===currentSlug)
     ||events.find(e=>e.kind==='championship')
+    ||events.find(e=>e.kind!=='archive')
     ||events[0];
   const evTabName=(evObj&&evObj.name)?evObj.name:'International Series Lola T290';
   document.getElementById('nav').innerHTML=
@@ -146,7 +180,7 @@ async function go(x){
   const eventPages=['event','classement','manches','pilotes','circuit','voiture'];
   if(backendMulti && eventPages.includes(x) && !eventContext){
     const last=localStorage.getItem('gdsp_last_event');
-    const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
+    const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events.find(e=>e.kind!=='archive')||events[0];
     if(target){
       app.innerHTML=`<div class="panel"><p class="note">Chargement du championnat…</p></div>`;
       nav();
@@ -216,14 +250,12 @@ function renderEventSwitcher(){
     tr.textContent=ev?nameOf(ev).toUpperCase():(events[0]?nameOf(events[0]).toUpperCase():'GDSP');
   }
   // Sélecteur toujours visible pour pouvoir changer d'événement depuis n'importe quelle page
-  const champOpts=events.filter(e=>e.kind==='championship');
-  const openOpts=events.filter(e=>e.kind==='open');
-  const archOpts=events.filter(e=>e.kind==='archive');
+  const groups=EVENT_KINDS.map(k=>({label:k.plural,arr:events.filter(e=>e.kind===k.id)}));
   const grp=(label,arr)=>arr.length?`<optgroup label="${label}">${arr.map(e=>`<option value="${esc(e.slug)}" ${e.slug===currentSlug?'selected':''}>${esc(e.name)}</option>`).join('')}</optgroup>`:'';
   // N'afficher le sélecteur que s'il y a plusieurs événements (ou au moins un + archives)
-  const totalEvents=champOpts.length+openOpts.length+archOpts.length;
+  const totalEvents=groups.reduce((s,g)=>s+g.arr.length,0);
   if(totalEvents<2){sw.innerHTML='';return}
-  sw.innerHTML=`<select onchange="switchEvent(this.value)"><option value="">— Changer de championnat/open —</option>${grp('Championnats',champOpts)}${grp('Opens',openOpts)}${grp('Archives',archOpts)}</select>`;
+  sw.innerHTML=`<select onchange="switchEvent(this.value)"><option value="">— Changer d’événement —</option>${groups.map(g=>grp(g.label,g.arr)).join('')}</select>`;
 }
 
 async function switchEvent(slug){
@@ -470,10 +502,10 @@ function liveInfoBanner(){
 function hub(){
   const __hubInner=(()=>{
   const byKind=(k)=>events.filter(e=>e.kind===k);
-  const champs=byKind('championship'), opens=byKind('open'), archives=byKind('archive');
+  const champs=byKind('championship'), endurances=byKind('endurance'), cups=byKind('cup'), opens=byKind('open'), fiestas=byKind('fiesta'), trackdays=byKind('trackday'), archives=byKind('archive');
   function card(e){
-    const tag = e.kind==='championship'?'<span class="tag live">CHAMPIONNAT</span>':e.kind==='open'?'<span class="tag open">OPEN</span>':'<span class="tag archive">ARCHIVE</span>';
-    const coef = (e.points_config&&e.points_config.globalCoef!=null)?`<span class="coef">coeff ${e.points_config.globalCoef}</span>`:'';
+    const tag = eventKindTagHtml(e.kind);
+    const coef = (e.points_config&&e.points_config.globalCoef!=null)?`<span class="coef">coeff ${formatGlobalCoef(e.points_config.globalCoef)}</span>`:'';
     return `<a class="event-card" style="display:block;text-decoration:none;color:inherit" href="/evenements/${encodeURIComponent(e.slug)}" onclick="if(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;event.preventDefault();switchEvent('${esc(e.slug)}')">${coef}${tag}<h3>${esc(e.name)}</h3><p class="note">Mis à jour le ${new Date(e.updated_at).toLocaleDateString('fr-FR')}</p><span class="label">Ouvrir →</span></a>`;
   }
   const section=(title,arr)=>arr.length?`<div class="section-head"><div><div class="eyebrow">${title}</div><h2>${arr.length} événement${arr.length>1?'s':''}</h2></div></div><div class="cardlist">${arr.map(card).join('')}</div>`:'';
@@ -557,7 +589,7 @@ function hub(){
         <h3 class="hub-side-h">📊 &nbsp; En un coup d'œil</h3>
         <div class="hub-stats">
           <div class="hub-stat-card"><div class="hub-stat-lbl">Championnats</div><strong>${String(champs.length).padStart(2,'0')}</strong></div>
-          <div class="hub-stat-card"><div class="hub-stat-lbl">Opens</div><strong>${String(opens.length).padStart(2,'0')}</strong></div>
+          <div class="hub-stat-card"><div class="hub-stat-lbl">Événements</div><strong>${String(endurances.length+cups.length+opens.length+fiestas.length+trackdays.length).padStart(2,'0')}</strong></div>
           <div class="hub-stat-card"><div class="hub-stat-lbl">Archives</div><strong>${String(archives.length).padStart(2,'0')}</strong></div>
           <div class="hub-stat-card"><div class="hub-stat-lbl">Pilotes</div><strong>${pilotsCount||'—'}</strong></div>
         </div>
@@ -674,7 +706,11 @@ function hub(){
   </style>
   <div id="hub-sections" style="margin-top:32px">
     ${section('Championnats en cours',champs)}
+    ${section('Endurances',endurances)}
+    ${section('Cups & trophées',cups)}
     ${section('Opens & week-ends',opens)}
+    ${section('Fiestas',fiestas)}
+    ${section('Trackdays',trackdays)}
     ${archives.length?`<details style="margin-top:42px"><summary style="cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none;list-style:none"><div class="eyebrow">Saisons archivées</div><h2 style="margin:4px 0 0;font-size:22px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:#5d5b56">${archives.length} saison${archives.length>1?'s':''} terminée${archives.length>1?'s':''}</h2><span class="chev" style="font-family:monospace;font-size:22px;color:#d8a347;margin-left:8px"></span></summary><div style="margin-top:14px"><div class="cardlist">${archives.map(card).join('')}</div></div></details>`:''}
     ${(!events.length)?'<p class="note">Aucun événement configuré pour l\'instant.</p>':''}
   </div>`;  })();
@@ -747,7 +783,7 @@ function globalRankingSync(){
   });
   const detailHtml=detailRows.join('');
   return `${exclusionsStatus()}${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
-    <p class="note" style="margin-bottom:16px"><b>10 dernières courses disputées · 9 meilleures dès 10 participations.</b> Rythme, vitesse et résultats sur les courses retenues ; propreté Commission sur toute la fenêtre, joker compris. Même poids pour chaque course, pas de pondération temporelle. Minimum ${GLOBAL_MIN_RACES} courses pour apparaître. Avant 10 : provisoire. Données partielles si des décisions restent à qualifier ou des courses non examinées. Sans sanction connue ne signifie pas course certifiée propre. <b>Real Penalty : DT / Stop & Go non évalués sans journaux.</b></p>
+    <p class="note" style="margin-bottom:16px"><b>10 dernières courses disputées · 9 meilleures dès 10 participations.</b> Rythme, vitesse et résultats sur les courses retenues ; propreté Commission sur toute la fenêtre, joker compris. Pondéré selon le type d’événement (Championnat / Endurance ×1, Cup ×0.75, Open ×0.5 ; Fiesta / Trackday ×0 exclus), sans pondération temporelle. Minimum ${GLOBAL_MIN_RACES} courses pour apparaître. Avant 10 : provisoire. Données partielles si des décisions restent à qualifier ou des courses non examinées. Sans sanction connue ne signifie pas course certifiée propre. <b>Real Penalty : DT / Stop & Go non évalués sans journaux.</b></p>
     <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">${tierCards}</div>
     <div class="panel global-rank-wrap"><h2>Détail des pilotes classés</h2><p class="note">Trié par score global. Les 4 mini-barres représentent Rythme / Propreté / Vitesse / Résultats (0-100) — survolez une mini-barre ou l'icône ? pour le détail. Les séparateurs bleu foncé marquent les changements de niveau.</p>${table(['#','','Pilote','Courses','Score / 100',`4 critères (0-100) ${gdspTip(PROFILE_TIPS.quatreCriteres,'gdsp-tip-right')}`],detailRows)}</div>`;
 }
@@ -1060,6 +1096,8 @@ function globalLevelForScore(score){
 function globalPerformanceRatings(){
   const records=[];
   for(const ev of events){
+    const weight=eventGlobalWeight(ev);
+    if(!(weight>0))continue;
     const data=ev.data||{},pm=data.penMap||{};
     const evSessions=Array.isArray(data.sessions)?data.sessions:[];
     const minPct=ev.points_config?.minPercentDistance??0.75;
@@ -1080,7 +1118,7 @@ function globalPerformanceRatings(){
           const review=GDSPGlobalRating.conduct(pm[`${ri}:${si}:${r.id}`]);
           const label=`${ev.name||ev.slug} · M${ri+1} C${raceNumber}`;
           records.push({id:r.id,name:r.name,team:r.team,key:`${ev.slug}:${session.date}:${session.track}:${session.type}`,
-            ts:Date.parse(session.date),date:session.date,label,conduct:review,
+            ts:Date.parse(session.date),date:session.date,label,weight,conduct:review,
             axes:{regularite:consistency[i],proprete:review.score,vitesse:speed[i],
               resultats:scoreResultsV45(participants.length,i+1,!!(r._dq||r.comDQ||r.comDNF||r.disqualified))}});
         });
@@ -1194,7 +1232,7 @@ function home(){
   }
   // Hero générique pour les autres événements (opens, autres championnats)
   const evName=eventContext.name||'Événement';
-  return `<div class="hero"><div class="hero-text"><div class="eyebrow" style="color:#d7a347">● &nbsp; ${esc((eventContext.kind||'').toUpperCase())} GDSP</div><h1>${esc(evName)}</h1><p>Saison en cours, classements, résultats course par course et profils pilotes.</p><button class="btn" onclick="go('manches')">Explorer les résultats &nbsp; ↗</button></div><div class="hero-image"></div></div><div class="stats"><div class="stat"><span class="label">Manches importées</span><strong>${String(rs.length).padStart(2,'0')}</strong></div><div class="stat"><span class="label">Pilotes</span><strong>${allDrivers().length}</strong></div><div class="stat"><span class="label">Coefficient global</span><strong>×${(pointsConfig().globalCoef||1).toFixed(1)}</strong></div><div class="stat"><span class="label">Type</span><strong>${esc(eventContext.kind)}</strong></div></div><div class="section-head"><div><div class="eyebrow">Le carnet de course</div><h2>Au cœur de la saison</h2></div></div><div class="grid"><div class="panel"><div class="eyebrow">Dernière manche importée</div><h2>${last?esc(last.track):'—'}</h2><p class="note">${last?`${date(last.date)} · ${last.sessions.length-1} course(s) · Manche ${last.number}`:'Aucune session importée.'}</p>${last?`<button class="btn secondary" onclick="round=${rs.length-1};sessionIndex=1;go('manches')">Voir les résultats →</button>`:''}</div><div class="panel"><div class="eyebrow">Barème appliqué</div><h2>${(pointsConfig().pointsScale||[]).slice(0,5).join('/')}…</h2><p class="note">${pointsConfig().doubleLongRaces?'Points doublés pour les courses d’1h. ':''}+${pointsConfig().polePoints||0} pt pôle · ${Math.round((pointsConfig().minPercentDistance||0.75)*100)}% de distance · coeff ×${(pointsConfig().globalCoef||1).toFixed(1)}.</p><span class="tag">ASSETTO CORSA</span></div></div>`;
+  return `<div class="hero"><div class="hero-text"><div class="eyebrow" style="color:#d7a347">● &nbsp; ${esc((eventContext.kind||'').toUpperCase())} GDSP</div><h1>${esc(evName)}</h1><p>Saison en cours, classements, résultats course par course et profils pilotes.</p><button class="btn" onclick="go('manches')">Explorer les résultats &nbsp; ↗</button></div><div class="hero-image"></div></div><div class="stats"><div class="stat"><span class="label">Manches importées</span><strong>${String(rs.length).padStart(2,'0')}</strong></div><div class="stat"><span class="label">Pilotes</span><strong>${allDrivers().length}</strong></div><div class="stat"><span class="label">Coefficient global</span><strong>×${formatGlobalCoef(pointsConfig().globalCoef??1)}</strong></div><div class="stat"><span class="label">Type</span><strong>${esc(eventKindMeta(eventContext.kind).label)}</strong></div></div><div class="section-head"><div><div class="eyebrow">Le carnet de course</div><h2>Au cœur de la saison</h2></div></div><div class="grid"><div class="panel"><div class="eyebrow">Dernière manche importée</div><h2>${last?esc(last.track):'—'}</h2><p class="note">${last?`${date(last.date)} · ${last.sessions.length-1} course(s) · Manche ${last.number}`:'Aucune session importée.'}</p>${last?`<button class="btn secondary" onclick="round=${rs.length-1};sessionIndex=1;go('manches')">Voir les résultats →</button>`:''}</div><div class="panel"><div class="eyebrow">Barème appliqué</div><h2>${(pointsConfig().pointsScale||[]).slice(0,5).join('/')}…</h2><p class="note">${pointsConfig().doubleLongRaces?'Points doublés pour les courses d’1h. ':''}+${pointsConfig().polePoints||0} pt pôle · ${Math.round((pointsConfig().minPercentDistance||0.75)*100)}% de distance · coeff ×${formatGlobalCoef(pointsConfig().globalCoef??1)}.</p><span class="tag">ASSETTO CORSA</span></div></div>`;
 }
 
 // Liveries (Lola T290 2026 — gardé en dur, d'autres championnats pourront avoir leurs propres visuels plus tard)
@@ -1373,7 +1411,7 @@ function getEventInfo(evCtx){
     if(detectedModel)break;
   }
   const cfg=pointsConfig();
-  const defaultCar=isLola?'Lola T290 · Prototypes historiques':(detectedModel||(ctx.kind==='open'?'Open · Assetto Corsa':'Championnat · Assetto Corsa'));
+  const defaultCar=isLola?'Lola T290 · Prototypes historiques':(detectedModel||`${eventKindMeta(ctx.kind).label} · Assetto Corsa`);
   const defaultSchedule='Mercredi soir · Informations & briefing sur le Discord GDSP';
   const defaultBriefing=isLola
     ?"Six manches historiques, l'esprit Gentleman Driver et tout le suivi du championnat réunis au même endroit : affiche officielle, calendrier, podium provisoire, classements, résultats et fiches pilotes."
@@ -1412,8 +1450,8 @@ function renderEventRichText(value){
 }
 function defaultSportingRules(ev,infoObj,cfg){
   const points=cfg&&Array.isArray(cfg.pointsScale)?cfg.pointsScale:DEFAULT_POINTS.pointsScale;
-  const joker=ev&&ev.kind==='open'
-    ?'Sans Joker (open)'
+  const joker=ev&&['open','fiesta','trackday'].includes(ev.kind)
+    ?`Sans Joker (${eventKindMeta(ev.kind).label.toLowerCase()})`
     :(shouldDropWorstJoker()?'1 pire manche décomptée':(Number(cfg&&cfg.jokerCount)>0?`${cfg.jokerCount} meilleures manches`:'Toutes les manches'));
   return [
     {label:'Catégorie',value:infoObj.car},
@@ -1468,7 +1506,7 @@ function eventHome(){
     +`<div class="ev-kpi"><span class="label">Progression saison</span><strong>${totalExpected?`${String(rs.length).padStart(2,'0')} / ${String(totalExpected).padStart(2,'0')}`:String(rs.length).padStart(2,'0')}</strong><small>${rs.length?`${rs.length} manche(s) disputée(s)`:'Coup d’envoi à venir'}</small></div>`
     +`<div class="ev-kpi gold"><span class="label">Pilotes engagés</span><strong>${ds.length||registerLink}</strong>${ds.length?registerLink:''}<small>${ds.length?'Classés ou ayant pris un départ':infoObj.registrationUrl?'Accéder aux inscriptions':'Ouvertes sur le Discord GDSP'}</small></div>`
     +`<div class="ev-kpi green"><span class="label">Voiture / Plateau</span><strong style="font-size:21px;line-height:1.2">${esc(carMain)}</strong><small>${esc(carSub)}</small></div>`
-    +`<div class="ev-kpi red"><span class="label">Coefficient Global</span><strong>×${Number(cfg.globalCoef??1).toFixed(1)}</strong><small>${cfg.polePoints?`+${cfg.polePoints} pt pole · `:''}${Math.round((cfg.minPercentDistance||0.75)*100)} % distance min.</small></div>`
+    +`<div class="ev-kpi red"><span class="label">Coefficient Global</span><strong>×${formatGlobalCoef(cfg.globalCoef??eventKindMeta(ev.kind).coef)}</strong><small>${cfg.polePoints?`+${cfg.polePoints} pt pole · `:''}${Math.round((cfg.minPercentDistance||0.75)*100)} % distance min.</small></div>`
     +`</div>`;
 
   const linksArr=[];
@@ -1603,17 +1641,15 @@ function renderEventShell(){
   const rs=rounds();
   const ds=allDrivers();
   const cfg=pointsConfig();
-  const badgeHtml=ev.kind==='open'
-    ?'<span class="tag open">OPEN GDSP</span>'
-    :ev.kind==='archive'
-    ?'<span class="tag archive">SAISON ARCHIVÉE</span>'
-    :(rs.length===0?'<span class="tag" style="background:#d7a347;color:#102a32">CHAMPIONNAT À VENIR</span>':'<span class="tag live">CHAMPIONNAT EN COURS</span>');
+  const badgeHtml=ev.kind==='championship'&&rs.length===0
+    ?'<span class="tag" style="background:#d7a347;color:#102a32">CHAMPIONNAT À VENIR</span>'
+    :eventKindTagHtml(ev.kind,{banner:true,upcoming:rs.length===0});
 
   const activeSub=page==='classement'?'classement':page==='manches'?'manches':page==='pilotes'?'pilotes':page==='circuit'?'circuit':page==='voiture'?'voiture':'event';
   const subBody=activeSub==='classement'?ranking():activeSub==='manches'?manche():activeSub==='pilotes'?drivers():activeSub==='circuit'?circuit():activeSub==='voiture'?carSheet():eventHome();
 
   return `<div class="ev-shell">`
-    +`<div class="ev-banner"><div><div class="ev-banner-kicker">${badgeHtml}<span style="font-size:11px;letter-spacing:1.8px;color:#d7a347;font-weight:700;text-transform:uppercase">Espace événement GDSP</span></div><h1>${esc(ev.name)}</h1><div class="ev-banner-meta">${rs.length?`${rs.length} manche(s) importée(s) · ${ds.length} pilote(s) engagé(s)`:'Saison en préparation · Inscriptions sur l’accueil de l’événement'} · Coefficient Global ×${Number(cfg.globalCoef??1).toFixed(1)}</div></div>`
+    +`<div class="ev-banner"><div><div class="ev-banner-kicker">${badgeHtml}<span style="font-size:11px;letter-spacing:1.8px;color:#d7a347;font-weight:700;text-transform:uppercase">Espace événement GDSP</span></div><h1>${esc(ev.name)}</h1><div class="ev-banner-meta">${rs.length?`${rs.length} manche(s) importée(s) · ${ds.length} pilote(s) engagé(s)`:'Saison en préparation · Inscriptions sur l’accueil de l’événement'} · Coefficient Global ×${formatGlobalCoef(cfg.globalCoef??eventKindMeta(ev.kind).coef)}</div></div>`
     +`</div>`
     +`<div class="ev-subtabs">`
     +`<button type="button" class="ev-subtab ${activeSub==='event'?'active':''}" onclick="setEventSubTab('event')">Accueil <span class="ev-subtab-badge">Affiche &amp; Infos</span></button>`
@@ -2582,7 +2618,7 @@ async function adminLogin(){
     if(j.warning)alert('⚠ Connexion en mode secours :\n\n'+j.warning);
     try{
       if(backendMulti){
-        const slugToLoad=currentSlug||(events.find(e=>e.kind==='championship')||events[0]||{}).slug;
+        const slugToLoad=currentSlug||(events.find(e=>e.kind==='championship')||events.find(e=>e.kind!=='archive')||events[0]||{}).slug;
         if(slugToLoad)await loadEvent(slugToLoad);
       }else await loadRemoteLegacy();
     }catch(e){}
@@ -2852,14 +2888,21 @@ function adminTabs(x){adminTab=x;render()}
 // Event creation (multi only)
 async function createEventPrompt(){
   const name=prompt('Nom du championnat/open (ex: Open de Spa 2026) ?');if(!name)return;
-  const kind=prompt('Type : "championship", "open" ou "archive" ?','open');if(!['championship','open','archive'].includes(kind))return alert('Type invalide.');
+  const kindIn=prompt('Type : "championship", "endurance", "cup", "open", "fiesta", "trackday" ou "archive" ?','open');
+  if(!kindIn)return;
+  const kind=kindIn.trim().toLowerCase();
+  if(!EVENT_KIND_MAP[kind])return alert('Type invalide.');
   const slugIn=prompt('Identifiant URL (lettres minuscules, chiffres, tirets, ex: open-spa-2026) ?',name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''));if(!slugIn)return;
-  const coefS=prompt('Coefficient global (1 = championnat, 0.5 = open par défaut) ?',kind==='open'?'0.5':'1');
+  const defaultCoef=eventKindMeta(kind).coef;
+  const coefS=prompt('Coefficient global (1 = championnat/endurance, 0.75 = cup, 0.5 = open, 0 = fiesta/trackday) ?',String(defaultCoef));
+  if(coefS===null)return;
+  const parsedCoef=Number(String(coefS).replace(',','.').trim());
+  const globalCoef=(String(coefS).trim()!==''&&Number.isFinite(parsedCoef)&&parsedCoef>=0)?parsedCoef:defaultCoef;
   const scaleS=prompt('Barème (points de la 1re à la 28e place, séparés par des virgules) ?','41,38,35,32,30,28,26,24,22,20,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1');
   const scale=scaleS.split(',').map(x=>+x.trim()).filter(x=>Number.isFinite(x)&&x>=0);
   const long2=confirm('Les courses d\'1 heure (une seule course par manche) donnent-elles le double de points ? OK=oui');
   const joker=+prompt('Nombre de meilleures manches retenues pour le Joker (0 = toutes les manches) ?','5')||0;
-  const cfg={pointsScale:scale,polePoints:1,doubleLongRaces:long2,longRaceMinutes:60,minPercentDistance:0.75,jokerCount:joker,globalCoef:+coefS||1};
+  const cfg={pointsScale:scale,polePoints:1,doubleLongRaces:long2,longRaceMinutes:60,minPercentDistance:0.75,jokerCount:joker,globalCoef};
   // Lire les cases au dernier moment : elles représentent exactement le plateau
   // choisi pour ce nouvel événement, sans dépendre d'une ancienne sélection.
   const chosenMods=readLocalModSelection()||{version:1,cars:[],track:null};
@@ -2958,7 +3001,7 @@ async function deleteEvent(slug){
   if(localStorage.getItem('gdsp_last_event')===slug)localStorage.removeItem('gdsp_last_event');
   events=events.filter(e=>e.slug!==slug);
   if(currentSlug===slug){
-    const next=events.find(e=>e.kind==='championship')||events[0];
+    const next=events.find(e=>e.kind==='championship')||events.find(e=>e.kind!=='archive')||events[0];
     if(next){
       try{await loadEvent(next.slug)}catch(e){currentSlug=null;eventContext=null;sessions.length=0;penMap={};}
     }else{
@@ -3185,14 +3228,23 @@ function renderGlobalExclusions(){
     <p class="note"><b>${Object.keys(globalHidden).length}</b> pilote(s) exclu(s).</p>
     ${table(['Pilote','Statut','Action'],rows)}`;
 }
-async function setEventKind(slug,kind){
-  const label=kind==='archive'?'clôturer':kind==='open'?'passer en open':'passer en championnat';
-  if(!confirm(`Valider pour ${label} cet événement ?`))return;
+async function setEventKind(slug,kind,opts={}){
+  const meta=EVENT_KIND_MAP[kind];
+  if(!meta){alert('Type invalide.');return false;}
+  const label=kind==='archive'?'clôturer':`passer en ${meta.label.toLowerCase()}`;
+  if(!opts.skipConfirm&&!confirm(`Valider pour ${label} cet événement ?`))return false;
   try{
     const r=await apiPut('/api/events/'+encodeURIComponent(slug),{kind});
     const j=await r.json().catch(()=>({}));
-    if(!r.ok){alert(j.error||'Erreur.');return}
-    const ev=events.find(e=>e.slug===slug);if(ev){ev.kind=kind;ev.updated_at=new Date().toISOString()}
+    if(!r.ok){alert(j.error||'Erreur.');return false;}
+    const updatedEv=j.event||null;
+    const ev=events.find(e=>e.slug===slug);
+    if(ev){
+      ev.kind=updatedEv?.kind||kind;
+      if(updatedEv?.points_config)ev.points_config=updatedEv.points_config;
+      else if(kind!=='archive')ev.points_config={...(ev.points_config||{}),globalCoef:meta.coef};
+      ev.updated_at=updatedEv?.updated_at||new Date().toISOString();
+    }
     // Recharger le listing
     const lr=await apiGet('/api/events');const lj=await lr.json().catch(()=>({}));
     if(Array.isArray(lj.events))events=filterEventsList(lj.events);
@@ -3200,10 +3252,30 @@ async function setEventKind(slug,kind){
       // Mettre à jour eventContext sans perdre eventContext.data
       const ec=events.find(e=>e.slug===slug);
       const prevData=(eventContext&&eventContext.slug===slug&&eventContext.data)?eventContext.data:{};
-      if(ec){eventContext={slug:ec.slug,name:ec.name,kind:ec.kind,pointsConfig:ec.points_config||{},data:ec.data||prevData}}
+      const nextPts=updatedEv?.points_config||ec?.points_config||(kind!=='archive'?{...(eventContext?.pointsConfig||{}),globalCoef:meta.coef}:(eventContext?.pointsConfig||{}));
+      if(ec){eventContext={slug:ec.slug,name:ec.name,kind:ec.kind,pointsConfig:nextPts,data:ec.data||prevData};}
+      else if(eventContext&&eventContext.slug===slug){eventContext={...eventContext,kind,pointsConfig:nextPts};}
     }
     render();
-  }catch(e){alert('Erreur : '+e.message)}
+    return true;
+  }catch(e){alert('Erreur : '+e.message);return false;}
+}
+async function changeCurrentEventKind(kind){
+  if(!adminAuth||!currentSlug)return false;
+  if(!EVENT_KIND_MAP[kind]){alert('Type invalide.');return false;}
+  if(eventContext&&eventContext.kind===kind)return true;
+  const statusEl=document.getElementById('event-poster-status');
+  if(statusEl){statusEl.style.color='#132d35';statusEl.textContent='⏳ Mise à jour de la sorte d’événement…';}
+  const ok=await setEventKind(currentSlug,kind,{skipConfirm:true});
+  const afterStatus=document.getElementById('event-poster-status');
+  if(ok&&afterStatus){
+    const meta=eventKindMeta(kind);
+    afterStatus.style.color='#3b6341';
+    afterStatus.textContent=kind==='archive'
+      ?'✓ Événement archivé.'
+      :`✓ Sorte d’événement enregistrée : ${meta.label} (poids Global ×${formatGlobalCoef(meta.coef)}).`;
+  }
+  return ok;
 }
 
 // ---------- Affiche d'événement (page Classements) ----------
@@ -3493,6 +3565,11 @@ async function saveEventInfoForm(){
   if(!currentSlug&&backendMulti)return;
   const slug=currentSlug||LEGACY_DEFAULT_SLUG;
   const val=id=>{const el=document.getElementById(id);return el&&typeof el.value==='string'?el.value.trim():'';};
+  const selectedKind=val('evinfo-kind');
+  if(backendMulti&&adminAuth&&selectedKind&&EVENT_KIND_MAP[selectedKind]&&eventContext&&eventContext.kind!==selectedKind){
+    const ok=await setEventKind(slug,selectedKind,{skipConfirm:true});
+    if(!ok)return;
+  }
   const info={
     car:val('evinfo-car'),
     schedule:val('evinfo-schedule'),
@@ -3911,7 +3988,7 @@ function renderEventsAdmin(){
   const row=(e)=>{
     const safe=e.slug.replace(/'/g,"\\'");
     const isCurrent=currentSlug===e.slug;
-    const tag = e.kind==='championship'?'<span class="tag live">CHAMPIONNAT</span>':e.kind==='open'?'<span class="tag open">OPEN</span>':'<span class="tag archive">ARCHIVÉ</span>';
+    const tag = eventKindTagHtml(e.kind,{admin:true});
     const posterOn=hasEventPoster(e);
     let actions;
     if(e.kind==='archive'){
@@ -3926,7 +4003,7 @@ function renderEventsAdmin(){
     return `<tr class="${isCurrent?'adm-ev-current-row':''}">
       <td>${tag}</td>
       <td><b>${esc(e.name)}</b>${isCurrent?' <span class="tag" style="margin-left:6px">▶ En cours</span>':''}<br><span class="muted" style="font-size:12px">${esc(e.slug)}</span></td>
-      <td>${e.points_config&&e.points_config.globalCoef?'×'+e.points_config.globalCoef:'—'}</td>
+      <td>${e.points_config&&e.points_config.globalCoef!=null?'×'+formatGlobalCoef(e.points_config.globalCoef):'—'}</td>
       <td>${posterOn?'<span class="tag live">✓ Active</span>':'<span class="muted">—</span>'}</td>
       <td>${new Date(e.updated_at).toLocaleDateString('fr-FR')}</td>
       <td style="text-align:right">
@@ -3950,7 +4027,7 @@ function renderEventsAdmin(){
       ${activeEv?`<div class="adm-active-pill">Événement courant : <b>${esc(activeEv.name||currentSlug||'')}</b></div>`:''}
     </div>
     <section class="adm-subpanel-light" style="margin-top:0">
-      <div class="adm-subhead"><div><div class="eyebrow">Catalogue · ${events.length} événement(s)</div><h3>Championnats, opens et archives</h3></div></div>
+      <div class="adm-subhead"><div><div class="eyebrow">Catalogue · ${events.length} événement(s)</div><h3>Championnats, endurances, cups, opens et archives</h3></div></div>
       ${events.length?table(['Type','Événement','Coeff','Affiche','Mis à jour','Actions'],events.map(row)):'<p class="note">Aucun événement enregistré pour le moment.</p>'}
     </section>
   </div>`;
@@ -3971,6 +4048,12 @@ function renderEventsAdmin(){
     </div>
     ${currentPoster?`<img src="${esc(currentPoster)}" alt="Aperçu affiche" style="display:block;max-width:440px;width:100%;height:auto;border:1px solid var(--line);margin-bottom:14px">`:''}
     <div class="admin-evhome-grid">
+      <label style="grid-column:1 / -1">Sorte d’événement (poids dans Global)
+        <select id="evinfo-kind" aria-label="Sorte d’événement" onchange="changeCurrentEventKind(this.value)">
+          ${EVENT_KINDS.map(k=>`<option value="${k.id}" ${(eventContext.kind||'championship')===k.id?'selected':''}>${esc(k.label)}${k.id==='archive'?' (saison terminée)':` — poids Global ×${formatGlobalCoef(k.coef)}`}</option>`).join('')}
+        </select>
+        <small>Modifie immédiatement le type affiché et le coefficient dans le classement Global (actuel : ×${formatGlobalCoef(pointsConfig().globalCoef??eventKindMeta(eventContext.kind).coef)}).</small>
+      </label>
       <label>Voiture / Catégorie<input id="evinfo-car" type="text" value="${esc(rawInfo.car||'')}" placeholder="Ex : Lola T290 · Prototypes historiques"></label>
       <label>Horaires / Rendez-vous<input id="evinfo-schedule" type="text" value="${esc(rawInfo.schedule||'')}" placeholder="Ex : Mercredi 21h00 · Essais 20h30"></label>
       <label style="grid-column:1 / -1">Présentation / Briefing de l'événement<textarea id="evinfo-briefing" rows="3" placeholder="Texte d'accueil affiché sur l'onglet Accueil de l'événement…">${esc(rawInfo.briefing||'')}</textarea></label>
@@ -4209,7 +4292,7 @@ function renderAhChamps(){
   const rows=ahChampsCache.map(c=>{
     try{
       const exists=events.some(e=>e.slug===c.slug);
-      const tag=(c.kind==='open')?'<span class="tag open">OPEN</span>':'<span class="tag live">CHAMPIONNAT</span>';
+      const tag=eventKindTagHtml(c.kind||'championship');
       const scale=Array.isArray(c.pointsScale)?c.pointsScale:[];
       const prog=Number.isFinite(c.progress)?c.progress.toFixed(0):'—';
       const nev=Number.isFinite(c.numEvents)?c.numEvents:0;
@@ -4262,7 +4345,7 @@ async function ahCreateEvent(server,uuid,slug){
       longRaceMinutes:60,
       minPercentDistance:(c.minDistancePct/100)||0.75,
       jokerCount:c.ignoreWorst>0?c.numEvents-c.ignoreWorst:c.numEvents,
-      globalCoef:c.kind==='open'?0.5:1.0,
+      globalCoef:eventKindMeta(c.kind||'championship').coef,
       secondRaceMultiplier:c.secondRaceMultiplier||1
     };
     // Normalise le slug généré par AH (caractères non autorisés)
@@ -4425,6 +4508,7 @@ function importSessionJson(text,fileName,opts){return importSessionJson(text,fil
 function collectAllRaces(){
   const out=[];
   for(const ev of events){
+    if(!(eventGlobalWeight(ev)>0))continue;
     const d=ev.data||{};
     const evSessions=Array.isArray(d.sessions)?d.sessions:[];
     const evPenMap=d.penMap||{};
@@ -4638,7 +4722,7 @@ function syncCircuitHistory(){syncEventSubTabHistory('circuit')}
     // défaut est préchargé en arrière-plan pour que Résultats réponde vite.
     const last=localStorage.getItem('gdsp_last_event');
     if(last&&!events.some(e=>e.slug===last))localStorage.removeItem('gdsp_last_event');
-    const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events[0];
+    const target=events.find(e=>e.slug===last)||events.find(e=>e.kind==='championship')||events.find(e=>e.kind!=='archive')||events[0];
     if(adminToken&&!backendError){
       try{
         const auth=await apiGet('/api/admin/verify');

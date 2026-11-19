@@ -78,3 +78,23 @@ test('vérification serveur indépendante de l’ordre des clés JSONB',()=>{
   assert.equal(reviewSignature({a:1,b:{x:2,y:3}}),reviewSignature({b:{y:3,x:2},a:1}));
   assert.notEqual(reviewSignature(undefined),reviewSignature({}));
 });
+
+test('pondération Global : poids 0 exclu et moyenne pondérée pour 1 / 0.75 / 0.5',()=>{
+  const base=Array.from({length:5},(_,i)=>record(i,{score:100,weight:1}));
+  const zero=Array.from({length:5},(_,i)=>record(10+i,{score:0,weight:0}));
+  const onlyBase=aggregate([...base,...zero],{minRaces:5})[0];
+  assert.equal(onlyBase.count,5);
+  assert.equal(onlyBase.score,100);
+  assert.equal(aggregate(zero,{minRaces:1}).length,0);
+
+  const weighted=[
+    record(1,{score:100,weight:1}),
+    record(2,{score:100,weight:1}),
+    record(3,{score:100,weight:1}),
+    record(4,{score:60,weight:0.5}),
+    record(5,{score:80,weight:0.75})
+  ];
+  const r=aggregate(weighted,{minRaces:5})[0];
+  const expected=((100*3)+(60*0.5)+(80*0.75))/(3+0.5+0.75);
+  assert.ok(Math.abs(r.details.resultats-expected)<1e-9);
+});
