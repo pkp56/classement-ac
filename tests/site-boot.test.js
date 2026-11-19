@@ -1253,3 +1253,79 @@ test('Gestion du paddock : onglet Circuit retiré, 2 onglets dans Événements e
   assert.match(paddockCss,/\.adm-tabpanel\[hidden\]\s*\{\s*display:none/);
   assert.doesNotMatch(paddockCss,/#213b36|Georgia/);
 });
+
+test('Event kinds endurance, cup, fiesta, trackday : hub, switcher, poids Global et menu Accueil public', async () => {
+  const mkRace = (date, trackName, bestMs) => ({
+    date,
+    track: trackName,
+    type: 'RACE',
+    results: [
+      { id: 'd1', name: 'Pilote Un', laps: 10, time: 900000, best: bestMs },
+      { id: 'd2', name: 'Pilote Deux', laps: 10, time: 910000, best: bestMs + 500 }
+    ],
+    laps: [
+      { id: 'd1', time: bestMs + 2000 }, { id: 'd1', time: bestMs }, { id: 'd1', time: bestMs + 100 }, { id: 'd1', time: bestMs + 200 },
+      { id: 'd2', time: bestMs + 2500 }, { id: 'd2', time: bestMs + 500 }, { id: 'd2', time: bestMs + 700 }, { id: 'd2', time: bestMs + 900 }
+    ]
+  });
+  const baseEvents = [
+    { slug: 'champ-1', name: 'Champ Principale', kind: 'championship', points_config: { globalCoef: 1 }, updated_at: '2026-11-01T10:00:00Z',
+      data: { sessions: [mkRace('2026-10-01T20:00:00Z', 'spa', 90000), mkRace('2026-10-08T20:00:00Z', 'monza', 91000), mkRace('2026-10-15T20:00:00Z', 'imola', 92000)] } },
+    { slug: 'endur-1', name: 'Endurance 2h', kind: 'endurance', points_config: { globalCoef: 1 }, updated_at: '2026-11-02T10:00:00Z',
+      data: { sessions: [mkRace('2026-10-22T20:00:00Z', 'lemans', 180000)] } },
+    { slug: 'cup-1', name: 'Porsche Cup', kind: 'cup', points_config: { globalCoef: 0.75 }, updated_at: '2026-11-03T10:00:00Z',
+      data: { sessions: [mkRace('2026-10-29T20:00:00Z', 'mugello', 95000)] } },
+    { slug: 'open-1', name: 'Open Estival', kind: 'open', points_config: { globalCoef: 0.5 }, updated_at: '2026-11-04T10:00:00Z',
+      data: { sessions: [] } },
+    { slug: 'fiesta-1', name: 'Fiesta Fun', kind: 'fiesta', points_config: { globalCoef: 0 }, updated_at: '2026-11-05T10:00:00Z',
+      data: { sessions: [mkRace('2026-11-01T20:00:00Z', 'brands', 85000)] } },
+    { slug: 'trackday-1', name: 'Trackday Libre', kind: 'trackday', points_config: { globalCoef: 0 }, updated_at: '2026-11-06T10:00:00Z',
+      data: { sessions: [mkRace('2026-11-02T20:00:00Z', 'zandvoort', 86000)] } }
+  ];
+  const { sandbox, getElementById, calls } = makeBrowser(baseEvents, (url, opts = {}) => {
+    const match = url.match(/^\/api\/events\/([^/]+)$/);
+    if (!match) return null;
+    const slug = decodeURIComponent(match[1]);
+    const ev = baseEvents.find(e => e.slug === slug);
+    if (!ev) return null;
+    if (opts.method === 'PUT') {
+      const body = JSON.parse(opts.body);
+      if (body.kind) {
+        ev.kind = body.kind;
+        const map = { championship: 1, endurance: 1, cup: 0.75, open: 0.5, fiesta: 0, trackday: 0 };
+        if (body.kind !== 'archive') ev.points_config = { ...(ev.points_config || {}), globalCoef: map[body.kind] };
+      }
+      return response({ status: 'ok', event: ev });
+    }
+    return response(ev);
+  });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const hubHtml = getElementById('app').innerHTML;
+  assert.match(hubHtml, /Endurances[\s\S]+Cups & trophées[\s\S]+Opens & week-ends[\s\S]+Fiestas[\s\S]+Trackdays/);
+  assert.match(hubHtml, /coeff 0\.75/);
+  assert.match(hubHtml, /coeff 0\.0/);
+  const switcherHtml = getElementById('event-switcher').innerHTML;
+  assert.match(switcherHtml, /optgroup label="Endurances"[\s\S]+optgroup label="Cups"[\s\S]+optgroup label="Opens"[\s\S]+optgroup label="Fiestas"[\s\S]+optgroup label="Trackdays"/);
+
+  // Fiesta & Trackday (globalCoef = 0) are excluded from Global (5 races total from champ-1 + endur-1 + cup-1, not 7)
+  const ratings = vm.runInContext('globalPerformanceRatings()', sandbox);
+  assert.equal(ratings[0].count, 5);
+
+  // Admin: Événement courant · Onglet Accueil public exposes the kind selector and updates via PUT
+  await vm.runInContext("loadEvent('open-1')", sandbox);
+  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin';adminTab='events';eventsSubTab='editor';page='admin';render()", sandbox);
+  const editorHtml = getElementById('app').innerHTML;
+  assert.match(editorHtml, /id="evinfo-kind"/);
+  assert.match(editorHtml, /value="endurance"[^>]*>Endurance — poids Global ×1\.0/);
+  assert.match(editorHtml, /value="cup"[^>]*>Cup — poids Global ×0\.75/);
+  assert.match(editorHtml, /value="fiesta"[^>]*>Fiesta — poids Global ×0\.0/);
+  assert.match(editorHtml, /value="trackday"[^>]*>Trackday — poids Global ×0\.0/);
+
+  await vm.runInContext("changeCurrentEventKind('cup')", sandbox);
+  const putCall = calls.filter(c => c.url === '/api/events/open-1' && c.method === 'PUT').at(-1);
+  assert.deepEqual(putCall.body, { kind: 'cup' });
+  assert.equal(vm.runInContext('eventContext.kind', sandbox), 'cup');
+  assert.equal(vm.runInContext('eventContext.pointsConfig.globalCoef', sandbox), 0.75);
+});

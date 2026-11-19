@@ -45,10 +45,23 @@
     const valid=values.filter(Number.isFinite);
     return valid.length?valid.reduce((a,b)=>a+b,0)/valid.length:fallback;
   }
+  function weightedAverage(entries,fallback=50){
+    let sum=0,totalWeight=0;
+    for(const e of entries){
+      if(!e||!Number.isFinite(e.value))continue;
+      const w=e.weight==null?1:Number(e.weight);
+      if(!Number.isFinite(w)||w<=0)continue;
+      sum+=e.value*w;
+      totalWeight+=w;
+    }
+    return totalWeight>0?sum/totalWeight:fallback;
+  }
   function aggregate(records,{minRaces=5,hidden={}}={}){
     const byPilot=new Map();
     for(const r of records){
       if(!r.id||!Number.isFinite(r.ts)||r.dns||r.started===false)continue;
+      const w=r.weight==null?1:Number(r.weight);
+      if(!Number.isFinite(w)||w<=0)continue;
       if(!byPilot.has(r.id))byPilot.set(r.id,new Map());
       // Un identifiant stable évite de compter deux fois une session importée.
       byPilot.get(r.id).set(r.key,r);
@@ -62,7 +75,7 @@
       // En cas d'égalité, joker sur la plus ancienne des courses à égalité.
       const worst=window.length===10?window.reduce((a,b)=>rawScore(a)<rawScore(b)?a:b):null;
       const retained=window.filter(r=>r!==worst);
-      const details=Object.fromEntries(AXES.map(k=>[k,average((k==='proprete'?window:retained).map(r=>r.axes[k]))]));
+      const details=Object.fromEntries(AXES.map(k=>[k,weightedAverage((k==='proprete'?window:retained).map(r=>({value:r.axes[k],weight:r.weight})))]));
       // Toute la propreté des dix courses reste : un joker sportif ne gomme
       // ni la sanction, ni une décision encore à qualifier.
       const score=average(AXES.map(k=>details[k]));
