@@ -55,7 +55,7 @@ test('local : aucun proxy implicite, routes retirées explicites et readiness di
 });
 test('écritures locales refusées sans authentification, y compris reset, import et API inconnue',async t=>{
   const {call,login}=await server(t);
-  const writes=[['POST','/api/save-championship'],['POST','/api/events'],['POST','/api/events/test-cup/data'],['PUT','/api/events/test-cup'],['DELETE','/api/events/test-cup'],['POST','/api/admin/reset'],['POST','/api/admin/circuits/import'],['POST','/api/admin/local-mods/scan'],['POST','/api/results']];
+  const writes=[['POST','/api/save-championship'],['POST','/api/events'],['POST','/api/events/test-cup/data'],['PUT','/api/events/test-cup'],['DELETE','/api/events/test-cup'],['POST','/api/admin/reset'],['POST','/api/admin/circuits/import'],['POST','/api/admin/circuits/import-local'],['POST','/api/admin/local-mods/scan'],['POST','/api/results']];
   for(const [method,p] of writes){const r=await call(p,{method,headers:{'content-type':'application/json',authorization:'Bearer forged'},body:'{"confirmation":"REINIT_CHAMPIONNAT"}'});assert.equal(r.status,401,method+' '+p);}
   const token=await login(),headers={'content-type':'application/json',authorization:'Bearer '+token};
   assert.equal((await call('/api/admin/reset',{method:'POST',headers,body:'{}'})).status,400);

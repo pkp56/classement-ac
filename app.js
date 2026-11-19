@@ -1229,14 +1229,19 @@ if(eventsSource()==='local'){
   eventsApi.mountEventRoutes(app,{getStore:getEventsStore});
 }
 
-// Catalogue des mods du PC hébergeant Node : lecture seule, administrateurs.
-require('./tools/lib/local-mods').mountLocalMods(app,{
-  authorize:async(req,res)=>{
-    const status=await verifyAdminDetail(req);
-    if(status==='ok')return true;
-    res.status(status==='denied'?401:503).json({error:status==='denied'?'Connexion administrateur requise.':'Vérification administrateur indisponible.'});
-    return false;
-  }
+// Catalogue et import des mods du PC hébergeant Node : lecture seule, administrateurs.
+const localMods = require('./tools/lib/local-mods');
+const localModRoots = localMods.configuredRoots();
+const authorizeLocalMods = async(req,res)=>{
+  const status=await verifyAdminDetail(req);
+  if(status==='ok')return true;
+  res.status(status==='denied'?401:503).json({error:status==='denied'?'Connexion administrateur requise.':'Vérification administrateur indisponible.'});
+  return false;
+};
+localMods.mountLocalMods(app,{roots:localModRoots,authorize:authorizeLocalMods});
+require('./tools/lib/local-circuits').mountLocalCircuitImport(app,{
+  roots:localModRoots,
+  authorize:authorizeLocalMods
 });
 
 app.get('/api/health',async(_req,res)=>{

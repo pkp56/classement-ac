@@ -1554,7 +1554,7 @@ function setCircuitAlt(key){
   render();
 }
 /**
- * Manches ajoutées depuis l'administration (import Drive).
+ * Manches ajoutées depuis l'administration (import Drive ou mods locaux).
  * Elles vivent dans l'événement (`data.circuitRounds`), donc elles sont
  * persistées en PostgreSQL et partagées par tous les visiteurs, alors que
  * `data/circuits.json` est un fichier statique du dépôt.
@@ -1615,11 +1615,17 @@ async function circuitsData(){
   if (!base && !extra.length) { circuitsError = err || 'Aucun circuit pour cet événement'; return null; }
   const merged = mergeCircuitRounds((base && base.rounds) || [], extra);
   if (!merged.length) { circuitsError = err || 'Aucun circuit pour cet événement'; return null; }
+  const sessionRounds=rounds();
+  const withResults=merged.map(r=>{
+    const resultGroup=circuitRoundResultsGroup(r,merged,sessionRounds);
+    if(!resultGroup)return r;
+    return {...r,status:'done',resultsImported:true,date:r.date||String(resultGroup.date||'').slice(0,10)};
+  });
   const j = {
     ...(base || {}),
-    rounds: merged,
-    totalCount: merged.length,
-    completedCount: merged.filter(r => r.date || (r.stats && r.stats.races)).length
+    rounds: withResults,
+    totalCount: withResults.length,
+    completedCount: withResults.filter(r => r.status === 'done').length
   };
   circuitsCache = j; circuitsError = '';
   return j;
@@ -1646,17 +1652,59 @@ const CIRCUIT_TRACK_ALIASES = {
   '6thgpmexico67': ['6thgpmexico67', 'mexico'],
   'oesterreichring1979': ['oesterreichring1979', 'oesterreichring']
 };
+function normalizeCircuitTrackName(value){
+  return String(value||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'');
+}
+function circuitTrackAliases(r){
+  if(!r)return [];
+  const folder=String(r.driverFolder||r.trackId||'').trim().toLowerCase();
+  const known=CIRCUIT_TRACK_ALIASES[folder]||[];
+  return [...new Set([...known,r.driverFolder,r.trackId,r.localTrackId,r.localLayoutId,r.track,r.name,r.shortName]
+    .map(normalizeCircuitTrackName).filter(Boolean))];
+}
+function circuitRoundsShareTrack(a,b){
+  const aliases=new Set(circuitTrackAliases(a));
+  return circuitTrackAliases(b).some(alias=>aliases.has(alias));
+}
+/** Sessions de résultats associées à une fiche : la date prévaut, puis un alias unique. */
+function circuitRoundSessions(r,circuitList,sessionRounds){
+  if(!r)return [];
+  const rs=Array.isArray(sessionRounds)?sessionRounds:rounds();
+  const all=Array.isArray(circuitList)?circuitList:[r];
+  const day=String(r.date||'').slice(0,10);
+  if(day){
+    const sameDate=rs.filter(x=>String(x.date||'').slice(0,10)===day);
+    if(sameDate.length)return sameDate;
+  }
+  const aliases=circuitTrackAliases(r);
+  if(!aliases.length)return [];
+  const sameTrackFiches=all.filter(item=>circuitRoundsShareTrack(item,r));
+  if(sameTrackFiches.length!==1)return [];
+  return rs.filter(x=>aliases.includes(normalizeCircuitTrackName(x.track)));
+}
+function circuitSessionGroupHasResults(group){
+  return (group&&group.sessions||[]).some(session=>
+    ['QUALIFY','RACE'].includes(String(session.type||'').toUpperCase())
+    &&Array.isArray(session.results)&&session.results.length>0
+  );
+}
+function circuitRoundResultsGroup(r,circuitList,sessionRounds){
+  return circuitRoundSessions(r,circuitList,sessionRounds).find(circuitSessionGroupHasResults)||null;
+}
+function circuitRoundHasResults(r,circuitList,sessionRounds){
+  return !!circuitRoundResultsGroup(r,circuitList,sessionRounds);
+}
 /** Retrouve l'index de la manche importée correspondant à une fiche circuit. */
 function circuitRoundIndex(r){
   if(!r)return -1;
   const rs=rounds();
-  const aliases=(CIRCUIT_TRACK_ALIASES[r.driverFolder]||[String(r.driverFolder||'')]).map(a=>a.toLowerCase());
-  let idx=rs.findIndex(x=>aliases.includes(String(x.track||'').toLowerCase()));
-  if(idx<0&&r.date){
+  if(r.date){
     const d=String(r.date).slice(0,10);
-    idx=rs.findIndex(x=>String(x.date||'').slice(0,10)===d);
+    const byDate=rs.findIndex(x=>String(x.date||'').slice(0,10)===d);
+    if(byDate>=0)return byDate;
   }
-  return idx;
+  const aliases=circuitTrackAliases(r);
+  return rs.findIndex(x=>aliases.includes(normalizeCircuitTrackName(x.track)));
 }
 function circuitCountryCode(country){
   return ({ 'Autriche': 'AUT', 'Canada': 'CAN', 'U.S.A.': 'USA', 'USA': 'USA', 'Mexique': 'MEX' })[country] || '—';
@@ -1820,7 +1868,9 @@ function circuit(){
   const statusChip = `<span class="cir-status ${isDone ? 'done' : ''}">${circuitStatusLabel(round)}</span>`;
   const winnerLine = round.winner
     ? `<span class="cir-winner"><small>Vainqueur</small>${esc(round.winner)}</span>`
-    : `<span class="cir-winner"><small>Manche</small>à venir</span>`;
+    : isDone
+      ? `<span class="cir-winner"><small>Manche</small>${round.resultsImported?'Résultats disponibles':'Disputée'}</span>`
+      : `<span class="cir-winner"><small>Manche</small>à venir</span>`;
 
   // --- KPI ---
   const seasonBest = data.seasonBest;
@@ -1929,6 +1979,8 @@ function circuit(){
   const lapRows = (() => {
     const stats = round.stats;
     if (!stats) {
+      if(round.resultsImported)return `<div class="cir-empty">Résultats QUALIFY / RACE disponibles dans l’onglet Résultats. La fiche circuit ne recalcule pas les statistiques de classement.</div>`;
+      if(isDone)return `<div class="cir-empty">Cette manche est disputée, mais aucune synthèse chronométrique n'est disponible dans la fiche.</div>`;
       return `<div class="cir-empty">Cette manche n'a pas encore été disputée : les chronos seront publiés après la course.</div>`;
     }
     const rows = [];
@@ -1943,7 +1995,7 @@ function circuit(){
 
   const entries = round.stats
     ? `${round.stats.races || 0} course${(round.stats.races || 0) > 1 ? 's' : ''}`
-    : (round.status === 'done' ? (round.format || '—') : 'Aucune session importée');
+    : (round.resultsImported ? 'Sessions importées' : (round.status === 'done' ? (round.format || '—') : 'Aucune session importée'));
   const sectorsTable = `<div class="cir-panel"><div class="eyebrow">Chronométrie &amp; repères de la manche</div><h3>${esc(round.label)} · ${esc(isDone ? circuitDateLabel(round) : 'À venir')}</h3>`
     + `<p class="cir-src" style="margin:0 0 10px">${esc(round.format)}${isDone ? ' · ' + esc(entries) : ''}${round.stats && round.stats.drivers ? ` · ${round.stats.drivers} pilotes classés` : ''}${round.winner ? ` · vainqueur ${esc(round.winner)}` : ''}.</p>`
     + lapRows
@@ -2340,7 +2392,7 @@ async function saveRemote(){
   if(Array.isArray(baseData.galleryImages)&&baseData.galleryImages.length)payload.galleryImages=baseData.galleryImages;
   if(baseData.eventInfo&&typeof baseData.eventInfo==='object')payload.eventInfo=baseData.eventInfo;
   if(baseData.modSelection&&typeof baseData.modSelection==='object')payload.modSelection=baseData.modSelection;
-  // Manches circuit ajoutées par l'import Drive : sans cette ligne, chaque
+  // Fiches circuit importées (Drive ou mod local) : sans cette ligne, chaque
   // sauvegarde de l'événement les effacerait.
   if(Array.isArray(baseData.circuitRounds)&&baseData.circuitRounds.length)payload.circuitRounds=baseData.circuitRounds;
   Object.assign(payload,{sessions:minSessions,penMap,manualDrivers,customCalendar});
@@ -2552,12 +2604,25 @@ async function createEventPrompt(){
   const long2=confirm('Les courses d\'1 heure (une seule course par manche) donnent-elles le double de points ? OK=oui');
   const joker=+prompt('Nombre de meilleures manches retenues pour le Joker (0 = toutes les manches) ?','5')||0;
   const cfg={pointsScale:scale,polePoints:1,doubleLongRaces:long2,longRaceMinutes:60,minPercentDistance:0.75,jokerCount:joker,globalCoef:+coefS||1};
+
+  let localCircuitImport=null,localCircuitError='';
+  if(chosenMods?.track){
+    const statusEl=document.getElementById('event-poster-status');
+    if(statusEl){statusEl.style.color='#132d35';statusEl.textContent='⏳ Lecture des fichiers locaux du circuit…';}
+    try{localCircuitImport=await requestLocalCircuitImport(chosenMods.track,plannedDate,1);}
+    catch(error){localCircuitError=error.message||String(error);}
+  }
+
   markEventSlugDeleted(slugIn,false);
   const initialData={};
   if(chosenMods&&(chosenMods.cars.length||chosenMods.track)){
     initialData.modSelection=chosenMods;
     if(chosenMods.cars.length)initialData.eventInfo={car:chosenMods.cars.map(c=>c.name).join(' / ')};
     if(plannedDate&&chosenMods.track)initialData.customCalendar={[plannedDate]:{track:chosenMods.track.trackId,layout:chosenMods.track.layoutId,trackName:chosenMods.track.name}};
+    if(localCircuitImport?.round){
+      const fiche={...localCircuitImport.round,round:1,label:'M1'};
+      initialData.circuitRounds=[fiche];
+    }
   }
   const r=await apiPost('/api/events',{slug:slugIn,name,kind,pointsConfig:cfg,data:initialData});
   const j=await r.json().catch(()=>({}));
@@ -2565,7 +2630,15 @@ async function createEventPrompt(){
   // Reload events list
   const lst=await apiGet('/api/events');const lj=await lst.json().catch(()=>({}));if(Array.isArray(lj.events))events=filterEventsList(lj.events);
   await switchEvent(slugIn);
-  alert('Événement créé. Tu peux maintenant importer ses JSON.');
+  let message='Événement créé. Tu peux maintenant importer ses JSON.';
+  if(chosenMods?.track){
+    if(localCircuitImport?.round)message=`Événement créé. La fiche Circuit locale a été importée automatiquement.${localCircuitImportDetails(localCircuitImport)} Tu peux maintenant importer les résultats JSON.`;
+    else{
+      const warning=localCircuitImportIssue(localCircuitImport,localCircuitError);
+      message=`Événement créé. La fiche Circuit n’a pas pu être importée (${warning}).${plannedDate?' L’entrée au calendrier est conservée.':''}`;
+    }
+  }
+  alert(message);
 }
 async function deleteEvent(slug){
   if(!backendMulti||!slug)return;
@@ -3203,6 +3276,43 @@ function readLocalModSelection(){
   return {version:1,cars:choices.cars.filter(c=>ids.has(c.id)).map(c=>({id:c.id,name:c.name,brand:c.brand||''})),
     track:(()=>{const t=choices.tracks.find(t=>t.id===trackSelect.value);return t?{id:t.id,trackId:t.trackId,layoutId:t.layoutId,name:t.name}:null;})()};
 }
+async function requestLocalCircuitImport(track,dateKey,roundNumber){
+  const id=String(track?.id||'');
+  const trackId=String(track?.trackId||id.split('/')[0]||'');
+  const layoutId=String(track?.layoutId||(id.includes('/')?id.slice(id.indexOf('/')+1):''));
+  const response=await apiPost('/api/admin/circuits/import-local',{
+    trackId,layoutId,name:track?.name||'',date:dateKey||undefined,round:roundNumber||undefined
+  });
+  const result=await response.json().catch(()=>({error:'Réponse illisible du serveur'}));
+  if(!response.ok)throw new Error(result.error||('HTTP '+response.status));
+  return result&&typeof result==='object'?result:{};
+}
+function localCircuitImportIssue(result,error){
+  if(error)return String(error);
+  const warnings=Array.isArray(result?.warnings)?result.warnings:[];
+  return warnings.find(w=>/fast_lane|circuit absent/i.test(String(w)))||warnings[0]||'Fichiers techniques du circuit indisponibles.';
+}
+function localCircuitImportDetails(result){
+  const warnings=Array.isArray(result?.warnings)?result.warnings:[];
+  return warnings.length?` Avertissements : ${warnings.slice(0,2).join(' ; ')}${warnings.length>2?'…':''}`:'';
+}
+function nextCircuitRoundNumber(data){
+  let highest=isLolaEvent()?6:0;
+  const rows=Array.isArray(data?.circuitRounds)?data.circuitRounds:[];
+  rows.forEach(row=>{const n=Number(row&&row.round);if(Number.isInteger(n)&&n>highest)highest=n;});
+  const cached=circuitsCache&&Array.isArray(circuitsCache.rounds)?circuitsCache.rounds:[];
+  cached.forEach(row=>{const n=Number(row&&row.round);if(Number.isInteger(n)&&n>highest)highest=n;});
+  return highest+1;
+}
+function upsertLocalCircuitRound(data,incoming){
+  if(!data||!incoming||!incoming.name)return;
+  const rows=Array.isArray(data.circuitRounds)?data.circuitRounds.slice():[];
+  const index=incoming.id?rows.findIndex(row=>row&&row.id===incoming.id):-1;
+  if(index>=0)rows[index]={...rows[index],...incoming};
+  else rows.push(incoming);
+  rows.sort((a,b)=>(Number(a.round)||999)-(Number(b.round)||999)||String(a.date||'').localeCompare(String(b.date||''))||String(a.name||'').localeCompare(String(b.name||'')));
+  data.circuitRounds=rows;
+}
 function filterLocalModOptions(input,selectId){
   const query=input.value.toLocaleLowerCase('fr');
   const select=document.getElementById(selectId);
@@ -3222,10 +3332,28 @@ async function addLocalModRound(){
   const t=selected.track;
   const existing=eventContext?.data?.customCalendar?.[day];
   if(existing&&!confirm('Remplacer la manche prévue à cette date ?'))return;
+
+  let localImport=null,localImportError='';
+  try{localImport=await requestLocalCircuitImport(t,day,nextCircuitRoundNumber(eventContext?.data));}
+  catch(error){localImportError=error.message||String(error);}
+  const importIssue=localCircuitImportIssue(localImport,localImportError);
+  const savedMessage=localImport?.round
+    ?`✓ Manche ajoutée au calendrier et fiche Circuit locale importée.${localCircuitImportDetails(localImport)}`
+    :`✓ Manche ajoutée au calendrier. Fiche Circuit indisponible : ${importIssue}`;
+
+  const previousCalendar=customCalendar;
   try{
-    await saveEventHomePatch(currentSlug,data=>{data.customCalendar={...(data.customCalendar||{}),[day]:{track:t.trackId,layout:t.layoutId,trackName:t.name}};},'✓ Manche ajoutée au calendrier du site.');
-    customCalendar=eventContext.data.customCalendar;render();
-  }catch(error){alert('Ajout impossible : '+error.message);}
+    await saveEventHomePatch(currentSlug,data=>{
+      data.customCalendar={...(data.customCalendar||{}),[day]:{track:t.trackId,layout:t.layoutId,trackName:t.name}};
+      customCalendar=data.customCalendar;
+      if(localImport?.round){
+        const number=nextCircuitRoundNumber(data);
+        upsertLocalCircuitRound(data,{...localImport.round,round:number,label:`M${number}`});
+        circuitsCache=null;circuitsError='';
+      }
+    },savedMessage);
+    customCalendar=eventContext.data.customCalendar;
+  }catch(error){customCalendar=previousCalendar;alert('Ajout impossible : '+error.message);}
 }
 function renderLocalModsPanel(){
   const {cars,tracks,saved}=localModChoices();
@@ -3237,7 +3365,7 @@ function renderLocalModsPanel(){
     ${localModsCatalog?`<p class="note">${localModsCatalog.cars.length} voitures · ${localModsCatalog.tracks.length} circuits / variantes${localModsCatalog.scannedAt?' · analysés le '+esc(new Date(localModsCatalog.scannedAt).toLocaleString('fr-FR')):''}</p><ul class="note">${localModsCatalog.sources.map(s=>`<li>${esc(s.path)} : ${esc(statuses[s.status]||s.status)}</li>`).join('')}</ul>${localModsCatalog.warnings.length?`<details><summary>Avertissements de lecture (${localModsCatalog.warnings.length})</summary><ul class="note">${localModsCatalog.warnings.map(w=>'<li>'+esc(w)+'</li>').join('')}</ul></details>`:''}`:''}
     <div class="grid"><label>Voitures (plusieurs : Ctrl + clic)<input type="search" placeholder="Rechercher une voiture…" oninput="filterLocalModOptions(this,'local-mod-cars')"><select id="local-mod-cars" aria-label="Voitures de l’événement" multiple size="6" style="width:100%">${cars.map(c=>`<option value="${esc(c.id)}" ${(saved.cars||[]).some(x=>x.id===c.id)?'selected':''}>${esc(c.name+' ['+c.id+']'+suffix(c))}</option>`).join('')}</select></label>
     <label>Circuit / variante<input type="search" placeholder="Rechercher un circuit…" oninput="filterLocalModOptions(this,'local-mod-track')"><select id="local-mod-track" aria-label="Circuit et variante" style="width:100%"><option value="">— Sans circuit sélectionné —</option>${tracks.map(t=>`<option value="${esc(t.id)}" ${saved.track?.id===t.id?'selected':''}>${esc(t.name+' ['+t.id+']'+suffix(t))}</option>`).join('')}</select><br>Date de la manche (optionnelle à la création)<input type="date" id="local-mod-date"></label></div>
-    <p class="note">La sélection ci-dessus est utilisée par « Créer un événement ». Pour l’événement courant, enregistre-la avec le bouton ci-dessous. Une date et un circuit permettent aussi d’ajouter une manche au calendrier.</p>
+    <p class="note">La sélection ci-dessus est utilisée par « Créer un événement ». À la création d’un événement ou d’une manche, la fiche Circuit complète est importée automatiquement depuis les mods locaux lorsque <code>fast_lane.ai</code> est disponible. Si des fichiers manquent, l’entrée au calendrier est tout de même conservée. Pour l’événement courant, choisis une date puis clique sur « Ajouter la manche sélectionnée ».</p>
     ${currentSlug?`<div class="controls"><button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button></div>`:''}</section>`;
 }
 
@@ -3643,6 +3771,7 @@ importSessionJson=function(text,fileName,opts){
     const idx=sessions.findIndex(x=>x.date===j.Date&&x.type===j.Type);
     if(idx>=0)sessions[idx]=sess;else sessions.push(sess);
     sessions.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    circuitsCache=null;circuitsError='';
     if(!opts.silent){saveState();alert(`Import réussi : ${j.Type} du ${j.Date} (${results.length} pilotes).`);render()}
     return true;
   }catch(err){console.error('import error',err);if(!opts.silent)alert('Erreur d\'import : '+err.message);return false}
