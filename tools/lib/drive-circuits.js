@@ -223,13 +223,13 @@ function detectCorners(points, opts = {}) {
  * @returns {Object<string, Object<string,string>>} sections -> clés
  */
 function parseIni(text) {
-  const out = {};
+  const out = Object.create(null);
   let section = null;
   for (const rawLine of String(text).split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith(';') || line.startsWith('#')) continue;
     const sm = line.match(/^\[(.+)\]$/);
-    if (sm) { section = sm[1].trim(); out[section] = out[section] || {}; continue; }
+    if (sm) { section = sm[1].trim(); out[section] = out[section] || Object.create(null); continue; }
     const kv = line.match(/^([A-Za-z0-9_]+)\s*=\s*(.*)$/);
     if (kv && section) out[section][kv[1].toUpperCase()] = kv[2].trim();
   }

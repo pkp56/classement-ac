@@ -8,6 +8,7 @@ const { safeTrackText } = require('./track-text');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { buildRound, buildSectorSplits } = require('./circuit-round');
+const { cachePreview } = require('./mod-previews');
 const drive = require('./drive-circuits');
 const { configuredRoots, within } = require('./local-mods');
 
@@ -187,6 +188,12 @@ async function readIni(fileInfo, label, warnings, reader) {
   }
 }
 
+function readNamedSections(text){
+  return Object.entries(drive.parseIni(text)).filter(([key])=>/^SECTION_\d+$/i.test(key)).map(([,row])=>({
+    from:parseFloat(row.IN),to:parseFloat(row.OUT),name:safeTrackText(row.TEXT,100)
+  })).filter(s=>s.name&&s.from>=0&&s.to<=1&&s.from<s.to).slice(0,128);
+}
+
 function fileLabel(fileInfo, trackDir) {
   if (!fileInfo || !fileInfo.path) return null;
   const relative = path.relative(trackDir, fileInfo.path);
@@ -241,7 +248,7 @@ function buildMetadata(ui, { trackId, layoutId, name, date, round }) {
     country: safeTrackText(ui && (ui.country || ui.Country)) || 'À confirmer',
     countryCode: safeTrackText(ui && (ui.countryCode || ui.CountryCode), 12),
     city: safeTrackText(ui && (ui.city || ui.City)) || null,
-    gps: gps || null,
+    gps: /^lat\s*·\s*lon$/i.test(gps) ? null : gps || null,
     year: safeTrackText(ui && (ui.year ?? ui.Year), 32) || null,
     author: safeTrackText(ui && (ui.author || ui.Author)) || null,
     version: safeTrackText(ui && (ui.version || ui.Version), 80) || null,
@@ -363,7 +370,9 @@ async function importLocalCircuit({ roots = configuredRoots(), trackId, layoutId
     const ui = await readJson(uiFile, uiWarnings);
     const surfacesFile = await findFile(textCandidates(orderedDataDirs, 'surfaces.ini'), rootReal, MAX_TEXT_BYTES);
     const overlaysFile = await findFile(textCandidates(orderedDataDirs, 'overlays.ini'), rootReal, MAX_TEXT_BYTES);
-    const fallback = { trackDir, ui, uiFile, surfacesFile, overlaysFile, uiWarnings, dataDirs: orderedDataDirs };
+    const previewCandidates=uiCandidates.flatMap(file=>['preview.png','preview.jpg'].map(n=>path.join(path.dirname(file),n)));
+    const preview=()=>cachePreview(trackDir,previewCandidates).catch(()=>null);
+    const fallback = { preview,trackDir, ui, uiFile, surfacesFile, overlaysFile, uiWarnings, dataDirs: orderedDataDirs };
     if (!metadataFallback || fileScore(fallback) > fileScore(metadataFallback)) metadataFallback = fallback;
 
     const lineFile = await findFile(lineCandidates(trackDir, layoutId, orderedDataDirs), rootReal, MAX_LINE_BYTES);
@@ -397,10 +406,22 @@ async function importLocalCircuit({ roots = configuredRoots(), trackId, layoutId
         date: plannedDate,
         round
       });
+      metadata.hero=await preview();
+      const sectionsFile=await findFile(textCandidates(orderedDataDirs,'sections.ini'),rootReal,MAX_TEXT_BYTES);
+      const sections=sectionsFile?await readIni(sectionsFile,'sections.ini',selectedWarnings,readNamedSections):[];
+      if(sections.length)files.sections={name:fileLabel(sectionsFile,trackDir)};
+      const markers=corners.map(c=>({...c,name:sections.find(s=>s.from<=c.norm&&c.norm<=s.to)?.name}));
+      for(const section of sections){
+        if(!corners.some(c=>section.from<=c.norm&&c.norm<=section.to))markers.push({norm:(section.from+section.to)/2,name:section.name});
+      }
+      markers.sort((a,b)=>a.norm-b.norm);
       const full = buildRound(track, metadata, {
         sectors: sectorBounds,
-        cornerNorms: corners.map(corner => corner.norm)
+        cornerNorms: markers.map(marker => marker.norm)
       });
+      full.outline.corners.forEach((pin,i)=>{if(markers[i].name)pin.name=markers[i].name;});
+      full.hasNamedSections=sections.length>0;
+      full.estimatedSectors=!sectors.length;
       full.surfaces = surfaces;
       full.surfaceFile = surfacesFile && !surfacesFile.tooLarge ? fileLabel(surfacesFile, trackDir) : null;
       full.overlaysFile = overlaysFile && !overlaysFile.tooLarge ? fileLabel(overlaysFile, trackDir) : null;
@@ -427,6 +448,7 @@ async function importLocalCircuit({ roots = configuredRoots(), trackId, layoutId
     const files = fileEntries(trackDir, { surfacesFile, overlaysFile, uiFile });
     const metadata = buildMetadata(ui || {}, { trackId, layoutId, name, date: plannedDate, round });
     if (ui || surfaces.length || sectors.length) {
+      metadata.hero=await metadataFallback.preview();
       const partial = metadataOnlyRound(metadata, {
         trackDir, surfaces, sectors, surfaceFile: surfacesFile, overlaysFile, warnings: fallbackWarnings, files
       });

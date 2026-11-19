@@ -1543,6 +1543,10 @@ function carTabBadge(){
   const cars=eventCarSheets(eventContext);
   return cars.length?`${cars.length} modèle${cars.length>1?'s':''}`:'À définir';
 }
+function liveryGallery(car){
+  const rows=car.liveries;
+  return `<gdsp-liveries aria-label="Livrées de ${esc(car.name)}"><img loading="lazy" src="/${esc(rows[0].image)}" alt="${esc(rows[0].name)}"><div><small>LIVRÉES · <span data-count>1 / ${rows.length}</span></small><select aria-label="Choisir une livrée">${rows.map(s=>`<option data-image="/${esc(s.image)}">${esc([s.number?'N° '+s.number:'',s.name,s.team&&s.team!==s.name?s.team:''].filter(Boolean).join(' · '))}</option>`).join('')}</select>${rows.length>1?`<div role="group" aria-label="Diaporama"><button type="button" data-step="-1" aria-label="Livrée précédente">←</button><button type="button" data-play>Pause</button><button type="button" data-step="1" aria-label="Livrée suivante">→</button></div>`:''}</div></gdsp-liveries>`;
+}
 function carSheet(){
   if(backendMulti&&!eventContext)return hub();
   const ev=eventContext||{slug:LEGACY_DEFAULT_SLUG,name:'International Series Lola T290',kind:'championship',data:{}};
@@ -1583,7 +1587,7 @@ function carSheet(){
     const metadataNotice=car.metadataAvailable
       ?`<p class="cir-src">Données importées du fichier <code>ui_car.json</code> du mod local.</p>`
       :`<div class="cir-empty">Les métadonnées <code>ui_car.json</code> ne sont pas disponibles pour cette voiture. La fiche conserve le modèle et les informations renseignées dans l’événement ; les caractéristiques restent à compléter.</div>`;
-    return `<section class="car-sheet-card"><div class="cir-hero car-sheet-hero"><div class="cir-hero-txt"><div><div class="cir-kicker"><span class="cir-flag">${cars.length>1?'Voiture '+(index+1):'Plateau engagé'}</span><span class="cir-status">${esc(car.brand||'Mod Assetto Corsa')}</span></div><h2>${esc(car.name)}</h2><div class="cir-hero-sub">${esc([car.brand,car.category,car.year].filter(Boolean).join(' · ')||'Fiche du véhicule engagé')}</div><dl class="cir-hero-meta">${heroMeta.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></div><div class="cir-hero-actions"><span class="cir-date-chip"><i>MOD</i> Assetto Corsa local</span><span class="cir-winner"><small>Modèle</small>${esc(car.id||car.name)}</span></div></div><div class="car-sheet-mark"><b>${esc(initials)}</b><span>FICHE VOITURE</span></div></div>`
+    return `<section class="car-sheet-card"><div class="cir-hero car-sheet-hero"><div class="cir-hero-txt"><div><div class="cir-kicker"><span class="cir-flag">${cars.length>1?'Voiture '+(index+1):'Plateau engagé'}</span><span class="cir-status">${esc(car.brand||'Mod Assetto Corsa')}</span></div><h2>${esc(car.name)}</h2><div class="cir-hero-sub">${esc([car.brand,car.category,car.year].filter(Boolean).join(' · ')||'Fiche du véhicule engagé')}</div><dl class="cir-hero-meta">${heroMeta.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></div><div class="cir-hero-actions"><span class="cir-date-chip"><i>MOD</i> Assetto Corsa local</span><span class="cir-winner"><small>Modèle</small>${esc(car.id||car.name)}</span></div></div>${car.liveries?.length?liveryGallery(car):`<div class="car-sheet-mark"><b>${esc(initials)}</b><span>FICHE VOITURE</span></div>`}</div>`
       +`<div class="cir-kpis">${specKpi('Constructeur',car.brand||car.name,'Marque du mod')}${specKpi('Puissance',car.specs?.bhp,'ui_car.json','gold')}${specKpi('Poids',car.specs?.weight,'ui_car.json','green')}${specKpi('Catégorie',car.category,'Classe du mod','red')}</div>`
       +`${metadataNotice}${tags}${description}${curveBlock}`
       +`<div class="cir-cols"><div class="cir-panel"><div class="eyebrow">Fiche technique</div><h3>Caractéristiques du mod</h3>${specs.length?`<div class="table-wrap"><table class="cir-surfaces"><tbody>${specs.map(([key,value])=>`<tr><td class="muted"><b>${esc(labels[key])}</b></td><td>${esc(value)}</td></tr>`).join('')}</tbody></table></div>`:`<div class="cir-empty">Aucune caractéristique technique n’est renseignée dans le mod.</div>`}</div><div class="cir-panel"><div class="eyebrow">Événement</div><h3>Voiture engagée</h3><div class="cir-optimal"><span>Événement</span><b>${esc(ev.name||'GDSP')}</b></div><p class="cir-src">L’identifiant affiché est le nom du dossier du mod, pas son chemin sur le PC serveur.</p>${modLink}</div></div></section>`;
@@ -1734,6 +1738,10 @@ function eventCircuitPlaceholders(existingRounds,data=eventContext?.data||{}){
   let next=existingRounds.reduce((max,row)=>Math.max(max,Number(row&&row.round)||0),0)+1;
   return pending.sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name,'fr')).map(candidate=>{
     const number=next++;
+    const sheet=data.modSelection?.trackSheet;
+    if(sheet&&sheet.trackId===candidate.trackId&&(sheet.layoutId||'')===candidate.layoutId){
+      return {...sheet,id:`selection:${candidate.date||'undated'}:${candidate.id}`,round:number,label:`M${number}`,date:candidate.date||null};
+    }
     return {
       id:`selection:${candidate.date||'undated'}:${candidate.id}`,round:number,label:`M${number}`,
       name:candidate.name,shortName:candidate.name,date:candidate.date||null,status:'upcoming',
@@ -1881,7 +1889,7 @@ function circuitMap(round, profile, mode, opts = {}){
   if (!o.path) return '';
   const compact = !!opts.compact;
   const corners = (o.corners || []).map(c =>
-    `<g class="cir-pin" data-corner="${c.id}"><circle cx="${c.x}" cy="${c.y}" r="13"/>`
+    `<g class="cir-pin" data-corner="${Number(c.id)}" tabindex="0" role="button" data-norm="${Number(c.norm)||0}" data-x="${Number(c.x)}" data-y="${Number(c.y)}" aria-label="${esc((c.name||'Virage '+c.id)+' · '+Math.round(c.dist)+' m'+(Number.isFinite(c.altitude)?' · altitude '+c.altitude+' m':''))}"><circle cx="${c.x}" cy="${c.y}" r="13"/>`
     + `<text x="${c.x}" y="${c.y + 4.5}" text-anchor="middle">${c.id}</text>`
     + `<title>Virage ${c.id}${c.name ? ' · ' + esc(c.name) : ''} · ${Math.round(c.dist)} m</title></g>`).join('');
   const sectorDots = (o.sectors || []).map(s =>
@@ -1891,12 +1899,12 @@ function circuitMap(round, profile, mode, opts = {}){
     + `<text x="${c.point.x}" y="${c.point.y + 4}" text-anchor="middle">${i + 1}</text>`
     + `<title>${esc(c.a)} / ${esc(c.b)} · ${c.speed} km/h · ${esc(c.corner || '')}</title></g>`).join('');
   const pins = mode === 'collisions' ? crashPins : (mode === 'sectors' ? '' : corners);
-  return `<svg viewBox="${o.viewBox || '0 0 1000 560'}" role="img" aria-label="Tracé ${esc(round.name)}">`
+  return `<svg viewBox="${o.viewBox || '0 0 1000 560'}" role="${compact?'img':'group'}" aria-label="Tracé ${esc(round.name)}">`
     + `<path class="cir-map-glow" d="${o.path}"/>`
     + `<path class="cir-map-outline" d="${o.path}"/>`
     + `<path class="cir-map-center" d="${o.path}"/>`
     + (compact ? '' : sectorDots)
-    + pins
+    + (compact ? '' : pins)
     + `<circle class="cir-map-start" cx="${o.start ? o.start.x : 0}" cy="${o.start ? o.start.y : 0}" r="9"><title>Ligne de départ / arrivée</title></circle>`
     + `</svg>`;
 }
@@ -1992,13 +2000,17 @@ function circuit(){
 
   // --- Hero ---
   const heroImage = (round.heroByVariant && round.heroByVariant[activeProfile.key]) || round.hero || null;
-  // Un circuit importé n'a pas de photo : fond uni plutôt qu'une image 404.
-  const heroStyle = heroImage
+  // Les aperçus importés comme les photos historiques sont des chemins relatifs.
+  const heroStyle = heroImage && /^[a-zA-Z0-9_./-]+$/.test(heroImage) && !heroImage.startsWith('/') && !heroImage.includes('..')
     ? `background-image:linear-gradient(90deg,#0f252c 0%,#0f252cf2 38%,#0f252c66 58%,#0f252c22 78%),url('/${esc(heroImage)}')`
     : 'background-image:linear-gradient(135deg,#0f252c 0%,#143a44 60%,#1c5a63 100%)';
   const heroMeta = [
     ['Plateau', isLolaEvent() ? 'Lola T290' : ((eventContext && eventContext.name) || '—')],
     ['Configuration', round.layout || 'Non précisée'],
+    ['Longueur annoncée',round.officialLengthM?nb(round.officialLengthM,0)+' m':round.officialLength||'—'],
+    ['Largeur',/^\d+(?:[.,]\d+)?$/.test(round.width)?round.width+' m':round.width||'—'],
+    ['Places aux stands',round.pitboxes||'—'],
+    ['Lieu',[round.city,round.country].filter(Boolean).join(', ')||'—'],
     ['Coordonnées GPS', round.gps || 'Non communiquées'],
     ['Auteur du mod', round.author || 'Non communiqué']
   ];
@@ -2016,7 +2028,7 @@ function circuit(){
   const kpis = `<div class="cir-kpis">`
     + `<div class="cir-kpi"><span>Longueur du tracé</span><strong>${esc(activeProfile.lengthStr || round.lengthStr)}</strong><small>${esc(round.layout)} · ${esc(round.width || '')}</small></div>`
     + `<div class="cir-kpi gold"><span>Dénivelé sur un tour</span><strong>${elev ? frNum(elev.delta, 1) + ' m' : '—'}</strong><small>Alt. ${elev ? frNum(elev.min, 1) + ' m → ' + frNum(elev.max, 1) + ' m' : '—'}</small></div>`
-    + `<div class="cir-kpi green"><span>Capacité des stands</span><strong>${capacity}</strong><small>${isLolaEvent() ? 'Grille Lola T290 du championnat' : 'Places en grille'}</small></div>`
+    + `<div class="cir-kpi green"><span>Capacité des stands</span><strong>${esc(capacity)}</strong><small>${isLolaEvent() ? 'Grille Lola T290 du championnat' : 'Places en grille'}</small></div>`
     + `<div class="cir-kpi red"><span>${isLolaEvent() ? 'Meilleur tour de la saison' : 'Meilleur tour'}</span><strong>${seasonBest ? esc(seasonBest.time) : '—'}</strong><small>${seasonBest ? `${esc(seasonBest.driver)} · ${esc(seasonBest.track)}` : 'Aucun tour enregistré'}</small></div>`
     + `</div>`;
 
@@ -2054,7 +2066,7 @@ function circuit(){
     const hasSectors = sourceSplits.length > 0;
     const sectorSource = round.technicalUnavailable
       ? (hasSectors ? 'Bornes lues dans les fichiers locaux disponibles ; aucun tracé n’est présent pour placer les repères.' : 'Découpage indisponible sans le fichier overlays.ini.')
-      : (round.overlaysFile ? `Bornes issues du fichier <code>${esc(round.overlaysFile)}</code> du mod.` : 'Découpage estimé en trois tiers du tour.');
+      : (round.overlaysFile && !round.estimatedSectors ? `Bornes issues du fichier <code>${esc(round.overlaysFile)}</code> du mod.` : 'Découpage estimé en trois tiers du tour.');
     const lengthLabel = round.lengthM
       ? `${nb(round.lengthM, 0)} m mesurés`
       : (round.officialLengthM ? `${nb(round.officialLengthM, 0)} m annoncés` : 'Mesure indisponible');
@@ -2082,16 +2094,17 @@ function circuit(){
         + `<div class="cir-empty">${missingLine}</div></div>`;
     }
     return `<div class="cir-inspector"><div class="eyebrow">Repères du tracé</div><h3>Points du circuit</h3>`
-      + `<p class="cir-src">${corners.length} virages relevés sur la ligne rapide (<code>fast_lane.ai</code>), numérotés depuis la ligne de départ.</p>`
+      + `<p class="cir-src">${corners.length} ${round.hasNamedSections?'repères (sections.ini)':'virages'} relevés sur la ligne rapide (<code>fast_lane.ai</code>), numérotés depuis la ligne de départ.</p>`
       + `<ul class="cir-sections">${corners.map(c => `<li><span class="cir-sec-num">${String(c.id).padStart(2, '0')}</span>`
-        + `<span class="cir-sec-name">Virage ${c.id}<small>à ${nb(c.dist, 0)} m de la ligne</small></span>`
+        + `<span class="cir-sec-name">${esc(c.name||'Virage '+c.id)}<small>à ${nb(c.dist, 0)} m de la ligne</small></span>`
         + `<span class="cir-sec-data"><b>${frNum(c.norm * 100, 0)} %</b><span>du tour</span></span></li>`).join('')}</ul></div>`;
   })();
 
   // --- Carte + profil altimétrique ---
+  const markerLabel=round.hasNamedSections?'repères':'virages';
   const cornerCount = (round.outline && round.outline.corners || []).length;
   const tabs = [
-    ['corners', `Virages & secteurs (${cornerCount})`],
+    ['corners', `${round.hasNamedSections?'Repères':'Virages'} & secteurs (${cornerCount})`],
     ['collisions', 'Carte des collisions'],
     ['sectors', 'Records par secteur']
   ].map(([k, l]) => `<button type="button" class="${mode === k ? 'active' : ''}" onclick="setCircMode('${k}')">${l}</button>`).join('');
@@ -2113,14 +2126,16 @@ function circuit(){
         : `<span class="lg lg-1">Départ / arrivée</span>`)
     + `</div></div>`;
 
-  const mapBlock = `<div class="cir-map-block">`
+  const samples=activeProfile.outline?.samples;
+  const scrub=Array.isArray(samples)&&samples.length?`<label class="cir-scrub">Explorer le tour <input type="range" min="0" max="1000" value="0" data-length="${Number(activeProfile.lengthM)||0}" data-samples="${esc(JSON.stringify(samples))}"></label>`:'';
+  const mapBlock = `<gdsp-track-guide class="cir-map-block">`
     + `<div class="cir-map-head"><div class="cir-map-tabs">${tabs}</div>`
     + sectorLegend
     + `<div class="cir-map-stage"><div class="cir-map-tag">${round.direction === 'clockwise' ? 'Sens horaire' : 'Sens anti-horaire'} · tracé extrait du fast_lane.ai</div>`
     + `${round.outline&&round.outline.path?circuitMap(round, activeProfile, mode):'<div class="cir-empty">Tracé indisponible : le fichier <code>fast_lane.ai</code> manque ou est illisible.</div>'}`
-    + `<div class="cir-map-hint">${cornerCount} virages · ${round.lengthM?nb(round.lengthM,0)+' m mesurés':'mesure indisponible'}</div></div>`
-    + `<div class="cir-elev"><div class="cir-elev-top"><span>Profil altimétrique sur un tour</span><b>${elev ? frNum(elev.delta, 1) + " m d'amplitude" : '—'}</b></div>${elev?circuitElevSvg(activeProfile):'<div class="cir-empty">Profil indisponible sans le tracé fast_lane.ai.</div>'}</div>`
-    + `</div>`;
+    + `<div class="cir-map-hint">${cornerCount} ${markerLabel} · ${round.lengthM?nb(round.lengthM,0)+' m mesurés':'mesure indisponible'}</div></div>`
+    + `${round.outline?.path?`<div class="cir-readout">${scrub}<output>Sélectionnez un repère sur le tracé.</output></div>`:''}<div class="cir-elev"><div class="cir-elev-top"><span>Profil altimétrique sur un tour</span><b>${elev ? frNum(elev.delta, 1) + " m d'amplitude" : '—'}</b></div>${elev?circuitElevSvg(activeProfile):'<div class="cir-empty">Profil indisponible sans le tracé fast_lane.ai.</div>'}</div>`
+    + `</gdsp-track-guide>`;
 
   // --- Briefing surfaces ---
   const surfaceRows = round.surfaces || [];
@@ -2196,7 +2211,7 @@ function circuit(){
     + `<div class="cir-toolbar"><div class="cir-select"><span>Manche</span><b>${esc(round.label)} · ${esc(round.name)} (${esc(round.country)})</b></div>${variantButtons}</div>`
     + `<div class="cir-hero cir-hero-photo" style="${heroStyle}">`
       + `<div class="cir-hero-txt"><div>`
-        + `<div class="cir-kicker"><span class="cir-flag">${esc(round.label)}</span>${statusChip}<span class="cir-eyebrow">${esc(round.city || round.country || '')} · ${esc(round.country || '')}${round.year ? ' · ' + round.year : ''}</span></div>`
+        + `<div class="cir-kicker"><span class="cir-flag">${esc(round.label)}</span>${statusChip}<span class="cir-eyebrow">${esc(round.city || round.country || '')} · ${esc(round.country || '')}${round.year ? ' · ' + esc(round.year) : ''}</span></div>`
         + `<h2>${esc(round.name)}</h2>`
         + `<div class="cir-hero-sub">${esc(round.layout)} · ${round.direction === 'clockwise' ? 'sens horaire' : 'sens anti-horaire'}</div>`
         + `<dl class="cir-hero-meta">${heroMeta.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`
@@ -2208,7 +2223,7 @@ function circuit(){
     + `</div>`
     + kpis
     + `<div class="cir-section-head"><div><div class="eyebrow">Reconnaissance &amp; direction de course</div><h2>Carte télémétrique &amp; profil altimétrique</h2></div>`
-      + `<div class="cir-map-legend big">${sectorCount ? `Chronométrie · ${sectorCount} secteurs (${esc(round.overlaysFile || 'overlays.ini')})` : 'Pas de découpage officiel par secteur'}</div></div>`
+      + `<div class="cir-map-legend big">${sectorCount ? `Chronométrie · ${sectorCount} secteurs (${round.estimatedSectors?'estimation':esc(round.overlaysFile || 'overlays.ini')})` : 'Pas de découpage officiel par secteur'}</div></div>`
     + `<div class="cir-map-grid">${mapBlock}${inspector}</div>`
     + `<div class="cir-cols">${briefing}${sectorsTable}</div>`
     + `<div class="cir-cols" style="grid-template-columns:1fr">${tech}</div>`
@@ -2788,6 +2803,7 @@ async function createEventPrompt(){
     catch(error){localCircuitError=error.message||String(error);}
   }
 
+  try{await importSelectedLiveries(chosenMods.cars);}catch(error){return alert('Création interrompue : '+error.message);}
   markEventSlugDeleted(slugIn,false);
   const initialData={};
   if(chosenMods&&(chosenMods.cars.length||chosenMods.track)){
@@ -3532,6 +3548,7 @@ function localCarSnapshot(car){
     url:/^https?:\/\//i.test(url)&&isSafeHttpUrl(url)?url:'',
     description:String(source.description||'').trim().slice(0,4000),
     tags:Array.isArray(source.tags)?source.tags.slice(0,12).map(tag=>String(tag||'').trim().slice(0,80)).filter(Boolean):[],
+    liveries:(Array.isArray(source.liveries)?source.liveries:[]).slice(0,80).filter(s=>s&&/^assets\/mod-previews\/[0-9a-f]{64}\.(?:jpg|png)$/.test(s.image)).map(s=>({image:s.image,name:String(s.name||'Livrée').slice(0,120),team:String(s.team||'').slice(0,120),number:String(s.number||'').slice(0,16)})),
     specs:safeSpecs,
     powerCurve:localCarCurveSnapshot(source.powerCurve,'power'),
     torqueCurve:localCarCurveSnapshot(source.torqueCurve,'torque'),
@@ -3610,15 +3627,33 @@ function filterLocalModOptions(input,selectId){
   }
   if(select.options)for(const option of select.options)option.hidden=!!option.value&&!option.selected&&!option.textContent.toLocaleLowerCase('fr').includes(query);
 }
+async function importSelectedLiveries(cars){
+  for(const car of cars){
+    const res=await apiPost('/api/admin/cars/import-liveries',{id:car.id});
+    if(!res.ok)throw Error('Import des livrées impossible : '+car.name+' (HTTP '+res.status+')');
+    const {liveries}=await res.json();
+    if(Array.isArray(liveries))car.liveries=liveries;
+    else if(!car.liveries?.length){
+      const saved=eventContext?.data?.carSheets?.find(row=>row.id===car.id);
+      if(saved?.liveries)car.liveries=saved.liveries;
+    }
+  }
+}
 async function saveLocalModSelection(){
   if(!adminAuth||!currentSlug)return;
   const selected=readLocalModSelection();if(!selected)return;
+  const slug=currentSlug;
   try{
-    await saveEventHomePatch(currentSlug,data=>{
+    await importSelectedLiveries(selected.cars);
+    const imported=selected.track?await requestLocalCircuitImport(selected.track,null,null):null;
+    await saveEventHomePatch(slug,data=>{
       const previousCars=Array.isArray(data.modSelection?.cars)?data.modSelection.cars:[];
       const previousName=previousCars.map(car=>car.name).filter(Boolean).join(' / ');
       const previousSheets=Array.isArray(data.carSheets)?data.carSheets:[];
+      if(imported?.round&&!(imported.round.technicalUnavailable&&data.modSelection?.track?.id===selected.track?.id&&data.modSelection?.trackSheet?.outline))selected.trackSheet=imported.round;
+      else if(selected.track&&selected.track.id===data.modSelection?.track?.id)selected.trackSheet=data.modSelection.trackSheet;
       data.modSelection=selected;
+      circuitsCache=null;circuitsError='';
       if(selected.cars.length){
         data.eventInfo={...(data.eventInfo||{}),car:selected.cars.map(car=>car.name).join(' / ')};
         data.carSheets=selected.cars.map(car=>{
@@ -3763,7 +3798,8 @@ async function refreshEventCircuit(index,button){
       if(i<0)i=rows.findIndex(r=>!Number(r.round)&&sheetTextKey('track',r)===sheetTextKey('track',old)&&r.name===old.name);
       const fresh={...result.round,round:old.round,label:target.label,technicalUnavailable:!!result.round.technicalUnavailable,
         sectorFractions:result.round.sectorFractions||[],importWarnings:result.warnings||[],importedFiles:Object.values(result.files||{}).map(f=>f.name)};
-      for(const k of ['date','dateLabel','status','winner','stats','format','hero','id'])if(target[k]!=null)fresh[k]=target[k];
+      for(const k of ['date','dateLabel','status','winner','stats','format','id'])if(target[k]!=null)fresh[k]=target[k];
+      if(!fresh.hero&&target.hero)fresh.hero=target.hero;
       if(Array.isArray(target.profiles)&&target.profiles.length){
         fresh.layoutKey=target.layoutKey;
         fresh.profiles=target.profiles.map(p=>p.key!==target.layoutKey?p:{...p,lengthM:fresh.lengthM,lengthStr:fresh.lengthStr,elevation:fresh.elevation,outline:fresh.outline,profile:fresh.profile});

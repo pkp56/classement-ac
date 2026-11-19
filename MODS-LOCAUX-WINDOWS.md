@@ -55,9 +55,16 @@ Le bouton **Actualiser les voitures et circuits** de l’onglet Gestion ne fait 
 
 Dans **Administration → Événements → Traduction**, le texte original de chaque description importée (voiture ou circuit) reste consultable. Saisir le français, puis cliquer sur **Enregistrer la traduction** sous le champ concerné. Vider le champ et enregistrer pour revenir à l’original. La traduction est propre à l’événement et indépendante du prochain import ; aucun fichier du mod ou de Drive n’est modifié. Si une ancienne fiche n’a pas de description, actualiser d’abord le circuit ou la sélection des voitures. Une description doit être présente dans le fichier UI du mod.
 
+### Bandeaux et carte interactive (imports locaux)
+
+- **Circuit** : création, ajout de manche et actualisation recherchent le `preview.png` ou `preview.jpg` près du `ui_track.json` de la variante. Le bandeau reprend les informations de piste disponibles. Un aperçu manquant laisse le fond habituel. `fast_lane.ai` alimente la carte et le profil : déplacer **Explorer le tour** ou sélectionner un repère (souris, tactile, clavier) pour lire distance et altitude. Les noms des portions proviennent des plages `IN`/`OUT` et du `TEXT` de `sections.ini` ; sans ce fichier, les virages détectés restent numérotés. Les tiers estimés ne sont pas des secteurs officiels.
+- **Voiture(s)** : à la création ou via **Enregistrer la sélection**, le serveur parcourt les 80 premiers dossiers de `cars/<id>/skins` par ordre de nom. `preview.jpg`, `preview.png` ou `preview.jpeg` et, si présent, `ui_skin.json` alimentent le diaporama de chaque voiture (nom, équipe, numéro). Sans métadonnées, le nom du dossier sert de légende ; sans image, la livrée est ignorée. Défilement toutes les 5 secondes, avec pause, choix direct et flèches ; lecture manuelle si le navigateur demande moins d’animations.
+- **Stockage Windows** : seules les images reconnues, jusqu’à 3 Mio chacune, sont copiées dans `assets/mod-previews` du site. Le compte **GDSP Node** doit pouvoir écrire dans ce dossier. Les doublons sont réutilisés. Les événements enregistrent les références, pas les images en base : **inclure ce dossier dans la sauvegarde du PC** pour conserver les photos même si le mod est retiré. Ne pas le nettoyer lors d’un `git pull`.
+- Pour un **événement existant**, utiliser **Actualiser les circuits → Actualiser depuis Mod local** pour les manches locales, et **Gestion → Enregistrer la sélection** pour les voitures. Le simple scan du catalogue ne modifie pas les fiches déjà publiées.
+
 ### Limites de cette version
 
-- Catalogue de **métadonnées** (noms, identifiants, marque, pays, longueur lorsqu'ils sont disponibles), pas de galerie de photos ou de distribution des mods.
+- Seuls les aperçus PNG/JPEG des mods sélectionnés sont copiés et publiés ; aucune distribution du mod complet.
 - Pas de téléchargement public des fichiers de voiture, circuit, physique ou livrée.
 - Pas d'écriture dans les dossiers du jeu par le site.
 - Pas d'installation, d'extraction d'archive ni de configuration ACSM / serveur CM à distance.

@@ -1238,6 +1238,13 @@ const authorizeLocalMods = async(req,res)=>{
   res.status(status==='denied'?401:503).json({error:status==='denied'?'Connexion administrateur requise.':'Vérification administrateur indisponible.'});
   return false;
 };
+app.post('/api/admin/cars/import-liveries',async(req,res)=>{
+  if(!await authorizeLocalMods(req,res))return;
+  const id=req.body?.id;
+  if(!require('./tools/lib/local-circuits').safeSegment(id))return res.status(400).json({error:'Identifiant de voiture invalide.'});
+  try{res.json({liveries:await require('./tools/lib/mod-previews').importLiveries(localModRoots,id)});}
+  catch{res.status(500).json({error:'Lecture des aperçus de livrées impossible.'});}
+});
 localMods.mountLocalMods(app,{roots:localModRoots,authorize:authorizeLocalMods});
 require('./tools/lib/local-circuits').mountLocalCircuitImport(app,{
   roots:localModRoots,

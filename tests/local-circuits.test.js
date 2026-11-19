@@ -194,3 +194,17 @@ test('API locale authentifiée : absence de tracé signalée sans perdre la rép
   assert.ok(result.round.importWarnings.some(w => /fast_lane\.ai absent/.test(w)));
   assert.ok(result.warnings.some(w => /fast_lane\.ai absent/.test(w)));
 });
+
+test('import local : sections nommées et coordonnées pour explorer la carte et le profil',async t=>{
+  const {root,write}=await fixture(t);
+  await addCompleteLayout(write);
+  await write('tracks/test-track/gp/data/sections.ini','[SECTION_0]\nIN=0.1\nOUT=0.2\nTEXT=Prima Curva\n[SECTION_1]\nIN=2\nOUT=3\nTEXT=Incorrect');
+  const {round,files}=await importLocalCircuit({roots:[root],trackId:'test-track',layoutId:'gp'});
+  assert.equal(files.sections.name,'gp/data/sections.ini');
+  const pin=round.outline.corners.find(p=>p.name==='Prima Curva');
+  assert.ok(pin.norm>=0.1&&pin.norm<=0.2);
+  assert.ok(Math.abs(pin.dist-round.lengthM*pin.norm)<10);
+  assert.ok(Number.isFinite(pin.altitude));
+  assert.ok(round.outline.samples.length>2&&round.outline.samples.length<=241);
+  assert.ok(!round.outline.corners.some(p=>p.name==='Incorrect'));
+});
