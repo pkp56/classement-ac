@@ -67,8 +67,11 @@ for(const configuredOrigin of ['https://gdsp.example',''])test('HTTP SEO : route
   assert.ok((await res.text()).includes('rel="canonical" href="'+origin+'/evenements/test-cup"'));
   res=await get('/evenements/missing/circuit');assert.equal(res.status,404);
   res=await get('/admin');assert.equal(res.status,200);assert.equal(res.headers.get('x-robots-tag'),'noindex, follow');
-  for(const existing of ['/live-timing','/telemetry','/circuits.html','/assets/logo.png']){
+  for(const existing of ['/live-timing','/telemetry','/assets/logo.png','/maquette-circuit/assets/tracks/tremblant/preview.png','/maquette-circuit/preview-chicane.png']){
     res=await get(existing);assert.equal(res.status,200,existing);
+  }
+  for(const removed of ['/circuits.html','/maquette-circuit/index.html','/maquette-circuit/maquette-circuit-gdsp.html','/maquette-pilotes/index.html']){
+    res=await get(removed);assert.equal(res.status,404,removed);
   }
   res=await get('/evenements/missing');const missingHtml=await res.text();assert.match(missingHtml,/noindex,follow/);assert.doesNotMatch(missingHtml,/<script\b/);
   assert.ok(html.includes('property="og:url" content="'+origin+'/evenements/test-cup"'));
