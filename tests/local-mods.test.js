@@ -168,3 +168,16 @@ test('voiture Kunos (ks_*) sans ui_car.json : extrait marque, ère, auteur Kunos
   assert.equal(porsche.metadataSource,'data');
   assert.equal(porsche.metadataAvailable,true);
 });
+
+test('circuit sans ui_track.json : découvre les variantes depuis models_*.ini et les infos ext_config.ini',async t=>{
+  const {c,write}=await fixture(t);
+  await write(c,'tracks/prague/models_prague.ini','[MODEL_0]\nFILE=100.kn5\n');
+  await write(c,'tracks/prague/models_prague_rev.ini','[MODEL_0]\nFILE=001.kn5\n');
+  await write(c,'tracks/prague/models_prague_short.ini','[MODEL_0]\nFILE=100_short.kn5\n');
+  await write(c,'tracks/prague/extension/ext_config.ini','[ABOUT]\nAUTHOR=Kavoriken, leBluem\n');
+  const r=await scanCatalog([c]);
+  assert.deepEqual(r.tracks.map(t=>t.id).sort(),['prague','prague/prague_rev','prague/prague_short']);
+  assert.equal(r.tracks[0].country,'République tchèque');
+  assert.equal(r.tracks[0].author,'Kavoriken, leBluem');
+  assert.equal(r.tracks[0].metadataAvailable,true);
+});

@@ -1368,3 +1368,48 @@ test('Fiche Voiture Kunos : logo importé, métadonnées skins/skin.ini et impor
   assert.equal(post.body.carSheets[0].specs.weight,'745 kg');
   assert.equal(post.body.carSheets[0].logo,logo);
 });
+
+test('Fiche Circuit estimée depuis cameras.ini et import manuel de fichiers circuit AC', async () => {
+  let remote={slug:'prague-cup',name:'Prague Cup',kind:'cup',points_config:{},data:{
+    circuitRounds:[{
+      id:'local:undated:prague',round:1,label:'M1',name:'Prague',shortName:'Prague',trackId:'prague',layoutId:'',
+      country:'République tchèque',city:'Prague',author:'Kavoriken, leBluem',version:'1.6',year:'2021',
+      lengthM:5522,lengthStr:'5,522 km',elevation:{min:-73.9,max:-2.5,delta:71.4},
+      outline:{path:'M0 0 L10 10 Z',viewBox:'0 0 100 100',samples:[],sectors:[],corners:[{id:1,dist:120,norm:0.1}]},
+      profile:{path:'M0 10 L10 5',closed:'M0 10 L10 5 L10 120 L0 120 Z',min:-73.9,max:-2.5,delta:71.4},
+      profiles:{default:{path:'M0 10 L10 5',closed:'M0 10 L10 5 L10 120 L0 120 Z',min:-73.9,max:-2.5,delta:71.4}},
+      sectorSplits:[{label:'S1',from:0,to:1841},{label:'S2',from:1841,to:3681},{label:'S3',from:3681,to:5522}],
+      surfaces:[{key:'COBBLE',label:'Pavés',grip:null,valid:true,note:'Détecté dans ext_config.ini'}],
+      approximateOutline:true,outlineSource:'cameras.ini',technicalUnavailable:false,status:'upcoming'
+    }]
+  }};
+  const {sandbox,getElementById,calls}=makeBrowser([remote],(url,opts)=>{
+    if(url==='/api/events/prague-cup'&&(!opts||!opts.method||opts.method==='GET'))return response(remote);
+    if(url==='/api/events/prague-cup/data'&&opts.method==='POST'){
+      remote={...remote,data:opts.body};
+      return response({ok:true});
+    }
+    if(url==='/api/admin/circuits/import-files'&&opts.method==='POST'){
+      return response({ok:true,round:{...remote.data.circuitRounds[0],name:'Prague · Short',lengthM:4100,lengthStr:'4,100 km'}});
+    }
+    return null;
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext("loadEvent('prague-cup')",sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  vm.runInContext("page='circuit';render()",sandbox);
+  const html=getElementById('app').innerHTML;
+  assert.match(html,/tracé estimé depuis cameras\.ini/);
+  assert.match(html,/5,522 km/);
+  assert.match(html,/Pavés/);
+
+  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin'",sandbox);
+  getElementById('track-files-import').files=[
+    {name:'ext_config.ini',text:async()=>'[ABOUT]\nAUTHOR=Kavoriken\n'}
+  ];
+  await vm.runInContext('importTrackFilesFromInput()',sandbox);
+  const importCall=calls.find(c=>c.url==='/api/admin/circuits/import-files'&&c.method==='POST');
+  assert.equal(importCall.body.files[0].name,'ext_config.ini');
+  const post=calls.filter(c=>c.url==='/api/events/prague-cup/data'&&c.method==='POST').at(-1);
+  assert.equal(post.body.circuitRounds[0].name,'Prague · Short');
+});
