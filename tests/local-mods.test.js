@@ -130,3 +130,41 @@ test('API réservée aux administrateurs ; chemins du corps ignorés ; rescan ex
   assert.equal((await (await fetch(url,{headers})).json()).cars.length,1);
   assert.equal((await (await fetch(url+'/scan',{method:'POST',headers,body:'{}'})).json()).cars.length,2);
 });
+test('voiture Kunos (ks_*) sans ui_car.json : extrait marque, ère, auteur Kunos, logo et données data/ / skins',async t=>{
+  const {c,write}=await fixture(t);
+  const logoBytes=await fs.readFile(path.resolve(__dirname,'../assets/logo.png'));
+  await write(c,'cars/ks_alfa_romeo_giulia_gta/skins/01_red/skin.ini','[driver_70]\nSUIT=\\sparco\\red\n\n[CREW]\nBRAND=\\alfa\n');
+  await write(c,'cars/ks_alfa_romeo_giulia_gta/skins/01_red/ui_skin.json',{skinname:'Misano Red',number:'0'});
+  await fs.writeFile(path.join(c,'cars/ks_alfa_romeo_giulia_gta/logo.png'),logoBytes);
+
+  await write(c,'cars/ks_porsche_911_rsr_1974/data/car.ini','[INFO]\nSCREEN_NAME=Porsche 911 Carrera RSR 3.0\n[BASIC]\nTOTALMASS=900\n');
+  await write(c,'cars/ks_porsche_911_rsr_1974/data/engine.ini','[ENGINE_DATA]\nTORQUE_CURVE=power.lut\n');
+  await write(c,'cars/ks_porsche_911_rsr_1974/data/power.lut','0|0\n4000|290\n7500|300\n');
+  await write(c,'cars/ks_porsche_911_rsr_1974/data/drivetrain.ini','[TRACTION]\nTYPE=RWD\n');
+
+  const r=await scanCatalog([c]);
+  const alfa=r.cars.find(x=>x.id==='ks_alfa_romeo_giulia_gta');
+  assert.equal(alfa.name,'Alfa Romeo Giulia GTA');
+  assert.equal(alfa.brand,'Alfa Romeo');
+  assert.equal(alfa.country,'Italie');
+  assert.equal(alfa.author,'Kunos Simulazioni');
+  assert.equal(alfa.year,'Années 1970');
+  assert.equal(alfa.hasLogo,true);
+  assert.equal(alfa.metadataSource,'skins');
+  assert.equal(alfa.metadataAvailable,true);
+
+  const porsche=r.cars.find(x=>x.id==='ks_porsche_911_rsr_1974');
+  assert.equal(porsche.name,'Porsche 911 Carrera RSR 3.0');
+  assert.equal(porsche.brand,'Porsche');
+  assert.equal(porsche.country,'Allemagne');
+  assert.equal(porsche.author,'Kunos Simulazioni');
+  assert.equal(porsche.year,'1974');
+  assert.equal(porsche.specs.weight,'900 kg');
+  assert.equal(porsche.specs.torque,'300 Nm');
+  assert.equal(porsche.specs.bhp,'316 bhp');
+  assert.deepEqual(porsche.tags,['rwd']);
+  assert.equal(porsche.torqueCurve.length,3);
+  assert.equal(porsche.powerCurve.length,3);
+  assert.equal(porsche.metadataSource,'data');
+  assert.equal(porsche.metadataAvailable,true);
+});

@@ -45,14 +45,26 @@ async function importLiveries(roots,id,destination=cache){
     const liveries=[];
     for(const entry of entries.filter(e=>e.isDirectory()&&!e.name.startsWith('.')).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,80)){
       const dir=path.join(skins,entry.name);
-      const image=await cachePreview(car,['preview.jpg','preview.png','preview.jpeg'].map(n=>path.join(dir,n)),destination);
+      const image=await cachePreview(car,['preview.jpg','preview.png','preview.jpeg','livery.png','livery.jpg'].map(n=>path.join(dir,n)),destination);
       if(!image)continue;
       let ui;
       try{ui=JSON.parse((await boundedRead(car,path.join(dir,'ui_skin.json'),65536)).toString('utf8').replace(/^\uFEFF/,''));}catch{}
-      liveries.push({image,name:safeTrackText(ui?.skinname||entry.name,120),number:safeTrackText(ui?.number,16),team:safeTrackText(ui?.team,120)});
+      const isPlaceholderNumber=String(ui?.number??'')==='0'&&!safeTrackText(ui?.skinname,120)&&!safeTrackText(ui?.team,120)&&!safeTrackText(ui?.drivername,120);
+      liveries.push({image,name:safeTrackText(ui?.skinname||entry.name,120),number:isPlaceholderNumber?'':safeTrackText(ui?.number,16),team:safeTrackText(ui?.team,120)});
     }
     return liveries;
   }
   return null; // Mod débranché : conserver la sélection historique.
 }
-module.exports={cachePreview,importLiveries};
+async function importCarLogo(roots,id,destination=cache){
+  const {safeSegment}=require('./local-circuits');
+  if(!safeSegment(id))throw new Error('Identifiant de voiture invalide');
+  const allowed=(await Promise.all(roots.map(p=>fs.realpath(p).catch(()=>null)))).filter(Boolean);
+  for(const root of allowed){
+    const car=await fs.realpath(path.join(root,'cars',id)).catch(()=>null);
+    if(!car||!allowed.some(r=>within(car,r)))continue;
+    return cachePreview(car,['logo.png','logo.jpg','logo.jpeg',path.join('ui','badge.png')].map(n=>path.join(car,n)),destination);
+  }
+  return null;
+}
+module.exports={cachePreview,importLiveries,importCarLogo};

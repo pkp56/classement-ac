@@ -1242,7 +1242,14 @@ app.post('/api/admin/cars/import-liveries',async(req,res)=>{
   if(!await authorizeLocalMods(req,res))return;
   const id=req.body?.id;
   if(!require('./tools/lib/local-circuits').safeSegment(id))return res.status(400).json({error:'Identifiant de voiture invalide.'});
-  try{res.json({liveries:await require('./tools/lib/mod-previews').importLiveries(localModRoots,id)});}
+  try{
+    const modPreviews=require('./tools/lib/mod-previews');
+    const [liveries,logo]=await Promise.all([
+      modPreviews.importLiveries(localModRoots,id),
+      modPreviews.importCarLogo(localModRoots,id)
+    ]);
+    res.json({liveries,logo});
+  }
   catch{res.status(500).json({error:'Lecture des aperçus de livrées impossible.'});}
 });
 localMods.mountLocalMods(app,{roots:localModRoots,authorize:authorizeLocalMods});

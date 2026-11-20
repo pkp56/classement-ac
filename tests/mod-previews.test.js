@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const os=require('node:os');
 const path=require('node:path');
-const {cachePreview,importLiveries}=require('../tools/lib/mod-previews');
+const {cachePreview,importLiveries,importCarLogo}=require('../tools/lib/mod-previews');
 
 test('les fiches ne publient que les aperçus internes ; images identiques dédupliquées',async t=>{
   const temp=await fs.mkdtemp(path.join(os.tmpdir(),'gdsp-preview-'));
@@ -26,4 +26,21 @@ test('les fiches ne publient que les aperçus internes ; images identiques dédu
   assert.equal(await cachePreview(root,[path.join(outside,'preview.png')],out),null);
   assert.equal(await importLiveries([root],'missing',out),null);
   await assert.rejects(importLiveries([root],'..',out));
+});
+
+test('importCarLogo et repli livery.png sur les voitures Kunos',async t=>{
+  const temp=await fs.mkdtemp(path.join(os.tmpdir(),'gdsp-kunos-'));
+  t.after(()=>fs.rm(temp,{recursive:true,force:true}));
+  const root=path.join(temp,'content'),car=path.join(root,'cars','ks_alfa_romeo_giulia_gta'),out=path.join(temp,'cache');
+  const bytes=await fs.readFile(path.resolve(__dirname,'../assets/logo.png'));
+  await fs.mkdir(path.join(car,'skins','01_alfa'),{recursive:true});
+  await fs.writeFile(path.join(car,'logo.png'),bytes);
+  await fs.writeFile(path.join(car,'skins','01_alfa','livery.png'),bytes);
+  await fs.writeFile(path.join(car,'skins','01_alfa','ui_skin.json'),JSON.stringify({skinname:'',drivername:'',country:'',team:'',number:'0'}));
+  const logo=await importCarLogo([root],'ks_alfa_romeo_giulia_gta',out);
+  assert.match(logo,/^assets\/mod-previews\/[a-f\d]{64}\.png$/);
+  const liveries=await importLiveries([root],'ks_alfa_romeo_giulia_gta',out);
+  assert.equal(liveries.length,1);
+  assert.equal(liveries[0].name,'01_alfa');
+  assert.equal(liveries[0].number,'');
 });
