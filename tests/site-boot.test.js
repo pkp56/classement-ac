@@ -1331,3 +1331,40 @@ test('Event kinds endurance, cup, fiesta, trackday : hub, switcher, poids Global
   assert.equal(vm.runInContext('eventContext.kind', sandbox), 'cup');
   assert.equal(vm.runInContext('eventContext.pointsConfig.globalCoef', sandbox), 0.75);
 });
+
+test('Fiche Voiture Kunos : logo importé, métadonnées skins/skin.ini et import manuel de fichiers AC', async () => {
+  const logo='assets/mod-previews/'+'a'.repeat(64)+'.png';
+  const image='assets/mod-previews/'+'b'.repeat(64)+'.jpg';
+  let remote={slug:'alfa-gta',name:'Alfa GTA Classic',kind:'cup',points_config:{},data:{
+    carSheets:[{id:'ks_alfa_romeo_giulia_gta',name:'Alfa Romeo Giulia GTA',brand:'Alfa Romeo',year:'Années 1970',country:'Italie',author:'Kunos Simulazioni',logo,liveries:[{image,name:'Misano Red',team:'',number:''}],specs:{},metadataSource:'skins',metadataAvailable:true}]
+  }};
+  const {sandbox,getElementById,calls}=makeBrowser([remote],(url,opts)=>{
+    if(url==='/api/events/alfa-gta'&&(!opts||!opts.method||opts.method==='GET'))return response(remote);
+    if(url==='/api/events/alfa-gta/data'&&opts.method==='POST'){
+      remote={...remote,data:opts.body};
+      return response({ok:true});
+    }
+    if(url==='/api/admin/cars/import-liveries')return response({liveries:[{name:'Misano Red',image,number:''}],logo});
+    return null;
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext("loadEvent('alfa-gta')",sandbox);
+  vm.runInContext("page='voiture';render()",sandbox);
+  const html=getElementById('app').innerHTML;
+  assert.match(html,/Alfa Romeo Giulia GTA/);
+  assert.match(html,/Kunos Simulazioni/);
+  assert.match(html,/Années 1970/);
+  assert.match(html,/car-sheet-logo/);
+  assert.match(html,/skin\.ini/);
+
+  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin'",sandbox);
+  getElementById('car-files-import').files=[
+    {name:'body_shadow.png',text:async()=>''},
+    {name:'skin.ini',text:async()=>'[driver_60]\n[CREW]\nBRAND=\\alfa\n'},
+    {name:'car.ini',text:async()=>'[INFO]\nSCREEN_NAME=Alfa Romeo Giulia Sprint GTA\n[BASIC]\nTOTALMASS=745\n'}
+  ];
+  await vm.runInContext('importCarFilesFromInput()',sandbox);
+  const post=calls.filter(c=>c.url==='/api/events/alfa-gta/data'&&c.method==='POST').at(-1);
+  assert.equal(post.body.carSheets[0].specs.weight,'745 kg');
+  assert.equal(post.body.carSheets[0].logo,logo);
+});

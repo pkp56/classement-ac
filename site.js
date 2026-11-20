@@ -1584,9 +1584,14 @@ function carTabBadge(){
   const cars=eventCarSheets(eventContext);
   return cars.length?`${cars.length} modèle${cars.length>1?'s':''}`:'À définir';
 }
+function localMediaSrc(src){
+  const s=String(src||'').trim();
+  if(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(s))return s;
+  return '/'+s.replace(/^\/+/,'');
+}
 function liveryGallery(car){
   const rows=car.liveries;
-  return `<gdsp-liveries aria-label="Livrées de ${esc(car.name)}"><img loading="lazy" src="/${esc(rows[0].image)}" alt="${esc(rows[0].name)}"><div><small>LIVRÉES · <span data-count>1 / ${rows.length}</span></small><select aria-label="Choisir une livrée">${rows.map(s=>`<option data-image="/${esc(s.image)}">${esc([s.number?'N° '+s.number:'',s.name,s.team&&s.team!==s.name?s.team:''].filter(Boolean).join(' · '))}</option>`).join('')}</select>${rows.length>1?`<div role="group" aria-label="Diaporama"><button type="button" data-step="-1" aria-label="Livrée précédente">←</button><button type="button" data-play>Pause</button><button type="button" data-step="1" aria-label="Livrée suivante">→</button></div>`:''}</div></gdsp-liveries>`;
+  return `<gdsp-liveries aria-label="Livrées de ${esc(car.name)}"><img loading="lazy" src="${esc(localMediaSrc(rows[0].image))}" alt="${esc(rows[0].name)}"><div><small>LIVRÉES · <span data-count>1 / ${rows.length}</span></small><select aria-label="Choisir une livrée">${rows.map(s=>`<option data-image="${esc(localMediaSrc(s.image))}">${esc([s.number?'N° '+s.number:'',s.name,s.team&&s.team!==s.name?s.team:''].filter(Boolean).join(' · '))}</option>`).join('')}</select>${rows.length>1?`<div role="group" aria-label="Diaporama"><button type="button" data-step="-1" aria-label="Livrée précédente">←</button><button type="button" data-play>Pause</button><button type="button" data-step="1" aria-label="Livrée suivante">→</button></div>`:''}</div></gdsp-liveries>`;
 }
 function carSheet(){
   if(backendMulti&&!eventContext)return hub();
@@ -1625,11 +1630,17 @@ function carSheet(){
     const curveCards=[curveCard('powerCurve','Puissance moteur','bhp','#9c3021'),curveCard('torqueCurve','Couple moteur','Nm','#315b66')].filter(Boolean);
     const curveBlock=curveCards.length?`<div class="cir-panel car-curves-panel"><div class="eyebrow">Données moteur</div><h3>Courbes moteur</h3><div class="car-curves-grid">${curveCards.join('')}</div></div>`:'';
     const modLink=car.url?`<p class="cir-src"><a href="${esc(car.url)}" target="_blank" rel="noopener noreferrer">Page du mod ↗</a></p>`:'';
+    const specSub=car.metadataSource==='data'?'Fichiers data/ AC':car.metadataSource==='skins'||car.metadataSource==='kunos'?'Fichiers AC locaux':'ui_car.json';
+    const logoBadge=car.logo?`<img class="car-sheet-logo" src="${esc(localMediaSrc(car.logo))}" alt="Logo ${esc(car.brand||car.name)}">`:'';
     const metadataNotice=car.metadataAvailable
-      ?`<p class="cir-src">Données importées du fichier <code>ui_car.json</code> du mod local.</p>`
+      ?(car.metadataSource==='data'
+        ?`<p class="cir-src">Données extraites des fichiers locaux (<code>data/</code>, <code>skin.ini</code>, <code>logo.png</code>) du véhicule.</p>`
+        :car.metadataSource==='skins'||car.metadataSource==='kunos'
+        ?`<p class="cir-src">Données extraites des fichiers locaux Assetto Corsa (<code>logo.png</code>, <code>skin.ini</code>, <code>ui_skin.json</code>, livrées et identification Kunos).</p>`
+        :`<p class="cir-src">Données importées du fichier <code>ui_car.json</code> du mod local.</p>`)
       :`<div class="cir-empty">Les métadonnées <code>ui_car.json</code> ne sont pas disponibles pour cette voiture. La fiche conserve le modèle et les informations renseignées dans l’événement ; les caractéristiques restent à compléter.</div>`;
-    return `<section class="car-sheet-card"><div class="cir-hero car-sheet-hero"><div class="cir-hero-txt"><div><div class="cir-kicker"><span class="cir-flag">${cars.length>1?'Voiture '+(index+1):'Plateau engagé'}</span><span class="cir-status">${esc(car.brand||'Mod Assetto Corsa')}</span></div><h2>${esc(car.name)}</h2><div class="cir-hero-sub">${esc([car.brand,car.category,car.year].filter(Boolean).join(' · ')||'Fiche du véhicule engagé')}</div><dl class="cir-hero-meta">${heroMeta.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></div><div class="cir-hero-actions"><span class="cir-date-chip"><i>MOD</i> Assetto Corsa local</span><span class="cir-winner"><small>Modèle</small>${esc(car.id||car.name)}</span></div></div>${car.liveries?.length?liveryGallery(car):`<div class="car-sheet-mark"><b>${esc(initials)}</b><span>FICHE VOITURE</span></div>`}</div>`
-      +`<div class="cir-kpis">${specKpi('Constructeur',car.brand||car.name,'Marque du mod')}${specKpi('Puissance',car.specs?.bhp,'ui_car.json','gold')}${specKpi('Poids',car.specs?.weight,'ui_car.json','green')}${specKpi('Catégorie',car.category,'Classe du mod','red')}</div>`
+    return `<section class="car-sheet-card"><div class="cir-hero car-sheet-hero"><div class="cir-hero-txt"><div><div class="cir-kicker"><span class="cir-flag">${cars.length>1?'Voiture '+(index+1):'Plateau engagé'}</span>${logoBadge}<span class="cir-status">${esc(car.brand||'Mod Assetto Corsa')}</span></div><h2>${esc(car.name)}</h2><div class="cir-hero-sub">${esc([car.brand,car.category,car.year].filter(Boolean).join(' · ')||'Fiche du véhicule engagé')}</div><dl class="cir-hero-meta">${heroMeta.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></div><div class="cir-hero-actions"><span class="cir-date-chip"><i>MOD</i> Assetto Corsa local</span><span class="cir-winner"><small>Modèle</small>${esc(car.id||car.name)}</span></div></div>${car.liveries?.length?liveryGallery(car):`<div class="car-sheet-mark">${car.logo?`<img class="car-sheet-logo-lg" src="${esc(localMediaSrc(car.logo))}" alt="Logo ${esc(car.brand||car.name)}">`:`<b>${esc(initials)}</b>`}<span>FICHE VOITURE</span></div>`}</div>`
+      +`<div class="cir-kpis">${specKpi('Constructeur',car.brand||car.name,'Marque du mod')}${specKpi('Puissance',car.specs?.bhp,specSub,'gold')}${specKpi('Poids',car.specs?.weight,specSub,'green')}${specKpi('Catégorie',car.category,'Classe du mod','red')}</div>`
       +`${metadataNotice}${tags}${description}${curveBlock}`
       +`<div class="cir-cols"><div class="cir-panel"><div class="eyebrow">Fiche technique</div><h3>Caractéristiques du mod</h3>${specs.length?`<div class="table-wrap"><table class="cir-surfaces"><tbody>${specs.map(([key,value])=>`<tr><td class="muted"><b>${esc(labels[key])}</b></td><td>${esc(value)}</td></tr>`).join('')}</tbody></table></div>`:`<div class="cir-empty">Aucune caractéristique technique n’est renseignée dans le mod.</div>`}</div><div class="cir-panel"><div class="eyebrow">Événement</div><h3>Voiture engagée</h3><div class="cir-optimal"><span>Événement</span><b>${esc(ev.name||'GDSP')}</b></div><p class="cir-src">L’identifiant affiché est le nom du dossier du mod, pas son chemin sur le PC serveur.</p>${modLink}</div></div></section>`;
   }).join('')}</div>`;
@@ -3682,6 +3693,11 @@ function localCarCurveSnapshot(value,metric){
       :null;
   }).filter(Boolean).sort((a,b)=>a.rpm-b.rpm);
 }
+function isSafeCarMedia(value){
+  const s=String(value||'').trim();
+  if(/^assets\/mod-previews\/[0-9a-f]{64}\.(?:jpg|png)$/.test(s))return true;
+  return s.length<=450000&&/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(s);
+}
 function localCarSnapshot(car){
   const source=car&&typeof car==='object'?car:{};
   const specs=source.specs&&typeof source.specs==='object'?source.specs:{};
@@ -3689,6 +3705,8 @@ function localCarSnapshot(car){
   const safeSpecs={};
   allowedSpecs.forEach(key=>{if(typeof specs[key]==='string'&&specs[key].trim())safeSpecs[key]=specs[key].trim().slice(0,100);});
   const url=String(source.url||'').trim().slice(0,500);
+  const logo=isSafeCarMedia(source.logo)?String(source.logo).trim():'';
+  const metadataSource=String(source.metadataSource||'').trim().slice(0,40);
   return {
     id:String(source.id||'').slice(0,128),name:String(source.name||source.id||'Voiture').trim().slice(0,300),
     brand:String(source.brand||'').trim().slice(0,200),category:String(source.category||'').trim().slice(0,200),
@@ -3697,10 +3715,12 @@ function localCarSnapshot(car){
     url:/^https?:\/\//i.test(url)&&isSafeHttpUrl(url)?url:'',
     description:String(source.description||'').trim().slice(0,4000),
     tags:Array.isArray(source.tags)?source.tags.slice(0,12).map(tag=>String(tag||'').trim().slice(0,80)).filter(Boolean):[],
-    liveries:(Array.isArray(source.liveries)?source.liveries:[]).slice(0,80).filter(s=>s&&/^assets\/mod-previews\/[0-9a-f]{64}\.(?:jpg|png)$/.test(s.image)).map(s=>({image:s.image,name:String(s.name||'Livrée').slice(0,120),team:String(s.team||'').slice(0,120),number:String(s.number||'').slice(0,16)})),
+    ...(logo?{logo}:{}),
+    liveries:(Array.isArray(source.liveries)?source.liveries:[]).slice(0,80).filter(s=>s&&isSafeCarMedia(s.image)).map(s=>({image:String(s.image).trim(),name:String(s.name||'Livrée').slice(0,120),team:String(s.team||'').slice(0,120),number:String(s.number||'').slice(0,16)})),
     specs:safeSpecs,
     powerCurve:localCarCurveSnapshot(source.powerCurve,'power'),
     torqueCurve:localCarCurveSnapshot(source.torqueCurve,'torque'),
+    ...(metadataSource?{metadataSource}:{}),
     metadataAvailable:source.metadataAvailable===true
   };
 }
@@ -3780,13 +3800,186 @@ async function importSelectedLiveries(cars){
   for(const car of cars){
     const res=await apiPost('/api/admin/cars/import-liveries',{id:car.id});
     if(!res.ok)throw Error('Import des livrées impossible : '+car.name+' (HTTP '+res.status+')');
-    const {liveries}=await res.json();
+    const {liveries,logo}=await res.json();
+    const saved=eventContext?.data?.carSheets?.find(row=>row.id===car.id);
     if(Array.isArray(liveries))car.liveries=liveries;
-    else if(!car.liveries?.length){
-      const saved=eventContext?.data?.carSheets?.find(row=>row.id===car.id);
-      if(saved?.liveries)car.liveries=saved.liveries;
-    }
+    else if(!car.liveries?.length&&saved?.liveries)car.liveries=saved.liveries;
+    if(logo)car.logo=logo;
+    else if(!car.logo&&saved?.logo)car.logo=saved.logo;
   }
+}
+const CLIENT_KUNOS_BRANDS={
+  alfa:{brand:'Alfa Romeo',country:'Italie'},alfa_romeo:{brand:'Alfa Romeo',country:'Italie'},
+  abarth:{brand:'Abarth',country:'Italie'},aston:{brand:'Aston Martin',country:'Grande-Bretagne'},
+  audi:{brand:'Audi',country:'Allemagne'},bmw:{brand:'BMW',country:'Allemagne'},
+  caterham:{brand:'Caterham',country:'Grande-Bretagne'},chevrolet:{brand:'Chevrolet',country:'États-Unis'},
+  corvette:{brand:'Chevrolet',country:'États-Unis'},ferrari:{brand:'Ferrari',country:'Italie'},
+  fiat:{brand:'Fiat',country:'Italie'},ford:{brand:'Ford',country:'États-Unis'},
+  glickenhaus:{brand:'Scuderia Cameron Glickenhaus',country:'États-Unis'},honda:{brand:'Honda',country:'Japon'},
+  jaguar:{brand:'Jaguar',country:'Grande-Bretagne'},ktm:{brand:'KTM',country:'Autriche'},
+  lamborghini:{brand:'Lamborghini',country:'Italie'},lancia:{brand:'Lancia',country:'Italie'},
+  lotus:{brand:'Lotus',country:'Grande-Bretagne'},maserati:{brand:'Maserati',country:'Italie'},
+  mazda:{brand:'Mazda',country:'Japon'},mclaren:{brand:'McLaren',country:'Grande-Bretagne'},
+  mercedes:{brand:'Mercedes-Benz',country:'Allemagne'},mini:{brand:'MINI',country:'Grande-Bretagne'},
+  nissan:{brand:'Nissan',country:'Japon'},pagani:{brand:'Pagani',country:'Italie'},
+  porsche:{brand:'Porsche',country:'Allemagne'},praga:{brand:'Praga',country:'République tchèque'},
+  renault:{brand:'Renault',country:'France'},alpine:{brand:'Alpine',country:'France'},
+  ruf:{brand:'RUF',country:'Allemagne'},shelby:{brand:'Shelby',country:'États-Unis'},
+  subaru:{brand:'Subaru',country:'Japon'},tatuus:{brand:'Tatuus',country:'Italie'},toyota:{brand:'Toyota',country:'Japon'}
+};
+function parseIniClient(raw){
+  const sections={};let current='';
+  for(const line of String(raw||'').replace(/^\uFEFF/,'').split(/\r?\n/)){
+    const s=line.replace(/\s*;.*$/,'').replace(/^\s*;.*$/,'').trim();
+    if(!s)continue;
+    const m=s.match(/^\[([^\]]+)\]$/);
+    if(m){current=m[1].trim().toUpperCase();if(!sections[current])sections[current]={};continue;}
+    const eq=s.indexOf('=');
+    if(eq<=0)continue;
+    if(!sections[current])sections[current]={};
+    sections[current][s.slice(0,eq).trim().toUpperCase()]=s.slice(eq+1).trim();
+  }
+  return sections;
+}
+function compressCarLogoImage(file){
+  return new Promise((resolve,reject)=>{
+    if(!file)return reject(new Error('Aucun fichier logo.'));
+    if(typeof FileReader==='undefined')return reject(new Error('Lecture de fichier non supportée.'));
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('Impossible de lire le logo.'));
+    reader.onload=()=>{
+      const raw=String(reader.result||'');
+      if(!isSafeCarMedia(raw)&&!/^data:image\//i.test(raw))return reject(new Error('Format de logo invalide.'));
+      if(typeof Image==='undefined'||typeof document==='undefined'||!document.createElement)return resolve(raw);
+      const probe=document.createElement('canvas');
+      if(!probe||typeof probe.getContext!=='function')return resolve(raw);
+      const img=new Image();
+      img.onerror=()=>resolve(raw);
+      img.onload=()=>{
+        try{
+          const w0=img.naturalWidth||img.width||128,h0=img.naturalHeight||img.height||128,maxSide=192;
+          let w=w0,h=h0;
+          if(w>maxSide||h>maxSide){const r=Math.min(maxSide/w,maxSide/h);w=Math.max(1,Math.round(w*r));h=Math.max(1,Math.round(h*r));}
+          const c=document.createElement('canvas');c.width=w;c.height=h;
+          c.getContext('2d').drawImage(img,0,0,w,h);
+          const png=c.toDataURL('image/png');
+          resolve(png.length<=450000?png:c.toDataURL('image/webp',0.85));
+        }catch{resolve(raw);}
+      };
+      img.src=raw;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+async function importCarFilesFromInput(){
+  if(!adminAuth||!currentSlug)return;
+  const input=document.getElementById('car-files-import');
+  const statusEl=document.getElementById('car-files-status');
+  const targetSel=document.getElementById('car-files-target');
+  const files=Array.from(input?.files||[]);
+  if(!files.length){if(statusEl)statusEl.textContent='Sélectionne un ou plusieurs fichiers (ui_car.json, skin.ini, ui_skin.json, logo.png, preview.jpg, livery.png).';return;}
+  if(statusEl)statusEl.textContent='Analyse des fichiers…';
+  try{
+    const baseSheets=eventCarSheets(eventContext).map(localCarSnapshot);
+    const targetId=targetSel?.value||baseSheets[0]?.id||'kunos-car';
+    const currentCar=baseSheets.find(c=>c.id===targetId)||{id:targetId,name:targetId,specs:{},tags:[],liveries:[],powerCurve:[],torqueCurve:[],metadataAvailable:false};
+    const next={...currentCar,specs:{...(currentCar.specs||{})},tags:[...(currentCar.tags||[])],liveries:[...(currentCar.liveries||[])]};
+    const uiSkinsByKey=new Map(),previewByKey=new Map(),liveryByKey=new Map();
+    const keyOf=name=>{const m=String(name||'').toLowerCase().match(/(?:ui_skin|skin|preview|livery)(.*?)\.(?:json|ini|jpe?g|png)$/i);return m?(m[1]||'_default').replace(/^[-_]+/,''):'_default';};
+    let touched=0;
+    for(const file of files){
+      const lower=String(file.name||'').toLowerCase();
+      if(/^(?:body_shadow|ambient_shadow|tyre_|glass|rim|interior)/.test(lower))continue;
+      if(lower==='ui_car.json'){
+        const data=JSON.parse((await file.text()).replace(/^\uFEFF/,''));
+        if(data&&typeof data==='object'){
+          if(data.name)next.name=String(data.name).trim();
+          if(data.brand)next.brand=String(data.brand).trim();
+          if(data.class||data.category)next.category=String(data.class||data.category).trim();
+          if(data.year!=null&&data.year!=='')next.year=String(data.year).trim();
+          if(data.country)next.country=String(data.country).trim();
+          if(data.author)next.author=String(data.author).trim();
+          if(data.version)next.version=String(data.version).trim();
+          if(data.url)next.url=String(data.url).trim();
+          if(data.description)next.description=String(data.description).replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]*>/g,'').trim();
+          if(Array.isArray(data.tags))next.tags=data.tags.map(t=>String(t||'').trim()).filter(Boolean).slice(0,12);
+          if(data.specs&&typeof data.specs==='object')for(const k of ['bhp','torque','weight','topspeed','acceleration','pwratio','range'])if(data.specs[k])next.specs[k]=String(data.specs[k]).trim();
+          const pc=localCarCurveSnapshot(data.powerCurve,'power'),tc=localCarCurveSnapshot(data.torqueCurve,'torque');
+          if(pc.length)next.powerCurve=pc;
+          if(tc.length)next.torqueCurve=tc;
+          next.metadataSource='ui_car';next.metadataAvailable=true;touched++;
+        }
+      }else if(/^skin.*\.ini$/i.test(lower)){
+        const ini=parseIniClient(await file.text());
+        const crewBrand=String(ini.CREW?.BRAND||'').replace(/^[\\/]+/,'').toLowerCase().replace(/[\s-]+/g,'_');
+        const info=CLIENT_KUNOS_BRANDS[crewBrand];
+        if(info){
+          if(!next.brand)next.brand=info.brand;
+          if(!next.country)next.country=info.country;
+          if(!next.author)next.author='Kunos Simulazioni';
+        }
+        const decades={'60':'Années 1960','70':'Années 1970','80':'Années 1980','90':'Années 1990','00':'Années 2000','10':'Années 2010'};
+        for(const sec of Object.keys(ini)){
+          const dm=sec.match(/^DRIVER_(\d{2})$/);
+          if(dm&&decades[dm[1]]&&!next.year)next.year=decades[dm[1]];
+        }
+        if(!next.metadataSource)next.metadataSource='skins';
+        next.metadataAvailable=true;touched++;
+      }else if(/^ui_skin.*\.json$/i.test(lower)){
+        try{
+          const ui=JSON.parse((await file.text()).replace(/^\uFEFF/,''));
+          if(ui&&typeof ui==='object'){uiSkinsByKey.set(keyOf(lower),ui);touched++;}
+        }catch{}
+      }else if(/^(?:logo|badge).*\.(?:png|jpe?g)$/i.test(lower)){
+        next.logo=await compressCarLogoImage(file);
+        if(!next.metadataSource)next.metadataSource='skins';
+        next.metadataAvailable=true;touched++;
+      }else if(/^preview.*\.(?:png|jpe?g)$/i.test(lower)){
+        previewByKey.set(keyOf(lower),await compressPosterImage(file,true));touched++;
+      }else if(/^livery.*\.(?:png|jpe?g)$/i.test(lower)){
+        liveryByKey.set(keyOf(lower),await compressPosterImage(file,true));touched++;
+      }else if(lower==='car.ini'){
+        const ini=parseIniClient(await file.text());
+        if(ini.INFO?.SCREEN_NAME&&!next.metadataSource)next.name=ini.INFO.SCREEN_NAME;
+        const mass=Number(ini.BASIC?.TOTALMASS);
+        if(Number.isFinite(mass)&&mass>100&&mass<10000&&!next.specs.weight)next.specs.weight=Math.round(mass)+' kg';
+        if(!next.metadataSource)next.metadataSource='data';
+        next.metadataAvailable=true;touched++;
+      }else if(lower==='power.lut'){
+        const pts=String(await file.text()).split(/\r?\n/).map(l=>l.split('|')).filter(p=>p.length>=2).map(([x,y])=>({rpm:Number(x),value:Number(y)})).filter(p=>Number.isFinite(p.rpm)&&Number.isFinite(p.value)&&p.rpm>=0&&p.value>=0);
+        if(pts.length>=2){
+          next.torqueCurve=localCarCurveSnapshot(pts,'torque');
+          next.powerCurve=localCarCurveSnapshot(pts.map(p=>({rpm:p.rpm,value:Math.round((p.value*p.rpm/7127)*100)/100})),'power');
+          const maxT=pts.reduce((m,p)=>Math.max(m,p.value),0),maxP=next.powerCurve.reduce((m,p)=>Math.max(m,p.value),0);
+          if(maxT>0&&!next.specs.torque)next.specs.torque=Math.round(maxT)+' Nm';
+          if(maxP>0&&!next.specs.bhp)next.specs.bhp=Math.round(maxP)+' bhp';
+          if(!next.metadataSource)next.metadataSource='data';
+          next.metadataAvailable=true;touched++;
+        }
+      }
+    }
+    const allKeys=new Set([...previewByKey.keys(),...liveryByKey.keys()]);
+    for(const key of [...allKeys].sort()){
+      const image=previewByKey.get(key)||liveryByKey.get(key);
+      if(!image)continue;
+      const ui=uiSkinsByKey.get(key)||null;
+      const rawNum=String(ui?.number??'').trim();
+      const isPlaceholderNum=rawNum==='0'&&!ui?.skinname&&!ui?.team&&!ui?.drivername;
+      const label=String(ui?.skinname||(key==='_default'?'Livrée principale':'Livrée '+key)).trim().slice(0,120);
+      const entry={image,name:label,team:String(ui?.team||'').trim().slice(0,120),number:isPlaceholderNum?'':rawNum.slice(0,16)};
+      if(!next.liveries.some(l=>l.image===entry.image))next.liveries.push(entry);
+    }
+    if(!touched){if(statusEl)statusEl.textContent='Aucun fichier voiture reconnu dans la sélection.';return;}
+    const snapshot=localCarSnapshot(next);
+    await saveEventHomePatch(currentSlug,data=>{
+      const sheets=Array.isArray(data.carSheets)?data.carSheets.slice():baseSheets;
+      const idx=sheets.findIndex(s=>s&&s.id===snapshot.id);
+      if(idx>=0)sheets[idx]=snapshot;else sheets.push(snapshot);
+      data.carSheets=sheets;
+      data.eventInfo={...(data.eventInfo||{}),car:sheets.map(s=>s.name).filter(Boolean).join(' / ')};
+    },'✓ Fiche voiture enrichie depuis les fichiers Assetto Corsa.');
+    if(input)input.value='';
+  }catch(err){if(statusEl)statusEl.textContent='Erreur : '+err.message;}
 }
 async function saveLocalModSelection(){
   if(!adminAuth||!currentSlug)return;
@@ -3864,7 +4057,7 @@ function renderLocalModsPanel(){
     <div class="grid local-mod-selection-grid"><div><label for="local-mod-car-search">Voitures à engager (<span id="local-mod-car-count">${selectedCount}</span> sélectionnée(s))</label><input id="local-mod-car-search" type="search" placeholder="Rechercher une voiture…" oninput="filterLocalModOptions(this,'local-mod-cars')"><div id="local-mod-cars" class="local-mod-car-list" role="group" aria-label="Voitures de l’événement">${cars.length?cars.map(car=>`<label class="local-mod-car-option"><input type="checkbox" data-local-car-id value="${esc(car.id)}" ${(saved.cars||[]).some(item=>item.id===car.id)?'checked':''} onchange="updateLocalModCount()"><span><b>${esc(car.name)}</b><small>${esc(car.brand||car.category||'Voiture')} · ${esc(car.id)}${suffix(car)}</small></span></label>`).join(''):'<span class="note">Aucune voiture chargée. Clique sur « Actualiser » pour analyser les mods installés.</span>'}</div><p class="note">Coche simplement une ou plusieurs voitures : cette sélection sera reprise lors de la création de l’événement.</p></div>
       <div style="display:flex;flex-direction:column;gap:10px"><label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#586260">Circuit / variante<input type="search" placeholder="Rechercher un circuit…" oninput="filterLocalModOptions(this,'local-mod-track')"><select id="local-mod-track" aria-label="Circuit et variante" style="width:100%"><option value="">— Sans circuit sélectionné —</option>${tracks.map(track=>`<option value="${esc(track.id)}" ${saved.track?.id===track.id?'selected':''}>${esc(track.name+' ['+track.id+']'+suffix(track))}</option>`).join('')}</select></label><label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#586260">Date de la manche (optionnelle à la création)<input type="date" id="local-mod-date" style="background:#fbf7ec;border:1px solid #b3a78e"></label></div></div>
     <p class="note">À la création d’un événement ou d’une manche, la fiche Circuit est importée automatiquement lorsque les fichiers techniques du mod sont disponibles. Si le tracé est incomplet, l’événement et sa fiche Circuit de base restent accessibles. Pour l’événement courant, choisis une date puis clique sur « Ajouter la manche sélectionnée ».</p>
-    <div class="controls" style="margin-bottom:0">${currentSlug?`<button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button>`:''}<button type="button" class="btn secondary" onclick="createEventPrompt()">+ Créer un événement avec cette sélection</button></div></section>`;
+    <div class="controls" style="margin-bottom:0">${currentSlug?`<button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button>`:''}<button type="button" class="btn secondary" onclick="createEventPrompt()">+ Créer un événement avec cette sélection</button></div>${currentSlug?`<div class="admin-round" style="margin-top:12px"><div class="eyebrow">Import manuel depuis des fichiers AC</div><p class="note" style="margin:4px 0 8px">Si une voiture Kunos (<code>ks_*</code>) ou un mod n’a pas de <code>ui_car.json</code> complet sur le serveur, sélectionne ici les fichiers de ton dossier (<code>logo.png</code>, <code>skin.ini</code>, <code>ui_skin.json</code>, <code>preview.jpg</code>, <code>livery.png</code>, <code>ui_car.json</code>, <code>car.ini</code>, <code>power.lut</code>).</p><div class="controls" style="margin:0;align-items:center">${eventCarSheets(eventContext).length>1?`<select id="car-files-target" aria-label="Voiture cible">${eventCarSheets(eventContext).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>`:''}<input type="file" id="car-files-import" multiple accept=".json,.ini,.lut,.png,.jpg,.jpeg"><button type="button" class="btn secondary small" onclick="importCarFilesFromInput()">Importer dans la fiche voiture</button></div><p id="car-files-status" class="note" role="status" style="margin:6px 0 0"></p></div>`:''}</section>`;
 }
 
 // Les traductions appartiennent à l'événement, pas au catalogue ni au mod.

@@ -65,31 +65,175 @@ function carUrl(value){
   const url=text(value,500);
   return /^https?:\/\/[^\s"'<>]+$/i.test(url)?url:'';
 }
-function carMetadata(meta,id){
+const KUNOS_BRANDS=Object.freeze({
+  alfa:{brand:'Alfa Romeo',country:'Italie'},
+  alfa_romeo:{brand:'Alfa Romeo',country:'Italie'},
+  alfaromeo:{brand:'Alfa Romeo',country:'Italie'},
+  abarth:{brand:'Abarth',country:'Italie'},
+  aston:{brand:'Aston Martin',country:'Grande-Bretagne'},
+  aston_martin:{brand:'Aston Martin',country:'Grande-Bretagne'},
+  audi:{brand:'Audi',country:'Allemagne'},
+  bmw:{brand:'BMW',country:'Allemagne'},
+  caterham:{brand:'Caterham',country:'Grande-Bretagne'},
+  chevrolet:{brand:'Chevrolet',country:'États-Unis'},
+  corvette:{brand:'Chevrolet',country:'États-Unis'},
+  ferrari:{brand:'Ferrari',country:'Italie'},
+  fiat:{brand:'Fiat',country:'Italie'},
+  ford:{brand:'Ford',country:'États-Unis'},
+  glickenhaus:{brand:'Scuderia Cameron Glickenhaus',country:'États-Unis'},
+  scg:{brand:'Scuderia Cameron Glickenhaus',country:'États-Unis'},
+  honda:{brand:'Honda',country:'Japon'},
+  jaguar:{brand:'Jaguar',country:'Grande-Bretagne'},
+  ktm:{brand:'KTM',country:'Autriche'},
+  lamborghini:{brand:'Lamborghini',country:'Italie'},
+  lancia:{brand:'Lancia',country:'Italie'},
+  lotus:{brand:'Lotus',country:'Grande-Bretagne'},
+  maserati:{brand:'Maserati',country:'Italie'},
+  mazda:{brand:'Mazda',country:'Japon'},
+  mclaren:{brand:'McLaren',country:'Grande-Bretagne'},
+  mercedes:{brand:'Mercedes-Benz',country:'Allemagne'},
+  mercedes_benz:{brand:'Mercedes-Benz',country:'Allemagne'},
+  mercedes_amg:{brand:'Mercedes-Benz',country:'Allemagne'},
+  mini:{brand:'MINI',country:'Grande-Bretagne'},
+  nissan:{brand:'Nissan',country:'Japon'},
+  pagani:{brand:'Pagani',country:'Italie'},
+  porsche:{brand:'Porsche',country:'Allemagne'},
+  praga:{brand:'Praga',country:'République tchèque'},
+  renault:{brand:'Renault',country:'France'},
+  alpine:{brand:'Alpine',country:'France'},
+  ruf:{brand:'RUF',country:'Allemagne'},
+  shelby:{brand:'Shelby',country:'États-Unis'},
+  subaru:{brand:'Subaru',country:'Japon'},
+  tatuus:{brand:'Tatuus',country:'Italie'},
+  toyota:{brand:'Toyota',country:'Japon'}
+});
+const KUNOS_ACRONYMS=new Set(['GT','GTA','GTAM','GTR','GTE','GT2','GT3','GT4','GTO','LM','LMP1','LMP2','DTM','F1','F2','F3','RS','RSR','SRS','V8','V10','V12','TDI','TSI','EVO','SV','LP','SCG','KTM','BMW','RUF','AMG','SLS','SL','SS','ZL1','Z06','MX5','RX7','NSX','R34','S1','S2','S3','TCR','WTCR','R1','M1','M3','M4','M6','C7R','C9','Z4','R8']);
+function isKunosId(id){
+  return /^ks(?:[_-]|(?=[A-Z0-9]))/i.test(String(id||''));
+}
+function lookupKunosBrand(token){
+  const clean=String(token||'').trim().replace(/^[\\/]+/,'').toLowerCase().replace(/[\s-]+/g,'_');
+  if(!clean)return null;
+  if(Object.prototype.hasOwnProperty.call(KUNOS_BRANDS,clean))return KUNOS_BRANDS[clean];
+  const parts=clean.split('_').filter(Boolean);
+  if(parts.length>=2&&Object.prototype.hasOwnProperty.call(KUNOS_BRANDS,parts[0]+'_'+parts[1]))return KUNOS_BRANDS[parts[0]+'_'+parts[1]];
+  if(parts.length>=1&&Object.prototype.hasOwnProperty.call(KUNOS_BRANDS,parts[0]))return KUNOS_BRANDS[parts[0]];
+  return null;
+}
+function formatKunosCarName(id){
+  const stripped=String(id||'').replace(/^ks[_-]+/i,'').trim();
+  if(!stripped)return String(id||'');
+  return stripped.split(/[_-]+/).filter(Boolean).map(part=>{
+    const upper=part.toUpperCase();
+    if(KUNOS_ACRONYMS.has(upper)||/^\d+[a-z]?$/i.test(part))return upper;
+    return part[0].toUpperCase()+part.slice(1).toLowerCase();
+  }).join(' ');
+}
+function inferKunosCategory(id){
+  const lower=String(id||'').toLowerCase();
+  if(/(?:^|_)gt3(?:_|$)/.test(lower))return 'GT3';
+  if(/(?:^|_)gt2(?:_|$)/.test(lower))return 'GT2';
+  if(/(?:^|_)gt4(?:_|$)/.test(lower))return 'GT4';
+  if(/(?:^|_)gte(?:_|$)/.test(lower))return 'GTE';
+  if(/(?:^|_)dtm(?:_|$)/.test(lower))return 'DTM';
+  if(/(?:^|_)lmp1(?:_|$)/.test(lower))return 'LMP1';
+  if(/(?:^|_)lmp2(?:_|$)/.test(lower))return 'LMP2';
+  if(/(?:^|_)cup(?:_|$)/.test(lower))return 'Cup';
+  return '';
+}
+function parseIni(raw){
+  const sections={};
+  let current='';
+  for(const line of String(raw||'').replace(/^\uFEFF/,'').split(/\r?\n/)){
+    const stripped=line.replace(/\s*;.*$/,'').replace(/^\s*;.*$/,'').trim();
+    if(!stripped)continue;
+    const sec=stripped.match(/^\[([^\]]+)\]$/);
+    if(sec){current=sec[1].trim().toUpperCase();if(!sections[current])sections[current]={};continue;}
+    const eq=stripped.indexOf('=');
+    if(eq<=0)continue;
+    const key=stripped.slice(0,eq).trim().toUpperCase();
+    const val=stripped.slice(eq+1).trim();
+    if(!sections[current])sections[current]={};
+    sections[current][key]=val;
+  }
+  return sections;
+}
+function parseLut(raw){
+  const points=[];
+  for(const line of String(raw||'').replace(/^\uFEFF/,'').split(/\r?\n/)){
+    const clean=line.replace(/;.*$/,'').trim();
+    if(!clean||!clean.includes('|'))continue;
+    const [rawX,rawY]=clean.split('|');
+    const rpm=Number(rawX),value=Number(rawY);
+    if(Number.isFinite(rpm)&&rpm>=0&&rpm<=20000&&Number.isFinite(value)&&value>=0&&value<=10000){
+      points.push({rpm,value});
+    }
+  }
+  points.sort((a,b)=>a.rpm-b.rpm);
+  if(points.length<=120)return points;
+  const sampled=[];
+  for(let i=0;i<119;i++)sampled.push(points[Math.floor(i*(points.length-1)/119)]);
+  sampled.push(points[points.length-1]);
+  return sampled;
+}
+function parseDriverEra(sections){
+  const decades={'60':'Années 1960','70':'Années 1970','80':'Années 1980','90':'Années 1990','00':'Années 2000','10':'Années 2010'};
+  for(const name of Object.keys(sections||{})){
+    const m=name.match(/^DRIVER_(\d{2})$/);
+    if(m&&decades[m[1]])return decades[m[1]];
+  }
+  return '';
+}
+function carMetadata(meta,id,extras={}){
   const rawSpecs=meta&&meta.specs&&typeof meta.specs==='object'&&!Array.isArray(meta.specs)?meta.specs:{};
   const specs={};
   for(const [key,_label,aliases] of CAR_SPEC_FIELDS){
     const value=aliases.map(alias=>text(rawSpecs[alias],100)).find(Boolean);
     if(value)specs[key]=value;
   }
-  const tags=Array.isArray(meta&&meta.tags)?meta.tags.slice(0,12).map(tag=>text(tag,80)).filter(Boolean):[];
+  if(!specs.weight&&extras.weight)specs.weight=text(extras.weight,100);
+  if(!specs.bhp&&extras.bhp)specs.bhp=text(extras.bhp,100);
+  if(!specs.torque&&extras.torque)specs.torque=text(extras.torque,100);
+  let tags=Array.isArray(meta&&meta.tags)?meta.tags.slice(0,12).map(tag=>text(tag,80)).filter(Boolean):[];
+  if(!tags.length&&extras.drivetrain)tags=[text(extras.drivetrain,40)];
+  const kunos=isKunosId(id);
+  const cleanIdBody=String(id||'').replace(/^ks[_-]+/i,'');
+  const brandInfo=lookupKunosBrand(extras.skinBrand)||(kunos?lookupKunosBrand(cleanIdBody):null);
+  const brand=text(meta&&meta.brand)||text(brandInfo&&brandInfo.brand);
+  const countryInfo=brandInfo||lookupKunosBrand(brand);
+  const idYear=(kunos&&String(id||'').match(/(?:^|_)(19\d\d|20[0-2]\d)(?:_|$)/)?.[1])||'';
+  const year=text(meta&&meta.year,32)||text(idYear,32)||text(extras.skinEra,32);
+  const country=text(meta&&meta.country,120)||((kunos||extras.skinBrand)&&countryInfo?countryInfo.country:'');
+  const author=text(meta&&meta.author)||(kunos?'Kunos Simulazioni':'');
+  const category=text(meta&&(meta.class||meta.category))||(kunos?inferKunosCategory(id):'');
+  const name=text(meta&&meta.name)||text(extras.screenName)||(kunos?formatKunosCarName(id):id);
+  const powerCurve=carCurve(meta&&meta.powerCurve,'power');
+  const torqueCurve=carCurve(meta&&meta.torqueCurve,'torque');
+  const finalPowerCurve=powerCurve.length?powerCurve:(extras.powerCurve||[]);
+  const finalTorqueCurve=torqueCurve.length?torqueCurve:(extras.torqueCurve||[]);
+  const hasData=Boolean(extras.screenName||extras.weight||extras.bhp||extras.torque||extras.drivetrain||finalPowerCurve.length||finalTorqueCurve.length);
+  const hasSkins=Boolean(extras.skinBrand||extras.skinEra||extras.skinCount>0);
+  const hasLogo=Boolean(extras.hasLogo);
+  const metadataSource=meta?'ui_car':hasData?'data':(hasSkins||hasLogo)?'skins':kunos?'kunos':'';
   return {
     id,
-    name:text(meta&&meta.name)||id,
-    brand:text(meta&&meta.brand),
-    category:text(meta&&(meta.class||meta.category)),
-    year:text(meta&&meta.year,32),
-    country:text(meta&&meta.country,120),
-    author:text(meta&&meta.author),
+    name,
+    brand,
+    category,
+    year,
+    country,
+    author,
     version:text(meta&&meta.version,80),
     url:carUrl(meta&&meta.url),
     description:text(meta&&meta.description,4000,true),
     tags,
     specs,
-    powerCurve:carCurve(meta&&meta.powerCurve,'power'),
-    torqueCurve:carCurve(meta&&meta.torqueCurve,'torque'),
+    powerCurve:finalPowerCurve,
+    torqueCurve:finalTorqueCurve,
+    hasLogo,
     source:'local',
-    metadataAvailable:!!meta
+    metadataSource,
+    metadataAvailable:Boolean(meta||hasData||hasSkins||hasLogo||kunos)
   };
 }
 function within(file,root){const relative=path.relative(root,file);return relative===''||(!path.isAbsolute(relative)&&relative!=='..'&&!relative.startsWith('..'+path.sep));}
@@ -117,16 +261,87 @@ async function scanCatalog(roots,{maxEntries=10000}={}){
       return data;
     }catch(e){if(!['ENOENT','ENOTDIR'].includes(e.code))warn('Métadonnées ignorées : '+path.basename(file));return null;}
   }
+  async function readText(file,maxBytes=262144){
+    try{
+      const real=await safe(file),stat=await fs.stat(real);
+      if(!stat.isFile()||stat.size>maxBytes)return null;
+      return await fs.readFile(real,'utf8');
+    }catch(e){
+      if(!['ENOENT','ENOTDIR'].includes(e.code))warn('Fichier ignoré : '+path.basename(file));
+      return null;
+    }
+  }
+  async function hasBoundedImage(file){
+    try{
+      const real=await safe(file),stat=await fs.stat(real);
+      return stat.isFile()&&stat.size>0&&stat.size<=3*1024*1024;
+    }catch{return false;}
+  }
+  async function readCarExtras(carDir,hasUiCar){
+    const extras={};
+    for(const candidate of ['logo.png','logo.jpg','logo.jpeg',path.join('ui','badge.png')]){
+      if(await hasBoundedImage(path.join(carDir,candidate))){extras.hasLogo=true;break;}
+    }
+    const carIniRaw=await readText(path.join(carDir,'data','car.ini'));
+    if(carIniRaw){
+      const carIni=parseIni(carIniRaw);
+      const screenName=text(carIni.INFO&&carIni.INFO.SCREEN_NAME,200);
+      if(screenName)extras.screenName=screenName;
+      const mass=Number(carIni.BASIC&&carIni.BASIC.TOTALMASS);
+      if(Number.isFinite(mass)&&mass>100&&mass<10000)extras.weight=Math.round(mass)+' kg';
+    }
+    if(!hasUiCar){
+      const engineIniRaw=await readText(path.join(carDir,'data','engine.ini'));
+      const engineIni=engineIniRaw?parseIni(engineIniRaw):null;
+      const lutName=String(engineIni?.ENGINE_DATA?.TORQUE_CURVE||'power.lut').trim();
+      if(lutName&&!/[\\/]|\.\./.test(lutName)){
+        const lutRaw=await readText(path.join(carDir,'data',lutName));
+        if(lutRaw){
+          const torqueCurve=parseLut(lutRaw);
+          if(torqueCurve.length>=2){
+            extras.torqueCurve=torqueCurve;
+            extras.powerCurve=torqueCurve.map(p=>({rpm:p.rpm,value:Math.round((p.value*p.rpm/7127)*100)/100}));
+            const maxTorque=torqueCurve.reduce((m,p)=>Math.max(m,p.value),0);
+            const maxBhp=extras.powerCurve.reduce((m,p)=>Math.max(m,p.value),0);
+            if(maxTorque>0)extras.torque=Math.round(maxTorque)+' Nm';
+            if(maxBhp>0)extras.bhp=Math.round(maxBhp)+' bhp';
+          }
+        }
+      }
+      const dtIniRaw=await readText(path.join(carDir,'data','drivetrain.ini'));
+      if(dtIniRaw){
+        const dtIni=parseIni(dtIniRaw);
+        const traction=text(dtIni.TRACTION&&dtIni.TRACTION.TYPE,20);
+        if(/^(RWD|FWD|AWD|4WD)$/i.test(traction))extras.drivetrain=traction.toLowerCase();
+      }
+    }
+    const skinDirs=await dirs(path.join(carDir,'skins'));
+    extras.skinCount=skinDirs.length;
+    for(const skinId of skinDirs.slice(0,40)){
+      const skinIniRaw=await readText(path.join(carDir,'skins',skinId,'skin.ini'),65536);
+      if(skinIniRaw){
+        const skinIni=parseIni(skinIniRaw);
+        const crewBrand=text(skinIni.CREW&&skinIni.CREW.BRAND,80);
+        if(crewBrand&&!extras.skinBrand)extras.skinBrand=crewBrand;
+        const era=parseDriverEra(skinIni);
+        if(era&&!extras.skinEra)extras.skinEra=era;
+      }
+      if(extras.skinBrand&&extras.skinEra)break;
+    }
+    return extras;
+  }
   let visited=0;
   for(const source of sources){
     if(source.status!=='available')continue;
     for(const id of await dirs(path.join(source.real,'cars'))){
       if(++visited>maxEntries)break;
-      try{if(!(await fs.stat(await safe(path.join(source.real,'cars',id)))).isDirectory())continue;}catch{warn('Voiture ignorée : '+id);continue;}
-      const meta=await json(path.join(source.real,'cars',id,'ui','ui_car.json'));
+      const carDir=path.join(source.real,'cars',id);
+      try{if(!(await fs.stat(await safe(carDir))).isDirectory())continue;}catch{warn('Voiture ignorée : '+id);continue;}
       const key=id.toLowerCase();
       if(cars.has(key)){cars.get(key).alsoAvailableIn.push(source.id);continue;}
-      cars.set(key,{...carMetadata(meta,id),source:source.id,alsoAvailableIn:[]});
+      const meta=await json(path.join(carDir,'ui','ui_car.json'));
+      const extras=await readCarExtras(carDir,!!meta);
+      cars.set(key,{...carMetadata(meta,id,extras),source:source.id,alsoAvailableIn:[]});
     }
     for(const trackId of await dirs(path.join(source.real,'tracks'))){
       if(++visited>maxEntries)break;
@@ -167,4 +382,4 @@ function mountLocalMods(app,{roots=configuredRoots(),authorize}){
     }catch(e){res.status(500).json({error:'Impossible de lire le catalogue local.'});}
   });
 }
-module.exports={DEFAULT_ROOTS,configuredRoots,scanCatalog,mountLocalMods,within};
+module.exports={DEFAULT_ROOTS,configuredRoots,scanCatalog,mountLocalMods,within,parseIni,parseLut,isKunosId,lookupKunosBrand,formatKunosCarName};
