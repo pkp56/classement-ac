@@ -601,16 +601,6 @@ function hub(){
       <li>Le redémarrage d'une course ou d'un serveur doit rester exceptionnel. Il ne sera accordé qu'à la demande de la majorité des pilotes et selon certaines conditions : bug serveur, problème de connexion, mauvaise mise en place d'un évènement, etc.</li>
     </ol>`;
 
-  const details = (id,titre,contenu,pdfLabel=null,pdfHref=null)=>`
-    <details class="rules-details" id="${id}" style="margin-top:14px;border-top:1px solid #3a5a63;padding-top:14px">
-      <summary style="cursor:pointer;font-weight:600;font-size:15px;color:#f7ecd5;user-select:none;list-style:none;display:flex;justify-content:space-between;align-items:center">
-        <span>${titre}</span><span class="chev" style="font-family:monospace;font-size:20px;color:#d8a347">+</span>
-      </summary>
-      <div style="margin-top:12px;color:#d1cbbd;font-size:14px">${contenu}
-        ${pdfLabel?`<div style="margin-top:14px"><a class="btn secondary small" href="${pdfHref||'#'}" target="_blank" rel="noopener" style="text-decoration:none;color:#f7ecd5;border-color:#d8a347">${pdfLabel}</a></div>`:''}
-      </div>
-    </details>`;
-
   // Nombre de pilotes CLASSÉS au GLOBAL (≥5 courses + non exclus par l'admin)
   // (Appelée une seule fois ici : globalRankingSync la rappelle mais elle est pure et rapide.)
   const pilotsCount = globalPerformanceRatings().length;
@@ -1461,7 +1451,7 @@ function isSafeHttpUrl(u){
   if(typeof u!=='string')return false;
   const s=u.trim();
   if(!s)return false;
-  return /^https?:\/\/[^\s"'<>]+$/i.test(s)||/^\/[a-z0-9_\-./?=&]+$/i.test(s);
+  return /^https?:\/\/[^\s"'<>]+$/i.test(s)||/^\/(?!\/)[a-z0-9_\-./?=&]+$/i.test(s);
 }
 function getEventInfo(evCtx){
   const ctx=evCtx||eventContext||{};
