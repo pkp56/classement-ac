@@ -1736,3 +1736,42 @@ test('validation des liens : refuse les URL externes sans protocole', () => {
   for (const value of ['//example.com/path', '///example.com', 'javascript:alert(1)', '/\\example.com']) assert.equal(validate(value), false, value);
   for (const value of ['/docs/reglement.pdf', '/live-timing?source=test', 'https://example.com/path', 'http://example.com']) assert.equal(validate(value), true, value);
 });
+
+test('Circuit : quatre courses le même jour restent une manche et distinguent les variantes', async () => {
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const fiches=['', 'prague_short', 'prague_rev', 'prague_short_rev'].map((layout,i)=>({
+    id:'local:undated:prague/'+layout,round:i+1,label:'M'+(i+1),name:'Prague '+(layout||'normal'),
+    trackId:'prague',driverFolder:'prague',layoutId:layout,localLayoutId:layout,status:'upcoming',date:null
+  }));
+  const races=fiches.map((f,i)=>({date:`2026-04-22T${20+i}:00:00Z`,track:'prague',trackConfig:f.layoutId,type:'RACE',results:[{id:'p',name:'Pilote',laps:1,time:100000}]}));
+  vm.runInContext(`eventContext={slug:'prague',name:'Prague',kind:'archive',data:{circuitRounds:${JSON.stringify(fiches)}}};sessions.splice(0,sessions.length,...${JSON.stringify(races)});circuitsCache=null;circuitsError=''`,sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  const data=vm.runInContext('circuitsCache',sandbox);
+  assert.equal(vm.runInContext('rounds().length',sandbox),1);
+  assert.equal(vm.runInContext('rounds()[0].sessions.length',sandbox),4);
+  assert.equal(data.totalCount,1);
+  assert.equal(data.completedCount,1);
+  assert.deepEqual(Array.from(data.rounds,r=>[r.round,r.label,r.date,r.status]),fiches.map(()=>[1,'M1','2026-04-22','done']));
+  for(let i=0;i<4;i++){
+    vm.runInContext(`openCircuitRoundResult(${i})`,sandbox);
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(vm.runInContext('sessionIndex',sandbox),i);
+  }
+});
+
+test('Circuit : variante et jour ambigus ne sont jamais attribués au hasard', async () => {
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const fiches=[{name:'Prague',trackId:'prague',layoutId:'',round:1,status:'upcoming'},
+    {name:'Prague Short',trackId:'prague',layoutId:'prague_short',round:2,status:'upcoming'}];
+  const race={date:'2026-04-22T20:00:00Z',track:'prague',type:'RACE',results:[{id:'p'}]};
+  vm.runInContext(`eventContext={slug:'prague',name:'Prague',kind:'archive',data:{circuitRounds:${JSON.stringify(fiches)}}};sessions.splice(0,sessions.length,${JSON.stringify(race)});circuitsCache=null;circuitsError=''`,sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  assert.ok(vm.runInContext("circuitsCache.rounds.every(r=>r.status==='unconfirmed'&&r.date==='2026-04-22'&&r.round===1&&!r.resultsImported)",sandbox));
+  assert.match(vm.runInContext('circuitStatusLabel(circuitsCache.rounds[0])',sandbox),/À vérifier/);
+  vm.runInContext("eventContext.data.circuitRounds=[eventContext.data.circuitRounds[0]];sessions.push({...sessions[0],date:'2026-05-01T20:00:00Z'});circuitsCache=null",sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  assert.notEqual(vm.runInContext('circuitsCache.rounds[0].status',sandbox),'done');
+  assert.ok(!vm.runInContext('circuitsCache.rounds[0].date',sandbox));
+});
