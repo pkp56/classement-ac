@@ -113,25 +113,13 @@ function proxyJson(opts, cb) {
 // /health et /healthz sont locaux ; /api/health vérifie aussi les dépendances.
 
 // --- PROXY AssettoHosting pour import automatique ---
-const AH_SERVERS = (process.env.AH_SERVERS||'https://fr2.assettohosting.com:50648,https://fr5.assettohosting.com:50145')
-  .split(',').map(s=>s.trim()).filter(Boolean);
-
-function ahFetch(url, timeoutMs=15000){
-  return new Promise((resolve,reject)=>{
-    let u;try{u=new URL(url)}catch(e){return reject(new Error('URL invalide'))}
-    const proto=u.protocol==='https:'?https:http;
-    const req=proto.get({hostname:u.hostname,port:u.port||(u.protocol==='https:'?443:80),path:u.pathname+u.search,headers:{'User-Agent':'GDSP-Importer/1.0','Accept':'application/json,*/*'}},res=>{
-      if(res.statusCode>=300&&res.statusCode<400&&res.headers.location){
-        return ahFetch(new URL(res.headers.location,url).toString(),timeoutMs).then(resolve,reject);
-      }
-      const chunks=[];
-      res.on('data',c=>chunks.push(c));
-      res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body:Buffer.concat(chunks)}));
-    });
-    req.setTimeout(timeoutMs,()=>req.destroy(new Error('timeout')));
-    req.on('error',reject);
-  });
-}
+const ahSecurity = require('./tools/lib/assettohosting-fetch');
+const AH_SERVERS = [...new Set((process.env.AH_SERVERS || ahSecurity.DEFAULT_SERVERS).split(',').map(s=>s.trim()).filter(Boolean).flatMap(s=>{
+  try{return ahSecurity.configuredServers(s)}
+  catch(_){console.warn('AssettoHosting : origine AH_SERVERS invalide ignorée.');return []}
+}))];
+const ahClient = ahSecurity.createAssettoHostingFetcher(AH_SERVERS);
+const ahFetch = (url, timeoutMs=15000) => ahClient.fetch(url, timeoutMs);
 
 function parisLocalToUtcDate(year, month, day, hour, minute){
   const utcGuess=Date.UTC(year,month-1,day,hour,minute,0);
@@ -187,9 +175,7 @@ app.get('/api/ah-scan', async(req,res)=>{
 
 app.get('/api/ah-fetch', async(req,res)=>{
   const url=String(req.query.url||'');
-  if(!/^https?:\/\/(fr2|fr5)\.assettohosting\.com/i.test(url)){
-    return res.status(400).json({error:'URL non autorisée.'});
-  }
+  try{ahClient.authorize(url)}catch(_){return res.status(400).json({error:'URL non autorisée.'})}
   try{
     const r=await ahFetch(url,20000);
     res.set('Cache-Control',req.query.refresh==='1'?'no-store':'public, max-age=300');
@@ -314,7 +300,7 @@ function suggestSlug(name,created){
 app.get('/api/ah-championship-sessions', async(req,res)=>{
   const server=String(req.query.server||'').replace(/\/+$/,'');
   const uuid=String(req.query.uuid||'');
-  if(!/^https?:\/\/(fr2|fr5)\.assettohosting\.com/i.test(server))return res.status(400).json({error:'Serveur non autorisé.'});
+  try{ahClient.authorize(server,true)}catch(_){return res.status(400).json({error:'Serveur non autorisé.'})}
   if(!/^[0-9a-f-]{36}$/i.test(uuid))return res.status(400).json({error:'UUID invalide.'});
   try{
     const champ=await ahFetchChampionship(server,uuid,{refresh:req.query.refresh==='1'});
@@ -444,7 +430,7 @@ app.get('/api/ah-championship-session-json', async(req,res)=>{
   const uuid=String(req.query.uuid||'');
   const eventId=String(req.query.eventId||'');
   const rawType=String(req.query.rawType||'');
-  if(!/^https?:\/\/(fr2|fr5)\.assettohosting\.com/i.test(server))return res.status(400).json({error:'Serveur non autorisé.'});
+  try{ahClient.authorize(server,true)}catch(_){return res.status(400).json({error:'Serveur non autorisé.'})}
   if(!/^[0-9a-f-]{36}$/i.test(uuid))return res.status(400).json({error:'UUID invalide.'});
   if(!/^[0-9a-zA-Z_-]+$/.test(eventId))return res.status(400).json({error:'eventId invalide.'});
   // Accepter QUALIFY/RACE/RACEx2/RACE2/RACE_2/RACE3/RW:<index>

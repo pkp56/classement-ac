@@ -53,6 +53,16 @@ test('local : aucun proxy implicite, routes retirées explicites et readiness di
   for(const p of ['/health','/healthz']){const r=await call(p);assert.equal(r.status,200);assert.equal((await r.json()).backend,undefined);}
   assert.equal(requests,0,'pas de retour au backend suspendu');
 });
+test('proxy AssettoHosting : les trois routes rejettent les origines forgées sans requête sortante',async t=>{
+  const {call,url}=await server(t);
+  const target='http://fr2.assettohosting.com@127.0.0.1:'+new URL(url).port+'/healthz';
+  let r=await call('/api/ah-fetch?url='+encodeURIComponent(target));
+  assert.equal(r.status,400);assert.match((await r.json()).error,/non autorisée/);
+  const params=new URLSearchParams({server:target,uuid:'a'.repeat(36),eventId:'ev1',rawType:'RACE'});
+  for(const route of ['/api/ah-championship-sessions','/api/ah-championship-session-json']){
+    r=await call(route+'?'+params);assert.equal(r.status,400,route);assert.match((await r.json()).error,/non autorisé/);
+  }
+});
 test('écritures locales refusées sans authentification, y compris reset, import et API inconnue',async t=>{
   const {call,login}=await server(t);
   const writes=[['POST','/api/save-championship'],['POST','/api/events'],['POST','/api/events/test-cup/data'],['PUT','/api/events/test-cup'],['DELETE','/api/events/test-cup'],['POST','/api/admin/reset'],['POST','/api/admin/circuits/import'],['POST','/api/admin/circuits/import-local'],['POST','/api/admin/local-mods/scan'],['POST','/api/results']];

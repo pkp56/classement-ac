@@ -21,6 +21,29 @@ Voir [LOT1-FIABILITE-SECURITE.md](LOT1-FIABILITE-SECURITE.md) pour l'installatio
 - Lancer les tests de calcul ciblés avec `npm test`.
 - Le cœur du site est dans `site.js` ; `patches-v71.js` contient les règles de calcul/pénalités conservées pour compatibilité. Les anciennes versions de patches non chargées ont été retirées.
 
+## Import AssettoHosting : origines autorisées
+
+Les routes d'import AssettoHosting n'acceptent que les origines explicitement
+configurées dans `AH_SERVERS`. Par défaut :
+`https://fr2.assettohosting.com:50648,https://fr5.assettohosting.com:50145`.
+Si un championnat utilise un autre port, ajouter son origine exacte à cette
+liste dans le `.env` du serveur puis redémarrer Node. Exemple :
+
+```dotenv
+AH_SERVERS=https://fr2.assettohosting.com:50648,https://fr5.assettohosting.com:50145,https://fr5.assettohosting.com:50648
+```
+
+Seuls les hôtes exacts `fr2.assettohosting.com` et `fr5.assettohosting.com`
+sont admis ; les chemins, identifiants et fragments ne sont pas valides dans
+`AH_SERVERS`. Le protocole et le port doivent correspondre exactement à une
+origine configurée. Privilégier HTTPS ; une redirection HTTPS vers HTTP est
+refusée. Les destinations DNS privées ou réservées sont bloquées et l'adresse
+IPv4 vérifiée est fixée pour la connexion. La résolution IPv6 seule n'est pas
+prise en charge. Les redirections sont limitées à trois et les réponses à 25 Mio.
+Une origine configurée incorrecte est ignorée et signalée dans les logs, sans
+empêcher le site de démarrer. Une adresse historique absente de la liste doit
+être ajoutée explicitement avant un nouvel import.
+
 ## Live timing d'un serveur AC dédié
 
 La page **`/live-timing`** suit en direct un serveur Assetto Corsa dédié qui
