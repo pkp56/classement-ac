@@ -209,3 +209,83 @@ test('import local : sections nommées et coordonnées pour explorer la carte et
   assert.ok(round.outline.samples.length>2&&round.outline.samples.length<=241);
   assert.ok(!round.outline.corners.some(p=>p.name==='Incorrect'));
 });
+
+test('circuit sans ui_track.json ni fast_lane.ai : extrait caméras TV, ext_config, models, ai_hints et audio_sources', async t => {
+  const { root, write } = await fixture(t);
+  await write('tracks/prague/extension/ext_config.ini', [
+    '[ABOUT]', 'AUTHOR=Kavoriken, leBluem', 'VERSION=1.6', 'DATE_RELEASE=2021 jun 18',
+    '[Material_Water]', 'Materials=Water_22',
+    '[RAIN_FX]', 'PUDDLES_MATERIALS=Asphalt?, CobbleStone_road, TERR_Prag_Concrete',
+    '[GRASS_FX]', 'GRASS_MATERIALS=Grass',
+    '[LIGHT_SERIES_0]', 'ACTIVE=1'
+  ].join('\n'));
+  await write('tracks/prague/models_prague_rev.ini', '[MODEL_0]\nFILE=001.kn5\n[MODEL_1]\nFILE=prague.kn5\n');
+  const camLines = ['[HEADER]', 'VERSION=3', 'CAMERA_COUNT=8', 'SET_NAME=TV Cam 1 by CrisT86'];
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    camLines.push(`[CAMERA_${i}]`, `POSITION=${(Math.cos(a) * 350).toFixed(2)}, ${(i * 5 - 20).toFixed(1)}, ${(Math.sin(a) * 350).toFixed(2)}`, `IN_POINT=${(i / 8).toFixed(3)}`);
+  }
+  await write('tracks/prague/data/cameras.ini', camLines.join('\n'));
+  await write('tracks/prague/data/ai_hints.ini', '[DANGER_1]\nSTART=0.844\nEND=0.883\n');
+  await write('tracks/prague/data/audio_sources.ini', '[REVERB_0]\nNODE=AC_AUDIO_TUNNEL\nPRESET=SEWERPIPE\n');
+
+  const res = await importLocalCircuit({ roots: [root], trackId: 'prague', layoutId: 'prague_rev' });
+  assert.equal(res.round.country, 'République tchèque');
+  assert.equal(res.round.city, 'Prague');
+  assert.equal(res.round.author, 'Kavoriken, leBluem');
+  assert.equal(res.round.version, '1.6');
+  assert.equal(res.round.year, '2021');
+  assert.equal(res.round.direction, 'counterclockwise');
+  assert.equal(res.round.approximateOutline, true);
+  assert.equal(res.round.outlineSource, 'data/cameras.ini');
+  assert.ok(res.round.outline.path.startsWith('M'));
+  assert.ok(res.round.lengthM > 1500);
+  assert.equal(res.round.elevation.delta, 35);
+  assert.ok(res.round.tags.includes('RainFX'));
+  assert.ok(res.round.tags.includes('Eau / Rivière'));
+  assert.ok(res.round.surfaces.some(s => s.label === 'Pavés'));
+  assert.match(res.round.description, /84–88 %/);
+  assert.match(res.round.description, /tunnels/);
+});
+
+test('POST /api/admin/circuits/import-files : authentifié, reconstruit la fiche depuis des fichiers fournis', async t => {
+  const { root } = await fixture(t);
+  const app = express();
+  app.use(express.json());
+  mountLocalCircuitImport(app, {
+    roots: [root],
+    authorize: async (req, res) => {
+      if (req.headers.authorization === 'Bearer test') return true;
+      res.status(401).json({ error: 'auth' });
+      return false;
+    }
+  });
+  const server = http.createServer(app);
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const url = `http://127.0.0.1:${server.address().port}/api/admin/circuits/import-files`;
+  assert.equal((await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 401);
+  const camLines = ['[HEADER]', 'SET_NAME=TV1'];
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    camLines.push(`[CAMERA_${i}]`, `POSITION=${(Math.cos(a) * 200).toFixed(1)}, ${i * 2}, ${(Math.sin(a) * 200).toFixed(1)}`, `IN_POINT=${(i / 8).toFixed(3)}`);
+  }
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { authorization: 'Bearer test', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      files: [
+        { name: 'models_prague.ini', content: '[MODEL_0]\nFILE=prague.kn5\n' },
+        { name: 'ext_config.ini', content: '[ABOUT]\nAUTHOR=Kavoriken\nVERSION=1.6\n[RAIN_FX]\nPUDDLES_MATERIALS=Asphalt?\n' },
+        { name: 'cameras.ini', content: camLines.join('\n') }
+      ]
+    })
+  });
+  assert.equal(resp.status, 200);
+  const data = await resp.json();
+  assert.equal(data.ok, true);
+  assert.equal(data.round.name, 'Prague');
+  assert.equal(data.round.author, 'Kavoriken');
+  assert.equal(data.round.approximateOutline, true);
+  assert.ok(data.round.outline.path.startsWith('M'));
+});

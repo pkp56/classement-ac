@@ -2205,8 +2205,11 @@ function circuit(){
       return `<div class="cir-inspector"><div class="eyebrow">Repères du tracé</div><h3>Points du circuit</h3>`
         + `<div class="cir-empty">${missingLine}</div></div>`;
     }
+    const cornerSource = round.approximateOutline
+      ? `repères relevés sur le tracé estimé (<code>${esc(round.outlineSource || 'cameras.ini')}</code>)`
+      : `${round.hasNamedSections?'repères (sections.ini)':'virages'} relevés sur la ligne rapide (<code>fast_lane.ai</code>)`;
     return `<div class="cir-inspector"><div class="eyebrow">Repères du tracé</div><h3>Points du circuit</h3>`
-      + `<p class="cir-src">${corners.length} ${round.hasNamedSections?'repères (sections.ini)':'virages'} relevés sur la ligne rapide (<code>fast_lane.ai</code>), numérotés depuis la ligne de départ.</p>`
+      + `<p class="cir-src">${corners.length} ${cornerSource}, numérotés depuis la ligne de départ.</p>`
       + `<ul class="cir-sections">${corners.map(c => `<li><span class="cir-sec-num">${String(c.id).padStart(2, '0')}</span>`
         + `<span class="cir-sec-name">${esc(c.name||'Virage '+c.id)}<small>à ${nb(c.dist, 0)} m de la ligne</small></span>`
         + `<span class="cir-sec-data"><b>${frNum(c.norm * 100, 0)} %</b><span>du tour</span></span></li>`).join('')}</ul></div>`;
@@ -2240,10 +2243,13 @@ function circuit(){
 
   const trace=activeProfile.outline||round.outline;
   const scrub=trace?.path?`<div class="tour-controls"><button type="button" class="btn secondary small" data-play>▶ Lire le tour</button><label class="cir-scrub">Explorer le tour <input type="range" min="0" max="1000" value="0" data-length="${Number(activeProfile.lengthM||round.lengthM)||0}" data-samples="${esc(JSON.stringify(trace.samples||[]))}" data-bounds="${esc(JSON.stringify((trace.sectors||[]).map(s=>s.at)))}"></label>${mode==='corners'&&trace.corners?.length?`<select aria-label="Choisir un repère" data-jump><option value="">Choisir un repère…</option>${trace.corners.map((c,i)=>`<option value="${i}">${esc(c.name||'Virage '+c.id)}</option>`).join('')}</select>`:''}</div>`:'';
+  const traceTag = round.approximateOutline
+    ? `tracé estimé depuis ${esc(round.outlineSource || 'cameras.ini')}`
+    : 'tracé extrait du fast_lane.ai';
   const mapBlock = `<gdsp-track-guide class="cir-map-block">`
     + `<div class="cir-map-head"><div class="cir-map-tabs">${tabs}</div>`
     + sectorLegend
-    + `<div class="cir-map-stage"><div class="cir-map-tag">${round.direction === 'clockwise' ? 'Sens horaire' : 'Sens anti-horaire'} · tracé extrait du fast_lane.ai</div>`
+    + `<div class="cir-map-stage"><div class="cir-map-tag">${round.direction === 'clockwise' ? 'Sens horaire' : 'Sens anti-horaire'} · ${traceTag}</div>`
     + `${round.outline&&round.outline.path?circuitMap(round, activeProfile, mode, {contacts}):'<div class="cir-empty">Tracé indisponible : le fichier <code>fast_lane.ai</code> manque ou est illisible.</div>'}`
     + `<div class="cir-map-hint">${cornerCount} ${markerLabel} · ${round.lengthM?nb(round.lengthM,0)+' m mesurés':'mesure indisponible'}</div></div>`
     + `${round.outline?.path?`<div class="cir-readout">${scrub}<output>Survolez le tracé ou le profil, ou déplacez le curseur.</output></div>`:''}<div class="cir-elev"><div class="cir-elev-top"><span>Profil altimétrique sur un tour</span><b>${elev ? frNum(elev.delta, 1) + " m d'amplitude" : '—'}</b></div>${elev?circuitElevSvg(activeProfile):'<div class="cir-empty">Profil indisponible sans le tracé fast_lane.ai.</div>'}</div>`
@@ -4045,6 +4051,51 @@ async function addLocalModRound(){
     customCalendar=eventContext.data.customCalendar;
   }catch(error){customCalendar=previousCalendar;alert('Ajout impossible : '+error.message);}
 }
+async function importTrackFilesFromInput(){
+  if(!adminAuth||!currentSlug)return;
+  const input=document.getElementById('track-files-import');
+  const statusEl=document.getElementById('track-files-status');
+  const files=Array.from(input?.files||[]);
+  if(!files.length){if(statusEl)statusEl.textContent='Sélectionne un ou plusieurs fichiers circuit (.ini, .json, .txt).';return;}
+  if(statusEl)statusEl.textContent='Analyse des fichiers du circuit…';
+  try{
+    const payloadFiles=[];
+    for(const file of files.slice(0,40)){
+      if(!/\.(?:ini|json|txt)$/i.test(String(file.name||'')))continue;
+      const content=await file.text();
+      if(content.length<=2*1024*1024)payloadFiles.push({name:file.name,content});
+    }
+    if(!payloadFiles.length){if(statusEl)statusEl.textContent='Aucun fichier texte circuit reconnu (.ini, .json, .txt).';return;}
+    const selectedTrack=readLocalModSelection()?.track||eventContext?.data?.modSelection?.track||null;
+    const day=document.getElementById('local-mod-date')?.value||null;
+    const res=await apiPost('/api/admin/circuits/import-files',{
+      trackId:selectedTrack?.trackId||'',
+      layoutId:selectedTrack?.layoutId||'',
+      name:selectedTrack?.name||undefined,
+      date:/^\d{4}-\d{2}-\d{2}$/.test(day||'')?day:null,
+      round:nextCircuitRoundNumber(eventContext?.data),
+      files:payloadFiles
+    });
+    if(!res.ok){
+      const err=await res.json().catch(()=>({}));
+      throw new Error(err.error||('HTTP '+res.status));
+    }
+    const result=await res.json();
+    if(!result?.round)throw new Error('Aucune information exploitable extraite.');
+    await saveEventHomePatch(currentSlug,data=>{
+      data.modSelection={...(data.modSelection||{}),trackSheet:result.round};
+      if(Array.isArray(data.circuitRounds)&&data.circuitRounds.length){
+        const idx=data.circuitRounds.findIndex(r=>r&&r.localTrackId===result.round.localTrackId&&r.localLayoutId===result.round.localLayoutId);
+        if(idx>=0)data.circuitRounds[idx]={...data.circuitRounds[idx],...result.round,round:data.circuitRounds[idx].round,label:data.circuitRounds[idx].label};
+        else upsertLocalCircuitRound(data,result.round);
+      }else{
+        upsertLocalCircuitRound(data,result.round);
+      }
+      circuitsCache=null;circuitsError='';
+    },`✓ Fiche Circuit mise à jour (${result.round.name}${result.round.lengthStr?' · '+result.round.lengthStr:''}).`);
+    if(input)input.value='';
+  }catch(err){if(statusEl)statusEl.textContent='Erreur : '+err.message;}
+}
 function renderLocalModsPanel(){
   const {cars,tracks,saved}=localModChoices();
   const statuses={available:'Accessible',missing:'Absent (ignoré)',unreadable:'Lecture refusée / erreur','not-scanned':'Pas encore analysé'};
@@ -4057,7 +4108,7 @@ function renderLocalModsPanel(){
     <div class="grid local-mod-selection-grid"><div><label for="local-mod-car-search">Voitures à engager (<span id="local-mod-car-count">${selectedCount}</span> sélectionnée(s))</label><input id="local-mod-car-search" type="search" placeholder="Rechercher une voiture…" oninput="filterLocalModOptions(this,'local-mod-cars')"><div id="local-mod-cars" class="local-mod-car-list" role="group" aria-label="Voitures de l’événement">${cars.length?cars.map(car=>`<label class="local-mod-car-option"><input type="checkbox" data-local-car-id value="${esc(car.id)}" ${(saved.cars||[]).some(item=>item.id===car.id)?'checked':''} onchange="updateLocalModCount()"><span><b>${esc(car.name)}</b><small>${esc(car.brand||car.category||'Voiture')} · ${esc(car.id)}${suffix(car)}</small></span></label>`).join(''):'<span class="note">Aucune voiture chargée. Clique sur « Actualiser » pour analyser les mods installés.</span>'}</div><p class="note">Coche simplement une ou plusieurs voitures : cette sélection sera reprise lors de la création de l’événement.</p></div>
       <div style="display:flex;flex-direction:column;gap:10px"><label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#586260">Circuit / variante<input type="search" placeholder="Rechercher un circuit…" oninput="filterLocalModOptions(this,'local-mod-track')"><select id="local-mod-track" aria-label="Circuit et variante" style="width:100%"><option value="">— Sans circuit sélectionné —</option>${tracks.map(track=>`<option value="${esc(track.id)}" ${saved.track?.id===track.id?'selected':''}>${esc(track.name+' ['+track.id+']'+suffix(track))}</option>`).join('')}</select></label><label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#586260">Date de la manche (optionnelle à la création)<input type="date" id="local-mod-date" style="background:#fbf7ec;border:1px solid #b3a78e"></label></div></div>
     <p class="note">À la création d’un événement ou d’une manche, la fiche Circuit est importée automatiquement lorsque les fichiers techniques du mod sont disponibles. Si le tracé est incomplet, l’événement et sa fiche Circuit de base restent accessibles. Pour l’événement courant, choisis une date puis clique sur « Ajouter la manche sélectionnée ».</p>
-    <div class="controls" style="margin-bottom:0">${currentSlug?`<button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button>`:''}<button type="button" class="btn secondary" onclick="createEventPrompt()">+ Créer un événement avec cette sélection</button></div>${currentSlug?`<div class="admin-round" style="margin-top:12px"><div class="eyebrow">Import manuel depuis des fichiers AC</div><p class="note" style="margin:4px 0 8px">Si une voiture Kunos (<code>ks_*</code>) ou un mod n’a pas de <code>ui_car.json</code> complet sur le serveur, sélectionne ici les fichiers de ton dossier (<code>logo.png</code>, <code>skin.ini</code>, <code>ui_skin.json</code>, <code>preview.jpg</code>, <code>livery.png</code>, <code>ui_car.json</code>, <code>car.ini</code>, <code>power.lut</code>).</p><div class="controls" style="margin:0;align-items:center">${eventCarSheets(eventContext).length>1?`<select id="car-files-target" aria-label="Voiture cible">${eventCarSheets(eventContext).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>`:''}<input type="file" id="car-files-import" multiple accept=".json,.ini,.lut,.png,.jpg,.jpeg"><button type="button" class="btn secondary small" onclick="importCarFilesFromInput()">Importer dans la fiche voiture</button></div><p id="car-files-status" class="note" role="status" style="margin:6px 0 0"></p></div>`:''}</section>`;
+    <div class="controls" style="margin-bottom:0">${currentSlug?`<button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button>`:''}<button type="button" class="btn secondary" onclick="createEventPrompt()">+ Créer un événement avec cette sélection</button></div>${currentSlug?`<div class="admin-round" style="margin-top:12px"><div class="eyebrow">Import manuel depuis des fichiers AC</div><p class="note" style="margin:4px 0 8px">Si une voiture Kunos (<code>ks_*</code>) ou un mod n’a pas de <code>ui_car.json</code> complet sur le serveur, sélectionne ici les fichiers de ton dossier (<code>logo.png</code>, <code>skin.ini</code>, <code>ui_skin.json</code>, <code>preview.jpg</code>, <code>livery.png</code>, <code>ui_car.json</code>, <code>car.ini</code>, <code>power.lut</code>).</p><div class="controls" style="margin:0;align-items:center">${eventCarSheets(eventContext).length>1?`<select id="car-files-target" aria-label="Voiture cible">${eventCarSheets(eventContext).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>`:''}<input type="file" id="car-files-import" multiple accept=".json,.ini,.lut,.png,.jpg,.jpeg"><button type="button" class="btn secondary small" onclick="importCarFilesFromInput()">Importer dans la fiche voiture</button></div><p id="car-files-status" class="note" role="status" style="margin:6px 0 0"></p></div><div class="admin-round" style="margin-top:10px"><div class="eyebrow">Import manuel depuis des fichiers circuit AC</div><p class="note" style="margin:4px 0 8px">Si un circuit n’a ni <code>ui_track.json</code> ni <code>fast_lane.ai</code>, sélectionne les fichiers disponibles (<code>ext_config.ini</code>, <code>models_*.ini</code>, <code>cameras*.ini</code>, <code>ai_hints.ini</code>, <code>audio_sources.ini</code>, <code>surfaces.ini</code>, <code>overlays.ini</code>, <code>ui_track.json</code>).</p><div class="controls" style="margin:0;align-items:center"><input type="file" id="track-files-import" multiple accept=".json,.ini,.txt"><button type="button" class="btn secondary small" onclick="importTrackFilesFromInput()">Importer dans la fiche circuit</button></div><p id="track-files-status" class="note" role="status" style="margin:6px 0 0"></p></div>`:''}</section>`;
 }
 
 // Les traductions appartiennent à l'événement, pas au catalogue ni au mod.

@@ -345,8 +345,9 @@ async function scanCatalog(roots,{maxEntries=10000}={}){
     }
     for(const trackId of await dirs(path.join(source.real,'tracks'))){
       if(++visited>maxEntries)break;
-      try{if(!(await fs.stat(await safe(path.join(source.real,'tracks',trackId)))).isDirectory())continue;}catch{warn('Circuit ignoré : '+trackId);continue;}
-      const ui=path.join(source.real,'tracks',trackId,'ui');
+      const trackDir=path.join(source.real,'tracks',trackId);
+      try{if(!(await fs.stat(await safe(trackDir))).isDirectory())continue;}catch{warn('Circuit ignoré : '+trackId);continue;}
+      const ui=path.join(trackDir,'ui');
       const base=await json(path.join(ui,'ui_track.json'));
       const layouts=[];
       if(base)layouts.push({layoutId:'',meta:base});
@@ -355,11 +356,52 @@ async function scanCatalog(roots,{maxEntries=10000}={}){
         const meta=await json(path.join(ui,layoutId,'ui_track.json'));
         if(meta)layouts.push({layoutId,meta});
       }
+      let trackExtras=null;
+      if(!layouts.length){
+        const rootEntries=await fs.readdir(await safe(trackDir),{withFileTypes:true}).catch(()=>[]);
+        const modelLayouts=rootEntries
+          .filter(e=>e.isFile()&&/^models_(.+)\.ini$/i.test(e.name))
+          .map(e=>e.name.match(/^models_(.+)\.ini$/i)[1])
+          .sort();
+        const extRaw=await readText(path.join(trackDir,'extension','ext_config.ini'),131072)
+          ||await readText(path.join(trackDir,'ext_config.ini'),131072);
+        const camRaw=await readText(path.join(trackDir,'data','cameras.ini'),131072)
+          ||await readText(path.join(trackDir,'cameras.ini'),131072);
+        const hasTech=Boolean(extRaw||camRaw||modelLayouts.length
+          ||await readText(path.join(trackDir,'data','surfaces.ini'),4096)
+          ||await readText(path.join(trackDir,'data','ai_hints.ini'),4096)
+          ||await readText(path.join(trackDir,'data','audio_sources.ini'),4096));
+        if(hasTech){
+          const extIni=extRaw?parseIni(extRaw):{};
+          const placeMap={prague:'République tchèque',spa:'Belgique',monza:'Italie',imola:'Italie',mugello:'Italie',silverstone:'Grande-Bretagne',nurburgring:'Allemagne',nordschleife:'Allemagne',zandvoort:'Pays-Bas',brands_hatch:'Grande-Bretagne',laguna_seca:'États-Unis',red_bull_ring:'Autriche',spielberg:'Autriche',barcelona:'Espagne',vallelunga:'Italie',magione:'Italie'};
+          const cleanId=trackId.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+          const placeCountry=placeMap[cleanId]||Object.entries(placeMap).find(([k])=>cleanId.includes(k))?.[1]||'';
+          const formatLabel=v=>String(v||'').replace(/[_-]+/g,' ').trim().split(/\s+/).filter(Boolean).map(w=>/^(gp|gt|f1)$/i.test(w)?w.toUpperCase():/^rev$/i.test(w)?'Reverse':w[0].toUpperCase()+w.slice(1)).join(' ');
+          trackExtras={hasTech:true,country:placeCountry,author:text(extIni.ABOUT&&extIni.ABOUT.AUTHOR,120),formatLabel};
+        }
+        if(modelLayouts.length){
+          for(const variant of modelLayouts){
+            const isBase=variant.toLowerCase()===trackId.toLowerCase();
+            layouts.push({layoutId:isBase?'':variant,meta:null});
+          }
+        }
+      }
       if(!layouts.length)layouts.push({layoutId:'',meta:null});
       for(const {layoutId,meta} of layouts){
         const id=trackId+(layoutId?'/'+layoutId:''),key=id.toLowerCase();
         if(tracks.has(key)){tracks.get(key).alsoAvailableIn.push(source.id);continue;}
-        tracks.set(key,{id,trackId,layoutId,name:text(meta?.name)||trackId+(layoutId?' · '+layoutId:''),country:text(meta?.country),length:text(meta?.length),source:source.id,alsoAvailableIn:[],metadataAvailable:!!meta});
+        const fallbackName=trackExtras
+          ?(layoutId&&!layoutId.toLowerCase().startsWith(trackId.toLowerCase())?`${trackExtras.formatLabel(trackId)} · ${trackExtras.formatLabel(layoutId)}`:trackExtras.formatLabel(layoutId||trackId))
+          :(trackId+(layoutId?' · '+layoutId:''));
+        tracks.set(key,{
+          id,trackId,layoutId,
+          name:text(meta?.name)||fallbackName,
+          country:text(meta?.country)||(trackExtras?trackExtras.country:''),
+          length:text(meta?.length),
+          ...(trackExtras?.author&&!meta?.author?{author:trackExtras.author}:{}),
+          source:source.id,alsoAvailableIn:[],
+          metadataAvailable:Boolean(meta||trackExtras?.hasTech)
+        });
       }
     }
   }
