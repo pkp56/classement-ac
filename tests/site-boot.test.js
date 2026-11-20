@@ -65,7 +65,7 @@ function makeBrowser(extraEvents = [], extraFetch = null, browserOptions = {}) {
     prompt() { return '0'; },
     confirm() { return true; },
     setTimeout, clearTimeout, setInterval, clearInterval,
-    AbortController, URL, Blob, Date, Math, Map, Set, Promise
+    AbortController, URL, URLSearchParams, Blob, Date, Math, Map, Set, Promise
   };
   Object.assign(sandbox, browserOptions);
   sandbox.window = sandbox;
@@ -1484,4 +1484,102 @@ test('Manche multi-circuits : calendrier, fiches Circuit, résultats et administ
   await vm.runInContext("removeCircuitFromPlannedRound('2027-04-14',1)",sandbox);
   assert.deepEqual(Array.from(vm.runInContext("customCalendar['2027-04-14'].tracks.map(t=>t.trackId)",sandbox)),['spa_1970','mugello']);
 });
+
+test('Import automatique AH : actualise collisions et meilleurs temps sur des sessions déjà importées', async () => {
+  const existingSession={
+    date:'2026-10-21T19:55:00.000Z',
+    track:'mid_ohio',
+    type:'RACE',
+    results:[{id:'p1',name:'Alice',team:'Red',grid:1,laps:5,best:0,time:450000},{id:'p2',name:'Bob',team:'Blue',grid:2,laps:5,best:0,time:455000}],
+    laps:[{id:'p1',time:91200,cuts:0}],
+    events:[{a:'Alice',b:'Bob',aid:'p1',bid:'p2',speed:12}]
+  };
+  let remote={
+    slug:'ah-refresh-cup',name:'AH Refresh Cup',kind:'cup',points_config:{},
+    data:{
+      ahServer:'https://fr2.assettohosting.com:50648',
+      ahUuid:'11111111-1111-1111-1111-111111111111',
+      sessions:[existingSession],
+      penMap:{'0:0:p1':{timeAdd:5000,note:'Avantage'}},
+      circuitRounds:[{
+        id:'local:2026-10-21:mid_ohio',round:1,label:'M1',name:'Mid-Ohio',shortName:'Mid-Ohio',
+        trackId:'mid_ohio',localTrackId:'mid_ohio',date:'2026-10-21',lengthM:3634,lengthStr:'3,634 km',
+        outline:{path:'M0 0 L10 10 Z',viewBox:'0 0 100 100',worldProjection:{originX:50,originY:50,scale:0.1},samples:[],sectors:[],corners:[]},
+        profile:{path:'M0 10 L10 5',closed:'M0 10 L10 5 L10 120 L0 120 Z',min:0,max:10,delta:10},
+        sectorSplits:[{label:'S1',from:0,to:1200},{label:'S2',from:1200,to:2400},{label:'S3',from:2400,to:3634}],
+        surfaces:[],status:'done'
+      }]
+    }
+  };
+  const ahExportJson={
+    Type:'RACE',
+    Date:'2026-10-21T21:55:00+02:00',
+    TrackName:'mid_ohio',
+    TrackConfig:'chicane',
+    Cars:[
+      {CarId:0,Driver:{Name:'Alice',Guid:'aa',Team:'Red'}},
+      {CarId:1,Driver:{Name:'Bob',Guid:'bb',Team:'Blue'}}
+    ],
+    Result:[
+      {CarId:0,GridPosition:1,NumLaps:5,BestLap:999999999,TotalTime:450000},
+      {CarId:1,GridPosition:2,NumLaps:5,BestLap:91800,TotalTime:455000}
+    ],
+    Laps:[
+      {CarId:0,LapTime:90500,Sectors:[28000,32000,30500],Cuts:0,Timestamp:1792610800},
+      {CarId:0,LapTime:89000,Sectors:[27000,31500,30500],Cuts:1,Timestamp:1792610900},
+      {CarId:1,LapTime:91800,Sectors:[28500,32500,30800],Cuts:0,Timestamp:1792610810}
+    ],
+    Events:[
+      {
+        Type:'COLLISION_WITH_CAR',CarId:0,OtherCarId:1,ImpactSpeed:28.5,Timestamp:1792610726,
+        WorldPosition:{X:100,Y:0,Z:200},RelPosition:{X:0.9,Y:0,Z:0.1}
+      }
+    ]
+  };
+  const {sandbox,getElementById,calls}=makeBrowser([remote],(url,opts)=>{
+    if(url==='/api/events/ah-refresh-cup'&&(!opts||!opts.method||opts.method==='GET'))return response(remote);
+    if(url==='/api/events/ah-refresh-cup/data'&&opts.method==='POST'){
+      remote={...remote,data:JSON.parse(opts.body)};
+      return response({ok:true});
+    }
+    if(url.startsWith('/api/ah-championship-sessions')){
+      return response({
+        championship:'AH Refresh Cup',events:1,
+        items:[{source:'export',server:'https://fr2.assettohosting.com:50648',eventId:'ev1',rawType:'RACE',sessionType:'RACE',date:'2026-10-21T19:55:00.000Z',track:'mid_ohio',eventName:'Manche 1'}]
+      });
+    }
+    if(url.startsWith('/api/ah-championship-session-json')){
+      return {ok:true,status:200,json:async()=>ahExportJson,text:async()=>JSON.stringify(ahExportJson)};
+    }
+    return null;
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext("loadEvent('ah-refresh-cup')",sandbox);
+  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin';adminTab='import';page='admin';render()",sandbox);
+
+  await vm.runInContext('ahImport()',sandbox);
+  await new Promise(resolve=>setImmediate(resolve));
+
+  const sessFetch=calls.find(c=>c.url.startsWith('/api/ah-championship-session-json'));
+  assert.ok(sessFetch,'la session déjà importée est bien re-téléchargée');
+  assert.equal(remote.data.sessions.length,1,'aucun doublon créé malgré le décalage horaire +02:00 vs Z');
+  const updated=remote.data.sessions[0];
+  assert.equal(updated.trackConfig,'chicane');
+  assert.deepEqual(updated.events[0].WorldPosition,{X:100,Z:200});
+  assert.deepEqual(updated.events[0].RelPosition,{X:0.9,Y:0,Z:0.1});
+  assert.equal(updated.results[0].best,90500,'meilleur tour propre recalculé depuis Laps quand BestLap vaut 999999999');
+  assert.equal(updated.results[1].best,91800);
+  assert.deepEqual(updated.laps[0].sectors,[28000,32000,30500]);
+  assert.deepEqual(remote.data.penMap['0:0:p1'],{timeAdd:5000,note:'Avantage'});
+  assert.match(getElementById('ah-result').innerHTML,/0 nouvelle\(s\), 1 actualisée\(s\)/);
+
+  // Vérifier que l'onglet Circuit expose bien le meilleur tour calculé et la collision géolocalisée
+  vm.runInContext('circuitsCache=null',sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  vm.runInContext("page='circuit';setCircMode('collisions')",sandbox);
+  const cirHtml=getElementById('app').innerHTML;
+  assert.match(cirHtml,/1:30\.500/);
+  assert.match(cirHtml,/class="cir-crash hard"/);
+});
+
 

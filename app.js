@@ -195,10 +195,16 @@ async function ahListChampionships(serverUrl){
   return [...uuids];
 }
 
+const AH_CHAMP_CACHE=new Map();
 async function ahFetchChampionship(serverUrl,uuid){
+  const key=serverUrl.replace(/\/+$/,'')+'|'+uuid;
+  const cached=AH_CHAMP_CACHE.get(key);
+  if(cached&&Date.now()-cached.ts<30000)return cached.data;
   const r=await ahFetch(serverUrl.replace(/\/+$/,'')+'/championship/'+uuid+'/export');
   if(r.status!==200)throw new Error('HTTP '+r.status);
-  return JSON.parse(r.body.toString('utf8'));
+  const data=JSON.parse(r.body.toString('utf8'));
+  AH_CHAMP_CACHE.set(key,{ts:Date.now(),data});
+  return data;
 }
 
 // Liste tous les championnats sur les serveurs, avec méta + barème + sessions connues
