@@ -10,7 +10,7 @@ const path = require('node:path');
 const { buildRound, buildSectorSplits } = require('./circuit-round');
 const { cachePreview } = require('./mod-previews');
 const drive = require('./drive-circuits');
-const { configuredRoots, within } = require('./local-mods');
+const { configuredRoots, within, parseLenientJson } = require('./local-mods');
 
 const MAX_LINE_BYTES = 8 * 1024 * 1024;
 const MAX_LINE_POINTS = 200000;
@@ -162,7 +162,7 @@ async function readJson(fileInfo, warnings) {
   }
   try {
     const raw = await fs.readFile(fileInfo.path, 'utf8');
-    const data = JSON.parse(raw.replace(/^\uFEFF/, ''));
+    const data = parseLenientJson(raw);
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('format invalide');
     return data;
   } catch (error) {
@@ -807,7 +807,7 @@ function importCircuitFilesPayload({ trackId = '', layoutId = '', name, date, ro
     const lower = base.toLowerCase();
     if (lower === 'ui_track.json') {
       try {
-        const parsed = JSON.parse(file.content.replace(/^\uFEFF/, ''));
+        const parsed = parseLenientJson(file.content);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           ui = parsed;
           importedNames.push(base);

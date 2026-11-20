@@ -368,7 +368,10 @@ async function importFromDrive(folderInput, opts = {}) {
   // --- ui_track.json
   let ui = null;
   if (fileMap.ui) {
-    try { ui = JSON.parse((await downloadPublicFile(fileMap.ui.id)).toString('utf8')); }
+    try {
+      const { parseLenientJson } = require('./local-mods');
+      ui = parseLenientJson((await downloadPublicFile(fileMap.ui.id)).toString('utf8'));
+    }
     catch (e) { warnings.push(`ui_track.json illisible : ${e.message}`); }
   }
 

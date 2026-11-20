@@ -3877,6 +3877,36 @@ function compressCarLogoImage(file){
     reader.readAsDataURL(file);
   });
 }
+function parseLenientJsonClient(raw){
+  const clean=String(raw||'').replace(/^\uFEFF/,'');
+  try{return JSON.parse(clean);}catch{
+    let out='',inString=false,escaped=false;
+    for(let i=0;i<clean.length;i++){
+      const ch=clean[i];
+      if(inString){
+        if(escaped){out+=ch;escaped=false;}
+        else if(ch==='\\'){out+=ch;escaped=true;}
+        else if(ch==='"'){out+=ch;inString=false;}
+        else if(ch==='\r'){if(clean[i+1]==='\n')i++;out+='\\n';}
+        else if(ch==='\n'){out+='\\n';}
+        else if(ch==='\t'){out+='\\t';}
+        else if(ch.charCodeAt(0)<0x20){out+=' ';}
+        else{out+=ch;}
+      }else{
+        if(ch==='"'){inString=true;out+=ch;}
+        else if(ch==='/'&&clean[i+1]==='/'){while(i+1<clean.length&&clean[i+1]!=='\n')i++;}
+        else if(ch==='/'&&clean[i+1]==='*'){i+=2;while(i<clean.length&&!(clean[i]==='*'&&clean[i+1]==='/'))i++;i++;}
+        else if(ch===','){
+          let j=i+1;
+          while(j<clean.length&&/\s/.test(clean[j]))j++;
+          if(j<clean.length&&(clean[j]===']'||clean[j]==='}'))continue;
+          out+=ch;
+        }else{out+=ch;}
+      }
+    }
+    return JSON.parse(out);
+  }
+}
 async function importCarFilesFromInput(){
   if(!adminAuth||!currentSlug)return;
   const input=document.getElementById('car-files-import');
@@ -3897,19 +3927,24 @@ async function importCarFilesFromInput(){
       const lower=String(file.name||'').toLowerCase();
       if(/^(?:body_shadow|ambient_shadow|tyre_|glass|rim|interior)/.test(lower))continue;
       if(lower==='ui_car.json'){
-        const data=JSON.parse((await file.text()).replace(/^\uFEFF/,''));
+        const data=parseLenientJsonClient(await file.text());
         if(data&&typeof data==='object'){
           if(data.name)next.name=String(data.name).trim();
           if(data.brand)next.brand=String(data.brand).trim();
           if(data.class||data.category)next.category=String(data.class||data.category).trim();
           if(data.year!=null&&data.year!=='')next.year=String(data.year).trim();
           if(data.country)next.country=String(data.country).trim();
+          else if(next.brand){
+            const bk=next.brand.toLowerCase().replace(/[\s-]+/g,'_');
+            if(CLIENT_KUNOS_BRANDS[bk]?.country&&!next.country)next.country=CLIENT_KUNOS_BRANDS[bk].country;
+          }
           if(data.author)next.author=String(data.author).trim();
+          else if(/^ks[_-]/i.test(next.id)&&!next.author)next.author='Kunos Simulazioni';
           if(data.version)next.version=String(data.version).trim();
           if(data.url)next.url=String(data.url).trim();
-          if(data.description)next.description=String(data.description).replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]*>/g,'').trim();
+          if(data.description)next.description=String(data.description).replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]*>/g,'').replace(/\r\n?/g,'\n').replace(/[ \t]+\n/g,'\n').replace(/\n[ \t]+/g,'\n').replace(/\t+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
           if(Array.isArray(data.tags))next.tags=data.tags.map(t=>String(t||'').trim()).filter(Boolean).slice(0,12);
-          if(data.specs&&typeof data.specs==='object')for(const k of ['bhp','torque','weight','topspeed','acceleration','pwratio','range'])if(data.specs[k])next.specs[k]=String(data.specs[k]).trim();
+          if(data.specs&&typeof data.specs==='object')for(const k of ['bhp','torque','weight','topspeed','acceleration','pwratio','range'])if(data.specs[k]!=null&&data.specs[k]!=='')next.specs[k]=String(data.specs[k]).trim();
           const pc=localCarCurveSnapshot(data.powerCurve,'power'),tc=localCarCurveSnapshot(data.torqueCurve,'torque');
           if(pc.length)next.powerCurve=pc;
           if(tc.length)next.torqueCurve=tc;
@@ -3933,7 +3968,7 @@ async function importCarFilesFromInput(){
         next.metadataAvailable=true;touched++;
       }else if(/^ui_skin.*\.json$/i.test(lower)){
         try{
-          const ui=JSON.parse((await file.text()).replace(/^\uFEFF/,''));
+          const ui=parseLenientJsonClient(await file.text());
           if(ui&&typeof ui==='object'){uiSkinsByKey.set(keyOf(lower),ui);touched++;}
         }catch{}
       }else if(/^(?:logo|badge).*\.(?:png|jpe?g)$/i.test(lower)){

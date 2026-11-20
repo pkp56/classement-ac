@@ -3,7 +3,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const {createHash} = require('node:crypto');
-const {within} = require('./local-mods');
+const {within, parseLenientJson} = require('./local-mods');
 const {safeTrackText} = require('./track-text');
 const cache = path.resolve(__dirname, '../../assets/mod-previews');
 const MAX_IMAGE = 3 * 1024 * 1024;
@@ -48,7 +48,7 @@ async function importLiveries(roots,id,destination=cache){
       const image=await cachePreview(car,['preview.jpg','preview.png','preview.jpeg','livery.png','livery.jpg'].map(n=>path.join(dir,n)),destination);
       if(!image)continue;
       let ui;
-      try{ui=JSON.parse((await boundedRead(car,path.join(dir,'ui_skin.json'),65536)).toString('utf8').replace(/^\uFEFF/,''));}catch{}
+      try{ui=parseLenientJson((await boundedRead(car,path.join(dir,'ui_skin.json'),65536)).toString('utf8'));}catch{}
       const isPlaceholderNumber=String(ui?.number??'')==='0'&&!safeTrackText(ui?.skinname,120)&&!safeTrackText(ui?.team,120)&&!safeTrackText(ui?.drivername,120);
       liveries.push({image,name:safeTrackText(ui?.skinname||entry.name,120),number:isPlaceholderNumber?'':safeTrackText(ui?.number,16),team:safeTrackText(ui?.team,120)});
     }

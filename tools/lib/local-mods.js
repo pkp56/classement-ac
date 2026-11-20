@@ -34,6 +34,7 @@ const text=(v,max=300,multiline=false)=>{
     .replace(/\r\n?/g,'\n')
     .replace(/[\x00-\x09\x0b\x0c\x0e-\x1f\x7f]/g,' ')
     .replace(/[ \t]+\n/g,'\n')
+    .replace(/\n[ \t]+/g,'\n')
     .replace(/\n{3,}/g,'\n\n')
     .trim();
   return (multiline?clean:clean.replace(/\n/g,' ')).slice(0,max);
@@ -176,6 +177,38 @@ function parseLut(raw){
   sampled.push(points[points.length-1]);
   return sampled;
 }
+function parseLenientJson(raw){
+  const clean=String(raw||'').replace(/^\uFEFF/,'');
+  try{
+    return JSON.parse(clean);
+  }catch{
+    let out='',inString=false,escaped=false;
+    for(let i=0;i<clean.length;i++){
+      const ch=clean[i];
+      if(inString){
+        if(escaped){out+=ch;escaped=false;}
+        else if(ch==='\\'){out+=ch;escaped=true;}
+        else if(ch==='"'){out+=ch;inString=false;}
+        else if(ch==='\r'){if(clean[i+1]==='\n')i++;out+='\\n';}
+        else if(ch==='\n'){out+='\\n';}
+        else if(ch==='\t'){out+='\\t';}
+        else if(ch.charCodeAt(0)<0x20){out+=' ';}
+        else{out+=ch;}
+      }else{
+        if(ch==='"'){inString=true;out+=ch;}
+        else if(ch==='/'&&clean[i+1]==='/'){while(i+1<clean.length&&clean[i+1]!=='\n')i++;}
+        else if(ch==='/'&&clean[i+1]==='*'){i+=2;while(i<clean.length&&!(clean[i]==='*'&&clean[i+1]==='/'))i++;i++;}
+        else if(ch===','){
+          let j=i+1;
+          while(j<clean.length&&/\s/.test(clean[j]))j++;
+          if(j<clean.length&&(clean[j]===']'||clean[j]==='}'))continue;
+          out+=ch;
+        }else{out+=ch;}
+      }
+    }
+    return JSON.parse(out);
+  }
+}
 function parseDriverEra(sections){
   const decades={'60':'Années 1960','70':'Années 1970','80':'Années 1980','90':'Années 1990','00':'Années 2000','10':'Années 2010'};
   for(const name of Object.keys(sections||{})){
@@ -203,7 +236,7 @@ function carMetadata(meta,id,extras={}){
   const countryInfo=brandInfo||lookupKunosBrand(brand);
   const idYear=(kunos&&String(id||'').match(/(?:^|_)(19\d\d|20[0-2]\d)(?:_|$)/)?.[1])||'';
   const year=text(meta&&meta.year,32)||text(idYear,32)||text(extras.skinEra,32);
-  const country=text(meta&&meta.country,120)||((kunos||extras.skinBrand)&&countryInfo?countryInfo.country:'');
+  const country=text(meta&&meta.country,120)||(countryInfo?countryInfo.country:'');
   const author=text(meta&&meta.author)||(kunos?'Kunos Simulazioni':'');
   const category=text(meta&&(meta.class||meta.category))||(kunos?inferKunosCategory(id):'');
   const name=text(meta&&meta.name)||text(extras.screenName)||(kunos?formatKunosCarName(id):id);
@@ -256,7 +289,7 @@ async function scanCatalog(roots,{maxEntries=10000}={}){
       const real=await safe(file),stat=await fs.stat(real);
       if(!stat.isFile()||stat.size>1024*1024)throw Error('metadata-too-large');
       const raw=await fs.readFile(real,'utf8');
-      const data=JSON.parse(raw.replace(/^\uFEFF/,''));
+      const data=parseLenientJson(raw);
       if(!data||typeof data!=='object'||Array.isArray(data))throw Error('metadata-invalid');
       return data;
     }catch(e){if(!['ENOENT','ENOTDIR'].includes(e.code))warn('Métadonnées ignorées : '+path.basename(file));return null;}
@@ -424,4 +457,4 @@ function mountLocalMods(app,{roots=configuredRoots(),authorize}){
     }catch(e){res.status(500).json({error:'Impossible de lire le catalogue local.'});}
   });
 }
-module.exports={DEFAULT_ROOTS,configuredRoots,scanCatalog,mountLocalMods,within,parseIni,parseLut,isKunosId,lookupKunosBrand,formatKunosCarName};
+module.exports={DEFAULT_ROOTS,configuredRoots,scanCatalog,mountLocalMods,within,parseIni,parseLut,parseLenientJson,isKunosId,lookupKunosBrand,formatKunosCarName};
