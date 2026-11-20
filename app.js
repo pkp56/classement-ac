@@ -928,7 +928,7 @@ app.post('/api/live/command',async(req,res)=>{
   }catch(e){res.status(502).json({error:e.message})}
 });
 app.get('/live-timing',(req,res)=>res.sendFile(path.join(ROOT,'live-timing.html')));
-app.get('/live-timing.html',(req,res)=>res.sendFile(path.join(ROOT,'live-timing.html')));
+app.get('/live-timing.html',(req,res)=>res.redirect(301,'/live-timing'+(req.originalUrl.includes('?')?req.originalUrl.slice(req.originalUrl.indexOf('?')):'')));
 
 // --- TÉLÉMÉTRIE & BoP (application séparée, schéma `telemetry`) --------------
 // Rien de ce qui suit ne lit ni n'écrit dans le championnat : ni les événements,
@@ -1228,7 +1228,7 @@ app.get('/api/telemetry/measurements/:id', async(req,res)=>{
   }catch(e){res.status(503).json({error:e.message})}
 });
 app.get('/telemetry',(req,res)=>res.sendFile(path.join(ROOT,'telemetry.html')));
-app.get('/telemetry.html',(req,res)=>res.sendFile(path.join(ROOT,'telemetry.html')));
+app.get('/telemetry.html',(req,res)=>res.redirect(301,'/telemetry'+(req.originalUrl.includes('?')?req.originalUrl.slice(req.originalUrl.indexOf('?')):'')));
 
 // --- ÉVÉNEMENTS : servis ici (EVENTS_SOURCE=local, le défaut) ---------------
 // Ces routes sont déclarées AVANT le proxy : elles gagnent. Avec

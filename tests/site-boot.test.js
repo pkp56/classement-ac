@@ -1729,3 +1729,10 @@ test('Carte des collisions : explique l’absence de repère GPS quand worldProj
 
 
 
+
+test('validation des liens : refuse les URL externes sans protocole', () => {
+  const source = siteSource.match(/function isSafeHttpUrl\(u\)\{[\s\S]*?\n\}/)[0];
+  const validate = vm.runInNewContext('(' + source + ')');
+  for (const value of ['//example.com/path', '///example.com', 'javascript:alert(1)', '/\\example.com']) assert.equal(validate(value), false, value);
+  for (const value of ['/docs/reglement.pdf', '/live-timing?source=test', 'https://example.com/path', 'http://example.com']) assert.equal(validate(value), true, value);
+});
