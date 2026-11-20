@@ -1942,8 +1942,22 @@ async function circuitsData(){
   const sessionRounds=rounds();
   const withResults=allRounds.map(r=>{
     const resultGroup=circuitRoundResultsGroup(r,allRounds,sessionRounds);
-    if(!resultGroup)return r;
-    return {...r,status:'done',resultsImported:true,date:r.date||String(resultGroup.date||'').slice(0,10)};
+    if(!resultGroup){
+      // Si les résultats ne permettent pas de distinguer les variantes, on peut
+      // rattacher les fiches à la journée commune sans prétendre qu'une variante
+      // précise a été disputée. Plusieurs journées restent ambiguës.
+      const possible=!r.date ? sessionRounds.filter(group=>group.sessions.some(session=>
+        circuitSessionGroupHasResults({sessions:[session]}) &&
+        circuitTrackAliases(r).includes(normalizeCircuitTrackName(session.track)))) : [];
+      if(possible.length===1 && r.status!=='done'){
+        const number=sessionRounds.indexOf(possible[0])+1;
+        return {...r,status:'unconfirmed',date:possible[0].date,round:number,label:`M${number}`};
+      }
+      return r;
+    }
+    const number=sessionRounds.findIndex(group=>group.date===resultGroup.date)+1;
+    return {...r,status:'done',resultsImported:true,date:r.date||String(resultGroup.date||'').slice(0,10),
+      ...(number>0?{round:number,label:`M${number}`}: {})};
   });
   let computedBest=null;
   for(const s of sessions){
@@ -1967,8 +1981,8 @@ async function circuitsData(){
     ...(base || {}),
     seasonBest,
     rounds: withResults,
-    totalCount: withResults.length,
-    completedCount: withResults.filter(r => r.status === 'done').length
+    totalCount: new Set(withResults.map(r=>r.round)).size,
+    completedCount: new Set(withResults.filter(r => r.status === 'done').map(r=>r.round)).size
   };
   circuitsCache = j; circuitsError = '';
   return j;
@@ -1984,10 +1998,11 @@ function openCircuitRoundResult(idx){
   const targetRound=rs[target];
   let targetSess=(targetRound&&targetRound.sessions.length>1)?1:0;
   if(targetRound&&aliases.length){
-    const matchedRace=targetRound.sessions.findIndex(s=>s.type==='RACE'&&aliases.includes(normalizeCircuitTrackName(s.track)));
-    const matchedAny=targetRound.sessions.findIndex(s=>aliases.includes(normalizeCircuitTrackName(s.track)));
+    const matchedRace=targetRound.sessions.findIndex(s=>s.type==='RACE'&&circuitSessionMatches(r,s,data.rounds));
+    const matchedAny=targetRound.sessions.findIndex(s=>circuitSessionMatches(r,s,data.rounds));
     if(matchedRace>=0)targetSess=matchedRace;
     else if(matchedAny>=0)targetSess=matchedAny;
+    else return; // Ne pas ouvrir une autre variante par défaut.
   }
   // `round` est une propriété réservée de window : on passe par la navigation
   // standard (go) puis on sélectionne la manche.
@@ -2014,35 +2029,36 @@ function circuitTrackAliases(r){
   return [...new Set([...known,r.driverFolder,r.trackId,r.localTrackId,r.localLayoutId,r.track,r.name,r.shortName]
     .map(normalizeCircuitTrackName).filter(Boolean))];
 }
-function circuitRoundsShareTrack(a,b){
-  const aliases=new Set(circuitTrackAliases(a));
-  return circuitTrackAliases(b).some(alias=>aliases.has(alias));
+/** Associe une session à une fiche par circuit et, si possible, variante.
+ * Les anciens imports sans TrackConfig restent ambigus si plusieurs variantes
+ * du même circuit existent : ne jamais attribuer leurs résultats au hasard. */
+function circuitSessionMatches(r, session, all){
+  const name=normalizeCircuitTrackName(session.track);
+  if(!name || !circuitTrackAliases(r).includes(name))return false;
+  const candidates=all.filter(item=>circuitTrackAliases(item).includes(name));
+  const config=session.trackConfig;
+  if(config!==undefined && config!==null){
+    const norm=normalizeCircuitTrackName(config);
+    const exact=candidates.filter(item=>normalizeCircuitTrackName(item.localLayoutId??item.layoutId??item.layoutKey??'')===norm);
+    if(exact.length)return exact.includes(r);
+    // Un export peut porter une configuration non reconnue : pas de supposition.
+    if(candidates.length>1 || norm)return false;
+  }
+  const variants=new Set(candidates.map(item=>normalizeCircuitTrackName(item.localLayoutId??item.layoutId??item.layoutKey??'')));
+  return variants.size<=1;
 }
-/** Sessions de résultats associées à une fiche : la date prévaut, puis un alias unique. */
 function circuitRoundSessions(r,circuitList,sessionRounds){
   if(!r)return [];
   const rs=Array.isArray(sessionRounds)?sessionRounds:rounds();
   const all=Array.isArray(circuitList)?circuitList:[r];
   const day=String(r.date||'').slice(0,10);
-  const aliases=circuitTrackAliases(r);
-  if(day){
-    const sameDate=rs.filter(x=>String(x.date||'').slice(0,10)===day);
-    if(sameDate.length){
-      const multiSameDay=all.filter(item=>String(item.date||'').slice(0,10)===day).length>1;
-      if(multiSameDay&&aliases.length){
-        const filtered=sameDate.map(g=>{
-          const matching=g.sessions.filter(s=>aliases.includes(normalizeCircuitTrackName(s.track)));
-          return matching.length?{...g,sessions:matching,track:track(matching[0].track)}:null;
-        }).filter(Boolean);
-        if(filtered.length)return filtered;
-      }
-      return sameDate;
-    }
-  }
-  if(!aliases.length)return [];
-  const sameTrackFiches=all.filter(item=>circuitRoundsShareTrack(item,r));
-  if(sameTrackFiches.length!==1)return [];
-  return rs.filter(x=>aliases.includes(normalizeCircuitTrackName(x.track)));
+  const matched=rs.filter(g=>!day||String(g.date||'').slice(0,10)===day).map(g=>{
+    const matching=(g.sessions||[]).filter(s=>circuitSessionMatches(r,s,all));
+    return matching.length?{...g,sessions:matching,track:track(matching[0].track)}:null;
+  }).filter(Boolean);
+  // Une fiche non datée ne désigne pas une manche si le même tracé a été
+  // utilisé plusieurs jours distincts.
+  return !day && matched.length>1 ? [] : matched;
 }
 function circuitSessionGroupHasResults(group){
   return (group&&group.sessions||[]).some(session=>
@@ -2195,7 +2211,7 @@ function circuitBadgeLabel(){
   return where ? `${r.label} · ${where}` : String(r.label || 'À VENIR');
 }
 function circuitStatusLabel(round){
-  return round.status === 'done' ? 'Disputée' : 'À venir';
+  return round.status === 'done' ? 'Disputée' : round.status === 'unconfirmed' ? 'À vérifier' : 'À venir';
 }
 function circuitDateLabel(round){
   if (round.dateLabel) return round.dateLabel;
@@ -2277,7 +2293,7 @@ function circuit(){
     ? `<span class="cir-winner"><small>Vainqueur</small>${esc(round.winner)}</span>`
     : isDone
       ? `<span class="cir-winner"><small>Manche</small>${round.resultsImported?'Résultats disponibles':'Disputée'}</span>`
-      : `<span class="cir-winner"><small>Manche</small>à venir</span>`;
+      : `<span class="cir-winner"><small>Manche</small>${round.status === 'unconfirmed'?'à vérifier':'à venir'}</span>`;
 
   // --- KPI ---
   const seasonBest = data.seasonBest;
@@ -2424,6 +2440,7 @@ function circuit(){
     if (!stats) {
       if(round.resultsImported)return `<div class="cir-empty">Résultats QUALIFY / RACE disponibles dans l’onglet Résultats. La fiche circuit ne recalcule pas les statistiques de classement.</div>`;
       if(isDone)return `<div class="cir-empty">Cette manche est disputée, mais aucune synthèse chronométrique n'est disponible dans la fiche.</div>`;
+      if(round.status==='unconfirmed')return `<div class="cir-empty">Des résultats existent pour cette journée, mais la configuration de ce circuit n'est pas identifiée avec certitude. Vérifie les fichiers de résultats importés.</div>`;
       return `<div class="cir-empty">Cette manche n'a pas encore été disputée : les chronos seront publiés après la course.</div>`;
     }
     const rows = [];
@@ -2444,7 +2461,7 @@ function circuit(){
     + lapRows
     + `<div class="cir-optimal"><span>${isLolaEvent() ? 'Tour le plus rapide de la saison' : 'Tour le plus rapide'}</span><b>${seasonBest ? esc(seasonBest.time) : '—'}</b></div>`
     + `<div class="cir-link"><div><div class="eyebrow" style="margin:0">Calendrier</div><div class="muted" style="margin-top:2px">${nb(data.completedCount || 0, 0)} manches disputées sur ${nb(data.totalCount || rounds.length, 0)}.</div></div>`
-    + `<button type="button" class="btn secondary small" onclick="openCircuitRoundResult(${idx})">Voir les résultats →</button></div></div>`;
+    + (round.status==='unconfirmed' ? '' : `<button type="button" class="btn secondary small" onclick="openCircuitRoundResult(${idx})">Voir les résultats →</button>`) + `</div></div>`;
 
   // --- Détail technique de la manche ---
   const officialLengthLabel=round.officialLengthM
