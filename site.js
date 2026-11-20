@@ -2118,8 +2118,10 @@ function circuitSessionStats(round,profile,allRounds,source,mode){
   const records=[],contacts=[];
   for(const session of source){
     if(!['QUALIFY','RACE'].includes(session.type)||!aliases.has(norm(session.track)))continue;
-    if(session.trackConfig!=null && key!=null){
-      if(norm(session.trackConfig)!==norm(key))continue;
+    const normCfg=session.trackConfig!=null?norm(session.trackConfig):null;
+    const normKey=key!=null?norm(key):null;
+    if(normCfg!=null && normKey!=null){
+      if(normCfg!==normKey && (variants.size>1 || (normCfg!=='' && normKey!=='')))continue;
     }else if(variants.size>1){
       // Ancien import sans variante : ne pas attribuer un record à deux tracés.
       continue;
@@ -2129,8 +2131,9 @@ function circuitSessionStats(round,profile,allRounds,source,mode){
     if(mode==='sectors')for(const lap of session.laps||[]){
       if(!drivers.has(lap.id)||lap.cuts>0||!(lap.time>0)||!Array.isArray(lap.sectors))continue;
       lap.sectors.forEach((ms,i)=>{
-        if(Number.isFinite(ms)&&ms>0&&ms<=lap.time&&(!records[i]||ms<records[i].ms))
-          records[i]={ms,name:drivers.get(lap.id),label};
+        const msVal=Number(ms);
+        if(Number.isFinite(msVal)&&msVal>0&&msVal<=lap.time&&(!records[i]||msVal<records[i].ms))
+          records[i]={ms:msVal,name:drivers.get(lap.id),label};
       });
     }
     if(mode==='collisions')for(const event of session.events||[]){
@@ -2298,12 +2301,19 @@ function circuit(){
     + `</div>`;
 
   // --- Inspecteur (3 modes) ---
+  const activeOutline=activeProfile.outline||round.outline;
+  const hasWorldProjection=!!(activeOutline&&activeOutline.worldProjection);
   const {records,contacts}=mode==='corners'?{}:circuitSessionStats(round,activeProfile,rounds,sessions,mode);
   const inspector = mode === 'collisions' ? (() => {
+    const canRefresh=adminAuth&&(round.driveFolderId||round.localTrackId||round.trackId);
+    const refreshBanner=(contacts.length&&!hasWorldProjection)
+      ?`<div class="cir-empty" style="margin-bottom:10px">Tracé importé sans repère GPS : les collisions apparaissent dans la liste mais ne peuvent pas encore être placées sur la carte.${canRefresh?`<div style="margin-top:8px"><button type="button" class="btn secondary small" onclick="refreshCircuitRoundFromInspector(${idx},this)">Actualiser la fiche circuit (${round.driveFolderId?'Drive':'Mod local'})</button></div>`:' Actualise la fiche circuit depuis un serveur local ou Google Drive.'}</div>`
+      :'';
     return `<div class="cir-inspector"><div class="eyebrow">Contacts serveur</div><h3>Carte des collisions</h3>`
+      + refreshBanner
       + (!contacts.length?`<div class="cir-empty">Aucun contact entre voitures enregistré pour ce tracé.</div>`:
         `<ul class="cir-crash-list">${contacts.map((c,i)=>`<li><span class="cir-crash-num ${c.speed>25?'hard':''}">${i+1}</span>`
-          + `<span><b>${esc(c.a)}</b> / ${esc(c.b)}<small>${c.label}${c.point?'':' · Position indisponible'}</small></span>`
+          + `<span><b>${esc(c.a)}</b> / ${esc(c.b)}<small>${c.label}${c.point?'':(hasWorldProjection?' · Position indisponible (absente du fichier)':' · Position indisponible (tracé sans repère GPS)')}</small></span>`
           + `<b class="cir-speed">${Number.isFinite(c.speed)?frNum(c.speed,1)+' km/h':''}</b></li>`).join('')}</ul>`)+`</div>`;
   })() : mode === 'sectors' ? (() => {
     const measuredSplits = Array.isArray(round.sectorSplits) ? round.sectorSplits : [];
@@ -2765,6 +2775,7 @@ function pseudonymizeGuid(guid){return shaShort(String(guid||''))}
 function saveState(opts={}){
   const cached=events.find(e=>e.slug===currentSlug);
   if(cached)cached.data={...(cached.data||{}),sessions,penMap,manualDrivers,customCalendar};
+  circuitsCache=null;circuitsError='';
   localStorage.setItem('gdsp_sessions',JSON.stringify(sessions));
   localStorage.setItem('gdsp_penalties',JSON.stringify(penMap));
   if(manualDrivers)localStorage.setItem('gdsp_drivers',JSON.stringify(manualDrivers));
@@ -2908,18 +2919,25 @@ function importSessionJson(text,fileName,opts){
     if(j.Type==='PRACTICE'){if(!opts.silent)alert('Les sessions PRACTICE ne sont pas importées.');return false}
     // Filtre "test"
     const serverName=String(j.ServerName||j.Name||''), trackName=String(j.TrackName||'');
-    if(/test/i.test(serverName+' '+trackName)){if(!opts.silent)alert('Session ignorée (nom contient "test").');return false}
+    if(/\btest\b/i.test(serverName+' '+trackName)){if(!opts.silent)alert('Session ignorée (nom contient "test").');return false}
     if(!j.Date){if(!opts.silent)alert('Date manquante dans le JSON, session ignorée.');return false}
 
     const cars={};toArr(j.Cars).forEach(c=>{if(c&&c.CarId!=null)cars[c.CarId]=driverFrom(c)});
+    const pickMeta=(obj)=>{
+      const byCar=obj&&obj.CarId!=null?cars[obj.CarId]:null;
+      const hasObjDriver=obj&&(obj.DriverGuid||obj.DriverName||obj.Driver);
+      if(byCar&&(byCar.name||!hasObjDriver))return byCar;
+      return hasObjDriver?driverFrom(obj):byCar;
+    };
     const laps=toArr(j.Laps).map(l=>{
       if(!l)return null;
-      const meta=cars[l.CarId]||((l.DriverGuid||l.DriverName)?driverFrom(l):null);
+      const meta=pickMeta(l);
       if(!meta)return null;
       const time=Number(l.LapTime??l.time);
       if(!Number.isFinite(time)||time<=0)return null;
       const lp={id:meta.id,time,cuts:l.Cuts||0};
-      if(Array.isArray(l.Sectors)&&l.Sectors.length)lp.sectors=l.Sectors;
+      const secs=(Array.isArray(l.Sectors)?l.Sectors:toArr(l.Sectors)).map(Number).filter(n=>Number.isFinite(n)&&n>0);
+      if(secs.length)lp.sectors=secs;
       if(l.Timestamp!=null)lp.timestamp=l.Timestamp;
       return lp;
     }).filter(Boolean);
@@ -2932,7 +2950,7 @@ function importSessionJson(text,fileName,opts){
 
     const results=toArr(j.Result).map(r=>{
       if(!r)return null;
-      const meta=cars[r.CarId]||driverFrom(r);
+      const meta=pickMeta(r)||driverFrom(r);
       if(meta.model==='dodge_monaco_police'||/broadcast/i.test(meta.name))return null;
       const rawBest=Number(r.BestLap);
       const lapBest=cleanBestById.get(meta.id);
@@ -3041,8 +3059,18 @@ async function bulkImport(ev){
       else errs.push(f.name+' : format invalide ou ignoré');
     }catch(e){errs.push(f.name+' : '+e.message)}
   }
-  saveState();render();
-  if(out)out.innerHTML=`<p class="note"><b>Import terminé :</b> ${ok} fichier(s) importé(s), ${errs.length} erreur(s).</p>${errs.length?`<ul class="note" style="font-family:monospace;font-size:11px">${errs.map(x=>'<li>✗ '+esc(x)+'</li>').join('')}</ul>`:''}`;
+  const backfill=await backfillCircuitWorldProjection();
+  let saveMsg='';
+  if(ok>0||backfill.refreshed>0){
+    saveState({remote:false});
+    if(adminToken){
+      try{await saveRemote();saveMsg=' Sauvegarde serveur confirmée.';}
+      catch(e){saveMsg=' ⚠ Échec sauvegarde serveur : '+e.message;}
+    }
+  }
+  render();
+  const warnProj=backfill.missing?`<p class="note" style="color:#8a5a14">⚠ ${backfill.missing} fiche(s) circuit sans repère GPS (<code>worldProjection</code>) : actualise la fiche circuit depuis un serveur local ou Google Drive pour afficher les collisions sur le tracé.</p>`:'';
+  if(out)out.innerHTML=`<p class="note"><b>Import terminé :</b> ${ok} fichier(s) importé(s), ${errs.length} erreur(s).${esc(saveMsg)}</p>${warnProj}${errs.length?`<ul class="note" style="font-family:monospace;font-size:11px">${errs.map(x=>'<li>✗ '+esc(x)+'</li>').join('')}</ul>`:''}`;
   ev.target.value='';
 }
 // Qualification explicite ; aucun parsing automatique des commentaires anciens.
@@ -4386,6 +4414,97 @@ async function refreshEventCircuit(index,button){
     if(currentSlug===slug){circuitsCache=null;circuitsError='';}
   }catch(e){alert('Fiche non actualisée : '+e.message);}finally{button.disabled=false;button.textContent='Actualiser depuis '+(old.driveFolderId?'Drive':'Mod local');}
 }
+async function fetchCircuitRoundRefresh(old){
+  if(!old)return null;
+  if(old.driveFolderId){
+    const res=await apiPost('/api/admin/circuits/import',{driveUrl:old.driveFolderId,round:old.round});
+    const result=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(result.error||'Import Drive impossible');
+    return result;
+  }
+  const trackId=old.localTrackId||old.trackId;
+  if(!trackId)return null;
+  return requestLocalCircuitImport({trackId,layoutId:old.localLayoutId||old.layoutId||'',name:old.name},old.date,old.round);
+}
+async function backfillCircuitWorldProjection(){
+  const data=eventContext&&eventContext.data;
+  if(!data||typeof data!=='object'||!adminToken)return {refreshed:0,missing:0};
+  const candidates=[];
+  if(Array.isArray(data.circuitRounds))candidates.push(...data.circuitRounds);
+  if(data.modSelection?.trackSheet)candidates.push(data.modSelection.trackSheet);
+  if(Array.isArray(data.modSelection?.trackSheets))candidates.push(...data.modSelection.trackSheets);
+  const need=candidates.filter(r=>r&&r.outline&&r.outline.path&&!r.outline.worldProjection&&(r.driveFolderId||r.localTrackId||r.trackId));
+  if(!need.length)return {refreshed:0,missing:0};
+  const cache=new Map();
+  let refreshed=0,missing=0;
+  for(const row of need){
+    const key=row.driveFolderId?('drive:'+row.driveFolderId):('local:'+(row.localTrackId||row.trackId)+':'+(row.localLayoutId||row.layoutId||''));
+    if(!cache.has(key)){
+      try{
+        const res=await fetchCircuitRoundRefresh(row);
+        cache.set(key,res&&res.round&&!res.round.technicalUnavailable&&res.round.outline&&res.round.outline.worldProjection?res.round:null);
+      }catch(_){
+        cache.set(key,null);
+      }
+    }
+    const fresh=cache.get(key);
+    if(fresh){
+      row.outline=fresh.outline;
+      if(Array.isArray(row.profiles)&&row.profiles.length){
+        row.profiles=row.profiles.map(p=>(p&&(!row.layoutKey||p.key===row.layoutKey))?{...p,outline:fresh.outline}:p);
+      }
+      refreshed++;
+    }else{
+      missing++;
+    }
+  }
+  if(refreshed>0){circuitsCache=null;circuitsError='';}
+  return {refreshed,missing};
+}
+async function refreshCircuitRoundFromInspector(idx,button){
+  if(!adminAuth||!currentSlug)return;
+  const slug=currentSlug,old=circuitsCache&&Array.isArray(circuitsCache.rounds)?circuitsCache.rounds[idx]:null;
+  if(!old)return;
+  const prevLabel=button?button.textContent:'';
+  if(button){button.disabled=true;button.textContent='Actualisation…';}
+  try{
+    const result=await fetchCircuitRoundRefresh(old);
+    if(!result||!result.round)throw new Error(localCircuitImportIssue(result));
+    if(old.outline&&result.round.technicalUnavailable)throw new Error('Tracé illisible : la fiche complète existante est conservée.');
+    await saveEventHomePatch(slug,data=>{
+      const rows=Array.isArray(data.circuitRounds)?[...data.circuitRounds]:[];
+      let i=rows.findIndex(r=>old.id&&r.id===old.id);
+      if(i<0)i=rows.findIndex(r=>Number(r.round)===Number(old.round)&&sheetTextKey('track',r)===sheetTextKey('track',old));
+      if(i<0)i=rows.findIndex(r=>(r.localTrackId||r.trackId||r.driverFolder)===(old.localTrackId||old.trackId||old.driverFolder)&&(r.localLayoutId||r.layoutId||'')===(old.localLayoutId||old.layoutId||''));
+      if(i>=0){
+        const cur={...rows[i],outline:result.round.outline};
+        if(result.round.elevation)cur.elevation=result.round.elevation;
+        if(result.round.profile)cur.profile=result.round.profile;
+        if(Array.isArray(cur.profiles)&&cur.profiles.length){
+          cur.profiles=cur.profiles.map(p=>p.key!==cur.layoutKey?p:{...p,outline:result.round.outline,elevation:result.round.elevation||p.elevation,profile:result.round.profile||p.profile});
+        }
+        rows[i]=cur;
+        data.circuitRounds=rows;
+      }else{
+        const fresh={...result.round,round:old.round,label:old.label||`M${old.round||1}`};
+        for(const k of ['date','dateLabel','status','winner','stats','format','id'])if(old[k]!=null)fresh[k]=old[k];
+        rows.push(fresh);
+        data.circuitRounds=rows;
+      }
+      if(data.modSelection?.trackSheet&&(data.modSelection.trackSheet.trackId===(old.localTrackId||old.trackId))){
+        data.modSelection.trackSheet={...data.modSelection.trackSheet,outline:result.round.outline};
+      }
+      if(Array.isArray(data.modSelection?.trackSheets)){
+        data.modSelection.trackSheets=data.modSelection.trackSheets.map(s=>s&&s.trackId===(old.localTrackId||old.trackId)&&(s.layoutId||'')===(old.localLayoutId||old.layoutId||'')?{...s,outline:result.round.outline}:s);
+      }
+    },'Fiche circuit actualisée.');
+    if(currentSlug===slug){circuitsCache=null;circuitsError='';await circuitsData();render();}
+  }catch(e){
+    alert('Fiche non actualisée : '+e.message);
+  }finally{
+    if(button){button.disabled=false;button.textContent=prevLabel;}
+  }
+}
 
 let eventsSubTab='catalog';
 function openEventsSubTab(tab){eventsSubTab=tab==='editor'?'editor':'catalog';render();}
@@ -4816,7 +4935,7 @@ async function ahImport(){
     let endpoint='/api/ah-scan';
     let scopeNote='';
     if(ahConfig){
-      endpoint=`/api/ah-championship-sessions?server=${encodeURIComponent(ahConfig.server)}&uuid=${encodeURIComponent(ahConfig.uuid)}`;
+      endpoint=`/api/ah-championship-sessions?server=${encodeURIComponent(ahConfig.server)}&uuid=${encodeURIComponent(ahConfig.uuid)}&refresh=1`;
     }else if(currentSlug){
       if(!confirm("Cet événement n'est pas lié à un championnat AssettoHosting.\n\nL'importation va parcourir TOUS les résultats des serveurs GDSP et ne pourra pas distinguer les sessions de cet événement de celles des autres. Il est recommandé de lier l'événement depuis l'onglet « Serveurs AH » (supprime-le puis recrée-le avec + Créer).\n\nContinuer quand même ?")){
         if(out)out.innerHTML='<p class="note">Import annulé. Passe par l\'onglet « Serveurs AH » pour lier cet événement à un championnat AH, ou importe des fichiers JSON manuellement.</p>';
@@ -4830,8 +4949,8 @@ async function ahImport(){
     // Filtres:
     // 1) Enlever PRACTICE
     items=items.filter(x=>x._type!=='PRACTICE');
-    // 2) Enlever celles qui contiennent "test" dans le nom/serveur/url (insensible à la casse)
-    const isTest=x=>/test/i.test((x.eventName||'')+' '+(x.sessionName||'')+' '+(x.filename||'')+' '+(x.server||''));
+    // 2) Enlever celles qui contiennent "test" en mot entier dans le nom/serveur/url (insensible à la casse)
+    const isTest=x=>/\btest\b/i.test((x.eventName||'')+' '+(x.sessionName||'')+' '+(x.filename||'')+' '+(x.server||''));
     items=items.filter(x=>!isTest(x));
     // 3) Identifier les nouvelles sessions et celles déjà importées (à actualiser pour collisions & meilleurs temps)
     const existing=new Set(sessions.filter(s=>s&&s.date).map(s=>sessionSlotKey(s.date,s.type)).filter(Boolean));
@@ -4857,25 +4976,35 @@ async function ahImport(){
       try{
         let fr,txt,fname=it.filename||(it.rawType+'_'+(it.date||'').slice(0,10));
         if(it.source==='export'){
-          const qs=new URLSearchParams({server:it.server,uuid:ahConfig.uuid,eventId:it.eventId,rawType:it.rawType}).toString();
+          const qs=new URLSearchParams({server:it.server,uuid:ahConfig.uuid,eventId:it.eventId,rawType:it.rawType,refresh:'1'}).toString();
           fr=await apiGet('/api/ah-championship-session-json?'+qs);
         }else{
-          fr=await apiGet('/api/ah-fetch?url='+encodeURIComponent(it.url));
+          fr=await apiGet('/api/ah-fetch?refresh=1&url='+encodeURIComponent(it.url));
         }
         if(!fr.ok)throw new Error('HTTP '+fr.status);
         txt=await fr.text();
         const meta={};
         if(importSessionJson(txt,fname,{silent:true,outMeta:meta})){
-          const statsTxt=`${meta.eventsCount||0} collision(s), ${meta.bestLapsCount||0} meilleur(s) temps`;
+          const statsTxt=`${meta.positionedEvents||0}/${meta.eventsCount||0} collision(s) positionnée(s), ${meta.sectorsLapsCount||0} tour(s) avec secteurs, ${meta.bestLapsCount||0} meilleur(s) temps`;
           if(meta.updated){updated++;details.push(`↻ ${it._type} ${it.track||''} ${it.eventName?'('+it.eventName+') ':''}— actualisée (${statsTxt})`)}
           else{added++;details.push(`+ ${it._type} ${it.track||''} ${it.eventName?'('+it.eventName+') ':''}— ${statsTxt}`)}
         }
         else{err++;details.push(`✗ erreur parsing ${fname}`)}
       }catch(e){err++;details.push(`✗ ${it._type} ${it.eventName||''}: ${e.message}`)}
     }
-    if(added>0||updated>0)saveState();
+    const backfill=await backfillCircuitWorldProjection();
+    let saveNote='';
+    if(added>0||updated>0||backfill.refreshed>0){
+      saveState({remote:false});
+      if(adminToken){
+        try{await saveRemote();saveNote=' Sauvegarde serveur confirmée.';}
+        catch(e){saveNote=` <span style="color:#9c3021">⚠ Échec sauvegarde serveur : ${esc(e.message)}</span>`;}
+      }
+    }
     render();
-    if(out)out.innerHTML+=`<p class="note"><b>Import terminé :</b> ${added} nouvelle(s), ${updated} actualisée(s) (collisions &amp; meilleurs temps), ${err} erreur(s).</p><ul class="note" style="font-family:monospace;font-size:11px">${details.map(d=>'<li>'+esc(d)+'</li>').join('')}</ul>`;
+    const projNote=backfill.refreshed?`<p class="note">🧭 ${backfill.refreshed} fiche(s) circuit recalibrée(s) pour le placement GPS des collisions.</p>`:''
+      +(backfill.missing?`<p class="note" style="color:#8a5a14">⚠ ${backfill.missing} fiche(s) circuit sans repère GPS (<code>worldProjection</code>) : actualise la fiche circuit depuis un serveur local ou Google Drive pour afficher les collisions sur le tracé.</p>`:'');
+    if(out)out.innerHTML+=`<p class="note"><b>Import terminé :</b> ${added} nouvelle(s), ${updated} actualisée(s) (collisions &amp; meilleurs temps), ${err} erreur(s).${saveNote}</p>${projNote}<ul class="note" style="font-family:monospace;font-size:11px">${details.map(d=>'<li>'+esc(d)+'</li>').join('')}</ul>`;
   }catch(e){if(out)out.innerHTML=`<p class="note" style="color:#9c3021">✗ Erreur : ${esc(e.message)}</p>`}
 }
 

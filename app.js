@@ -133,6 +133,24 @@ function ahFetch(url, timeoutMs=15000){
   });
 }
 
+function parisLocalToUtcDate(year, month, day, hour, minute){
+  const utcGuess=Date.UTC(year,month-1,day,hour,minute,0);
+  try{
+    const fmt=new Intl.DateTimeFormat('en-US',{
+      timeZone:'Europe/Paris',
+      year:'numeric',month:'2-digit',day:'2-digit',
+      hour:'2-digit',minute:'2-digit',second:'2-digit',
+      hour12:false
+    });
+    const parts=Object.fromEntries(fmt.formatToParts(new Date(utcGuess)).map(p=>[p.type,p.value]));
+    const parisHour=Number(parts.hour)==24?0:Number(parts.hour);
+    const asUtc=Date.UTC(Number(parts.year),Number(parts.month)-1,Number(parts.day),parisHour,Number(parts.minute),0);
+    return new Date(utcGuess-(asUtc-utcGuess));
+  }catch(_){
+    return new Date(utcGuess);
+  }
+}
+
 async function ahListResults(serverUrl){
   const r=await ahFetch(serverUrl.replace(/\/+$/,'')+'/results');
   if(r.status!==200)throw new Error('HTTP '+r.status);
@@ -147,7 +165,7 @@ async function ahListResults(serverUrl){
     const [y,mo,d,h,mi,...rest]=parts;
     const type=rest.pop().toUpperCase();
     const serverName=rest.join('_');
-    const dObj=new Date(+y,+mo-1,+d,+h,+mi);
+    const dObj=parisLocalToUtcDate(+y,+mo,+d,+h,+mi);
     if(!isFinite(dObj))continue;
     out.push({filename,url:serverUrl.replace(/\/+$/,'')+'/results/download/'+filename,type,date:dObj.toISOString(),sessionName:serverName});
   }
@@ -174,7 +192,7 @@ app.get('/api/ah-fetch', async(req,res)=>{
   }
   try{
     const r=await ahFetch(url,20000);
-    res.set('Cache-Control','public, max-age=300');
+    res.set('Cache-Control',req.query.refresh==='1'?'no-store':'public, max-age=300');
     res.set('Content-Type','application/json');
     res.status(r.status).send(r.body);
   }catch(e){res.status(502).json({error:e.message})}
@@ -196,10 +214,10 @@ async function ahListChampionships(serverUrl){
 }
 
 const AH_CHAMP_CACHE=new Map();
-async function ahFetchChampionship(serverUrl,uuid){
+async function ahFetchChampionship(serverUrl,uuid,opts){
   const key=serverUrl.replace(/\/+$/,'')+'|'+uuid;
   const cached=AH_CHAMP_CACHE.get(key);
-  if(cached&&Date.now()-cached.ts<30000)return cached.data;
+  if(!(opts&&opts.refresh)&&cached&&Date.now()-cached.ts<30000)return cached.data;
   const r=await ahFetch(serverUrl.replace(/\/+$/,'')+'/championship/'+uuid+'/export');
   if(r.status!==200)throw new Error('HTTP '+r.status);
   const data=JSON.parse(r.body.toString('utf8'));
@@ -299,7 +317,7 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
   if(!/^https?:\/\/(fr2|fr5)\.assettohosting\.com/i.test(server))return res.status(400).json({error:'Serveur non autorisé.'});
   if(!/^[0-9a-f-]{36}$/i.test(uuid))return res.status(400).json({error:'UUID invalide.'});
   try{
-    const champ=await ahFetchChampionship(server,uuid);
+    const champ=await ahFetchChampionship(server,uuid,{refresh:req.query.refresh==='1'});
     const items=[];
     const diagnostics={ignored:[],missing:[]};
     const events=champ.Events||[];
@@ -432,8 +450,8 @@ app.get('/api/ah-championship-session-json', async(req,res)=>{
   // Accepter QUALIFY/RACE/RACEx2/RACE2/RACE_2/RACE3/RW:<index>
   if(!/^(QUALIFY|RACE|RACEx2|RACE2|RACE_2|RACE3|RACE_3|RW:\d+)$/.test(rawType))return res.status(400).json({error:'rawType invalide.'});
   try{
-    const champ=await ahFetchChampionship(server,uuid);
-    const evObj=champ.Events&&(champ.Events[eventId]||(Array.isArray(champ.Events)?champ.Events.find(e=>e&&e.ID===eventId):null));
+    const champ=await ahFetchChampionship(server,uuid,{refresh:req.query.refresh==='1'});
+    const evObj=champ.Events&&(champ.Events[eventId]||(Array.isArray(champ.Events)?champ.Events.find(e=>e&&e.ID===eventId):Object.values(champ.Events).find(e=>e&&e.ID===eventId)));
     if(!evObj)return res.status(404).json({error:'Event introuvable.'});
     let s=null;
     if(rawType.startsWith('RW:')){
@@ -446,7 +464,7 @@ app.get('/api/ah-championship-session-json', async(req,res)=>{
     if(!s)return res.status(404).json({error:'Session introuvable (ni simple, ni RaceWeekend).'});
     const rObj=s.Results;
     if(!rObj||!Array.isArray(rObj.Result))return res.status(404).json({error:'Session sans résultats dans l\'export.'});
-    res.set('Cache-Control','public, max-age=300');
+    res.set('Cache-Control','no-store');
     res.set('Content-Type','application/json');
     res.send(JSON.stringify(rObj));
   }catch(e){res.status(502).json({error:e.message})}

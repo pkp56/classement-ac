@@ -1582,4 +1582,150 @@ test('Import automatique AH : actualise collisions et meilleurs temps sur des se
   assert.match(cirHtml,/class="cir-crash hard"/);
 });
 
+test('Import automatique AH : recalibre worldProjection manquant et met à jour les meilleurs secteurs même sur tracé unique',async()=>{
+  const existingSession={
+    date:'2026-11-18T20:55:00.000Z',
+    track:'charade_test',
+    trackConfig:'gp',
+    type:'RACE',
+    results:[
+      {id:'p1',name:'Alice',team:'Red',grid:1,laps:5,best:95000,time:480000},
+      {id:'p2',name:'Bob',team:'Blue',grid:2,laps:5,best:96000,time:485000}
+    ],
+    laps:[{id:'p1',time:95000,cuts:0}],
+    events:[{type:'COLLISION_WITH_CAR',a:'Alice',b:'Bob',aid:'p1',bid:'p2',speed:32.1}]
+  };
+  let remote={
+    slug:'open-charade',
+    name:'Open Charade',
+    kind:'open',
+    points_config:{scale:[25,18,15],pole:1,bestLap:1,minPct:75,ignoreWorst:0},
+    data:{
+      ahServer:'https://fr5.assettohosting.com:50648',
+      ahUuid:'22222222-2222-2222-2222-222222222222',
+      sessions:[existingSession],
+      circuitRounds:[{
+        id:'local:2026-11-18:charade_test',round:1,label:'M1',name:'Charade',shortName:'Charade',
+        trackId:'charade_test',localTrackId:'charade_test',localLayoutId:'',date:'2026-11-18',
+        lengthM:3521,lengthStr:'3,521 km',
+        outline:{path:'M0 0 L100 100 Z',viewBox:'0 0 1000 560',samples:[],sectors:[],corners:[]},
+        profile:{path:'M0 10 L10 5',closed:'M0 10 L10 5 L10 120 L0 120 Z',min:0,max:10,delta:10},
+        sectorSplits:[{label:'S1',from:0,to:1174},{label:'S2',from:1174,to:2347},{label:'S3',from:2347,to:3521}],
+        surfaces:[],status:'done'
+      }]
+    }
+  };
+  const ahExportJson={
+    Type:'RACE',
+    Date:'2026-11-18T21:55:00+01:00',
+    TrackName:'charade_test',
+    TrackConfig:'gp',
+    Cars:[
+      {CarId:0,Driver:{Name:'Alice',Guid:'aa',Team:'Red'}},
+      {CarId:1,Driver:{Name:'Bob',Guid:'bb',Team:'Blue'}}
+    ],
+    Result:[
+      {CarId:0,GridPosition:1,NumLaps:5,BestLap:91200,TotalTime:460000},
+      {CarId:1,GridPosition:2,NumLaps:5,BestLap:91900,TotalTime:465000}
+    ],
+    Laps:[
+      {CarId:0,LapTime:91200,Sectors:[28100,32400,30700],Cuts:0,Timestamp:1795035300},
+      {CarId:1,LapTime:91900,Sectors:[28500,31900,31500],Cuts:0,Timestamp:1795035310}
+    ],
+    Events:[
+      {
+        Type:'COLLISION_WITH_CAR',CarId:0,OtherCarId:1,ImpactSpeed:32.1,Timestamp:1795035250,
+        WorldPosition:{X:120,Y:0,Z:240},RelPosition:{X:0.5,Y:0,Z:0.2}
+      }
+    ]
+  };
+  const {sandbox,getElementById,calls}=makeBrowser([remote],(url,opts)=>{
+    if(url==='/api/events/open-charade'&&(!opts||!opts.method||opts.method==='GET'))return response(remote);
+    if(url==='/api/events/open-charade/data'&&opts.method==='POST'){
+      remote={...remote,data:JSON.parse(opts.body)};
+      return response({ok:true});
+    }
+    if(url.startsWith('/api/ah-championship-sessions')){
+      assert.match(url,/refresh=1/);
+      return response({
+        championship:'Open Charade',events:1,
+        items:[{source:'export',server:'https://fr5.assettohosting.com:50648',eventId:'ev1',rawType:'RACE',sessionType:'RACE',date:'2026-11-18T20:55:00.000Z',track:'charade_test',eventName:'Manche 1'}]
+      });
+    }
+    if(url.startsWith('/api/ah-championship-session-json')){
+      assert.match(url,/refresh=1/);
+      return {ok:true,status:200,json:async()=>ahExportJson,text:async()=>JSON.stringify(ahExportJson)};
+    }
+    if(url==='/api/admin/circuits/import-local'&&opts.method==='POST'){
+      return response({
+        round:{
+          id:'local:2026-11-18:charade_test',round:1,name:'Charade',trackId:'charade_test',localTrackId:'charade_test',localLayoutId:'',
+          outline:{path:'M0 0 L100 100 Z',viewBox:'0 0 1000 560',worldProjection:{originX:40,originY:60,scale:0.25},samples:[],sectors:[],corners:[]}
+        }
+      });
+    }
+    return null;
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext("loadEvent('open-charade')",sandbox);
+  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin';adminTab='import';page='admin';render()",sandbox);
+
+  await vm.runInContext('ahImport()',sandbox);
+  assert.ok(remote.data.circuitRounds[0].outline.worldProjection,'worldProjection doit être sauvegardé automatiquement');
+  assert.ok(calls.some(c=>c.url==='/api/events/open-charade/data'&&c.method==='POST'),'la sauvegarde serveur est attendue avant la fin de ahImport');
+  assert.match(getElementById('ah-result').innerHTML,/Sauvegarde serveur confirmée/);
+  assert.match(getElementById('ah-result').innerHTML,/recalibrée/);
+
+  await vm.runInContext('circuitsData()',sandbox);
+  vm.runInContext("page='circuit';setCircMode('collisions')",sandbox);
+  const colHtml=getElementById('app').innerHTML;
+  assert.match(colHtml,/class="cir-crash hard"/,'la collision doit être placée sur le tracé');
+  assert.doesNotMatch(colHtml,/Position indisponible/);
+
+  vm.runInContext("setCircMode('sectors')",sandbox);
+  const secHtml=getElementById('app').innerHTML;
+  assert.match(secHtml,/S1<\/td><td>0:28\.100<\/td><td>Alice/);
+  assert.match(secHtml,/S2<\/td><td>0:31\.900<\/td><td>Bob/);
+  assert.match(secHtml,/S3<\/td><td>0:30\.700<\/td><td>Alice/);
+});
+
+test('Carte des collisions : explique l’absence de repère GPS quand worldProjection manque encore',async()=>{
+  const remote={
+    slug:'open-noproj',
+    name:'Open Sans GPS',
+    kind:'open',
+    points_config:{scale:[25,18],pole:1,bestLap:1,minPct:75,ignoreWorst:0},
+    data:{
+      sessions:[{
+        date:'2026-11-18T20:55:00.000Z',track:'charade_test',trackConfig:'gp',type:'RACE',
+        results:[{id:'p1',name:'Alice',laps:5,best:91200},{id:'p2',name:'Bob',laps:5,best:91900}],
+        laps:[{id:'p1',time:91200,sectors:[28100,32400,30700],cuts:0}],
+        events:[{type:'COLLISION_WITH_CAR',a:'Alice',b:'Bob',aid:'p1',bid:'p2',speed:22,WorldPosition:{X:120,Z:240}}]
+      }],
+      circuitRounds:[{
+        id:'local:2026-11-18:charade_test',round:1,label:'M1',name:'Charade',shortName:'Charade',
+        trackId:'charade_test',localTrackId:'charade_test',localLayoutId:'',date:'2026-11-18',
+        lengthM:3521,lengthStr:'3,521 km',
+        outline:{path:'M0 0 L100 100 Z',viewBox:'0 0 1000 560',samples:[],sectors:[],corners:[]},
+        sectorSplits:[{label:'S1',from:0,to:1174},{label:'S2',from:1174,to:2347},{label:'S3',from:2347,to:3521}],
+        surfaces:[],status:'done'
+      }]
+    }
+  };
+  const {sandbox,getElementById}=makeBrowser([remote],(url,opts)=>{
+    if(url==='/api/events/open-noproj'&&(!opts||!opts.method||opts.method==='GET'))return response(remote);
+    return null;
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext("loadEvent('open-noproj')",sandbox);
+  vm.runInContext("adminAuth=true;adminToken='tok'",sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  vm.runInContext("page='circuit';setCircMode('collisions')",sandbox);
+  const html=getElementById('app').innerHTML;
+  assert.match(html,/Tracé importé sans repère GPS/);
+  assert.match(html,/Position indisponible \(tracé sans repère GPS\)/);
+  assert.match(html,/refreshCircuitRoundFromInspector/);
+});
+
+
 
