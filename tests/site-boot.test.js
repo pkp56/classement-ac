@@ -1357,30 +1357,11 @@ test('Fiche Voiture Kunos : logo importé, métadonnées skins/skin.ini et impor
   assert.match(html,/car-sheet-logo/);
   assert.match(html,/skin\.ini/);
 
-  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin'",sandbox);
-  getElementById('car-files-import').files=[
-    {name:'body_shadow.png',text:async()=>''},
-    {name:'skin.ini',text:async()=>'[driver_60]\n[CREW]\nBRAND=\\alfa\n'},
-    {name:'car.ini',text:async()=>'[INFO]\nSCREEN_NAME=Alfa Romeo Giulia Sprint GTA\n[BASIC]\nTOTALMASS=745\n'}
-  ];
-  await vm.runInContext('importCarFilesFromInput()',sandbox);
-  const post=calls.filter(c=>c.url==='/api/events/alfa-gta/data'&&c.method==='POST').at(-1);
-  assert.equal(post.body.carSheets[0].specs.weight,'745 kg');
-  assert.equal(post.body.carSheets[0].logo,logo);
-
-  getElementById('car-files-import').files=[
-    {name:'ui_car.json',text:async()=>'{\r\n"name":"Alfa Romeo GTA",\r\n"brand":"Alfa Romeo",\r\n"description":"L1<br/><br/>\r\n\tL2",\r\n"class":"race",\r\n"specs":{"bhp":"170bhp","range":79,},\r\n"powerCurve":[["0","0"],["7500","174"]]\r\n}'}
-  ];
-  await vm.runInContext('importCarFilesFromInput()',sandbox);
-  const postUi=calls.filter(c=>c.url==='/api/events/alfa-gta/data'&&c.method==='POST').at(-1);
-  assert.equal(postUi.body.carSheets[0].name,'Alfa Romeo GTA');
-  assert.equal(postUi.body.carSheets[0].country,'Italie');
-  assert.equal(postUi.body.carSheets[0].specs.bhp,'170bhp');
-  assert.equal(postUi.body.carSheets[0].specs.range,'79');
-  assert.equal(postUi.body.carSheets[0].metadataSource,'ui_car');
+  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin';adminTab='events';page='admin';render()",sandbox);
+  assert.doesNotMatch(getElementById('app').innerHTML,/car-files-import|track-files-import/);
 });
 
-test('Fiche Circuit estimée depuis cameras.ini et import manuel de fichiers circuit AC', async () => {
+test('Fiche Circuit estimée depuis cameras.ini sans imports manuels', async () => {
   let remote={slug:'prague-cup',name:'Prague Cup',kind:'cup',points_config:{},data:{
     circuitRounds:[{
       id:'local:undated:prague',round:1,label:'M1',name:'Prague',shortName:'Prague',trackId:'prague',layoutId:'',
@@ -1394,15 +1375,8 @@ test('Fiche Circuit estimée depuis cameras.ini et import manuel de fichiers cir
       approximateOutline:true,outlineSource:'cameras.ini',technicalUnavailable:false,status:'upcoming'
     }]
   }};
-  const {sandbox,getElementById,calls}=makeBrowser([remote],(url,opts)=>{
-    if(url==='/api/events/prague-cup'&&(!opts||!opts.method||opts.method==='GET'))return response(remote);
-    if(url==='/api/events/prague-cup/data'&&opts.method==='POST'){
-      remote={...remote,data:opts.body};
-      return response({ok:true});
-    }
-    if(url==='/api/admin/circuits/import-files'&&opts.method==='POST'){
-      return response({ok:true,round:{...remote.data.circuitRounds[0],name:'Prague · Short',lengthM:4100,lengthStr:'4,100 km'}});
-    }
+  const {sandbox,getElementById}=makeBrowser([remote],(url)=>{
+    if(url==='/api/events/prague-cup')return response(remote);
     return null;
   });
   await new Promise(resolve=>setImmediate(resolve));
@@ -1413,14 +1387,101 @@ test('Fiche Circuit estimée depuis cameras.ini et import manuel de fichiers cir
   assert.match(html,/tracé estimé depuis cameras\.ini/);
   assert.match(html,/5,522 km/);
   assert.match(html,/Pavés/);
-
-  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin'",sandbox);
-  getElementById('track-files-import').files=[
-    {name:'ext_config.ini',text:async()=>'[ABOUT]\nAUTHOR=Kavoriken\n'}
-  ];
-  await vm.runInContext('importTrackFilesFromInput()',sandbox);
-  const importCall=calls.find(c=>c.url==='/api/admin/circuits/import-files'&&c.method==='POST');
-  assert.equal(importCall.body.files[0].name,'ext_config.ini');
-  const post=calls.filter(c=>c.url==='/api/events/prague-cup/data'&&c.method==='POST').at(-1);
-  assert.equal(post.body.circuitRounds[0].name,'Prague · Short');
 });
+
+test('Manche multi-circuits : calendrier, fiches Circuit, résultats et administration', async () => {
+  const catalog={scannedAt:'2026-11-19T12:00:00Z',sources:[],cars:[],tracks:[
+    {id:'spa/short',trackId:'spa',layoutId:'short',name:'Spa court',country:'Belgique',length:'4.26 km',metadataAvailable:true},
+    {id:'monza/gp',trackId:'monza',layoutId:'gp',name:'Monza GP',country:'Italie',length:'5.79 km',metadataAvailable:true}
+  ],warnings:[]};
+  let remote={
+    slug:'multi-circuit-cup',name:'Multi Circuit Cup',kind:'cup',points_config:{},
+    data:{
+      sessions:[
+        {date:'2027-03-10T20:00:00Z',type:'RACE',track:'spa',results:[{id:'p1',name:'Alice',team:'Red',best:90000,laps:10,totalTime:900000,grid:1}]},
+        {date:'2027-03-10T21:00:00Z',type:'RACE',track:'monza',results:[{id:'p1',name:'Alice',team:'Red',best:105000,laps:10,totalTime:1050000,grid:1}]}
+      ],
+      penMap:{}
+    }
+  };
+  const {sandbox,getElementById}=makeBrowser([remote],(url,opts)=>{
+    if(url==='/api/events/multi-circuit-cup'&&(!opts||!opts.method||opts.method==='GET'))return response(remote);
+    if(url==='/api/events/multi-circuit-cup/data'&&opts.method==='POST'){
+      remote={...remote,data:JSON.parse(opts.body)};
+      return response({ok:true});
+    }
+    if(url.startsWith('/api/admin/local-mods'))return response(catalog);
+    if(url==='/api/admin/circuits/import-local'){
+      const body=JSON.parse(opts.body);
+      const isMonza=body.trackId==='monza';
+      return response({ok:true,round:{
+        id:`local:${body.date||'undated'}:${body.trackId}/${body.layoutId}`,
+        date:body.date||null,
+        name:isMonza?'Monza GP':'Spa court',
+        shortName:isMonza?'Monza':'Spa',
+        round:body.round||1,
+        label:`M${body.round||1}`,
+        trackId:body.trackId,localTrackId:body.trackId,
+        layoutId:body.layoutId,localLayoutId:body.layoutId,
+        lengthM:isMonza?5793:4260,lengthStr:isMonza?'5,793 km':'4,260 km',
+        elevation:{min:0,max:20,delta:20},
+        outline:{path:'M0 0 L10 10 Z',viewBox:'0 0 100 100',samples:[],sectors:[],corners:[]},
+        profile:{path:'M0 10 L10 5',closed:'M0 10 L10 5 L10 120 L0 120 Z',min:0,max:20,delta:20},
+        sectorSplits:[{label:'S1',from:0,to:2000}],surfaces:[],status:'upcoming'
+      },warnings:[]});
+    }
+    return null;
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext("loadEvent('multi-circuit-cup')",sandbox);
+
+  // 1. rounds() regroupe les 2 sessions du 2027-03-10 et expose les 2 circuits
+  const rs=vm.runInContext('rounds()',sandbox);
+  assert.equal(rs.length,1);
+  assert.equal(rs[0].tracks.length,2);
+  assert.match(rs[0].track,/spa/i);
+  assert.match(rs[0].track,/monza/i);
+
+  // 2. Ajout de 2 circuits dans la même manche via queueLocalModTrack + addLocalModRound
+  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin';adminTab='events';page='admin'",sandbox);
+  await vm.runInContext('loadLocalMods(true)',sandbox);
+  getElementById('local-mod-track').value='spa/short';
+  vm.runInContext('queueLocalModTrack()',sandbox);
+  getElementById('local-mod-track').value='monza/gp';
+  getElementById('local-mod-date').value='2027-03-10';
+  await vm.runInContext('addLocalModRound()',sandbox);
+
+  assert.equal(remote.data.customCalendar['2027-03-10'].tracks.length,2);
+  assert.equal(remote.data.circuitRounds.length,2);
+  assert.equal(remote.data.circuitRounds[0].round,1);
+  assert.equal(remote.data.circuitRounds[1].round,1,'les 2 circuits partagent le même numéro de manche M1');
+
+  // 3. Onglet Circuit affiche les 2 pastilles M1 · 1/2 et M1 · 2/2 et bascule bien vers le 2e circuit
+  vm.runInContext('circuitsCache=null',sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  vm.runInContext("page='circuit';setCircuitRound(1)",sandbox);
+  assert.match(getElementById('app').innerHTML,/M1 · 1\/2/);
+  assert.match(getElementById('app').innerHTML,/M1 · 2\/2/);
+  assert.match(getElementById('app').innerHTML,/4,260 km/);
+  vm.runInContext('setCircuitRound(2)',sandbox);
+  assert.match(getElementById('app').innerHTML,/5,793 km/);
+
+  // 4. Depuis la 2e fiche circuit, openCircuitRoundResult(1) ouvre directement la 2e session (Monza)
+  vm.runInContext('openCircuitRoundResult(1)',sandbox);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(vm.runInContext('round',sandbox),0);
+  assert.equal(vm.runInContext('sessionIndex',sandbox),1);
+  assert.match(getElementById('app').innerHTML,/<h2>[^<]*Monza/i);
+
+  // 5. Ajout d'une manche planifiée multi-circuits par addRound / addCircuitToPlannedRound / removeCircuitFromPlannedRound
+  let prompts=['2027-04-14','spa_1970, monza'];
+  sandbox.prompt=()=>prompts.shift()??null;
+  await vm.runInContext('addRound()',sandbox);
+  assert.equal(vm.runInContext("customCalendar['2027-04-14'].tracks.length",sandbox),2);
+  prompts=['mugello'];
+  await vm.runInContext("addCircuitToPlannedRound('2027-04-14')",sandbox);
+  assert.equal(vm.runInContext("customCalendar['2027-04-14'].tracks.length",sandbox),3);
+  await vm.runInContext("removeCircuitFromPlannedRound('2027-04-14',1)",sandbox);
+  assert.deepEqual(Array.from(vm.runInContext("customCalendar['2027-04-14'].tracks.map(t=>t.trackId)",sandbox)),['spa_1970','mugello']);
+});
+
