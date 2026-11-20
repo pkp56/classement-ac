@@ -1367,6 +1367,17 @@ test('Fiche Voiture Kunos : logo importé, métadonnées skins/skin.ini et impor
   const post=calls.filter(c=>c.url==='/api/events/alfa-gta/data'&&c.method==='POST').at(-1);
   assert.equal(post.body.carSheets[0].specs.weight,'745 kg');
   assert.equal(post.body.carSheets[0].logo,logo);
+
+  getElementById('car-files-import').files=[
+    {name:'ui_car.json',text:async()=>'{\r\n"name":"Alfa Romeo GTA",\r\n"brand":"Alfa Romeo",\r\n"description":"L1<br/><br/>\r\n\tL2",\r\n"class":"race",\r\n"specs":{"bhp":"170bhp","range":79,},\r\n"powerCurve":[["0","0"],["7500","174"]]\r\n}'}
+  ];
+  await vm.runInContext('importCarFilesFromInput()',sandbox);
+  const postUi=calls.filter(c=>c.url==='/api/events/alfa-gta/data'&&c.method==='POST').at(-1);
+  assert.equal(postUi.body.carSheets[0].name,'Alfa Romeo GTA');
+  assert.equal(postUi.body.carSheets[0].country,'Italie');
+  assert.equal(postUi.body.carSheets[0].specs.bhp,'170bhp');
+  assert.equal(postUi.body.carSheets[0].specs.range,'79');
+  assert.equal(postUi.body.carSheets[0].metadataSource,'ui_car');
 });
 
 test('Fiche Circuit estimée depuis cameras.ini et import manuel de fichiers circuit AC', async () => {

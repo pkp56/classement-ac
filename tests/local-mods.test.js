@@ -181,3 +181,30 @@ test('circuit sans ui_track.json : découvre les variantes depuis models_*.ini e
   assert.equal(r.tracks[0].author,'Kavoriken, leBluem');
   assert.equal(r.tracks[0].metadataAvailable,true);
 });
+
+test('scanCatalog : accepte les ui_car.json Kunos avec retours à la ligne littéraux (ks_alfa_romeo_gta)',async t=>{
+  const {c,write}=await fixture(t);
+  await write(c,'cars/ks_alfa_romeo_gta/ui/ui_car.json',
+    '{\r\n\t"name": "Alfa Romeo GTA",\r\n\t"brand": "Alfa Romeo",\r\n\t"description": "Première ligne.<br/><br/>\r\n\t\r\n\tDeuxième ligne.",\r\n\t"tags": ["#Vintage Touring", "rwd", "italy", ],\r\n\t"class": "race",\r\n\t"specs": {\r\n\t\t"bhp": "170bhp",\r\n\t\t"torque": "200Nm",\r\n\t\t"weight": "750kg",\r\n\t\t"topspeed": "210+km/h",\r\n\t\t"acceleration": "--s 0-100",\r\n\t\t"pwratio": "4.41kg/hp",\r\n\t\t"range": 79\r\n\t},\r\n\t"torqueCurve": [["0","0"],["5500","200"]],\r\n\t"powerCurve": [["0","0"],["7500","174"]]\r\n}');
+  await write(c,'cars/ks_alfa_romeo_gta/skins/01_red/skin.ini','[DRIVER_60]\n[CREW]\nBRAND=\\alfa\n');
+  const r=await scanCatalog([c]);
+  assert.deepEqual(r.warnings,[]);
+  assert.equal(r.cars.length,1);
+  const car=r.cars[0];
+  assert.equal(car.id,'ks_alfa_romeo_gta');
+  assert.equal(car.name,'Alfa Romeo GTA');
+  assert.equal(car.brand,'Alfa Romeo');
+  assert.equal(car.category,'race');
+  assert.equal(car.country,'Italie');
+  assert.equal(car.author,'Kunos Simulazioni');
+  assert.equal(car.year,'Années 1960');
+  assert.equal(car.metadataSource,'ui_car');
+  assert.equal(car.metadataAvailable,true);
+  assert.match(car.description,/Première ligne\.\n\nDeuxième ligne\./);
+  assert.equal(car.specs.bhp,'170bhp');
+  assert.equal(car.specs.weight,'750kg');
+  assert.equal(car.specs.range,'79');
+  assert.equal(car.powerCurve.length,2);
+  assert.equal(car.torqueCurve.length,2);
+});
+
