@@ -410,8 +410,72 @@ function rounds(){
   const typeOrder={QUALIFY:0,RACE:1,PRACTICE:2};
   return [...byDate.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([d,list],i)=>{
     list.sort((a,b)=>(typeOrder[a.type]??9)-(typeOrder[b.type]??9)||String(a.date||'').localeCompare(String(b.date||'')));
-    return{date:d,sessions:list,track:track(list[0].track),number:i+1};
+    const tracks=[...new Set(list.map(s=>track(s.track)).filter(Boolean))];
+    return{date:d,sessions:list,track:tracks.join(' · ')||track(list[0].track),tracks,number:i+1};
   });
+}
+function normalizeCalendarTrackEntry(item){
+  if(typeof item==='string'){
+    const raw=item.trim();
+    if(!raw)return null;
+    const parts=raw.split('/');
+    const trackId=parts[0]||'';
+    const layoutId=parts.length>1?parts.slice(1).join('/'):'';
+    return {id:raw,trackId,layoutId,trackName:'',country:'',length:''};
+  }
+  if(!item||typeof item!=='object')return null;
+  const rawId=String(item.id||item.trackId||item.track||'').trim();
+  const parts=rawId.split('/');
+  const trackId=String(item.trackId||item.track||parts[0]||'').trim();
+  const layoutId=String(item.layoutId!=null?item.layoutId:(item.layout!=null?item.layout:(parts.length>1?parts.slice(1).join('/'):''))).trim();
+  if(!trackId)return null;
+  const id=rawId&&rawId.includes('/')?rawId:(trackId+(layoutId?'/'+layoutId:''));
+  return {
+    id,
+    trackId,
+    layoutId,
+    trackName:String(item.trackName||item.name||'').trim(),
+    country:String(item.country||'').trim(),
+    length:String(item.length||'').trim()
+  };
+}
+function calendarRoundTracks(entry){
+  if(!entry)return [];
+  const rawList=Array.isArray(entry)?entry:(Array.isArray(entry.tracks)&&entry.tracks.length?entry.tracks:[entry]);
+  const out=[],seen=new Set();
+  for(const item of rawList){
+    const norm=normalizeCalendarTrackEntry(item);
+    if(!norm)continue;
+    const key=norm.trackId.toLowerCase()+'/'+(norm.layoutId||'').toLowerCase();
+    if(seen.has(key))continue;
+    seen.add(key);
+    out.push(norm);
+  }
+  return out;
+}
+function calendarRoundLabel(entry){
+  const list=calendarRoundTracks(entry);
+  if(!list.length)return 'Circuit à annoncer';
+  return list.map(t=>t.trackName||track(t.trackId||t.id)).filter(Boolean).join(' · ')||'Circuit à annoncer';
+}
+function mergeCalendarRoundTracks(existing,incoming){
+  const merged=[];
+  const seen=new Set();
+  for(const item of [...calendarRoundTracks(existing),...(Array.isArray(incoming)?incoming:[incoming]).map(normalizeCalendarTrackEntry).filter(Boolean)]){
+    const key=item.trackId.toLowerCase()+'/'+(item.layoutId||'').toLowerCase();
+    if(seen.has(key))continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  if(!merged.length)return null;
+  const first=merged[0];
+  const label=merged.map(t=>t.trackName||track(t.trackId||t.id)).filter(Boolean).join(' · ');
+  return {
+    track:first.trackId,
+    layout:first.layoutId,
+    trackName:label||first.trackName||first.trackId,
+    tracks:merged
+  };
 }
 function allDrivers(){let map=new Map;for(const s of sessions)for(const r of s.results){if(!map.has(r.id))map.set(r.id,{...r});}return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name))}
 function info(){return ''}
@@ -1492,7 +1556,7 @@ function eventHome(){
     ?Object.entries(customCalendar)
       .filter(([dt,val])=>dt&&val&&!importedDates.has(String(dt).slice(0,10)))
       .sort(([a],[b])=>a.localeCompare(b))
-      .map(([dt,val])=>({date:dt,track:val.trackName||val.track||'Circuit à annoncer'}))
+      .map(([dt,val])=>({date:dt,track:calendarRoundLabel(val)}))
     :[];
   const isLola=!ev.slug||ev.slug===LEGACY_DEFAULT_SLUG||ev.slug===ACTIVE_LOLA_SLUG;
   const totalExpected=Number(cfg.expectedRounds)||(isLola?Math.max(6,rs.length+plannedExtras.length):(rs.length+plannedExtras.length));
@@ -1548,7 +1612,7 @@ function eventHome(){
   });
   plannedExtras.forEach((p,idx)=>{
     const mNum=rs.length+idx+1;
-    calRows.push(`<div class="ev-cal-row"><div class="ev-cal-num">M${mNum}</div><div><b>${esc(track(p.track))}</b> &nbsp; <span class="muted">· Programmée</span><div class="muted" style="margin-top:2px">${date(p.date)}</div></div><div><span class="tag" style="background:#efe6d0;color:#6d726c">À VENIR</span></div></div>`);
+    calRows.push(`<div class="ev-cal-row"><div class="ev-cal-num">M${mNum}</div><div><b>${esc(p.track)}</b> &nbsp; <span class="muted">· Programmée</span><div class="muted" style="margin-top:2px">${date(p.date)}</div></div><div><span class="tag" style="background:#efe6d0;color:#6d726c">À VENIR</span></div></div>`);
   });
 
   const calendarPanel=`<div class="panel"><div class="eyebrow">Programme de la saison</div><h2 style="margin-top:4px">Calendrier des manches</h2>${calRows.length?`<div>${calRows.join('')}</div>`:`<p class="note">Aucune manche programmée ou importée pour l'instant.</p>`}</div>`;
@@ -1722,14 +1786,52 @@ function mergeCircuitRounds(base, extra){
   const key = r => (Number.isFinite(Number(r && r.round)) && Number(r.round) > 0)
     ? 'n' + Number(r.round)
     : 'k' + String((r && (r.id || r.name)) || '');
+  const sameFiche = (a, b) => {
+    if (!a || !b) return false;
+    if (a.id && b.id && a.id === b.id) return true;
+    const aT = String(a.trackId || a.localTrackId || a.driverFolder || '').toLowerCase();
+    const bT = String(b.trackId || b.localTrackId || b.driverFolder || '').toLowerCase();
+    const aL = String(a.layoutId || a.localLayoutId || '').toLowerCase();
+    const bL = String(b.layoutId || b.localLayoutId || '').toLowerCase();
+    const aD = String(a.date || '').slice(0, 10), bD = String(b.date || '').slice(0, 10);
+    return !!aT && aT === bT && aL === bL && (!aD || !bD || aD === bD);
+  };
   for (const r of base) byRound.set(key(r), r);
-  for (const r of extra) byRound.set(key(r), { ...byRound.get(key(r)), ...r, imported: true });
+  const extraCountByRound = new Map();
+  for (const r of extra) {
+    const n = Number(r && r.round);
+    if (Number.isFinite(n) && n > 0) extraCountByRound.set(n, (extraCountByRound.get(n) || 0) + 1);
+  }
+  extra.forEach((r, idx) => {
+    const k = key(r);
+    const existing = byRound.get(k);
+    const n = Number(r && r.round);
+    if (!existing) {
+      byRound.set(k, { ...r, imported: true });
+      return;
+    }
+    if ((!existing.imported && (extraCountByRound.get(n) || 0) === 1) || sameFiche(existing, r)) {
+      byRound.set(k, { ...existing, ...r, imported: true });
+      return;
+    }
+    for (const [ek, ev] of byRound.entries()) {
+      if (sameFiche(ev, r)) {
+        byRound.set(ek, { ...ev, ...r, imported: true });
+        return;
+      }
+    }
+    const uniqueKey = `${k}:${String((r && (r.id || r.trackId || r.name)) || idx)}`;
+    byRound.set(uniqueKey, { ...r, imported: true });
+  });
   const hasRound = r => Number.isFinite(Number(r && r.round)) && Number(r.round) > 0;
   const sorted = [...byRound.values()].sort((a, b) => {
     const ra = Number(a.round), rb = Number(b.round);
     if (hasRound(a) && hasRound(b) && ra !== rb) return ra - rb;
     // Les manches sans numéro passent après celles qui en ont un.
     if (hasRound(a) !== hasRound(b)) return hasRound(a) ? -1 : 1;
+    const da = String(a.date || ''), db = String(b.date || '');
+    if (da !== db) return da.localeCompare(db);
+    if (hasRound(a) && hasRound(b) && ra === rb) return 0;
     return String(a.name || '').localeCompare(String(b.name || ''));
   });
   // Numérotation finale : on garde le numéro fourni, sinon on prend le premier
@@ -1767,14 +1869,15 @@ function eventCircuitPlaceholders(existingRounds,data=eventContext?.data||{}){
   };
   Object.entries(calendar).sort(([a],[b])=>String(a).localeCompare(String(b))).forEach(([day,value])=>{
     if(!value||typeof value!=='object')return;
-    const rawId=String(value.id||value.trackId||value.track||'');
-    const parts=rawId.split('/');
-    const trackId=String(value.trackId||parts[0]||'');
-    const layoutId=String(value.layoutId||value.layout||(parts.length>1?parts.slice(1).join('/'):''));
-    add({id:rawId||trackId+(layoutId?'/'+layoutId:''),trackId,layoutId,name:value.trackName||value.name||value.track||rawId,date:day,country:value.country||'',length:value.length||''});
+    for(const entry of calendarRoundTracks(value)){
+      add({id:entry.id,trackId:entry.trackId,layoutId:entry.layoutId,name:entry.trackName||entry.trackId,date:day,country:entry.country||'',length:entry.length||''});
+    }
   });
-  const selected=data.modSelection&&data.modSelection.track;
-  if(selected&&typeof selected==='object'){
+  const selectedTracks=Array.isArray(data.modSelection?.tracks)&&data.modSelection.tracks.length
+    ?data.modSelection.tracks
+    :(data.modSelection?.track&&typeof data.modSelection.track==='object'?[data.modSelection.track]:[]);
+  for(const selected of selectedTracks){
+    if(!selected||typeof selected!=='object')continue;
     const rawId=String(selected.id||selected.trackId||'');
     const parts=rawId.split('/');
     const trackId=String(selected.trackId||parts[0]||'');
@@ -1782,14 +1885,22 @@ function eventCircuitPlaceholders(existingRounds,data=eventContext?.data||{}){
     add({...selected,id:rawId||trackId+(layoutId?'/'+layoutId:''),trackId,layoutId,name:selected.name||rawId});
   }
   const pending=found.filter(candidate=>!existingRounds.some(round=>{
-    if(candidate.date&&String(round.date||'').slice(0,10)===candidate.date)return true;
-    return sameTrack(round,candidate);
+    if(sameTrack(round,candidate))return true;
+    return candidate.date&&String(round.date||'').slice(0,10)===candidate.date&&!(round.trackId||round.driverFolder||round.localTrackId);
   }));
+  const roundByDate=new Map();
+  existingRounds.forEach(row=>{
+    const d=String(row?.date||'').slice(0,10);
+    const n=Number(row?.round);
+    if(d&&Number.isFinite(n)&&n>0&&!roundByDate.has(d))roundByDate.set(d,n);
+  });
   let next=existingRounds.reduce((max,row)=>Math.max(max,Number(row&&row.round)||0),0)+1;
+  const sheetsPool=[...(Array.isArray(data.modSelection?.trackSheets)?data.modSelection.trackSheets:[]),...(data.modSelection?.trackSheet?[data.modSelection.trackSheet]:[])];
   return pending.sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name,'fr')).map(candidate=>{
-    const number=next++;
-    const sheet=data.modSelection?.trackSheet;
-    if(sheet&&sheet.trackId===candidate.trackId&&(sheet.layoutId||'')===candidate.layoutId){
+    const number=candidate.date&&roundByDate.has(candidate.date)?roundByDate.get(candidate.date):next++;
+    if(candidate.date&&!roundByDate.has(candidate.date))roundByDate.set(candidate.date,number);
+    const sheet=sheetsPool.find(s=>s&&s.trackId===candidate.trackId&&(s.layoutId||'')===candidate.layoutId);
+    if(sheet){
       return {...sheet,id:`selection:${candidate.date||'undated'}:${candidate.id}`,round:number,label:`M${number}`,date:candidate.date||null};
     }
     return {
@@ -1860,9 +1971,18 @@ function openCircuitRoundResult(idx){
   const rs=rounds();
   const target=circuitRoundIndex(r);
   if(target<0)return;
+  const aliases=circuitTrackAliases(r);
+  const targetRound=rs[target];
+  let targetSess=(targetRound&&targetRound.sessions.length>1)?1:0;
+  if(targetRound&&aliases.length){
+    const matchedRace=targetRound.sessions.findIndex(s=>s.type==='RACE'&&aliases.includes(normalizeCircuitTrackName(s.track)));
+    const matchedAny=targetRound.sessions.findIndex(s=>aliases.includes(normalizeCircuitTrackName(s.track)));
+    if(matchedRace>=0)targetSess=matchedRace;
+    else if(matchedAny>=0)targetSess=matchedAny;
+  }
   // `round` est une propriété réservée de window : on passe par la navigation
   // standard (go) puis on sélectionne la manche.
-  const apply=()=>{ round=target; sessionIndex=(rs[target]&&rs[target].sessions.length>1)?1:0; render(); window.scrollTo(0,0); };
+  const apply=()=>{ round=target; sessionIndex=targetSess; render(); window.scrollTo(0,0); };
   Promise.resolve(go('manches')).then(apply,apply);
 }
 // Correspondance entre le dossier du mod (JSON AH / Drive) et les libellés
@@ -1895,11 +2015,21 @@ function circuitRoundSessions(r,circuitList,sessionRounds){
   const rs=Array.isArray(sessionRounds)?sessionRounds:rounds();
   const all=Array.isArray(circuitList)?circuitList:[r];
   const day=String(r.date||'').slice(0,10);
+  const aliases=circuitTrackAliases(r);
   if(day){
     const sameDate=rs.filter(x=>String(x.date||'').slice(0,10)===day);
-    if(sameDate.length)return sameDate;
+    if(sameDate.length){
+      const multiSameDay=all.filter(item=>String(item.date||'').slice(0,10)===day).length>1;
+      if(multiSameDay&&aliases.length){
+        const filtered=sameDate.map(g=>{
+          const matching=g.sessions.filter(s=>aliases.includes(normalizeCircuitTrackName(s.track)));
+          return matching.length?{...g,sessions:matching,track:track(matching[0].track)}:null;
+        }).filter(Boolean);
+        if(filtered.length)return filtered;
+      }
+      return sameDate;
+    }
   }
-  const aliases=circuitTrackAliases(r);
   if(!aliases.length)return [];
   const sameTrackFiches=all.filter(item=>circuitRoundsShareTrack(item,r));
   if(sameTrackFiches.length!==1)return [];
@@ -2093,13 +2223,15 @@ function circuit(){
     ?`<details class="cir-panel" style="margin-bottom:14px"><summary>Sources de la fiche · ${importedFiles.length} fichier(s), ${importWarnings.length} avertissement(s)</summary>${importedFiles.length?`<ul class="cir-src">${importedFiles.map(file=>`<li><code>${esc(file)}</code></li>`).join('')}</ul>`:''}${importWarnings.length?`<ul class="cir-src">${importWarnings.map(warning=>`<li>${esc(warning)}</li>`).join('')}</ul>`:''}</details>`
     :'';
 
-  // --- Bandeau des manches : une pastille cliquable par manche ---
+  // --- Bandeau des manches : une pastille cliquable par circuit (plusieurs possibles par manche) ---
   const calendar = rounds.map((r, i) => {
     const cls = ['cir-round-pill',
       r.status === 'done' ? 'done' : 'next',
       i === idx ? 'selected' : ''].filter(Boolean).join(' ');
-    return `<button type="button" class="${cls}" onclick="setCircuitRound(${r.round})" title="${esc(r.name)}">`
-      + `<b>${esc(r.label)}</b><span>${esc(r.shortName || r.name)}</span>`
+    const peers = rounds.filter(item => item.round === r.round);
+    const peerLabel = peers.length > 1 ? `${r.label} · ${peers.indexOf(r) + 1}/${peers.length}` : r.label;
+    return `<button type="button" class="${cls}" onclick="setCircuitRound(${i + 1})" title="${esc(r.name)}">`
+      + `<b>${esc(peerLabel)}</b><span>${esc(r.shortName || r.name)}</span>`
       + `<span class="cir-round-state">${esc(circuitStatusLabel(r))} · ${esc(circuitDateLabel(r))}</span></button>`;
   }).join('');
 
@@ -2404,7 +2536,7 @@ function manche(){
   const headers=s.type==='QUALIFY'
     ?['Pos.','Pilote','Équipe','Tours','Meilleur tour','Pénal.','Pts']
     :['Pos.','Pilote','Équipe','Grille','Tours','Meilleur tour','Pénal.','Écart / tête','Écart / préc.','Pts'];
-  return `${head('résultats','Les manches','Toutes les sessions importées, regroupées par date.')}<div class="controls"><select onchange="round=+this.value;sessionIndex=0;eventtab='resultats';render()">${rs.map((x,i)=>`<option value="${i}" ${i===round?'selected':''}>Manche ${i+1} · ${esc(x.track)}</option>`).join('')}</select><select onchange="sessionIndex=+this.value;eventtab='resultats';render()">${r.sessions.map((x,i)=>`<option value="${i}" ${i===sessionIndex?'selected':''}>${x.type==='QUALIFY'?'Qualification':'Course '+r.sessions.slice(0,i+1).filter(y=>y.type==='RACE').length}</option>`).join('')}</select><span class="tag">${date(r.date)}</span></div>${tabs([['resultats','Résultats'],...(s.type==='RACE'?[['collisions','Collisions entre pilotes']]:[])],eventtab,'showevent')}<div class="panel">${eventtab==='collisions'?`<h2>Incidents enregistrés</h2><p class="note">Événements bruts entre voitures en course, sans attribution de responsabilité.</p>${table(['#','Pilote','Autre pilote','Vitesse','Temps de course'],eventrows)}`:`<h2>${esc(r.track)} · ${s.type==='QUALIFY'?'Qualification':'Course'}</h2><p class="note">Classement officiel : meilleur tour pour les qualifications, ordre d'arrivée (avec pénalités Commission) pour les courses.</p>${table(headers,resultrows)}`}</div>`;
+  return `${head('résultats','Les manches','Toutes les sessions importées, regroupées par date.')}<div class="controls"><select onchange="round=+this.value;sessionIndex=0;eventtab='resultats';render()">${rs.map((x,i)=>`<option value="${i}" ${i===round?'selected':''}>Manche ${i+1} · ${esc(x.track)}</option>`).join('')}</select><select onchange="sessionIndex=+this.value;eventtab='resultats';render()">${r.sessions.map((x,i)=>`<option value="${i}" ${i===sessionIndex?'selected':''}>${x.type==='QUALIFY'?'Qualification':'Course '+r.sessions.slice(0,i+1).filter(y=>y.type==='RACE').length}${r.tracks&&r.tracks.length>1?' · '+esc(track(x.track)):''}</option>`).join('')}</select><span class="tag">${date(r.date)}</span></div>${tabs([['resultats','Résultats'],...(s.type==='RACE'?[['collisions','Collisions entre pilotes']]:[])],eventtab,'showevent')}<div class="panel">${eventtab==='collisions'?`<h2>Incidents enregistrés</h2><p class="note">Événements bruts entre voitures en course, sans attribution de responsabilité.</p>${table(['#','Pilote','Autre pilote','Vitesse','Temps de course'],eventrows)}`:`<h2>${esc(track(s.track)||r.track)} · ${s.type==='QUALIFY'?'Qualification':'Course'}</h2><p class="note">Classement officiel : meilleur tour pour les qualifications, ordre d'arrivée (avec pénalités Commission) pour les courses.</p>${table(headers,resultrows)}`}</div>`;
 }
 
 // Performance ratings (par week-end : Régularité iRacing, Propreté Option 3, Vitesse Q+R, Résultats v45)
@@ -2858,7 +2990,33 @@ function submitChampPointsAdj(sign){
   addChampionshipPoints(drvId,delta,note);
 }
 function removeAdjustment(key){delete penMap[key];saveState();render()}
-function addRound(){const d=prompt('Date (AAAA-MM-JJ) ?','2026-11-18');if(!d)return;const t=prompt('Circuit (ex: spa_1970) ?','spa_1970');if(!t)return;customCalendar=customCalendar||{};customCalendar[d]={track:t};saveState();render()}
+function addRound(){
+  const d=prompt('Date (AAAA-MM-JJ) ?','2026-11-18');if(!d)return;
+  const raw=prompt('Circuit(s) séparés par des virgules (ex: spa_1970 ou spa_1970, monza) ?','spa_1970');if(!raw)return;
+  const entries=raw.split(',').map(s=>s.trim()).filter(Boolean).map(t=>({track:t}));
+  if(!entries.length)return;
+  customCalendar=customCalendar||{};
+  customCalendar[d]=mergeCalendarRoundTracks(customCalendar[d],entries);
+  saveState();render();
+}
+function addCircuitToPlannedRound(dateKey){
+  if(!dateKey)return;
+  const raw=prompt('Ajouter un ou plusieurs circuits à cette manche (séparés par des virgules) :','');
+  if(!raw)return;
+  const entries=raw.split(',').map(s=>s.trim()).filter(Boolean).map(t=>({track:t}));
+  if(!entries.length)return;
+  customCalendar=customCalendar||{};
+  customCalendar[dateKey]=mergeCalendarRoundTracks(customCalendar[dateKey],entries);
+  saveState();render();
+}
+function removeCircuitFromPlannedRound(dateKey,trackIndex){
+  if(!customCalendar||!dateKey||!customCalendar[dateKey])return;
+  const list=calendarRoundTracks(customCalendar[dateKey]);
+  if(list.length<=1){removePlannedRound(dateKey);return;}
+  list.splice(trackIndex,1);
+  customCalendar[dateKey]=mergeCalendarRoundTracks(null,list);
+  saveState();render();
+}
 function removePlannedRound(dateKey){
   if(!customCalendar||!dateKey)return;
   delete customCalendar[dateKey];
@@ -2922,43 +3080,53 @@ async function createEventPrompt(){
   const cfg={pointsScale:scale,polePoints:1,doubleLongRaces:long2,longRaceMinutes:60,minPercentDistance:0.75,jokerCount:joker,globalCoef};
   // Lire les cases au dernier moment : elles représentent exactement le plateau
   // choisi pour ce nouvel événement, sans dépendre d'une ancienne sélection.
-  const chosenMods=readLocalModSelection()||{version:1,cars:[],track:null};
+  const chosenMods=readLocalModSelection()||{version:1,cars:[],track:null,tracks:[]};
+  const chosenTracks=Array.isArray(chosenMods.tracks)&&chosenMods.tracks.length?chosenMods.tracks:(chosenMods.track?[chosenMods.track]:[]);
   const plannedDate=document.getElementById('local-mod-date')?.value||'';
 
-  let localCircuitImport=null,localCircuitError='';
-  if(chosenMods?.track){
+  const localImports=[];
+  let localCircuitError='';
+  if(chosenTracks.length){
     const statusEl=document.getElementById('event-poster-status');
     if(statusEl){statusEl.style.color='#132d35';statusEl.textContent='⏳ Lecture des fichiers locaux du circuit…';}
-    try{localCircuitImport=await requestLocalCircuitImport(chosenMods.track,plannedDate,1);}
-    catch(error){localCircuitError=error.message||String(error);}
+    for(const trk of chosenTracks){
+      try{localImports.push(await requestLocalCircuitImport(trk,plannedDate,1));}
+      catch(error){if(!localCircuitError)localCircuitError=error.message||String(error);}
+    }
   }
 
   try{await importSelectedLiveries(chosenMods.cars);}catch(error){return alert('Création interrompue : '+error.message);}
   markEventSlugDeleted(slugIn,false);
   const initialData={};
-  if(chosenMods&&(chosenMods.cars.length||chosenMods.track)){
+  if(chosenMods&&(chosenMods.cars.length||chosenTracks.length)){
     initialData.modSelection=chosenMods;
     if(chosenMods.cars.length){
       initialData.eventInfo={car:chosenMods.cars.map(c=>c.name).join(' / ')};
       initialData.carSheets=chosenMods.cars.map(localCarSnapshot);
     }
-    if(plannedDate&&chosenMods.track)initialData.customCalendar={[plannedDate]:{track:chosenMods.track.trackId,layout:chosenMods.track.layoutId,trackName:chosenMods.track.name}};
-    if(localCircuitImport?.round){
-      const fiche={...localCircuitImport.round,round:1,label:'M1'};
-      initialData.circuitRounds=[fiche];
+    if(plannedDate&&chosenTracks.length){
+      initialData.customCalendar={[plannedDate]:mergeCalendarRoundTracks(null,chosenTracks.map(t=>({track:t.trackId,layout:t.layoutId,trackName:t.name})))};
+    }
+    const importedRounds=localImports.filter(x=>x&&x.round).map(x=>({...x.round,round:1,label:'M1'}));
+    if(importedRounds.length){
+      initialData.circuitRounds=importedRounds;
     }
   }
   const r=await apiPost('/api/events',{slug:slugIn,name,kind,pointsConfig:cfg,data:initialData});
   const j=await r.json().catch(()=>({}));
   if(!r.ok)return alert('Erreur : '+(j.error||r.status));
+  localModQueuedTracks=[];localModQueuedSlug=slugIn;
   // Reload events list
   const lst=await apiGet('/api/events');const lj=await lst.json().catch(()=>({}));if(Array.isArray(lj.events))events=filterEventsList(lj.events);
   await switchEvent(slugIn);
   let message='Événement créé. Tu peux maintenant importer ses JSON.';
-  if(chosenMods?.track){
-    if(localCircuitImport?.round)message=`Événement créé. ${localCircuitImport.round.technicalUnavailable?'Une fiche Circuit partielle avec les métadonnées disponibles a été enregistrée.':'La fiche Circuit locale a été importée automatiquement.'}${localCircuitImportDetails(localCircuitImport)} Tu peux maintenant importer les résultats JSON.`;
-    else{
-      const warning=localCircuitImportIssue(localCircuitImport,localCircuitError);
+  if(chosenTracks.length){
+    const firstImport=localImports.find(x=>x&&x.round)||localImports[0]||null;
+    if(firstImport?.round){
+      const countTxt=localImports.filter(x=>x&&x.round).length>1?`${localImports.filter(x=>x&&x.round).length} fiches Circuit importées automatiquement pour M1.`:(firstImport.round.technicalUnavailable?'Une fiche Circuit partielle avec les métadonnées disponibles a été enregistrée.':'La fiche Circuit locale a été importée automatiquement.');
+      message=`Événement créé. ${countTxt}${localCircuitImportDetails(firstImport)} Tu peux maintenant importer les résultats JSON.`;
+    }else{
+      const warning=localCircuitImportIssue(firstImport,localCircuitError);
       message=`Événement créé. La fiche Circuit n’a pas pu être importée (${warning}).${plannedDate?' L’entrée au calendrier est conservée.':''}`;
     }
   }
@@ -3665,7 +3833,10 @@ async function removeEventGalleryImage(idx){
 }
 
 // Catalogue local : métadonnées uniquement, jamais les fichiers des mods.
-let localModsCatalog=null,localModsBusy=false,localModsMessage='';
+let localModsCatalog=null,localModsBusy=false,localModsMessage='',localModQueuedTracks=[],localModQueuedSlug=null;
+function syncLocalModQueueScope(){
+  if(localModQueuedSlug!==currentSlug){localModQueuedTracks=[];localModQueuedSlug=currentSlug;}
+}
 async function loadLocalMods(scan=false){
   if(!adminAuth||localModsBusy)return;
   localModsBusy=true;localModsMessage='';render();
@@ -3679,10 +3850,12 @@ async function loadLocalMods(scan=false){
   finally{localModsBusy=false;render();}
 }
 function localModChoices(){
+  syncLocalModQueueScope();
   const saved=eventContext?.data?.modSelection||{};
   const cars=[...(localModsCatalog?.cars||[])],tracks=[...(localModsCatalog?.tracks||[])];
   for(const car of saved.cars||[])if(!cars.some(x=>x.id===car.id))cars.push({...car,unavailable:true});
-  if(saved.track&&!tracks.some(x=>x.id===saved.track.id))tracks.push({...saved.track,unavailable:true});
+  const savedTracks=Array.isArray(saved.tracks)&&saved.tracks.length?saved.tracks:(saved.track?[saved.track]:[]);
+  for(const st of savedTracks)if(st&&!tracks.some(x=>x.id===st.id))tracks.push({...st,unavailable:true});
   return {cars,tracks,saved};
 }
 function localCarCurveSnapshot(value,metric){
@@ -3742,11 +3915,44 @@ function updateLocalModCount(){
   if(count)count.textContent=String(selectedLocalCarIds().size);
 }
 function readLocalModSelection(){
+  syncLocalModQueueScope();
   const carsBox=document.getElementById('local-mod-cars'),trackSelect=document.getElementById('local-mod-track');
   if(!carsBox||!trackSelect)return null;
   const choices=localModChoices(),ids=selectedLocalCarIds();
-  return {version:1,cars:choices.cars.filter(car=>ids.has(car.id)).map(localCarSnapshot),
-    track:(()=>{const t=choices.tracks.find(item=>item.id===trackSelect.value);return t?{id:t.id,trackId:t.trackId,layoutId:t.layoutId,name:t.name,country:t.country||'',length:t.length||'',metadataAvailable:t.metadataAvailable===true}:null;})()};
+  const toSnapshot=t=>({id:t.id,trackId:t.trackId,layoutId:t.layoutId,name:t.name,country:t.country||'',length:t.length||'',metadataAvailable:t.metadataAvailable===true});
+  const pickedTracks=[],seenTracks=new Set();
+  for(const qt of localModQueuedTracks){
+    const found=choices.tracks.find(item=>item.id===qt.id)||qt;
+    if(found&&!seenTracks.has(found.id)){seenTracks.add(found.id);pickedTracks.push(toSnapshot(found));}
+  }
+  if(trackSelect.value&&!seenTracks.has(trackSelect.value)){
+    const found=choices.tracks.find(item=>item.id===trackSelect.value);
+    if(found){seenTracks.add(found.id);pickedTracks.push(toSnapshot(found));}
+  }
+  return {
+    version:1,
+    cars:choices.cars.filter(car=>ids.has(car.id)).map(localCarSnapshot),
+    track:pickedTracks[0]||null,
+    tracks:pickedTracks
+  };
+}
+function queueLocalModTrack(){
+  syncLocalModQueueScope();
+  const trackSelect=document.getElementById('local-mod-track');
+  if(!trackSelect||!trackSelect.value)return;
+  const {tracks}=localModChoices();
+  const found=tracks.find(item=>item.id===trackSelect.value);
+  if(!found)return;
+  if(!localModQueuedTracks.some(x=>x.id===found.id)){
+    localModQueuedTracks.push({id:found.id,trackId:found.trackId,layoutId:found.layoutId,name:found.name,country:found.country||'',length:found.length||'',metadataAvailable:found.metadataAvailable===true});
+  }
+  trackSelect.value='';
+  render();
+}
+function unqueueLocalModTrack(idx){
+  syncLocalModQueueScope();
+  localModQueuedTracks.splice(idx,1);
+  render();
 }
 async function requestLocalCircuitImport(track,dateKey,roundNumber){
   const id=String(track?.id||'');
@@ -3771,11 +3977,16 @@ function localCircuitImportDetails(result){
     :'';
   return completeness+(warnings.length?` Avertissements : ${warnings.slice(0,2).join(' ; ')}${warnings.length>2?'…':''}`:'');
 }
-function nextCircuitRoundNumber(data){
-  let highest=isLolaEvent()?6:0;
+function nextCircuitRoundNumber(data,dateKey){
+  const cleanDate=dateKey?String(dateKey).slice(0,10):'';
   const rows=Array.isArray(data?.circuitRounds)?data.circuitRounds:[];
-  rows.forEach(row=>{const n=Number(row&&row.round);if(Number.isInteger(n)&&n>highest)highest=n;});
   const cached=circuitsCache&&Array.isArray(circuitsCache.rounds)?circuitsCache.rounds:[];
+  if(cleanDate){
+    const sameDateFiche=[...rows,...cached].find(row=>row&&String(row.date||'').slice(0,10)===cleanDate&&Number.isInteger(Number(row.round))&&Number(row.round)>0);
+    if(sameDateFiche)return Number(sameDateFiche.round);
+  }
+  let highest=isLolaEvent()?6:0;
+  rows.forEach(row=>{const n=Number(row&&row.round);if(Number.isInteger(n)&&n>highest)highest=n;});
   cached.forEach(row=>{const n=Number(row&&row.round);if(Number.isInteger(n)&&n>highest)highest=n;});
   return highest+1;
 }
@@ -3785,7 +3996,7 @@ function upsertLocalCircuitRound(data,incoming){
   const index=incoming.id?rows.findIndex(row=>row&&row.id===incoming.id):-1;
   if(index>=0)rows[index]={...rows[index],...incoming};
   else rows.push(incoming);
-  rows.sort((a,b)=>(Number(a.round)||999)-(Number(b.round)||999)||String(a.date||'').localeCompare(String(b.date||''))||String(a.name||'').localeCompare(String(b.name||'')));
+  rows.sort((a,b)=>(Number(a.round)||999)-(Number(b.round)||999)||String(a.date||'').localeCompare(String(b.date||'')));
   data.circuitRounds=rows;
 }
 function filterLocalModOptions(input,selectId){
@@ -3814,227 +4025,35 @@ async function importSelectedLiveries(cars){
     else if(!car.logo&&saved?.logo)car.logo=saved.logo;
   }
 }
-const CLIENT_KUNOS_BRANDS={
-  alfa:{brand:'Alfa Romeo',country:'Italie'},alfa_romeo:{brand:'Alfa Romeo',country:'Italie'},
-  abarth:{brand:'Abarth',country:'Italie'},aston:{brand:'Aston Martin',country:'Grande-Bretagne'},
-  audi:{brand:'Audi',country:'Allemagne'},bmw:{brand:'BMW',country:'Allemagne'},
-  caterham:{brand:'Caterham',country:'Grande-Bretagne'},chevrolet:{brand:'Chevrolet',country:'États-Unis'},
-  corvette:{brand:'Chevrolet',country:'États-Unis'},ferrari:{brand:'Ferrari',country:'Italie'},
-  fiat:{brand:'Fiat',country:'Italie'},ford:{brand:'Ford',country:'États-Unis'},
-  glickenhaus:{brand:'Scuderia Cameron Glickenhaus',country:'États-Unis'},honda:{brand:'Honda',country:'Japon'},
-  jaguar:{brand:'Jaguar',country:'Grande-Bretagne'},ktm:{brand:'KTM',country:'Autriche'},
-  lamborghini:{brand:'Lamborghini',country:'Italie'},lancia:{brand:'Lancia',country:'Italie'},
-  lotus:{brand:'Lotus',country:'Grande-Bretagne'},maserati:{brand:'Maserati',country:'Italie'},
-  mazda:{brand:'Mazda',country:'Japon'},mclaren:{brand:'McLaren',country:'Grande-Bretagne'},
-  mercedes:{brand:'Mercedes-Benz',country:'Allemagne'},mini:{brand:'MINI',country:'Grande-Bretagne'},
-  nissan:{brand:'Nissan',country:'Japon'},pagani:{brand:'Pagani',country:'Italie'},
-  porsche:{brand:'Porsche',country:'Allemagne'},praga:{brand:'Praga',country:'République tchèque'},
-  renault:{brand:'Renault',country:'France'},alpine:{brand:'Alpine',country:'France'},
-  ruf:{brand:'RUF',country:'Allemagne'},shelby:{brand:'Shelby',country:'États-Unis'},
-  subaru:{brand:'Subaru',country:'Japon'},tatuus:{brand:'Tatuus',country:'Italie'},toyota:{brand:'Toyota',country:'Japon'}
-};
-function parseIniClient(raw){
-  const sections={};let current='';
-  for(const line of String(raw||'').replace(/^\uFEFF/,'').split(/\r?\n/)){
-    const s=line.replace(/\s*;.*$/,'').replace(/^\s*;.*$/,'').trim();
-    if(!s)continue;
-    const m=s.match(/^\[([^\]]+)\]$/);
-    if(m){current=m[1].trim().toUpperCase();if(!sections[current])sections[current]={};continue;}
-    const eq=s.indexOf('=');
-    if(eq<=0)continue;
-    if(!sections[current])sections[current]={};
-    sections[current][s.slice(0,eq).trim().toUpperCase()]=s.slice(eq+1).trim();
-  }
-  return sections;
-}
-function compressCarLogoImage(file){
-  return new Promise((resolve,reject)=>{
-    if(!file)return reject(new Error('Aucun fichier logo.'));
-    if(typeof FileReader==='undefined')return reject(new Error('Lecture de fichier non supportée.'));
-    const reader=new FileReader();
-    reader.onerror=()=>reject(new Error('Impossible de lire le logo.'));
-    reader.onload=()=>{
-      const raw=String(reader.result||'');
-      if(!isSafeCarMedia(raw)&&!/^data:image\//i.test(raw))return reject(new Error('Format de logo invalide.'));
-      if(typeof Image==='undefined'||typeof document==='undefined'||!document.createElement)return resolve(raw);
-      const probe=document.createElement('canvas');
-      if(!probe||typeof probe.getContext!=='function')return resolve(raw);
-      const img=new Image();
-      img.onerror=()=>resolve(raw);
-      img.onload=()=>{
-        try{
-          const w0=img.naturalWidth||img.width||128,h0=img.naturalHeight||img.height||128,maxSide=192;
-          let w=w0,h=h0;
-          if(w>maxSide||h>maxSide){const r=Math.min(maxSide/w,maxSide/h);w=Math.max(1,Math.round(w*r));h=Math.max(1,Math.round(h*r));}
-          const c=document.createElement('canvas');c.width=w;c.height=h;
-          c.getContext('2d').drawImage(img,0,0,w,h);
-          const png=c.toDataURL('image/png');
-          resolve(png.length<=450000?png:c.toDataURL('image/webp',0.85));
-        }catch{resolve(raw);}
-      };
-      img.src=raw;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-function parseLenientJsonClient(raw){
-  const clean=String(raw||'').replace(/^\uFEFF/,'');
-  try{return JSON.parse(clean);}catch{
-    let out='',inString=false,escaped=false;
-    for(let i=0;i<clean.length;i++){
-      const ch=clean[i];
-      if(inString){
-        if(escaped){out+=ch;escaped=false;}
-        else if(ch==='\\'){out+=ch;escaped=true;}
-        else if(ch==='"'){out+=ch;inString=false;}
-        else if(ch==='\r'){if(clean[i+1]==='\n')i++;out+='\\n';}
-        else if(ch==='\n'){out+='\\n';}
-        else if(ch==='\t'){out+='\\t';}
-        else if(ch.charCodeAt(0)<0x20){out+=' ';}
-        else{out+=ch;}
-      }else{
-        if(ch==='"'){inString=true;out+=ch;}
-        else if(ch==='/'&&clean[i+1]==='/'){while(i+1<clean.length&&clean[i+1]!=='\n')i++;}
-        else if(ch==='/'&&clean[i+1]==='*'){i+=2;while(i<clean.length&&!(clean[i]==='*'&&clean[i+1]==='/'))i++;i++;}
-        else if(ch===','){
-          let j=i+1;
-          while(j<clean.length&&/\s/.test(clean[j]))j++;
-          if(j<clean.length&&(clean[j]===']'||clean[j]==='}'))continue;
-          out+=ch;
-        }else{out+=ch;}
-      }
-    }
-    return JSON.parse(out);
-  }
-}
-async function importCarFilesFromInput(){
-  if(!adminAuth||!currentSlug)return;
-  const input=document.getElementById('car-files-import');
-  const statusEl=document.getElementById('car-files-status');
-  const targetSel=document.getElementById('car-files-target');
-  const files=Array.from(input?.files||[]);
-  if(!files.length){if(statusEl)statusEl.textContent='Sélectionne un ou plusieurs fichiers (ui_car.json, skin.ini, ui_skin.json, logo.png, preview.jpg, livery.png).';return;}
-  if(statusEl)statusEl.textContent='Analyse des fichiers…';
-  try{
-    const baseSheets=eventCarSheets(eventContext).map(localCarSnapshot);
-    const targetId=targetSel?.value||baseSheets[0]?.id||'kunos-car';
-    const currentCar=baseSheets.find(c=>c.id===targetId)||{id:targetId,name:targetId,specs:{},tags:[],liveries:[],powerCurve:[],torqueCurve:[],metadataAvailable:false};
-    const next={...currentCar,specs:{...(currentCar.specs||{})},tags:[...(currentCar.tags||[])],liveries:[...(currentCar.liveries||[])]};
-    const uiSkinsByKey=new Map(),previewByKey=new Map(),liveryByKey=new Map();
-    const keyOf=name=>{const m=String(name||'').toLowerCase().match(/(?:ui_skin|skin|preview|livery)(.*?)\.(?:json|ini|jpe?g|png)$/i);return m?(m[1]||'_default').replace(/^[-_]+/,''):'_default';};
-    let touched=0;
-    for(const file of files){
-      const lower=String(file.name||'').toLowerCase();
-      if(/^(?:body_shadow|ambient_shadow|tyre_|glass|rim|interior)/.test(lower))continue;
-      if(lower==='ui_car.json'){
-        const data=parseLenientJsonClient(await file.text());
-        if(data&&typeof data==='object'){
-          if(data.name)next.name=String(data.name).trim();
-          if(data.brand)next.brand=String(data.brand).trim();
-          if(data.class||data.category)next.category=String(data.class||data.category).trim();
-          if(data.year!=null&&data.year!=='')next.year=String(data.year).trim();
-          if(data.country)next.country=String(data.country).trim();
-          else if(next.brand){
-            const bk=next.brand.toLowerCase().replace(/[\s-]+/g,'_');
-            if(CLIENT_KUNOS_BRANDS[bk]?.country&&!next.country)next.country=CLIENT_KUNOS_BRANDS[bk].country;
-          }
-          if(data.author)next.author=String(data.author).trim();
-          else if(/^ks[_-]/i.test(next.id)&&!next.author)next.author='Kunos Simulazioni';
-          if(data.version)next.version=String(data.version).trim();
-          if(data.url)next.url=String(data.url).trim();
-          if(data.description)next.description=String(data.description).replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]*>/g,'').replace(/\r\n?/g,'\n').replace(/[ \t]+\n/g,'\n').replace(/\n[ \t]+/g,'\n').replace(/\t+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
-          if(Array.isArray(data.tags))next.tags=data.tags.map(t=>String(t||'').trim()).filter(Boolean).slice(0,12);
-          if(data.specs&&typeof data.specs==='object')for(const k of ['bhp','torque','weight','topspeed','acceleration','pwratio','range'])if(data.specs[k]!=null&&data.specs[k]!=='')next.specs[k]=String(data.specs[k]).trim();
-          const pc=localCarCurveSnapshot(data.powerCurve,'power'),tc=localCarCurveSnapshot(data.torqueCurve,'torque');
-          if(pc.length)next.powerCurve=pc;
-          if(tc.length)next.torqueCurve=tc;
-          next.metadataSource='ui_car';next.metadataAvailable=true;touched++;
-        }
-      }else if(/^skin.*\.ini$/i.test(lower)){
-        const ini=parseIniClient(await file.text());
-        const crewBrand=String(ini.CREW?.BRAND||'').replace(/^[\\/]+/,'').toLowerCase().replace(/[\s-]+/g,'_');
-        const info=CLIENT_KUNOS_BRANDS[crewBrand];
-        if(info){
-          if(!next.brand)next.brand=info.brand;
-          if(!next.country)next.country=info.country;
-          if(!next.author)next.author='Kunos Simulazioni';
-        }
-        const decades={'60':'Années 1960','70':'Années 1970','80':'Années 1980','90':'Années 1990','00':'Années 2000','10':'Années 2010'};
-        for(const sec of Object.keys(ini)){
-          const dm=sec.match(/^DRIVER_(\d{2})$/);
-          if(dm&&decades[dm[1]]&&!next.year)next.year=decades[dm[1]];
-        }
-        if(!next.metadataSource)next.metadataSource='skins';
-        next.metadataAvailable=true;touched++;
-      }else if(/^ui_skin.*\.json$/i.test(lower)){
-        try{
-          const ui=parseLenientJsonClient(await file.text());
-          if(ui&&typeof ui==='object'){uiSkinsByKey.set(keyOf(lower),ui);touched++;}
-        }catch{}
-      }else if(/^(?:logo|badge).*\.(?:png|jpe?g)$/i.test(lower)){
-        next.logo=await compressCarLogoImage(file);
-        if(!next.metadataSource)next.metadataSource='skins';
-        next.metadataAvailable=true;touched++;
-      }else if(/^preview.*\.(?:png|jpe?g)$/i.test(lower)){
-        previewByKey.set(keyOf(lower),await compressPosterImage(file,true));touched++;
-      }else if(/^livery.*\.(?:png|jpe?g)$/i.test(lower)){
-        liveryByKey.set(keyOf(lower),await compressPosterImage(file,true));touched++;
-      }else if(lower==='car.ini'){
-        const ini=parseIniClient(await file.text());
-        if(ini.INFO?.SCREEN_NAME&&!next.metadataSource)next.name=ini.INFO.SCREEN_NAME;
-        const mass=Number(ini.BASIC?.TOTALMASS);
-        if(Number.isFinite(mass)&&mass>100&&mass<10000&&!next.specs.weight)next.specs.weight=Math.round(mass)+' kg';
-        if(!next.metadataSource)next.metadataSource='data';
-        next.metadataAvailable=true;touched++;
-      }else if(lower==='power.lut'){
-        const pts=String(await file.text()).split(/\r?\n/).map(l=>l.split('|')).filter(p=>p.length>=2).map(([x,y])=>({rpm:Number(x),value:Number(y)})).filter(p=>Number.isFinite(p.rpm)&&Number.isFinite(p.value)&&p.rpm>=0&&p.value>=0);
-        if(pts.length>=2){
-          next.torqueCurve=localCarCurveSnapshot(pts,'torque');
-          next.powerCurve=localCarCurveSnapshot(pts.map(p=>({rpm:p.rpm,value:Math.round((p.value*p.rpm/7127)*100)/100})),'power');
-          const maxT=pts.reduce((m,p)=>Math.max(m,p.value),0),maxP=next.powerCurve.reduce((m,p)=>Math.max(m,p.value),0);
-          if(maxT>0&&!next.specs.torque)next.specs.torque=Math.round(maxT)+' Nm';
-          if(maxP>0&&!next.specs.bhp)next.specs.bhp=Math.round(maxP)+' bhp';
-          if(!next.metadataSource)next.metadataSource='data';
-          next.metadataAvailable=true;touched++;
-        }
-      }
-    }
-    const allKeys=new Set([...previewByKey.keys(),...liveryByKey.keys()]);
-    for(const key of [...allKeys].sort()){
-      const image=previewByKey.get(key)||liveryByKey.get(key);
-      if(!image)continue;
-      const ui=uiSkinsByKey.get(key)||null;
-      const rawNum=String(ui?.number??'').trim();
-      const isPlaceholderNum=rawNum==='0'&&!ui?.skinname&&!ui?.team&&!ui?.drivername;
-      const label=String(ui?.skinname||(key==='_default'?'Livrée principale':'Livrée '+key)).trim().slice(0,120);
-      const entry={image,name:label,team:String(ui?.team||'').trim().slice(0,120),number:isPlaceholderNum?'':rawNum.slice(0,16)};
-      if(!next.liveries.some(l=>l.image===entry.image))next.liveries.push(entry);
-    }
-    if(!touched){if(statusEl)statusEl.textContent='Aucun fichier voiture reconnu dans la sélection.';return;}
-    const snapshot=localCarSnapshot(next);
-    await saveEventHomePatch(currentSlug,data=>{
-      const sheets=Array.isArray(data.carSheets)?data.carSheets.slice():baseSheets;
-      const idx=sheets.findIndex(s=>s&&s.id===snapshot.id);
-      if(idx>=0)sheets[idx]=snapshot;else sheets.push(snapshot);
-      data.carSheets=sheets;
-      data.eventInfo={...(data.eventInfo||{}),car:sheets.map(s=>s.name).filter(Boolean).join(' / ')};
-    },'✓ Fiche voiture enrichie depuis les fichiers Assetto Corsa.');
-    if(input)input.value='';
-  }catch(err){if(statusEl)statusEl.textContent='Erreur : '+err.message;}
-}
 async function saveLocalModSelection(){
   if(!adminAuth||!currentSlug)return;
   const selected=readLocalModSelection();if(!selected)return;
   const slug=currentSlug;
+  const selectedTracks=Array.isArray(selected.tracks)&&selected.tracks.length?selected.tracks:(selected.track?[selected.track]:[]);
   try{
     await importSelectedLiveries(selected.cars);
-    const imported=selected.track?await requestLocalCircuitImport(selected.track,null,null):null;
+    const importedSheets=[];
+    for(const trk of selectedTracks){
+      const imported=await requestLocalCircuitImport(trk,null,null);
+      if(imported?.round)importedSheets.push(imported.round);
+    }
     await saveEventHomePatch(slug,data=>{
       const previousCars=Array.isArray(data.modSelection?.cars)?data.modSelection.cars:[];
       const previousName=previousCars.map(car=>car.name).filter(Boolean).join(' / ');
       const previousSheets=Array.isArray(data.carSheets)?data.carSheets:[];
-      if(imported?.round&&!(imported.round.technicalUnavailable&&data.modSelection?.track?.id===selected.track?.id&&data.modSelection?.trackSheet?.outline))selected.trackSheet=imported.round;
-      else if(selected.track&&selected.track.id===data.modSelection?.track?.id)selected.trackSheet=data.modSelection.trackSheet;
+      const oldPool=[...(Array.isArray(data.modSelection?.trackSheets)?data.modSelection.trackSheets:[]),...(data.modSelection?.trackSheet?[data.modSelection.trackSheet]:[])];
+      const finalTrackSheets=selectedTracks.map(trk=>{
+        const fresh=importedSheets.find(s=>s.trackId===trk.trackId&&(s.layoutId||'')===(trk.layoutId||''));
+        const old=oldPool.find(s=>s&&s.trackId===trk.trackId&&(s.layoutId||'')===(trk.layoutId||''));
+        if(fresh&&!(fresh.technicalUnavailable&&old?.outline))return fresh;
+        return old||fresh||null;
+      }).filter(Boolean);
+      if(finalTrackSheets.length){
+        selected.trackSheet=finalTrackSheets[0];
+        selected.trackSheets=finalTrackSheets;
+      }else if(selected.track&&selected.track.id===data.modSelection?.track?.id&&data.modSelection?.trackSheet){
+        selected.trackSheet=data.modSelection.trackSheet;
+      }
       data.modSelection=selected;
       circuitsCache=null;circuitsError='';
       if(selected.cars.length){
@@ -4051,85 +4070,63 @@ async function saveLocalModSelection(){
           if(!Object.values(data.eventInfo).some(Boolean))delete data.eventInfo;
         }
       }
-    },'✓ Sélection des voitures, fiche(s) locale(s) et circuit enregistrés pour cet événement.');
+    },'✓ Sélection des voitures, fiche(s) locale(s) et circuit(s) enregistrés pour cet événement.');
+    localModQueuedTracks=[];
   }catch(error){alert('Enregistrement impossible : '+error.message);}
 }
 async function addLocalModRound(){
   if(!adminAuth||!currentSlug)return;
   const selected=readLocalModSelection(),day=document.getElementById('local-mod-date')?.value;
-  if(!selected?.track||!/^\d{4}-\d{2}-\d{2}$/.test(day||''))return alert('Choisis un circuit et une date.');
-  const t=selected.track;
+  const selectedTracks=selected?(Array.isArray(selected.tracks)&&selected.tracks.length?selected.tracks:(selected.track?[selected.track]:[])):[];
+  if(!selectedTracks.length||!/^\d{4}-\d{2}-\d{2}$/.test(day||''))return alert('Choisis au moins un circuit et une date.');
   const existing=eventContext?.data?.customCalendar?.[day];
-  if(existing&&!confirm('Remplacer la manche prévue à cette date ?'))return;
+  const existingTracks=calendarRoundTracks(existing);
+  const incomingEntries=selectedTracks.map(t=>({id:t.id,trackId:t.trackId,layoutId:t.layoutId,trackName:t.name,country:t.country||'',length:t.length||''}));
+  const hasNewTracks=existingTracks.length>0&&incomingEntries.some(inc=>!existingTracks.some(old=>old.trackId.toLowerCase()===inc.trackId.toLowerCase()&&(old.layoutId||'').toLowerCase()===(inc.layoutId||'').toLowerCase()));
+  if(existing){
+    const msg=hasNewTracks
+      ?`Une manche est déjà prévue le ${day} (${calendarRoundLabel(existing)}). Ajouter ce(s) circuit(s) à la même manche ?`
+      :'Remplacer la manche prévue à cette date ?';
+    if(!confirm(msg))return;
+  }
 
-  let localImport=null,localImportError='';
-  try{localImport=await requestLocalCircuitImport(t,day,nextCircuitRoundNumber(eventContext?.data));}
-  catch(error){localImportError=error.message||String(error);}
-  const importIssue=localCircuitImportIssue(localImport,localImportError);
-  const savedMessage=localImport?.round
-    ?localImport.round.technicalUnavailable
-      ?`✓ Manche ajoutée au calendrier avec une fiche Circuit partielle.${localCircuitImportDetails(localImport)}`
-      :`✓ Manche ajoutée au calendrier et fiche Circuit locale importée.${localCircuitImportDetails(localImport)}`
+  const targetRoundNumber=nextCircuitRoundNumber(eventContext?.data,day);
+  const localImports=[];
+  let localImportError='';
+  for(const t of selectedTracks){
+    try{localImports.push(await requestLocalCircuitImport(t,day,targetRoundNumber));}
+    catch(error){if(!localImportError)localImportError=error.message||String(error);}
+  }
+  const primaryImport=localImports.find(x=>x&&x.round)||localImports[0]||null;
+  const importIssue=localCircuitImportIssue(primaryImport,localImportError);
+  const importedCount=localImports.filter(x=>x&&x.round).length;
+  const savedMessage=importedCount
+    ?(importedCount>1
+      ?`✓ Manche mise à jour au calendrier avec ${importedCount} fiches Circuit.${localCircuitImportDetails(primaryImport)}`
+      :primaryImport.round.technicalUnavailable
+        ?`✓ Manche ajoutée au calendrier avec une fiche Circuit partielle.${localCircuitImportDetails(primaryImport)}`
+        :`✓ Manche ajoutée au calendrier et fiche Circuit locale importée.${localCircuitImportDetails(primaryImport)}`)
     :`✓ Manche ajoutée au calendrier. Fiche Circuit indisponible : ${importIssue}`;
 
   const previousCalendar=customCalendar;
   try{
     await saveEventHomePatch(currentSlug,data=>{
-      data.customCalendar={...(data.customCalendar||{}),[day]:{track:t.trackId,layout:t.layoutId,trackName:t.name}};
+      const mergedEntry=hasNewTracks
+        ?mergeCalendarRoundTracks(data.customCalendar?.[day],incomingEntries)
+        :mergeCalendarRoundTracks(null,incomingEntries);
+      data.customCalendar={...(data.customCalendar||{}),[day]:mergedEntry};
       customCalendar=data.customCalendar;
-      if(localImport?.round){
-        const number=nextCircuitRoundNumber(data);
-        upsertLocalCircuitRound(data,{...localImport.round,round:number,label:`M${number}`});
-        circuitsCache=null;circuitsError='';
+      const number=nextCircuitRoundNumber(data,day);
+      for(const imp of localImports){
+        if(imp?.round){
+          upsertLocalCircuitRound(data,{...imp.round,round:number,label:`M${number}`});
+          circuitsCache=null;circuitsError='';
+        }
       }
     },savedMessage);
     customCalendar=eventContext.data.customCalendar;
+    localModQueuedTracks=[];
   }catch(error){customCalendar=previousCalendar;alert('Ajout impossible : '+error.message);}
-}
-async function importTrackFilesFromInput(){
-  if(!adminAuth||!currentSlug)return;
-  const input=document.getElementById('track-files-import');
-  const statusEl=document.getElementById('track-files-status');
-  const files=Array.from(input?.files||[]);
-  if(!files.length){if(statusEl)statusEl.textContent='Sélectionne un ou plusieurs fichiers circuit (.ini, .json, .txt).';return;}
-  if(statusEl)statusEl.textContent='Analyse des fichiers du circuit…';
-  try{
-    const payloadFiles=[];
-    for(const file of files.slice(0,40)){
-      if(!/\.(?:ini|json|txt)$/i.test(String(file.name||'')))continue;
-      const content=await file.text();
-      if(content.length<=2*1024*1024)payloadFiles.push({name:file.name,content});
-    }
-    if(!payloadFiles.length){if(statusEl)statusEl.textContent='Aucun fichier texte circuit reconnu (.ini, .json, .txt).';return;}
-    const selectedTrack=readLocalModSelection()?.track||eventContext?.data?.modSelection?.track||null;
-    const day=document.getElementById('local-mod-date')?.value||null;
-    const res=await apiPost('/api/admin/circuits/import-files',{
-      trackId:selectedTrack?.trackId||'',
-      layoutId:selectedTrack?.layoutId||'',
-      name:selectedTrack?.name||undefined,
-      date:/^\d{4}-\d{2}-\d{2}$/.test(day||'')?day:null,
-      round:nextCircuitRoundNumber(eventContext?.data),
-      files:payloadFiles
-    });
-    if(!res.ok){
-      const err=await res.json().catch(()=>({}));
-      throw new Error(err.error||('HTTP '+res.status));
-    }
-    const result=await res.json();
-    if(!result?.round)throw new Error('Aucune information exploitable extraite.');
-    await saveEventHomePatch(currentSlug,data=>{
-      data.modSelection={...(data.modSelection||{}),trackSheet:result.round};
-      if(Array.isArray(data.circuitRounds)&&data.circuitRounds.length){
-        const idx=data.circuitRounds.findIndex(r=>r&&r.localTrackId===result.round.localTrackId&&r.localLayoutId===result.round.localLayoutId);
-        if(idx>=0)data.circuitRounds[idx]={...data.circuitRounds[idx],...result.round,round:data.circuitRounds[idx].round,label:data.circuitRounds[idx].label};
-        else upsertLocalCircuitRound(data,result.round);
-      }else{
-        upsertLocalCircuitRound(data,result.round);
-      }
-      circuitsCache=null;circuitsError='';
-    },`✓ Fiche Circuit mise à jour (${result.round.name}${result.round.lengthStr?' · '+result.round.lengthStr:''}).`);
-    if(input)input.value='';
-  }catch(err){if(statusEl)statusEl.textContent='Erreur : '+err.message;}
 }
 function renderLocalModsPanel(){
   const {cars,tracks,saved}=localModChoices();
@@ -4137,13 +4134,16 @@ function renderLocalModsPanel(){
   const sourceName=id=>{const p=localModsCatalog?.sources?.find(s=>s.id===id)?.path||'';return /^[a-z]:/i.test(p)?p.slice(0,2):(id||'catalogue local');};
   const suffix=item=>item.unavailable?' — disponibilité à vérifier':(' — '+sourceName(item.source)+(item.metadataAvailable?'':' · nom de dossier'));
   const selectedCount=(saved.cars||[]).length;
+  const queueHtml=localModQueuedTracks.length
+    ?`<div id="local-mod-track-queue" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${localModQueuedTracks.map((qt,qi)=>`<span class="tag" style="display:inline-flex;align-items:center;gap:6px">${esc(qt.name||qt.id)} <button type="button" onclick="unqueueLocalModTrack(${qi})" aria-label="Retirer ${esc(qt.name||qt.id)}" style="background:none;border:none;color:inherit;cursor:pointer;font-weight:700;padding:0">✕</button></span>`).join('')}</div>`
+    :'';
   return `<section class="adm-subpanel"><div class="adm-subhead"><div><div class="eyebrow">Mods installés · catalogue du PC serveur</div><h3>Préparer le plateau et le circuit</h3></div><div class="controls" style="margin:0"><button type="button" class="btn secondary small" onclick="loadLocalMods(false)" ${localModsBusy?'disabled':''}>Charger le catalogue</button><button type="button" class="btn small" onclick="loadLocalMods(true)" ${localModsBusy?'disabled':''}>${localModsBusy?'Analyse en cours…':'Actualiser les voitures et circuits'}</button></div></div><p class="note" style="margin-top:0">Lecture seule des dossiers configurés. Aucun mod n’est téléchargé, déplacé ou configuré. Les disques absents sont ignorés ; les premières sources ont priorité sur les doublons.</p>
     <p class="note" role="status">${esc(localModsMessage)}</p>
     ${localModsCatalog?`<p class="note">${localModsCatalog.cars.length} voitures · ${localModsCatalog.tracks.length} circuits / variantes${localModsCatalog.scannedAt?' · analysés le '+esc(new Date(localModsCatalog.scannedAt).toLocaleString('fr-FR')):''}</p><ul class="note">${localModsCatalog.sources.map(s=>`<li>${esc(s.path)} : ${esc(statuses[s.status]||s.status)}</li>`).join('')}</ul>${localModsCatalog.warnings.length?`<details><summary>Avertissements de lecture (${localModsCatalog.warnings.length})</summary><ul class="note">${localModsCatalog.warnings.map(w=>'<li>'+esc(w)+'</li>').join('')}</ul></details>`:''}`:''}
     <div class="grid local-mod-selection-grid"><div><label for="local-mod-car-search">Voitures à engager (<span id="local-mod-car-count">${selectedCount}</span> sélectionnée(s))</label><input id="local-mod-car-search" type="search" placeholder="Rechercher une voiture…" oninput="filterLocalModOptions(this,'local-mod-cars')"><div id="local-mod-cars" class="local-mod-car-list" role="group" aria-label="Voitures de l’événement">${cars.length?cars.map(car=>`<label class="local-mod-car-option"><input type="checkbox" data-local-car-id value="${esc(car.id)}" ${(saved.cars||[]).some(item=>item.id===car.id)?'checked':''} onchange="updateLocalModCount()"><span><b>${esc(car.name)}</b><small>${esc(car.brand||car.category||'Voiture')} · ${esc(car.id)}${suffix(car)}</small></span></label>`).join(''):'<span class="note">Aucune voiture chargée. Clique sur « Actualiser » pour analyser les mods installés.</span>'}</div><p class="note">Coche simplement une ou plusieurs voitures : cette sélection sera reprise lors de la création de l’événement.</p></div>
-      <div style="display:flex;flex-direction:column;gap:10px"><label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#586260">Circuit / variante<input type="search" placeholder="Rechercher un circuit…" oninput="filterLocalModOptions(this,'local-mod-track')"><select id="local-mod-track" aria-label="Circuit et variante" style="width:100%"><option value="">— Sans circuit sélectionné —</option>${tracks.map(track=>`<option value="${esc(track.id)}" ${saved.track?.id===track.id?'selected':''}>${esc(track.name+' ['+track.id+']'+suffix(track))}</option>`).join('')}</select></label><label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#586260">Date de la manche (optionnelle à la création)<input type="date" id="local-mod-date" style="background:#fbf7ec;border:1px solid #b3a78e"></label></div></div>
-    <p class="note">À la création d’un événement ou d’une manche, la fiche Circuit est importée automatiquement lorsque les fichiers techniques du mod sont disponibles. Si le tracé est incomplet, l’événement et sa fiche Circuit de base restent accessibles. Pour l’événement courant, choisis une date puis clique sur « Ajouter la manche sélectionnée ».</p>
-    <div class="controls" style="margin-bottom:0">${currentSlug?`<button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button>`:''}<button type="button" class="btn secondary" onclick="createEventPrompt()">+ Créer un événement avec cette sélection</button></div>${currentSlug?`<div class="admin-round" style="margin-top:12px"><div class="eyebrow">Import manuel depuis des fichiers AC</div><p class="note" style="margin:4px 0 8px">Si une voiture Kunos (<code>ks_*</code>) ou un mod n’a pas de <code>ui_car.json</code> complet sur le serveur, sélectionne ici les fichiers de ton dossier (<code>logo.png</code>, <code>skin.ini</code>, <code>ui_skin.json</code>, <code>preview.jpg</code>, <code>livery.png</code>, <code>ui_car.json</code>, <code>car.ini</code>, <code>power.lut</code>).</p><div class="controls" style="margin:0;align-items:center">${eventCarSheets(eventContext).length>1?`<select id="car-files-target" aria-label="Voiture cible">${eventCarSheets(eventContext).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>`:''}<input type="file" id="car-files-import" multiple accept=".json,.ini,.lut,.png,.jpg,.jpeg"><button type="button" class="btn secondary small" onclick="importCarFilesFromInput()">Importer dans la fiche voiture</button></div><p id="car-files-status" class="note" role="status" style="margin:6px 0 0"></p></div><div class="admin-round" style="margin-top:10px"><div class="eyebrow">Import manuel depuis des fichiers circuit AC</div><p class="note" style="margin:4px 0 8px">Si un circuit n’a ni <code>ui_track.json</code> ni <code>fast_lane.ai</code>, sélectionne les fichiers disponibles (<code>ext_config.ini</code>, <code>models_*.ini</code>, <code>cameras*.ini</code>, <code>ai_hints.ini</code>, <code>audio_sources.ini</code>, <code>surfaces.ini</code>, <code>overlays.ini</code>, <code>ui_track.json</code>).</p><div class="controls" style="margin:0;align-items:center"><input type="file" id="track-files-import" multiple accept=".json,.ini,.txt"><button type="button" class="btn secondary small" onclick="importTrackFilesFromInput()">Importer dans la fiche circuit</button></div><p id="track-files-status" class="note" role="status" style="margin:6px 0 0"></p></div>`:''}</section>`;
+      <div style="display:flex;flex-direction:column;gap:10px"><label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#586260">Circuit(s) / variante(s) de la manche<input type="search" placeholder="Rechercher un circuit…" oninput="filterLocalModOptions(this,'local-mod-track')"><select id="local-mod-track" aria-label="Circuit et variante" style="width:100%"><option value="">— Sans circuit sélectionné —</option>${tracks.map(track=>`<option value="${esc(track.id)}" ${saved.track?.id===track.id?'selected':''}>${esc(track.name+' ['+track.id+']'+suffix(track))}</option>`).join('')}</select></label><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn secondary small" onclick="queueLocalModTrack()">+ Ajouter ce circuit à la manche</button><span class="note" style="margin:0">Permet d’associer plusieurs circuits à une même manche.</span></div>${queueHtml}<label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#586260">Date de la manche (optionnelle à la création)<input type="date" id="local-mod-date" style="background:#fbf7ec;border:1px solid #b3a78e"></label></div></div>
+    <p class="note">À la création d’un événement ou d’une manche, la fiche Circuit est importée automatiquement lorsque les fichiers techniques du mod sont disponibles. Tu peux ajouter plusieurs circuits sur une même date en les ajoutant à la liste ou en cliquant à nouveau sur « Ajouter la manche sélectionnée » avec la même date.</p>
+    <div class="controls" style="margin-bottom:0">${currentSlug?`<button type="button" class="btn" onclick="saveLocalModSelection()">Enregistrer la sélection · ${esc(eventContext?.name||currentSlug)}</button><button type="button" class="btn secondary" onclick="addLocalModRound()">Ajouter la manche sélectionnée</button>`:''}<button type="button" class="btn secondary" onclick="createEventPrompt()">+ Créer un événement avec cette sélection</button></div></section>`;
 }
 
 // Les traductions appartiennent à l'événement, pas au catalogue ni au mod.
@@ -4220,7 +4220,9 @@ async function refreshEventCircuit(index,button){
       const target=currentSlug===slug&&adminSheetRounds(data).find(r=>r.round===old.round);
       if(!target||sheetTextKey('track',target)!==sheetTextKey('track',old)||target.date!==old.date)throw new Error('La manche a changé. Rechargez l’événement.');
       const rows=[...(data.circuitRounds||[])];
-      let i=rows.findIndex(r=>Number(r.round)===old.round);
+      let i=rows.findIndex(r=>old.id&&r.id===old.id);
+      if(i<0)i=rows.findIndex(r=>Number(r.round)===old.round&&sheetTextKey('track',r)===sheetTextKey('track',old));
+      if(i<0&&rows.filter(r=>Number(r.round)===old.round).length<=1)i=rows.findIndex(r=>Number(r.round)===old.round);
       if(i<0)i=rows.findIndex(r=>!Number(r.round)&&sheetTextKey('track',r)===sheetTextKey('track',old)&&r.name===old.name);
       const fresh={...result.round,round:old.round,label:target.label,technicalUnavailable:!!result.round.technicalUnavailable,
         sectorFractions:result.round.sectorFractions||[],importWarnings:result.warnings||[],importedFiles:Object.values(result.files||{}).map(f=>f.name)};
@@ -4493,14 +4495,18 @@ function admin(){
       .sort(([a],[b])=>a.localeCompare(b))
       .map(([dt,val],idx)=>{
         const safeDt=esc(String(dt).replace(/'/g,"\\'"));
-        return `<div class="admin-round" style="border-style:dashed"><b>Manche ${rs.length+idx+1} · ${esc(val.trackName||track(val.track||''))} <span class="tag" style="margin-left:6px">À VENIR</span></b><div class="muted">${date(dt)} · Date prévisionnelle</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn secondary small" onclick="removePlannedRound('${safeDt}')">Retirer</button></div></div>`;
+        const tracksList=calendarRoundTracks(val);
+        const chips=tracksList.length>1
+          ?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${tracksList.map((t,ti)=>`<span class="tag" style="display:inline-flex;align-items:center;gap:5px">${esc(t.trackName||track(t.trackId||t.id))} <button type="button" onclick="removeCircuitFromPlannedRound('${safeDt}',${ti})" aria-label="Retirer ce circuit" style="background:none;border:none;color:inherit;cursor:pointer;font-weight:700;padding:0">✕</button></span>`).join('')}</div>`
+          :'';
+        return `<div class="admin-round" style="border-style:dashed"><b>Manche ${rs.length+idx+1} · ${esc(calendarRoundLabel(val))} <span class="tag" style="margin-left:6px">À VENIR</span></b><div class="muted">${date(dt)} · Date prévisionnelle</div>${chips}<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn secondary small" onclick="addCircuitToPlannedRound('${safeDt}')">+ Ajouter un circuit</button><button class="btn secondary small" onclick="removePlannedRound('${safeDt}')">Retirer</button></div></div>`;
       }).join('')
     :'';
   const roundCards=rs.map((r,i)=>{
     const races=r.sessions.filter(s=>s.type==='RACE').length;
     const quals=r.sessions.filter(s=>s.type==='QUALIFY').length;
     const info=quals?`${races} course(s) · ${quals} qualif`:`${races} course(s)`;
-    return `<div class="admin-round"><b>Manche ${r.number} · ${esc(track(r.track))}</b><div class="muted">${date(r.date)} · ${info}</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn secondary small" onclick="openAdj(${i})">Pénalités</button><button class="btn secondary small" onclick="resetRound(${i})">Effacer</button></div></div>`;
+    return `<div class="admin-round"><b>Manche ${r.number} · ${esc(r.track)}</b><div class="muted">${date(r.date)} · ${info}</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn secondary small" onclick="openAdj(${i})">Pénalités</button><button class="btn secondary small" onclick="resetRound(${i})">Effacer</button></div></div>`;
   }).join('')+plannedRoundCards;
   return `${workspace}<div class="panel" id="admin-tool">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, doublons détectés automatiquement.</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer automatiquement les nouveaux résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Une session déjà importée (même date/heure et type) n'est pas réimportée.</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Ajustements de points au championnat (+ / −), pénalités temps en course (reclassement automatique), DNF/DNS/DQ ou avertissements.</p>${renderChampPointsPanel()}${selectedRaceAdj!==null&&rs[selectedRaceAdj]?renderAdjPanel(rs[selectedRaceAdj]):rs.length?`<div class="controls"><select onchange="selectedRaceAdj=this.value===''?null:+this.value;render()"><option value="">— Choisir une manche pour ajuster un résultat de course —</option>${rs.map((x,i)=>`<option value="${i}">Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div>`:`<p class="note">Aucune manche importée pour les pénalités de course.</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'||adminTab==='teams'?adminRoster(adminTab==='teams'):adminTab==='refresh'?renderEventSheetTools(false):adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='circuits'?renderCircuitsAdmin():adminTab==='globalexc'?renderGlobalExclusions():adminTab==='telemetry'?renderTelemetryAdmin()
 :`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter les sessions</button><button class="btn secondary" onclick="exportEventBackup()">Sauvegarde complète (commission incluse)</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>`;
@@ -4518,7 +4524,7 @@ function renderAdjPanel(r){
     if(s.type!=='RACE')return;
     const raceNum=r.sessions.slice(0,sj+1).filter(x=>x.type==='RACE').length;
     const rIdx=r.number-1;
-    html+=`<div class="panel"><h3>Course ${raceNum}</h3>${table(['Pos.','Pilote','Ajuster'],s.results.map((p,i)=>`<tr><td class="pos">${i+1}</td><td>${esc(p.name)}</td><td><button class="btn secondary small" onclick="openAdjForm(${rIdx},${sj},'${String(p.id).replace(/'/g,"\\'")}')">Modifier</button> <button type="button" class="btn secondary small" data-conduct-key="${esc(`${rIdx}:${sj}:${p.id}`)}" onclick="qualifyConduct(this.dataset.conductKey)">Propreté : ${penMap[`${rIdx}:${sj}:${p.id}`]?.conduct?.reviewed?'examinée':'à examiner'}</button>${penMap[`${rIdx}:${sj}:${p.id}`]?.conduct?` <button class="btn secondary small" data-conduct-key="${esc(`${rIdx}:${sj}:${p.id}`)}" onclick="clearConduct(this.dataset.conductKey)">Annuler l’examen</button>`:''}</td></tr>`))}</div>`;
+    html+=`<div class="panel"><h3>Course ${raceNum}${r.tracks&&r.tracks.length>1?' · '+esc(track(s.track)):''}</h3>${table(['Pos.','Pilote','Ajuster'],s.results.map((p,i)=>`<tr><td class="pos">${i+1}</td><td>${esc(p.name)}</td><td><button class="btn secondary small" onclick="openAdjForm(${rIdx},${sj},'${String(p.id).replace(/'/g,"\\'")}')">Modifier</button> <button type="button" class="btn secondary small" data-conduct-key="${esc(`${rIdx}:${sj}:${p.id}`)}" onclick="qualifyConduct(this.dataset.conductKey)">Propreté : ${penMap[`${rIdx}:${sj}:${p.id}`]?.conduct?.reviewed?'examinée':'à examiner'}</button>${penMap[`${rIdx}:${sj}:${p.id}`]?.conduct?` <button class="btn secondary small" data-conduct-key="${esc(`${rIdx}:${sj}:${p.id}`)}" onclick="clearConduct(this.dataset.conductKey)">Annuler l’examen</button>`:''}</td></tr>`))}</div>`;
   });
   return html+'</div>';
 }
