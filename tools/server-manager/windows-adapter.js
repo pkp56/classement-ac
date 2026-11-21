@@ -1,5 +1,5 @@
 'use strict';
-// Adaptateur expérimental non relié à l'API. Jamais de shell ou arguments libres.
+// Adaptateur expérimental désactivé par défaut. Jamais de shell ou arguments libres.
 const {execFile,spawn}=require('node:child_process');
 const {promisify}=require('node:util');
 const {SCRIPT}=require('./process-state');
@@ -19,14 +19,17 @@ $process = [System.Diagnostics.Process]::GetProcessById([int]$pdata.pid)
 try {
   # Le handle obtenu ici reste lié au processus même si son PID est réutilisé.
   $handle = $process.Handle
-  $date = $process.StartTime.ToUniversalTime().ToString('o')
+  $processDate = $process.StartTime.ToUniversalTime()
   $row = Get-CimInstance Win32_Process -Filter ("ProcessId = " + [int]$pdata.pid)
   if (!$row -or !$row.CommandLine -or !$row.ExecutablePath -or !$row.CreationDate) { throw 'identity' }
   $cimDate = $row.CreationDate.ToUniversalTime().ToString('o')
   $bytes = [Text.Encoding]::UTF8.GetBytes($row.CommandLine)
   $sha = [Security.Cryptography.SHA256]::Create()
   try { $hash = -join ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) } finally { $sha.Dispose() }
-  if ($date -ne $pdata.creationTime -or $cimDate -ne $pdata.creationTime -or $hash -ne $pdata.hash -or ![String]::Equals($row.ExecutablePath, $pdata.executablePath, [StringComparison]::OrdinalIgnoreCase)) { throw 'identity' }
+  # CIM arrondit à la microseconde, alors que StartTime garde des ticks de 100 ns.
+  # Comparer CIM exactement à l'identité initiale et tolérer moins d'une microseconde sur le handle.
+  $deltaTicks = [Math]::Abs(($processDate - $row.CreationDate.ToUniversalTime()).Ticks)
+  if ($deltaTicks -gt 9 -or $cimDate -ne $pdata.creationTime -or $hash -ne $pdata.hash -or ![String]::Equals($row.ExecutablePath, $pdata.executablePath, [StringComparison]::OrdinalIgnoreCase)) { throw 'identity' }
   if (![GdspProcess]::TerminateProcess($handle, 0)) { throw 'terminate' }
 } finally { $process.Dispose() }
 Write-Output 'STOP_REQUESTED'
