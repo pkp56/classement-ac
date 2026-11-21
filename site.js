@@ -1292,20 +1292,20 @@ function home(){
 }
 
 // Liveries (Lola T290 2026 — gardé en dur, d'autres championnats pourront avoir leurs propres visuels plus tard)
-const liveries=[['pistol','pistol','01'],['kimy','kimy','07'],['zplouch','jim','08'],['streetbike','streetbike','09'],['fmherrou','fmherrou','10'],['lenain','lenain','11'],['ponge','thomas','13'],['yohana','yohana','14'],['tofusan','tofusan','21'],['holden','holden','23'],['assassin','assassins','25'],['elouan','elouan','27'],['harryth','harry','28'],['jenkweed','jenkweed','29'],['erwann','erwann','30'],['arthur maus','arthur','31'],['alexou','alexou','33'],['orthopedux','victor','35'],['superslipos','superslipos','42'],['51r gilles','gilles','55'],['51r sherman','sherman','56'],['richard','richard','66'],['cheucheu','cheucheu','69'],['karl74','karl','74'],['neutraliz','neutraliz','77'],['alan mc','alan','84'],['pierre','pierre','86'],['kant-1','kant','88']];
+const liveries=[['pistol','pistol','01'],['kimy','kimy','07'],['zplouch','jim','08'],['streetbike','streetbike','09'],['fmherrou','fmherrou','10'],['lenain','lenain','11'],['ponge','thomas','13'],['yohana','yohana','14'],['tofusan','tofusan','21'],['holden','holden','23'],['assassin','assassins','25'],['elouan','elouan','27'],['harryth','harry','28'],['jenkweed','jenkweed','29'],['erwann','erwann','30'],['arthur maus','arthur','31'],['alexou','alexou','33'],['orthopedux','victor','35'],['superslipos','superslipos','42'],['51r gilles','gilles','55'],['51r sherman','sherman','56'],['richard','richard','66'],['cheucheu','cheucheu','69'],['karl74','karl','74'],['neutraliz','neutraliz','77'],['alan mc','alan','84'],['pierre','pierre','86'],['kant-1','kant','88'],['[apr] christophe','holden','23'],['christophe [apr]','holden','23'],['christophe legendre','holden','23'],['kami_kaze31','kami',''],['tx3rony68z','rony',''],['pikoupok','pikoupok',''],['thibjedi','thibjedi','']];
 function livery(name){return liveries.find(x=>(name||'').toLocaleLowerCase('fr').includes(x[0]))}
 function car(name,id){
   const photo=driverPhoto(id);if(photo)return `<img class="car-thumb" src="${esc(photo)}" alt="Voiture de ${esc(name)}">`;
   const isLola=!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG||eventContext.slug===ACTIVE_LOLA_SLUG;
   if(!isLola)return `<span class="muted">${esc(carModel(name)||'—')}</span>`;
-  let l=livery(name);return l?`<img class="car-thumb" src="/assets/${l[1]}.jpg?v=6" alt="Voiture n° ${l[2]} de ${esc(name)}">`:'<span class="muted">Visuel à ajouter</span>'
+  let l=livery(name);return l?`<img class="car-thumb" src="/assets/${l[1]}.jpg?v=6" alt="Voiture${l[2]?' n° '+esc(l[2]):''} de ${esc(name)}">`:'<span class="muted">Visuel à ajouter</span>'
 }
 function carModel(name){
   // find model from current event sessions
   for(const s of sessions){for(const r of (s.results||[])){if(r.name===name)return r.model||''}}
   return '';
 }
-function number(name){let l=livery(name);return l?`<span class="race-number">${l[2]}</span>`:'—'}
+function number(name){let l=livery(name);return l&&l[2]?`<span class="race-number">${esc(l[2])}</span>`:'—'}
 
 // Per-event points helper using current pointsConfig()
 function baseFull(place,multiplier){
@@ -2765,7 +2765,7 @@ function drivers(){
     const isLolaProf=!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG||eventContext.slug===ACTIVE_LOLA_SLUG;
     const l=isLolaProf?livery(d.name):null;
     const initials=(d.name||'').trim().split(/[\s._-]+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('')||'—';
-    const roundelHtml=l?`<div class="drv-roundel">${esc(l[2])}</div>`:`<div class="drv-roundel drv-roundel-txt">${esc(initials)}</div>`;
+    const roundelHtml=l&&l[2]?`<div class="drv-roundel">${esc(l[2])}</div>`:`<div class="drv-roundel drv-roundel-txt">${esc(initials)}</div>`;
     let carVisual,carNumLabel,carFootLeft;
     if(!isLolaProf){
       const md=races[0]&&races[0].results.find(r=>r.id===driverId);
@@ -2774,8 +2774,8 @@ function drivers(){
       carNumLabel=md&&md.model?esc(md.model):'Engagé';
       carFootLeft=esc((eventContext&&eventContext.name)||'GDSP');
     }else{
-      carVisual=l?`<img class="driver-car" src="/assets/${l[1]}.jpg?v=6" alt="Voiture numéro ${l[2]} de ${esc(d.name)}">`:'<div class="drv-car-placeholder">Visuel de voiture à ajouter</div>';
-      carNumLabel=l?`N° ${esc(l[2])}`:'N° —';
+      carVisual=l?`<img class="driver-car" src="/assets/${l[1]}.jpg?v=6" alt="Voiture${l[2]?' numéro '+esc(l[2]):''} de ${esc(d.name)}">`:'<div class="drv-car-placeholder">Visuel de voiture à ajouter</div>';
+      carNumLabel=l&&l[2]?`N° ${esc(l[2])}`:'N° —';
       carFootLeft='Lola T290 · International Series';
     }
     const photo=driverPhoto(d.id);if(photo)carVisual=`<img class="driver-car" src="${esc(photo)}" alt="Voiture de ${esc(d.name)}">`;
@@ -2791,7 +2791,7 @@ function drivers(){
     const deltaCls=avgDelta===null?'':(avgDelta>0.05?'kpi-val-pos':avgDelta<-0.05?'kpi-val-neg':'');
     const quickOpts=ds.map(x=>{
       const xl=isLolaProf?livery(x.name):null;
-      return `<option value="${esc(x.id)}" ${x.id===driverId?'selected':''}>${xl?'#'+esc(xl[2])+' · ':''}${esc(x.name)}</option>`;
+      return `<option value="${esc(x.id)}" ${x.id===driverId?'selected':''}>${xl&&xl[2]?'#'+esc(xl[2])+' · ':''}${esc(x.name)}</option>`;
     }).join('');
     let rows=metrics.map(m=>{
       const s=m.race,r=m.result;
