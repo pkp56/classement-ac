@@ -92,7 +92,7 @@ function fakePool(seed = []) {
         const found = rows.find(r => r.slug === params[0]);
         if (!found) return { rows: [], rowCount: 0 };
         if (/RETURNING updated_at/.test(sql)) {
-          found.data = JSON.parse(params[1]);
+          found.data = /COALESCE\(data/.test(sql) ? {...found.data,...JSON.parse(params[1])} : JSON.parse(params[1]);
           found.updated_at = '2026-11-12T01:00:00.000Z';
           return { rows: [{ updated_at: found.updated_at }], rowCount: 1 };
         }
@@ -598,4 +598,21 @@ test('Sortes endurance, cup, fiesta et trackday : init SQL, création et changem
   });
   assert.equal(archivePut.statusCode, 200);
   assert.equal(archivePut.body.event.points_config.globalCoef, 0);
+});
+
+test('Liaison AH : authentifiée, serveur autorisé, mise à jour atomique sans toucher aux données', async () => {
+  const data={sessions:[{track:'Sugo'}],penMap:{'0:0:x':{timeAdd:5}},other:{x:1}};
+  const pool=fakePool([{slug:'open-sugo',name:'Sugo',kind:'open',data,points_config:{pointsScale:[25]}}]);
+  const harness=fakeApp();
+  harness.mount(harness.app,{getStore:async()=>new EventStore(pool),authorizeAhServer:s=>{if(s!=='https://fr2.assettohosting.com:50648')throw Error('refus');}});
+  const body={__param:'open-sugo',server:'https://fr2.assettohosting.com:50648',uuid:'11111111-1111-1111-1111-111111111111'};
+  const auth={authorization:`Bearer ${signAdminToken('gdspadmin',ENV)}`};
+  assert.equal((await harness.call('post','/api/events/:slug/ah-link',{body})).statusCode,401);
+  assert.equal((await harness.call('post','/api/events/:slug/ah-link',{headers:auth,body:{...body,server:'http://localhost'}})).statusCode,400);
+  assert.equal((await harness.call('post','/api/events/:slug/ah-link',{headers:auth,body:{...body,uuid:'bad'}})).statusCode,400);
+  assert.equal((await harness.call('post','/api/events/:slug/ah-link',{headers:auth,body:{...body,__param:'inconnu'}})).statusCode,404);
+  assert.equal((await harness.call('post','/api/events/:slug/ah-link',{headers:auth,body})).statusCode,200);
+  assert.deepEqual(pool.rows[0].data,{...data,ahServer:body.server,ahUuid:body.uuid});
+  assert.deepEqual(pool.rows[0].points_config,{pointsScale:[25]});
+  assert.match(pool.calls.at(-1).sql,/COALESCE\(data, '\{\}'::jsonb\) \|\| \$2::jsonb/);
 });

@@ -4864,7 +4864,7 @@ function admin(){
     const info=quals?`${races} course(s) · ${quals} qualif`:`${races} course(s)`;
     return `<div class="admin-round"><b>Manche ${r.number} · ${esc(r.track)}</b><div class="muted">${date(r.date)} · ${info}</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn secondary small" onclick="openAdj(${i})">Pénalités</button><button class="btn secondary small" onclick="resetRound(${i})">Effacer</button></div></div>`;
   }).join('')+plannedRoundCards;
-  return `${workspace}<div class="panel" id="admin-tool">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import automatique uniquement pour un événement lié à un championnat AssettoHosting. Sinon, importe ses fichiers JSON manuellement. <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, sessions déjà importées actualisées (collisions &amp; meilleurs temps).</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer / actualiser automatiquement les résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Les sessions déjà importées sont réimportées pour récupérer ou actualiser leurs données de collisions et de meilleurs temps (sans doublon et en conservant les pénalités Commission).</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Ajustements de points au championnat (+ / −), pénalités temps en course (reclassement automatique), DNF/DNS/DQ ou avertissements.</p>${renderCommissionIncidents(rs)}${renderChampPointsPanel()}${selectedRaceAdj!==null&&rs[selectedRaceAdj]?renderAdjPanel(rs[selectedRaceAdj]):rs.length?`<div class="controls"><select onchange="selectedRaceAdj=this.value===''?null:+this.value;render()"><option value="">— Choisir une manche pour ajuster un résultat de course —</option>${rs.map((x,i)=>`<option value="${i}">Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div>`:`<p class="note">Aucune manche importée pour les pénalités de course.</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'||adminTab==='teams'?adminRoster(adminTab==='teams'):adminTab==='refresh'?renderEventSheetTools(false):adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='circuits'?renderCircuitsAdmin():adminTab==='globalexc'?renderGlobalExclusions():adminTab==='telemetry'?renderTelemetryAdmin()
+  return `${workspace}<div class="panel" id="admin-tool">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import automatique uniquement pour un événement lié à un championnat AssettoHosting. Sinon, importe ses fichiers JSON manuellement. <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, sessions déjà importées actualisées (collisions &amp; meilleurs temps).</p><div class="panel" style="margin:12px 0"><h3>Liaison AssettoHosting</h3><p class="note">${ahConfig?`Lien actuel : ${esc(ahConfig.server)} · ${esc(ahConfig.uuid)}.`:'Aucun lien enregistré pour cet événement.'} Choisis manuellement le championnat ou l’Open correspondant ; la liaison seule ne lance aucun import et ne supprime aucune donnée.</p><button class="btn secondary" onclick="ahLinkScan()">🔍 Choisir un événement AssettoHosting</button><div id="ah-link-result"></div></div><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer / actualiser automatiquement les résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Les sessions déjà importées sont réimportées pour récupérer ou actualiser leurs données de collisions et de meilleurs temps (sans doublon et en conservant les pénalités Commission).</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Ajustements de points au championnat (+ / −), pénalités temps en course (reclassement automatique), DNF/DNS/DQ ou avertissements.</p>${renderCommissionIncidents(rs)}${renderChampPointsPanel()}${selectedRaceAdj!==null&&rs[selectedRaceAdj]?renderAdjPanel(rs[selectedRaceAdj]):rs.length?`<div class="controls"><select onchange="selectedRaceAdj=this.value===''?null:+this.value;render()"><option value="">— Choisir une manche pour ajuster un résultat de course —</option>${rs.map((x,i)=>`<option value="${i}">Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div>`:`<p class="note">Aucune manche importée pour les pénalités de course.</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'||adminTab==='teams'?adminRoster(adminTab==='teams'):adminTab==='refresh'?renderEventSheetTools(false):adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='circuits'?renderCircuitsAdmin():adminTab==='globalexc'?renderGlobalExclusions():adminTab==='telemetry'?renderTelemetryAdmin()
 :`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter les sessions</button><button class="btn secondary" onclick="exportEventBackup()">Sauvegarde complète (commission incluse)</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>`;
 }
 // Suggestions uniquement : deux enregistrements réciproques, à moins de deux
@@ -5079,6 +5079,54 @@ async function ahCreateEvent(server,uuid,slug){
   }catch(e){alert('❌ Erreur création événement : '+e.message)}
 }
 
+// La sélection est explicite : deux événements peuvent avoir des noms proches.
+let ahLinkChoices=null;
+async function ahLinkScan(){
+  const slug=currentSlug;
+  const out=document.getElementById('ah-link-result');
+  if(!slug||!adminAuth||!adminToken){if(out)out.textContent='Sélectionne un événement et connecte-toi comme administrateur.';return;}
+  ahLinkChoices=null;
+  if(out)out.textContent='Recherche des événements AssettoHosting…';
+  try{
+    const r=await apiGet('/api/ah-championships');
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
+    if(!Array.isArray(j.items))throw new Error('Liste AssettoHosting invalide.');
+    if(currentSlug!==slug)return;
+    const target=document.getElementById('ah-link-result');if(!target)return;
+    const choices=j.items.filter(c=>c&&typeof c.name==='string'&&typeof c.server==='string'&&typeof c.uuid==='string');
+    ahLinkChoices={slug,items:choices};
+    const warning=Array.isArray(j.errors)&&j.errors.length?'<p class="note">⚠ Certains serveurs n’ont pas répondu : la liste peut être incomplète.</p>':'';
+    if(!choices.length){target.innerHTML=warning+'<p class="note">Aucun événement disponible. Réessaie plus tard ou importe les JSON manuellement.</p>';return;}
+    target.innerHTML=warning+'<p class="note">Vérifie le nom et le serveur avant de confirmer. Cela ne nettoie pas les sessions déjà présentes.</p>'+
+      '<label>Événement AssettoHosting <select id="ah-link-choice"><option value="">— Sélectionner —</option>'+choices.map((c,i)=>`<option value="${i}">${esc(c.name)}${c.inactive?' · inactif':''} · ${esc(c.server)} · ${esc(c.uuid)}</option>`).join('')+'</select></label> <button class="btn secondary" onclick="ahLinkSave()">Lier à cet événement GDSP</button>';
+  }catch(e){if(currentSlug===slug){const target=document.getElementById('ah-link-result');if(target)target.innerHTML=`<p class="note" style="color:#9c3021">Erreur : ${esc(e.message)}</p>`;}}
+}
+async function ahLinkSave(){
+  const select=document.getElementById('ah-link-choice');
+  const value=select&&select.value;
+  const list=ahLinkChoices;
+  if(!adminAuth||!adminToken||!list||currentSlug!==list.slug||!/^\d+$/.test(value||'')){alert('Sélectionne un événement AssettoHosting pour l’événement courant.');return;}
+  const c=list.items[Number(value)];if(!c)return;
+  const slug=list.slug, name=eventContext&&eventContext.name||slug;
+  if(!confirm(`Lier « ${name} » à « ${c.name} » sur ${c.server} ?\n\nVérifie cette correspondance. Aucun résultat ne sera importé ni supprimé maintenant.`))return;
+  try{
+    const r=await apiPost('/api/events/'+encodeURIComponent(slug)+'/ah-link',{server:c.server,uuid:c.uuid});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
+    // Ne pas modifier le contexte d'un autre événement si l'utilisateur a navigué.
+    if(currentSlug===slug&&eventContext){
+      ahConfig={server:c.server,uuid:c.uuid};
+      eventContext.data=Object.assign({},eventContext.data,{ahServer:c.server,ahUuid:c.uuid});
+      render();
+      const target=document.getElementById('ah-link-result');
+      if(target)target.innerHTML=`<p class="note">✓ Liaison enregistrée avec ${esc(c.name)}. Aucun import n’a été lancé ; les anciennes sessions restent inchangées.</p>`;
+    }
+    try{const map=JSON.parse(localStorage.getItem('gdsp_ah_map')||'{}');map[slug]={server:c.server,uuid:c.uuid};localStorage.setItem('gdsp_ah_map',JSON.stringify(map));}catch(_){}
+    ahLinkChoices=null;
+  }catch(e){alert('Échec de la liaison : '+e.message);}
+}
+
 async function ahImport(){
   const out=document.getElementById('ah-result');
   if(out){out.innerHTML='<p class="note">Scan des serveurs AssettoHosting en cours…</p>'}
@@ -5106,12 +5154,13 @@ async function ahImport(){
     const newItems=validItems.filter(x=>!existing.has(sessionSlotKey(x.date,x._type)));
     const alreadyItems=validItems.filter(x=>existing.has(sessionSlotKey(x.date,x._type)));
     const evLabel=esc(j.championship||'');
+    const missingCount=Array.isArray(j.diagnostics?.missing)?j.diagnostics.missing.length:0;
     if(ahConfig && out){
       if(items.length===0){
-        out.innerHTML=`<p class="note">Événement lié à <b>${evLabel}</b> (${j.events||0} manches côté AH), mais <b>AssettoHosting n'a conservé aucun résultat historique pour cet événement</b> (les données ont été purgées avec le temps). Importe les fichiers JSON manuellement si tu les possèdes encore.</p>`;
+        out.innerHTML=`<p class="note">Événement lié à <b>${evLabel}</b> (${j.events||0} manches côté AH), mais <b>aucune session récupérable automatiquement</b> dans l’export. Les résultats absents ou non identifiables doivent être importés manuellement si tu possèdes leurs fichiers JSON.</p>`;
         return;
       }
-      out.innerHTML=`<p class="note">Événement lié à <b>${evLabel}</b> (${j.events||0} manches côté AH, ${items.length} sessions récupérables depuis l'archive AH). ${newItems.length} nouvelle(s), ${alreadyItems.length} déjà importée(s) (actualisation collisions &amp; meilleurs temps).</p>`;
+      out.innerHTML=`<p class="note">Événement lié à <b>${evLabel}</b> (${j.events||0} manches côté AH, ${items.length} sessions récupérables depuis l'archive AH). ${newItems.length} nouvelle(s), ${alreadyItems.length} déjà importée(s) (actualisation collisions &amp; meilleurs temps). ${missingCount?missingCount+' session(s) sans résultat identifiable ignorée(s) : import JSON manuel si disponible.':''}</p>`;
     }
     if(!validItems.length){
       const msg=`✅ Aucune session QUALIFY/RACE récupérable depuis AssettoHosting (PRACTICE ignorées).`;
@@ -5153,7 +5202,7 @@ async function ahImport(){
     const projNote=backfill.refreshed?`<p class="note">🧭 ${backfill.refreshed} fiche(s) circuit recalibrée(s) pour le placement GPS des collisions.</p>`:''
       +(backfill.missing?`<p class="note" style="color:#8a5a14">⚠ ${backfill.missing} fiche(s) circuit sans repère GPS (<code>worldProjection</code>) : actualise la fiche circuit depuis un serveur local ou Google Drive pour afficher les collisions sur le tracé.</p>`:'');
     const resultOut=document.getElementById('ah-result');
-    if(resultOut)resultOut.innerHTML+=`<p class="note"><b>Import terminé :</b> ${added} nouvelle(s), ${updated} actualisée(s) (collisions &amp; meilleurs temps), ${err} erreur(s).${saveNote}</p>${projNote}<ul class="note" style="font-family:monospace;font-size:11px">${details.map(d=>'<li>'+esc(d)+'</li>').join('')}</ul>`;
+    if(resultOut)resultOut.innerHTML+=`<p class="note"><b>Import terminé :</b> ${added} nouvelle(s), ${updated} actualisée(s) (collisions &amp; meilleurs temps), ${err} erreur(s).${saveNote}</p>${missingCount?`<p class="note">⚠ ${missingCount} session(s) sans résultat identifiable ignorée(s) : import JSON manuel si disponible.</p>`:''}${projNote}<ul class="note" style="font-family:monospace;font-size:11px">${details.map(d=>'<li>'+esc(d)+'</li>').join('')}</ul>`;
   }catch(e){if(out)out.innerHTML=`<p class="note" style="color:#9c3021">✗ Erreur : ${esc(e.message)}</p>`}
 }
 

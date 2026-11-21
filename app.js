@@ -225,7 +225,6 @@ app.get('/api/ah-championships', async(req,res)=>{
             const lname=name.toLowerCase();
             // Filtres: test/duplicate/practice servers
             if(/\btest\b|ser.?test|duplicate/i.test(name))continue;
-            if(j.IsInactive)continue;
             const pts=((j.Classes||[])[0]||{}).Points||{};
             const scale=(pts.Places||[]).map(x=>+x||0).filter(x=>x>0);
             const events=(j.Events||{});
@@ -255,7 +254,7 @@ app.get('/api/ah-championships', async(req,res)=>{
               }
             });
             out.push({
-              server:srv,uuid,name,
+              server:srv,uuid,name,inactive:!!j.IsInactive,
               progress:j.Stats?.Progress||0,
               numEvents:j.Stats?.NumEvents||0,
               numEntrants:j.Stats?.NumEntrants||0,
@@ -308,7 +307,6 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
     const diagnostics={ignored:[],missing:[]};
     const events=champ.Events||[];
     const evList=Array.isArray(events)?events:Object.values(events);
-    const DATE_WINDOW_MS=45*60*1000; // fenêtre de correspondance portée à 45 minutes
     // Type → sessionType
     function toSessionType(rawType,sess){
       const name=((sess&&sess.SessionConfig&&sess.SessionConfig.name)||rawType||'').toUpperCase();
@@ -384,42 +382,7 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
         });
       }
     });
-    // Complète les 'url' avec /results pour les sessions en cours non encore dans l'export
-    const needUrl=items.filter(x=>x.source==='url'&&x.date);
-    if(needUrl.length){
-      try{
-        const allResults=await ahListResults(server);
-        // Filtre "test" moins agressif : ignorer seulement si le nom entier est "test" ou commence par "test "
-        const pool=allResults.filter(x=>{
-          if(x.type==='PRACTICE')return false;
-          const full=((x.sessionName||'')+' '+(x.filename||'')).trim().toLowerCase();
-          const base=full.replace(/^.*[\\/]/,'');
-          if(/^test(\b|[-_])/i.test(base))return false;
-          if(/\bduplicate\b/i.test(full))return false;
-          return true;
-        });
-        for(const it of needUrl){
-          const needType=it.sessionType;
-          const baseTs=new Date(it.date).getTime();
-          if(!isFinite(baseTs)){diagnostics.missing.push(it);continue;}
-          const base=baseTs;
-          let best=null,bestDt=Infinity;
-          for(const r of pool){
-            // type AC brut peut être 'RACE','QUALIFY','PRACTICE', parfois 'RACE2' etc.
-            const rt=(r.type||'').toUpperCase();
-            const matchType=(needType==='QUALIFY')? rt.startsWith('QUALIF')||rt==='QUALIFY'
-                           : rt.startsWith('RACE');
-            if(!matchType)continue;
-            const t=new Date(r.date).getTime();
-            const dt=Math.abs(t-base);
-            if(dt<bestDt && dt<=DATE_WINDOW_MS){best=r;bestDt=dt}
-          }
-          if(best){it.url=best.url;it.filename=best.filename}
-          else{it.source='missing';diagnostics.missing.push(it);}
-        }
-      }catch(e){}
-    }
-    const final=items.filter(x=>x.source!=='missing');
+    const final=require('./tools/lib/ah-session-safety').retainVerifiedSessions(items,diagnostics);
     res.json({server,uuid,championship:champ.Name,events:evList.length,items:final,diagnostics});
   }catch(e){res.status(502).json({error:e.message})}
 });
@@ -1236,7 +1199,7 @@ app.get('/telemetry.html',(req,res)=>res.redirect(301,'/telemetry'+(req.original
 // c'est le retour en arrière en une variable d'environnement, sans redéploiement
 // de code.
 if(eventsSource()==='local'){
-  eventsApi.mountEventRoutes(app,{getStore:getEventsStore});
+  eventsApi.mountEventRoutes(app,{getStore:getEventsStore,authorizeAhServer:server=>ahClient.authorize(server,true)});
 }
 
 // Catalogue et import des mods du PC hébergeant Node : lecture seule, administrateurs.
