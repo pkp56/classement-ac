@@ -1556,9 +1556,17 @@ test('Import automatique AH : actualise collisions et meilleurs temps sur des se
   await new Promise(resolve=>setImmediate(resolve));
   await vm.runInContext("loadEvent('ah-refresh-cup')",sandbox);
   vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin';adminTab='import';page='admin';render()",sandbox);
+  // Comme dans le vrai DOM, render remplace le panneau et son élément de résultat.
+  let visibleResult=getElementById('ah-result');
+  const originalGet=sandbox.document.getElementById;
+  sandbox.document.getElementById=id=>id==='ah-result'?visibleResult:originalGet(id);
+  sandbox.replaceImportResult=()=>{visibleResult={id:'ah-result',innerHTML:'',style:{}};};
+  vm.runInContext('const originalRenderForImportTest=render; render=function(){originalRenderForImportTest();replaceImportResult()}',sandbox);
 
   await vm.runInContext('ahImport()',sandbox);
   await new Promise(resolve=>setImmediate(resolve));
+  assert.match(visibleResult.innerHTML,/Import terminé/);
+  assert.match(visibleResult.innerHTML,/Sauvegarde serveur confirmée/);
 
   const sessFetch=calls.find(c=>c.url.startsWith('/api/ah-championship-session-json'));
   assert.ok(sessFetch,'la session déjà importée est bien re-téléchargée');
@@ -1571,7 +1579,7 @@ test('Import automatique AH : actualise collisions et meilleurs temps sur des se
   assert.equal(updated.results[1].best,91800);
   assert.deepEqual(updated.laps[0].sectors,[28000,32000,30500]);
   assert.deepEqual(remote.data.penMap['0:0:p1'],{timeAdd:5000,note:'Avantage'});
-  assert.match(getElementById('ah-result').innerHTML,/0 nouvelle\(s\), 1 actualisée\(s\)/);
+  assert.match(visibleResult.innerHTML,/0 nouvelle\(s\), 1 actualisée\(s\)/);
 
   // Vérifier que l'onglet Circuit expose bien le meilleur tour calculé et la collision géolocalisée
   vm.runInContext('circuitsCache=null',sandbox);

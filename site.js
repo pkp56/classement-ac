@@ -3158,7 +3158,8 @@ async function bulkImport(ev){
   }
   render();
   const warnProj=backfill.missing?`<p class="note" style="color:#8a5a14">⚠ ${backfill.missing} fiche(s) circuit sans repère GPS (<code>worldProjection</code>) : actualise la fiche circuit depuis un serveur local ou Google Drive pour afficher les collisions sur le tracé.</p>`:'';
-  if(out)out.innerHTML=`<p class="note"><b>Import terminé :</b> ${ok} fichier(s) importé(s), ${errs.length} erreur(s).${esc(saveMsg)}</p>${warnProj}${errs.length?`<ul class="note" style="font-family:monospace;font-size:11px">${errs.map(x=>'<li>✗ '+esc(x)+'</li>').join('')}</ul>`:''}`;
+  const resultOut=document.getElementById('ah-result');
+  if(resultOut)resultOut.innerHTML=`<p class="note"><b>Import terminé :</b> ${ok} fichier(s) importé(s), ${errs.length} erreur(s).${esc(saveMsg)}</p>${warnProj}${errs.length?`<ul class="note" style="font-family:monospace;font-size:11px">${errs.map(x=>'<li>✗ '+esc(x)+'</li>').join('')}</ul>`:''}`;
   ev.target.value='';
 }
 // Qualification explicite ; aucun parsing automatique des commentaires anciens.
@@ -5154,7 +5155,8 @@ async function ahImport(){
     render();
     const projNote=backfill.refreshed?`<p class="note">🧭 ${backfill.refreshed} fiche(s) circuit recalibrée(s) pour le placement GPS des collisions.</p>`:''
       +(backfill.missing?`<p class="note" style="color:#8a5a14">⚠ ${backfill.missing} fiche(s) circuit sans repère GPS (<code>worldProjection</code>) : actualise la fiche circuit depuis un serveur local ou Google Drive pour afficher les collisions sur le tracé.</p>`:'');
-    if(out)out.innerHTML+=`<p class="note"><b>Import terminé :</b> ${added} nouvelle(s), ${updated} actualisée(s) (collisions &amp; meilleurs temps), ${err} erreur(s).${saveNote}</p>${projNote}<ul class="note" style="font-family:monospace;font-size:11px">${details.map(d=>'<li>'+esc(d)+'</li>').join('')}</ul>`;
+    const resultOut=document.getElementById('ah-result');
+    if(resultOut)resultOut.innerHTML+=`<p class="note"><b>Import terminé :</b> ${added} nouvelle(s), ${updated} actualisée(s) (collisions &amp; meilleurs temps), ${err} erreur(s).${saveNote}</p>${projNote}<ul class="note" style="font-family:monospace;font-size:11px">${details.map(d=>'<li>'+esc(d)+'</li>').join('')}</ul>`;
   }catch(e){if(out)out.innerHTML=`<p class="note" style="color:#9c3021">✗ Erreur : ${esc(e.message)}</p>`}
 }
 
