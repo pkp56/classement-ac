@@ -44,3 +44,17 @@ test('La variante est proposée même si CONFIG_TRACK est absent du préréglage
  assert.match(html,/data-cm-key="CONFIG_TRACK" data-cm-original="" data-cm-layout/);
  assert.match(html,/value="east"/);assert.match(html,/value="west"/);
 });
+test('Liste des voitures autorisées et places limitées, sans effacer une place existante',()=>{
+ const html=editor.render({settings:{SERVER:{CARS:'car_a;car_b'}},extra:{},slots:[{id:0,model:'car_c',skin:'',skinEditable:true}]},{cars:[{id:'car_a',skins:[]},{id:'car_b',skins:[]},{id:'car_c',skins:[]}],tracks:[]});
+ assert.match(html,/data-cm-allowed/);assert.match(html,/value="car_c"[^>]*>car_c<\/option>/);
+ assert.match(html,/value="car_c" selected disabled>car_c \(actuelle, non autorisée\)/);
+ assert.match(html,/data-cm-add-model/);assert.match(html,/data-cm-cars/);
+});
+test('La modification des voitures autorisées filtre les choix des places et conserve la valeur précédente',()=>{
+ let onChange;const hidden={value:''};let html='';
+ const select={tagName:'SELECT',disabled:false,value:'car_b',hasAttribute:()=>false,set innerHTML(v){html=v},get innerHTML(){return html}};
+ const container={addEventListener(_name,fn){onChange=fn},querySelector(s){return s==='[data-cm-cars]'?hidden:null},querySelectorAll(s){return s.includes('data-cm-slot-field')?[select]:[]}};
+ editor.attach(container,{cars:[]},{},()=>{},()=>{},'local1');
+ onChange({target:{matches:s=>s==='[data-cm-allowed]',selectedOptions:[{value:'car_a'}]}});
+ assert.equal(hidden.value,'car_a');assert.equal(select.value,'car_b');assert.match(html,/car_b \(actuelle, non autorisée\)/);assert.match(html,/value="car_a"/);
+});

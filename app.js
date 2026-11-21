@@ -950,7 +950,7 @@ app.post('/api/server-manager/presets/:id/preview',async(req,res)=>{
   if(!path.isAbsolute(root)||!path.isAbsolute(content))return res.status(503).json({error:'Lecture des serveurs non configurée.'});
   try{
     const files=await require('./tools/server-manager/presets').readFiles(root,req.params.id);
-    const inventory=await require('./tools/server-manager/inventory').inventory(content);
+    const inventory=await require('./tools/server-manager/inventory').inventory(content,String(process.env.GDSP_AC_EXTRA_CONTENT_ROOT||'').trim());
     const body=req.body||{},hasCsp=body.cspConfig!==undefined;
     const welcome=hasCsp?await require('./tools/server-manager/welcome-store').readWelcome(root,req.params.id,files.config):null;
     const next=hasCsp?require('./tools/server-manager/welcome-store').prepareWelcome(welcome,body.welcomeRevision,body.cspConfig):null;
@@ -1015,7 +1015,7 @@ app.post('/api/server-manager/presets/:id/save',async(req,res)=>{
   const body=req.body||{};
   if(body.confirmation!==id||body.cmClosed!==true)return res.status(400).json({error:'Confirme le serveur et la fermeture de Content Manager.'});
   try{
-    const result=await cmExclusive(()=>require('./tools/server-manager/save').save({root,contentRoot,backupRoot,publicRoot:ROOT,id,confirmation:body.confirmation,configRevision:body.configRevision,entryRevision:body.entryRevision,configChanges:body.configChanges,entryChanges:body.entryChanges,weatherChanges:body.weatherChanges,raceMode:body.raceMode,cspConfig:body.cspConfig,welcomeRevision:body.welcomeRevision},{checkState:serverId=>require('./tools/server-manager/windows-safety').canEdit(root,serverId)}));
+    const result=await cmExclusive(()=>require('./tools/server-manager/save').save({root,contentRoot,extraContentRoot:String(process.env.GDSP_AC_EXTRA_CONTENT_ROOT||'').trim(),backupRoot,publicRoot:ROOT,id,confirmation:body.confirmation,configRevision:body.configRevision,entryRevision:body.entryRevision,configChanges:body.configChanges,entryChanges:body.entryChanges,weatherChanges:body.weatherChanges,raceMode:body.raceMode,cspConfig:body.cspConfig,welcomeRevision:body.welcomeRevision},{checkState:serverId=>require('./tools/server-manager/windows-safety').canEdit(root,serverId)}));
     res.json(result);
   }catch(e){
     if(e.code==='RECOVERY_REQUIRED')return res.status(500).json({error:'Écriture non confirmée : restauration manuelle nécessaire avant toute nouvelle modification.',code:e.code});
@@ -1030,7 +1030,7 @@ app.get('/api/server-manager/inventory',async(req,res)=>{
   if(!root||!path.isAbsolute(root))return res.status(503).json({error:'Lecture des serveurs non configurée sur le PC serveur.'});
   const content=String(process.env.GDSP_AC_CONTENT_ROOT||path.join(root,'..','content')).trim();
   if(!path.isAbsolute(content))return res.status(503).json({error:'Contenu Assetto Corsa non configuré.'});
-  try{res.json(await require('./tools/server-manager/inventory').inventory(content));}
+  try{res.json(await require('./tools/server-manager/inventory').inventory(content,String(process.env.GDSP_AC_EXTRA_CONTENT_ROOT||'').trim()));}
   catch(e){res.status(503).json({error:'Inventaire des voitures et circuits indisponible.'});}
 });
 app.get('/api/server-manager/state',async(req,res)=>{
