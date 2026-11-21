@@ -34,3 +34,12 @@ test('Aperçu ajout et suppression ne divulgue jamais les données réservées',
  const two=entry+'[CAR_1]\nMODEL=car_b\nSKIN=red\nGUID=\n';
  const q=prepare({...args2,entry:two,entryRevision:h(two),entryChanges:[{id:1,operation:'remove'}]});assert.equal(q.slotChanges[0].after,null);
 });
+test('Une variante peut être ajoutée si CONFIG_TRACK est absent sans toucher aux autres lignes',()=>{
+ const missing=config.replace('CONFIG_TRACK=\n','');
+ const plan=prepare({...args,config:missing,configRevision:h(missing),configChanges:[{section:'SERVER',key:'TRACK',value:'monza'},{section:'SERVER',key:'CONFIG_TRACK',value:'gp'}]});
+ assert.ok(plan.configChanges.some(c=>c.key==='CONFIG_TRACK'&&c.after==='gp'));
+ const {patchIni}=require('../tools/server-manager/ini');
+ assert.equal(patchIni(missing,[{section:'SERVER',key:'CONFIG_TRACK',value:'gp'}]),missing.replace('[SERVER]\n','[SERVER]\nCONFIG_TRACK=gp\n'));
+ assert.throws(()=>patchIni(missing+'\n[SERVER]\n',[{section:'SERVER',key:'CONFIG_TRACK',value:'gp'}]),/ambigu/);
+ assert.throws(()=>prepare({...args,config:missing,configRevision:h(missing),configChanges:[{section:'SERVER',key:'TRACK',value:'monza'},{section:'SERVER',key:'CONFIG_TRACK',value:'wrong'}]}),/introuvable/);
+});
