@@ -9,6 +9,8 @@
   ];
   const weatherLabels={GRAPHICS:'Météo',__CM_GRAPHICS:'Météo CM',BASE_TEMPERATURE_AMBIENT:'Température ambiante',BASE_TEMPERATURE_ROAD:'Écart de température piste',VARIATION_AMBIENT:'Variation ambiante',VARIATION_ROAD:'Variation piste',WIND_BASE_SPEED_MIN:'Vent minimum',WIND_BASE_SPEED_MAX:'Vent maximum',WIND_BASE_DIRECTION:'Direction du vent',WIND_VARIATION_DIRECTION:'Variation du vent'};
   function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function normaliseCsp(value){return String(value??'').replace(/\r\n?/g,'\n');}
+  function cspChanged(current,original){return normaliseCsp(current)!==normaliseCsp(original);}
   function options(list,current){
     const values=[...new Set(list||[])];
     if(current&&!values.includes(current)) values.unshift(current);
@@ -65,6 +67,9 @@
     return changes;
   }
   function attach(container,inventory,data,check,save,id){
+    // Initialiser explicitement : le parseur HTML peut retirer le premier saut de ligne.
+    const cspInput=container.querySelector('[data-cm-csp]');
+    if(cspInput&&data.cspWelcome?.available)cspInput.value=normaliseCsp(data.cspWelcome.config);
     container.addEventListener('change',event=>{
       const el=event.target;
       if(el.matches?.('[data-cm-track]')){
@@ -85,10 +90,10 @@
       const weatherRemoved=[...container.querySelectorAll('[data-cm-weather-remove]:checked')].map(el=>Number(el.dataset.cmWeatherRemove)).sort((a,b)=>b-a);
       const weatherAdd=container.querySelector('[data-cm-weather-add]')?.value.trim()||'';
       const cspValue=container.querySelector('[data-cm-csp]')?.value;
-      const cspChanged=cspValue!==undefined&&cspValue!==data.cspWelcome?.config;
+      const cspIsChanged=cspValue!==undefined&&cspChanged(cspValue,data.cspWelcome?.config);
       const raceModeEl=container.querySelector('[data-race-mode]'),raceValueEl=container.querySelector('[data-race-value]');
       const raceChanged=!!raceModeEl&&(raceModeEl.value!==raceModeEl.dataset.original||raceValueEl.value!==raceValueEl.dataset.original);
-      if(!changes.length&&!removed.length&&!addModel&&!weatherRemoved.length&&!weatherAdd&&!cspChanged&&!raceChanged){out.textContent='Aucun changement dans le brouillon.';return;}
+      if(!changes.length&&!removed.length&&!addModel&&!weatherRemoved.length&&!weatherAdd&&!cspIsChanged&&!raceChanged){out.textContent='Aucun changement dans le brouillon.';return;}
       const configChanges=[],slots=new Map();
       for(const c of changes){
         if(c.section){
@@ -107,11 +112,11 @@
       if(weatherRemoved.length&&weatherAdd){out.textContent='Enregistre les suppressions avant d’ajouter une météo.';return;}
       const weatherChanges=weatherRemoved.map(id=>({id,operation:'remove'}));
       if(weatherAdd){const ids=Object.keys(data.extra?.weather||{}).map(x=>Number(x.slice(8)));weatherChanges.push({id:ids.length?Math.max(...ids)+1:0,operation:'add',graphics:weatherAdd});}
-      if(saving&&cspChanged&&!global.confirm('Les Extra options CSP seront remplacées par le texte affiché. Les scripts supprimés dans ce texte ne seront plus chargés. Confirmer ?'))return;
+      if(saving&&cspIsChanged&&!global.confirm('Les Extra options CSP seront remplacées par le texte affiché. Les scripts supprimés dans ce texte ne seront plus chargés. Confirmer ?'))return;
       if(saving&&!global.confirm(`Enregistrer sur ${id==='local1'?'Serveur CM 1':'Serveur CM 2'} ? Content Manager doit être fermé et le serveur arrêté. Une sauvegarde sera créée ; une interruption peut nécessiter une restauration manuelle.`))return;
       event.target.disabled=true;out.textContent='Vérification…';
       try{
-        const payload={configRevision:data.revision,entryRevision:data.entryRevision,configChanges,entryChanges:[...slots.values()],weatherChanges,...(raceChanged?{raceMode:{mode:raceModeEl.value,value:raceValueEl.value}}:{}),...(cspChanged?{cspConfig:cspValue,welcomeRevision:data.cspWelcome.revision}:{})};
+        const payload={configRevision:data.revision,entryRevision:data.entryRevision,configChanges,entryChanges:[...slots.values()],weatherChanges,...(raceChanged?{raceMode:{mode:raceModeEl.value,value:raceValueEl.value}}:{}),...(cspIsChanged?{cspConfig:cspValue,welcomeRevision:data.cspWelcome.revision}:{})};
         const result=await (saving?save({...payload,confirmation:id,cmClosed:true}):check(payload));
         const plan=saving?result.plan:result;
         const lines=[...plan.configChanges.map(c=>`${c.section} · ${c.key} : ${c.before||'(vide)'} → ${c.after||'(vide)'}`),...plan.slotChanges.map(c=>`Place ${c.id+1} : ${c.before?c.before.model+' / '+c.before.skin:'(nouvelle)'} → ${c.after?c.after.model+' / '+c.after.skin:'(supprimée)'}`),...(plan.weatherChanges||[]).map(c=>`Météo ${c.id+1} : ${c.before?'existante':'(nouvelle)'} → ${c.after?(c.after.__CM_GRAPHICS||c.after.GRAPHICS||'existante'):'(supprimée)'}`)];
@@ -132,9 +137,9 @@
       const model=container.querySelector('[data-cm-add-model]')?.value.trim(),weather=container.querySelector('[data-cm-weather-add]')?.value.trim();
       if(model)lines.push(`Nouvelle place : ${model}`);if(weather)lines.push(`Nouvelle météo : ${weather}`);
       const mode=container.querySelector('[data-race-mode]'),rv=container.querySelector('[data-race-value]');if(mode&&(mode.value!==mode.dataset.original||rv.value!==rv.dataset.original))lines.push(`Course : ${rv.value} ${mode.value==='time'?'minutes':'tours'}.`);
-      const csp=container.querySelector('[data-cm-csp]');if(csp&&csp.value!==data.cspWelcome?.config)lines.push('Extra options CSP modifiées.');
+      const csp=container.querySelector('[data-cm-csp]');if(csp&&cspChanged(csp.value,data.cspWelcome?.config))lines.push('Extra options CSP modifiées.');
       out.textContent=lines.length?lines.join('\n')+'\n\nAucun changement n’a été enregistré.':'Aucun changement dans le brouillon.';
     });
   }
-  global.gdspServerEditor={render,collect,attach};
+  global.gdspServerEditor={render,collect,attach,cspChanged};
 })(window);

@@ -22,6 +22,10 @@ async function readWelcome(root,id,config){
 function prepareWelcome(old,revision,cspConfig){
  if(!old||revision!==old.revision)throw Error('Le message CSP a changé : recharge avant de modifier');
  if(typeof cspConfig!=='string')throw Error('Configuration CSP invalide');
+ // Les textarea HTML normalisent CRLF en LF : ne jamais réécrire le MOTD
+ // ni recompresser le CSP pour un simple changement de fins de ligne.
+ const normalized=text=>text.replace(/\r\n?/g,'\n');
+ if(normalized(cspConfig)===normalized(old.decoded.config||''))return old.local;
  return encodeWelcome(old.decoded.message,cspConfig);
 }
 module.exports={readWelcome,prepareWelcome};

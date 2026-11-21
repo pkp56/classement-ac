@@ -23,3 +23,19 @@ test('Les options CSP sont visibles sans exécuter le contenu HTML',()=>{
  const html=editor.render({settings:{},extra:{},slots:[],cspWelcome:{available:true,config:'[SCRIPT_2]\n<script>alert(1)</script>'}},null);
  assert.match(html,/data-cm-csp/);assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>alert/);
 });
+
+test('CRLF du CSP identique aux retours navigateur ne déclenche pas de modification',()=>{
+ assert.equal(editor.cspChanged('[SCRIPT_2]\nSCRIPT=x\n','[SCRIPT_2]\r\nSCRIPT=x\r\n'),false);
+ assert.equal(editor.cspChanged('[SCRIPT_2]\nSCRIPT=y\n','[SCRIPT_2]\r\nSCRIPT=x\r\n'),true);
+});
+test('Une modification des dégâts ne transmet pas le CSP inchangé',async()=>{
+ const buttons={};for(const id of ['#cm-preview-btn','#cm-check-btn','#cm-save-btn'])buttons[id]={disabled:false,addEventListener(_name,fn){this.click=fn;}};
+ const csp={value:''},out={textContent:''};
+ const field={disabled:false,value:'95',dataset:{cmOriginal:'100',cmSection:'SERVER',cmKey:'DAMAGE_MULTIPLIER'}};
+ const container={addEventListener(){},querySelector(selector){return buttons[selector]||({'[data-cm-csp]':csp,'#cm-preview':out})[selector]||null;},querySelectorAll(selector){return selector==='[data-cm-original]'?[field]:[];}};
+ let payload;const original='\n[SCRIPT_2]\r\nSCRIPT=x\r\n';
+ editor.attach(container,null,{revision:'config',entryRevision:'entry',slots:[],cspWelcome:{available:true,config:original,revision:'welcome'}},async x=>{payload=x;return {configChanges:[],slotChanges:[],weatherChanges:[]};},async()=>{},'local2');
+ assert.equal(csp.value,'\n[SCRIPT_2]\nSCRIPT=x\n');
+ await buttons['#cm-check-btn'].click({target:buttons['#cm-check-btn']});
+ assert.equal(payload.configChanges[0].value,'95');assert.equal(Object.hasOwn(payload,'cspConfig'),false);
+});
