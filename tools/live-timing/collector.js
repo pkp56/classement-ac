@@ -134,7 +134,7 @@ class LiveTimingCollector extends EventEmitter {
       pluginPort: Number(options.pluginPort || process.env.AC_PLUGIN_PORT || 12001),
       listenPort: Number(options.listenPort || process.env.AC_LISTEN_PORT || 12000),
       realtimeMs: Number(options.realtimeMs || process.env.AC_REALTIME_MS || 500),
-      httpUrl: (options.httpUrl || process.env.AC_HTTP_URL || '').replace(/\/+$/, ''),
+      httpUrl: String(options.httpUrl != null ? options.httpUrl : (process.env.AC_HTTP_URL || '')).replace(/\/+$/, ''),
       label: options.label || process.env.AC_SERVER_LABEL || 'Serveur Assetto Corsa',
       autoStart: options.autoStart !== false
     };

@@ -1063,7 +1063,7 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Telemetry-Token': 'jeton-tel' },
     body: JSON.stringify({
-      ...pushPayload(),
+      ...pushPayload(), serverName: 'GDSP Test Race Control', sessionKey: 'live-sector-http',
       laps: [{ lapNumber: 1, lapMs: 75576 }, { lapNumber: 10 }]
     })
   });
@@ -1094,6 +1094,14 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
 
   // 4. lecture avec admin → les tours sont là
   const auth = { Authorization: 'Bearer ' + loginBody.token };
+  const serverCatalog=await (await fetch(`${base}/api/telemetry/catalog`,{headers:auth})).json();
+  assert.ok(serverCatalog.servers.includes('GDSP Test Race Control'));
+  const filteredSummary=await (await fetch(`${base}/api/telemetry/summary?serverName=${encodeURIComponent('GDSP Test Race Control')}`,{headers:auth})).json();
+  assert.equal(filteredSummary.rows,3);
+  const otherSummary=await (await fetch(`${base}/api/telemetry/summary?serverName=Different`,{headers:auth})).json();
+  assert.equal(otherSummary.rows,0);
+  const otherSessions=await (await fetch(`${base}/api/telemetry/sessions?serverName=Different`,{headers:auth})).json();
+  assert.equal(otherSessions.sessions.length,0);
   const clients = await (await fetch(`${base}/api/telemetry/measurement-clients`, { headers: auth })).json();
   assert.equal(clients.clients.length, 1);
   assert.equal(clients.clients[0].car, 'alfa_giulietta_spider');
@@ -2240,4 +2248,31 @@ test('la ligne circuit dit SA source : jeu (ac.getTrackID) ou config', () => {
   });
   assert.equal(config.error, null);
   assert.ok(config.ui.some(l => /circuit: oesterreichring1979 \(config\)/.test(l)), config.ui.join(' | '));
+});
+
+test('Filtre serveur : deux serveurs sur le même circuit restent séparés, sans inventer les noms absents', async () => {
+  const service = new TelemetryService(tempStore());
+  await service.ingest(pushPayload({serverName:'CM 1',sessionKey:'separate-cm-1'}));
+  await service.ingest(pushPayload({serverName:'CM 2',sessionKey:'separate-cm-2',laps:[{lapNumber:1,lapMs:88000}]}));
+  await service.ingest(pushPayload({serverName:'',sessionKey:'no-server-name',laps:[{lapNumber:1,lapMs:77000}]}));
+  const catalog=await service.catalog();
+  assert.deepEqual(catalog.servers,['CM 1','CM 2']);
+  const first=await service.rows({serverName:'CM 1'});
+  const second=await service.rows({serverName:'CM 2'});
+  assert.equal(first.length,3);
+  assert.equal(second.length,1);
+  assert.ok(first.every(r=>r.server_name==='CM 1'));
+  assert.equal(second[0].lap_ms,88000);
+  assert.equal((await service.rows()).length,5);
+  assert.equal((await service.summary({serverName:'CM 1'})).rows,3);
+  assert.equal((await service.summary({serverName:'CM 2'})).rows,1);
+});
+
+test('Anciennes télémétries sans clé : ne pas réunir deux serveurs sur un même circuit', async () => {
+  const service=new TelemetryService(tempStore());
+  await service.ingest(pushPayload({serverName:'CM 1'}));
+  await service.ingest(pushPayload({serverName:'CM 2'}));
+  assert.equal((await service.listSessions()).length,2);
+  assert.equal((await service.rows({serverName:'CM 1'})).length,3);
+  assert.equal((await service.rows({serverName:'CM 2'})).length,3);
 });

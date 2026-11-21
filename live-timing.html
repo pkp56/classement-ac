@@ -251,8 +251,8 @@
       return;
     }
     $('copyCmd').style.display = '';
-    var pushOn = cfg.push && cfg.push.enabled;
-    var udp = (cfg.udp) || st.udp || {};
+    var pushOn = !activeSource && cfg.push && cfg.push.enabled;
+    var udp = st.udp || cfg.udp || {};
     $('bannerTitle').textContent = st.error ? 'La liaison avec le serveur est en erreur' : "Le site n'arrive pas encore à lire le serveur";
     var html = '';
     if (pushOn) {
@@ -477,13 +477,12 @@
     return '/api/live/status' + (activeSource ? '?source=' + encodeURIComponent(activeSource) : '');
   }
   function renderSources(cfg) {
-    var list = (cfg && cfg.httpSources) || [];
+    var local = (cfg && cfg.localSources) || [];
+    var remote = (cfg && cfg.httpSources) || [];
     var sel = $('sourceSelect');
-    if (list.length < 2) { sel.style.display = 'none'; return; }
-    sel.innerHTML = list.map(function (s, i) {
-      var current = activeSource === '' ? i === 0 : String(i) === activeSource || s.url === activeSource;
-      return '<option value="' + s.index + '"' + (current ? ' selected' : '') + '>' + esc(s.url.replace(/^https?:\/\//, '')) + '</option>';
-    }).join('');
+    if (local.length < 2 && !remote.length) { sel.style.display = 'none'; return; }
+    var rows = [{id:'',name:'Source automatique'}].concat(local).concat(remote.map(function(s){return {id:String(s.index),name:s.name+' · '+s.url.replace(/^https?:\/\//,'')};}));
+    sel.innerHTML=rows.map(function(s){return '<option value="'+esc(s.id)+'"'+(s.id===activeSource?' selected':'')+'>'+esc(s.name)+'</option>';}).join('');
     sel.style.display = '';
   }
   // --- historique persistant -------------------------------------------------
@@ -570,11 +569,13 @@
     var es = new EventSource(streamUrl());
     socket = es;
     es.addEventListener('snapshot', function (ev) {
+      if(socket!==es)return;
       lastSnapshotAt = Date.now();
       if (viewingHistory) return;   // les archives restent affichées tant qu'on les regarde
       try { render(JSON.parse(ev.data)); } catch (e) { console.error(e); }
     });
     es.addEventListener('log', function (ev) {
+      if(socket!==es)return;
       // Les événements arrivent aussi par le flux : on les ajoute tout de suite
       // au fil pour un retour immédiat, sans attendre la photo suivante.
       if (!last) return;
@@ -585,6 +586,7 @@
       } catch (e) {}
     });
     es.addEventListener('error', function () {
+      if(socket!==es)return;
       // Si le flux est coupé (proxy, onglet en veille), on basculera sur le
       // rafraîchissement périodique ci-dessous.
       if (!lastSnapshotAt) $('stateText').textContent = 'Connexion au flux…';
@@ -625,7 +627,10 @@
     var url = new URL(location.href);
     url.searchParams.set('source', activeSource);
     history.replaceState({}, '', url);
-    lastSnapshotAt = 0;
+    lastSnapshotAt = 0; last = null; sectorContext = ''; sectorRows = []; viewingHistory = false;
+    render({status:{status:'offline'},server:{},session:{},cars:[],events:[],updatedAt:new Date().toISOString()});
+    var requested=activeSource;
+    fetchLiveJson(statusUrl()).then(function(data){if(activeSource===requested)render(data);}).catch(function(){if(activeSource===requested)showLiveError();});
     connect();
   });
 })();
