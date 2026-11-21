@@ -204,7 +204,33 @@ function scheduleGenerate() {
   pendingTimer = setTimeout(generateOutputs, 100);
 }
 
+let motdGeneration = 0;
+async function updateMotd(ini, generation) {
+  const output = $('motdOut'), badge = $('motdSizeBadge'), error = $('motdError'), button = $('copyMotdBtn');
+  output.value = ''; button.disabled = true; badge.textContent = 'Génération…'; error.textContent = '';
+  if (!ini) { badge.textContent = 'Configuration invalide'; return; }
+  try {
+    const welcome = $('welcomeText').value.trimEnd();
+    if (welcome.includes('$CSP0:')) throw new Error('Le message d’accueil ne doit pas contenir $CSP0:.');
+    if (typeof CompressionStream !== 'function') throw new Error('Ce navigateur ne permet pas la génération MOTD. Utilise une version récente de Chrome ou Edge.');
+    const compressed = new Blob([new TextEncoder().encode(ini)]).stream().pipeThrough(new CompressionStream('deflate'));
+    const bytes = new Uint8Array(await new Response(compressed).arrayBuffer());
+    let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte);
+    const motd = welcome + '\t'.repeat(32) + '$CSP0:' + btoa(binary).replace(/=+$/, '');
+    if (generation !== motdGeneration) return;
+    const size = new TextEncoder().encode(motd).length;
+    output.value = motd; badge.textContent = `${size} / 2039 octets`;
+    badge.className = 'badge ' + (size > 2039 ? 'badge-err' : (size > 1750 ? 'badge-warn' : 'badge-ok'));
+    button.disabled = size > 2039;
+    if (size > 2039) error.textContent = 'MOTD trop long : réduis le message ou les réglages avant de copier.';
+  } catch (e) {
+    if (generation !== motdGeneration) return;
+    badge.textContent = 'MOTD indisponible'; error.textContent = e.message;
+  }
+}
+
 function generateOutputs() {
+  const generation = ++motdGeneration;
   const output = $('iniOut');
   const error = $('configError');
   try {
@@ -218,6 +244,7 @@ function generateOutputs() {
     output.value = '';
     error.textContent = e.message;
   }
+  updateMotd(output.value, generation);
 }
 
 function renderPresets() {
@@ -272,6 +299,7 @@ async function init() {
     el.addEventListener('change', scheduleGenerate);
   }
   $('scriptUrl').addEventListener('input', scheduleGenerate);
+  $('welcomeText').addEventListener('input', scheduleGenerate);
 
   $('addZoneBtn').addEventListener('click', () => {
     const name = ($('zoneNameInput').value || '').trim() || `Virage #${cornerZones.length + 1}`;
@@ -284,6 +312,7 @@ async function init() {
   });
 
   $('copyIniBtn').addEventListener('click', () => copyText('iniOut', 'copyIniBtn'));
+  $('copyMotdBtn').addEventListener('click', () => { if (!$('copyMotdBtn').disabled) copyText('motdOut', 'copyMotdBtn'); });
   generateOutputs();
 }
 

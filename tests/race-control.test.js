@@ -4,12 +4,13 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const net=require('node:net');
+const zlib=require('node:zlib');
 const {spawn}=require('node:child_process');
 const {once}=require('node:events');
 const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 
-test('Configurateur CSP initialise et génère les paramètres choisis sans requête réseau',()=>{
+test('Configurateur CSP initialise et génère les paramètres choisis sans requête réseau',async()=>{
   const html=fs.readFileSync(path.join(root,'race-control.html'),'utf8');
   const elements={};
   for(const match of html.matchAll(/<(input|select|textarea|button|div|span|p)[^>]*\bid="([^"]+)"[^>]*>/g)) {
@@ -17,7 +18,7 @@ test('Configurateur CSP initialise et génère les paramètres choisis sans requ
     elements[id]={value:'',checked:false,type:/type="checkbox"/.test(tag)?'checkbox':'text',classList:{toggle(){},remove(){}},style:{},addEventListener(type,fn){this[type]=fn;},appendChild(){},replaceChildren(){},select(){}};
   }
   const document={getElementById:id=>elements[id]||null,createElement:()=>({style:{},appendChild(){},addEventListener(){}}),querySelectorAll:()=>[]};
-  const context={window:{},document,URL,console,setTimeout,clearTimeout,navigator:{clipboard:{writeText:async()=>{}}}};
+  const context={window:{},document,URL,console,setTimeout,clearTimeout,Blob,TextEncoder,CompressionStream,Response,btoa,navigator:{clipboard:{writeText:async()=>{}}}};
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(root,'race-control/encoder.js'),'utf8'),context);
   context.GDSPRaceEncoder=context.window.GDSPRaceEncoder;
@@ -29,6 +30,18 @@ test('Configurateur CSP initialise et génère les paramètres choisis sans requ
   vm.runInContext('generateOutputs()',context);
   assert.match(elements.iniOut.value,/\nautoFormation=1\n/);
   assert.match(elements.iniOut.value,/\ncutEnabled=0\n/);
+  elements.welcomeText.value='Bienvenue à tous';
+  await vm.runInContext('updateMotd(document.getElementById("iniOut").value, ++motdGeneration)',context);
+  const motd=elements.motdOut.value;
+  assert.match(motd,/Bienvenue à tous\t+\$CSP0:/);
+  const decoded=zlib.inflateSync(Buffer.from(motd.split('$CSP0:')[1],'base64')).toString('utf8');
+  assert.equal(decoded,elements.iniOut.value);
+  assert.equal(elements.copyMotdBtn.disabled,false);
+  assert.match(elements.motdSizeBadge.textContent,new RegExp('^'+Buffer.byteLength(motd)+' / 2039'));
+  elements.welcomeText.value='à'.repeat(1000);
+  await vm.runInContext('updateMotd(document.getElementById("iniOut").value, ++motdGeneration)',context);
+  assert.equal(elements.copyMotdBtn.disabled,true);
+  assert.match(elements.motdError.textContent,/trop long/);
   elements.scriptUrl.value='https://test.invalid/\n[EVIL]';
   vm.runInContext('generateOutputs()',context);
   assert.equal(elements.iniOut.value,'');

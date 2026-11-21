@@ -510,6 +510,15 @@
 
       <div>
         <div class="card">
+          <h2>AssettoHosting — MOTD <code>$CSP0:</code></h2>
+          <p class="hint">Alternative au bloc CSP ci-dessous : ajoute la configuration au message d'accueil. Vérifie la limite de 2039 octets et conserve toute configuration CSP existante.</p>
+          <label for="welcomeText">Message d'accueil</label>
+          <input id="welcomeText" type="text" maxlength="500" value="GDSP Race Control Actif — Respectez les limites de piste et le départ." />
+          <div class="out-head"><span id="motdSizeBadge" class="badge">Génération…</span><button class="btn btn-gold btn-sm" id="copyMotdBtn" type="button" disabled>Copier MOTD $CSP0:</button></div>
+          <textarea id="motdOut" rows="6" readonly></textarea>
+          <p id="motdError" role="alert" class="hint"></p>
+        </div>
+        <div class="card">
           <h2>Configuration CSP pour Content Manager</h2>
           <p class="hint">Copiez ce bloc dans les Extra options du serveur choisi. Conservez les autres scripts, notamment la télémétrie [SCRIPT_2]. Redémarrez uniquement ce serveur pour appliquer les changements.</p>
           <button class="btn btn-gold btn-sm" id="copyIniBtn" type="button">Copier [SCRIPT_1]</button>
