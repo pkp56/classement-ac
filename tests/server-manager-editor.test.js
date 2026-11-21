@@ -39,3 +39,8 @@ test('Une modification des dégâts ne transmet pas le CSP inchangé',async()=>{
  await buttons['#cm-check-btn'].click({target:buttons['#cm-check-btn']});
  assert.equal(payload.configChanges[0].value,'95');assert.equal(Object.hasOwn(payload,'cspConfig'),false);
 });
+test('La variante est proposée même si CONFIG_TRACK est absent du préréglage',()=>{
+ const html=editor.render({settings:{SERVER:{TRACK:'sugo'}},extra:{csp:{trackId:'sugo'}},slots:[]},{tracks:[{id:'sugo',layouts:['east','west']}],cars:[]});
+ assert.match(html,/data-cm-key="CONFIG_TRACK" data-cm-original="" data-cm-layout/);
+ assert.match(html,/value="east"/);assert.match(html,/value="west"/);
+});

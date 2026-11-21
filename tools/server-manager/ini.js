@@ -145,7 +145,7 @@ function inspectIni(text){
 }
 function patchIni(text, updates) {
   if(!Array.isArray(updates))throw new Error('Entrée invalide');
-  const {lines,entries,sections}=parse(text), edits=new Set(),toggles=[];
+  const {lines,entries,sections}=parse(text), edits=new Set(),toggles=[],insertions=[];
   for(const u of updates){
     const section=String(u?.section||'').toUpperCase(),key=String(u?.key||'').toUpperCase();
     if(!keyAllowed(section,key))throw new Error('Paramètre non autorisé');
@@ -178,6 +178,10 @@ function patchIni(text, updates) {
       toggles.push({from:onCount?section:off,to:value==='1'?section:off});continue;
     }
     const found=entries.get(id)||[];
+    if(section==='SERVER'&&key==='CONFIG_TRACK'&&found.length===0&&sections.get(section)===1){
+      if(value)insertions.push(value);
+      continue;
+    }
     if(found.length!==1||sections.get(section)!==1)throw new Error('Paramètre absent ou ambigu : '+section+'.'+key);
     const output=section==='SERVER'&&key==='TRACK'?trackParts(found[0].value.trim()).prefix+value:value;
     lines[found[0].index]=found[0].prefix+output+found[0].ending;
@@ -187,6 +191,13 @@ function patchIni(text, updates) {
     const index=lines.findIndex(line=>{const match=line.match(/^\uFEFF?\s*\[([^\]]+)\]/);return match&&match[1].trim().toUpperCase()===toggle.from;});
     if(index<0)throw new Error('Session absente ou ambiguë');
     lines[index]=lines[index].replace(/^(\uFEFF?\s*\[)([^\]]+)(\])/,(_,a,_b,c)=>a+toggle.to+c);
+  }
+  if(insertions.length){
+    const index=lines.findIndex(line=>/^\uFEFF?\s*\[SERVER\]\s*(?:[;#].*)?(?:\r\n|\n|\r|$)$/i.test(line));
+    if(index<0)throw new Error('Section serveur absente');
+    const newline=text.match(/\r\n|\n|\r/)?.[0]||'\r\n';
+    if(!/(?:\r\n|\n|\r)$/.test(lines[index]))lines[index]+=newline;
+    lines[index]+='CONFIG_TRACK='+insertions[0]+newline;
   }
   return lines.join('');
 }
