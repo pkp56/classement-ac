@@ -17,6 +17,7 @@ let ahConfig = null;              // {server, uuid} when event is bound to an AH
 let page='accueil', ranktab='pilotes', eventtab='resultats', round=0, sessionIndex=1, driverId='', globalDriverId='', compareA='', compareB='';
 let sessions=[], penMap={}, manualDrivers=null, customCalendar=null;
 let adminAuth=false, adminUser='', adminTab='desk', selectedRaceAdj=null;
+let commissionIncidentSession='', commissionIncidentPilot='';
 // Les anciens jetons persistants ne sont plus réutilisés : reconnexion requise.
 localStorage.removeItem('gdsp_admin_token');
 sessionStorage.removeItem('gdsp_admin_token');
@@ -2981,6 +2982,22 @@ function importSessionJson(text,fileName,opts){
       return ev;
     }).filter(Boolean);
 
+    // Journal séparé des données sportives : garde aussi les contacts avec le
+    // décor et ne modifie ni les classements ni les décisions de commission.
+    const incidentEvents=toArr(j.Events).filter(e=>e&&['COLLISION_WITH_CAR','COLLISION_WITH_ENV'].includes(e.Type||e.type)).map(e=>{
+      const type=e.Type||e.type;
+      const a=cars[e.CarId]||(e.Driver?driverFrom({Driver:e.Driver,CarId:e.CarId}):null);
+      if(!a)return null;
+      const b=type==='COLLISION_WITH_CAR'?(cars[e.OtherCarId]||(e.OtherDriver?driverFrom({Driver:e.OtherDriver,CarId:e.OtherCarId}):null)):null;
+      const speed=e.ImpactSpeed??e.speed;
+      const row={type,aid:a.id,a:a.name,bid:b?.id||'',b:b?.name||'',
+        speed:speed!=null&&Number.isFinite(Number(speed))?Number(speed):null,
+        timestamp:e.Timestamp??e.timestamp??null};
+      const pos=contactPosition(e);if(pos)row.WorldPosition=pos;
+      if(typeof e.AfterSessionEnd==='boolean')row.afterSessionEnd=e.AfterSessionEnd;
+      return row;
+    }).filter(Boolean);
+
     let raceStart=null;
     if(j.Type==='RACE'){const c=[];laps.forEach(l=>{if(typeof l.timestamp==='number'&&typeof l.time==='number'&&l.time>40000&&l.time<600000)c.push(l.timestamp-l.time/1000)});if(c.length)raceStart=Math.min(...c)}
 
@@ -3024,6 +3041,10 @@ function importSessionJson(text,fileName,opts){
       results:finalResults,
       laps:finalLaps,
       events:finalEvents,
+      // Un export incomplet ne doit pas effacer un journal déjà sauvegardé.
+      ...(incidentEvents.length ? {incidentEvents} :
+        (prev&&Array.isArray(prev.incidentEvents) ? {incidentEvents:prev.incidentEvents} :
+          (j.Events!=null && !(prev&&prev.events&&prev.events.length) ? {incidentEvents:[]} : {}))),
       raceStart:raceStart??(prev?prev.raceStart:null)
     };
     if(idx>=0)sessions[idx]=sess;else sessions.push(sess);
@@ -4523,7 +4544,7 @@ async function editAdminEvent(slug){
 async function selectEditorEvent(slug){
   if(!slug)return;
   if(!await loadEvent(slug)){alert('Impossible de charger cet événement.');render();return;}
-  round=0;sessionIndex=0;selectedRaceAdj=null;driverId='';compareA='';compareB='';
+  round=0;sessionIndex=0;selectedRaceAdj=null;commissionIncidentSession='';commissionIncidentPilot='';driverId='';compareA='';compareB='';
   eventsSubTab='editor';render();
 }
 
@@ -4673,7 +4694,7 @@ const adminGeneralTools=[['events','Événements','Championnats, opens et fiches
 async function chooseAdminEvent(slug){
   if(!slug)return;
   if(!await loadEvent(slug)){alert('Impossible de charger cet événement.');render();return}
-  round=0;sessionIndex=0;selectedRaceAdj=null;driverId='';compareA='';compareB='';
+  round=0;sessionIndex=0;selectedRaceAdj=null;commissionIncidentSession='';commissionIncidentPilot='';driverId='';compareA='';compareB='';
   if(window.history)window.history.replaceState({},'', '/evenements/'+encodeURIComponent(slug));
   adminTabs('desk');
 }
@@ -4782,8 +4803,70 @@ function admin(){
     const info=quals?`${races} course(s) · ${quals} qualif`:`${races} course(s)`;
     return `<div class="admin-round"><b>Manche ${r.number} · ${esc(r.track)}</b><div class="muted">${date(r.date)} · ${info}</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn secondary small" onclick="openAdj(${i})">Pénalités</button><button class="btn secondary small" onclick="resetRound(${i})">Effacer</button></div></div>`;
   }).join('')+plannedRoundCards;
-  return `${workspace}<div class="panel" id="admin-tool">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, sessions déjà importées actualisées (collisions &amp; meilleurs temps).</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer / actualiser automatiquement les résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Les sessions déjà importées sont réimportées pour récupérer ou actualiser leurs données de collisions et de meilleurs temps (sans doublon et en conservant les pénalités Commission).</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Ajustements de points au championnat (+ / −), pénalités temps en course (reclassement automatique), DNF/DNS/DQ ou avertissements.</p>${renderChampPointsPanel()}${selectedRaceAdj!==null&&rs[selectedRaceAdj]?renderAdjPanel(rs[selectedRaceAdj]):rs.length?`<div class="controls"><select onchange="selectedRaceAdj=this.value===''?null:+this.value;render()"><option value="">— Choisir une manche pour ajuster un résultat de course —</option>${rs.map((x,i)=>`<option value="${i}">Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div>`:`<p class="note">Aucune manche importée pour les pénalités de course.</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'||adminTab==='teams'?adminRoster(adminTab==='teams'):adminTab==='refresh'?renderEventSheetTools(false):adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='circuits'?renderCircuitsAdmin():adminTab==='globalexc'?renderGlobalExclusions():adminTab==='telemetry'?renderTelemetryAdmin()
+  return `${workspace}<div class="panel" id="admin-tool">${adminTab==='import'?`<h2>Importer des résultats</h2><p class="note">Import direct depuis les deux serveurs AssettoHosting GDSP (fr2 / fr5) : <b>PRACTICE ignorés</b>, sessions dont le nom contient « test » ignorées, sessions déjà importées actualisées (collisions &amp; meilleurs temps).</p><div style="margin:12px 0"><button class="btn" onclick="ahImport()">📥 Importer / actualiser automatiquement les résultats</button></div><div id="ah-result"></div><div class="grid" style="margin-top:16px"><div class="panel"><h3>Importer un fichier JSON</h3><p class="note">Import manuel si besoin (un ou plusieurs).</p><input type="file" accept=".json" onchange="handleImport(event)"><br><input type="file" accept=".json" multiple onchange="bulkImport(event)" style="margin-top:8px"></div><div class="panel"><h3>Règles de filtrage automatique</h3><ul class="note"><li>QUALIFY et RACE importés.</li><li>PRACTICE systématiquement ignorés.</li><li>Toute session dont le nom (serveur/piste) contient « test » est ignorée.</li><li>Les sessions déjà importées sont réimportées pour récupérer ou actualiser leurs données de collisions et de meilleurs temps (sans doublon et en conservant les pénalités Commission).</li></ul></div></div>${currentSlug?`<p class="note" style="margin-top:12px">Ces résultats iront dans <b>${esc(eventContext.name)}</b>.</p>`:''}`:adminTab==='rounds'?`<h2>Calendrier et manches</h2><p class="note">${rs.length} manches chargées.</p><div class="grid admin-grid">${roundCards}<div class="admin-round dashed"><button class="btn secondary" onclick="addRound()">+ Ajouter une manche au calendrier</button></div></div>`:adminTab==='adjust'?`<h2>Commission</h2><p class="note">Ajustements de points au championnat (+ / −), pénalités temps en course (reclassement automatique), DNF/DNS/DQ ou avertissements.</p>${renderCommissionIncidents(rs)}${renderChampPointsPanel()}${selectedRaceAdj!==null&&rs[selectedRaceAdj]?renderAdjPanel(rs[selectedRaceAdj]):rs.length?`<div class="controls"><select onchange="selectedRaceAdj=this.value===''?null:+this.value;render()"><option value="">— Choisir une manche pour ajuster un résultat de course —</option>${rs.map((x,i)=>`<option value="${i}">Manche ${x.number} · ${esc(track(x.track))}</option>`).join('')}</select></div>`:`<p class="note">Aucune manche importée pour les pénalités de course.</p>`}${table(['Manche','Session','Pilote','Ajustement','Note',''],adjList)}`:adminTab==='drivers'||adminTab==='teams'?adminRoster(adminTab==='teams'):adminTab==='refresh'?renderEventSheetTools(false):adminTab==='events'?`<h2>Gestion des championnats & opens</h2><p class="note">Liste de tous les événements configurés. Un événement <b>clôturé</b> bascule dans les <b>Archives</b> et n'apparaît plus sur la page d'accueil. Les classements et résultats restent accessibles depuis la section Archives et depuis le classement GLOBAL.</p>${renderEventsAdmin()}`:adminTab==='ah'?`<h2>Découverte automatique depuis AssettoHosting</h2><p class="note">Scanne les deux serveurs GDSP (fr2:50648 et fr5:50145), récupère la liste des championnats/opens avec leur barème. Les PRACTICE et événements « test » sont filtrés. Clique sur « Créer » pour ajouter un événement dans le portail avec son barème, puis va sur l'onglet Imports de cet événement pour importer ses sessions.</p><div style="margin:12px 0"><button class="btn" onclick="ahScanChamps()">🔍 Scanner les serveurs AH</button></div><div id="ah-champs-result"><p class="note">Clique sur « Scanner » pour commencer.</p></div>`:adminTab==='circuits'?renderCircuitsAdmin():adminTab==='globalexc'?renderGlobalExclusions():adminTab==='telemetry'?renderTelemetryAdmin()
 :`<h2>Données et sauvegarde</h2><p class="note">Les modifications sont sauvegardées en PostgreSQL (Render/Neon).</p><div id="save-status" class="note" style="margin:8px 0"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportData()">Exporter les sessions</button><button class="btn secondary" onclick="exportEventBackup()">Sauvegarde complète (commission incluse)</button><button class="btn" onclick="doSaveRemote()">Enregistrer sur le serveur</button><button class="btn secondary" onclick="if(confirm('Recharger la dernière sauvegarde serveur ?')){(backendMulti&&currentSlug?loadEvent(currentSlug):loadRemoteLegacy()).then(()=>render())}">Recharger depuis le serveur</button><button class="btn secondary" onclick="resetChampionship()">Vider cet événement</button></div><p class="note" style="margin-top:12px">${currentSlug?`Événement courant : <b>${esc(eventContext.name)}</b> · `:''}Sessions chargées : ${sessions.length}.</p>`}</div>`;
+}
+// Suggestions uniquement : deux enregistrements réciproques, à moins de deux
+// secondes et proches sur la carte. Aucun événement brut n'est supprimé.
+function commissionIncidentSuggestions(rows){
+  const buckets=new Map(), out=new Map();
+  const key=(a,b,t)=>JSON.stringify([a,b,t]);
+  const second=e=>typeof e.timestamp==='number'&&Number.isFinite(e.timestamp)&&e.timestamp>0?Math.floor(e.timestamp):null;
+  rows.forEach((e,i)=>{
+    const t=second(e);
+    if(e.type!=='COLLISION_WITH_CAR'||!e.aid||!e.bid||e.aid===e.bid||t===null||!contactPosition(e))return;
+    const k=key(e.aid,e.bid,t), list=buckets.get(k)||[];list.push(i);buckets.set(k,list);
+  });
+  rows.forEach((e,i)=>{
+    const t=second(e),pos=contactPosition(e);
+    if(e.type!=='COLLISION_WITH_CAR'||!e.aid||!e.bid||t===null||!pos)return;
+    const matches=[];
+    for(let n=t-2;n<=t+2;n++)for(const j of buckets.get(key(e.bid,e.aid,n))||[]){
+      const other=rows[j],p=contactPosition(other);
+      if(Math.abs(e.timestamp-other.timestamp)<=2 && Math.hypot(pos.X-p.X,pos.Z-p.Z)<=25)matches.push(j);
+    }
+    if(matches.length)out.set(i,matches);
+  });
+  return out;
+}
+function commissionIncidentTime(value){
+  if(typeof value!=='number'||!Number.isFinite(value)||value<1000000000||value>=10000000000)return 'Heure indisponible';
+  const d=new Date(value*1000);
+  if(!Number.isFinite(d.getTime()))return 'Heure indisponible';
+  return d.toLocaleString('fr-FR',{timeZone:'Europe/Paris',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' (Paris)';
+}
+function renderCommissionIncidents(rs){
+  if(!adminAuth)return '';
+  const options=[];
+  rs.forEach((r,ri)=>r.sessions.forEach((s,si)=>{
+    if(!['RACE','QUALIFY'].includes(s.type))return;
+    const n=r.sessions.slice(0,si+1).filter(x=>x.type===s.type).length;
+    options.push({key:ri+':'+si,s,label:`M${r.number} · ${s.type==='RACE'?'Course':'Qualification'} ${n} · ${track(s.track)||r.track} · ${r.date}`});
+  }));
+  if(!options.length)return '<div class="panel"><h3>Journal des incidents</h3><p class="note">Aucune session importée.</p></div>';
+  const selected=options.find(o=>o.key===commissionIncidentSession)||options[0];
+  const hasFull=Array.isArray(selected.s.incidentEvents);
+  const rows=hasFull?selected.s.incidentEvents:(selected.s.events||[]);
+  const pilots=new Map();
+  rows.forEach(e=>{if(e.aid&&e.a)pilots.set(e.aid,e.a);if(e.bid&&e.b)pilots.set(e.bid,e.b)});
+  const pilot=pilots.has(commissionIncidentPilot)?commissionIncidentPilot:'';
+  const suggestions=commissionIncidentSuggestions(rows);
+  const visible=rows.map((e,i)=>({e,i})).filter(({e})=>!pilot||e.aid===pilot||e.bid===pilot);
+  const cells=visible.map(({e,i})=>{
+    const pos=contactPosition(e);
+    const location=pos?`X ${pos.X.toFixed(1)} · Z ${pos.Z.toFixed(1)}`:'Position indisponible';
+    const other=e.type==='COLLISION_WITH_ENV'?'Décor':(e.b||'Autre pilote inconnu');
+    const speed=typeof e.speed==='number'&&Number.isFinite(e.speed)?e.speed.toFixed(1)+' km/h':'Vitesse indisponible';
+    const proposed=suggestions.get(i);
+    const hint=proposed?.length?`Correspondance possible : ${proposed.map(j=>'#'+(j+1)).join(', ')} (à vérifier)`:'—';
+    return `<tr><td>#${i+1}</td><td>${esc(commissionIncidentTime(e.timestamp))}${e.afterSessionEnd===true?' · après session':''}</td><td>${esc(e.a||'Pilote inconnu')}</td><td>${esc(other)}</td><td>${esc(speed)}</td><td>${esc(location)}</td><td>${esc(hint)}</td></tr>`;
+  });
+  return `<div class="panel"><h3>Journal des incidents</h3><p class="note">Signalements bruts du serveur : aucune responsabilité ni sanction n’est attribuée. Les rapprochements sont indicatifs ; tous les signalements restent visibles.</p>`
+    +(!hasFull?'<p class="note">Archive partielle : seuls les contacts entre voitures déjà conservés sont affichés. Réimporte la session pour récupérer les autres incidents, si la source les fournit.</p>':'')
+    +`<div class="controls"><label>Session <select aria-label="Session des incidents" onchange="commissionIncidentSession=this.value;commissionIncidentPilot='';render()">${options.map(o=>`<option value="${esc(o.key)}" ${o.key===selected.key?'selected':''}>${esc(o.label)}</option>`).join('')}</select></label>`
+    +`<label>Pilote <select aria-label="Filtrer les incidents par pilote" onchange="commissionIncidentPilot=this.value;render()"><option value="">Tous les pilotes</option>${[...pilots].sort((a,b)=>a[1].localeCompare(b[1],'fr')).map(([id,name])=>`<option value="${esc(id)}" ${id===pilot?'selected':''}>${esc(name)}</option>`).join('')}</select></label></div>`
+    +`<p class="note">${visible.length} signalement(s) affiché(s) sur ${rows.length}. L’heure est affichée à Paris lorsqu’elle est disponible.</p>`
+    +(cells.length?table(['#','Date et heure','Pilote','Autre / décor','Vitesse','Position monde','Rapprochement possible'],cells):'<p class="note">Aucun signalement disponible pour ce filtre.</p>')+'</div>';
 }
 function renderAdjPanel(r){
   const rs=rounds();
