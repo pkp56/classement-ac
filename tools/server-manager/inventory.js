@@ -15,9 +15,10 @@ async function directory(parent,name){
  try{const s=await fs.lstat(p);return s.isDirectory()&&!s.isSymbolicLink()?p:null;}
  catch(e){if(e.code==='ENOENT')return null;throw e;}
 }
-async function inventory(contentRoot){
+async function scan(contentRoot,requireBoth=false){
  if(typeof contentRoot!=='string'||!path.isAbsolute(contentRoot))throw new Error('Chemin contenu non configuré');
  const root=await fs.realpath(contentRoot),carsRoot=await directory(root,'cars'),tracksRoot=await directory(root,'tracks');
+ if(requireBoth&&(!carsRoot||!tracksRoot))throw new Error('Dossiers cars ou tracks indisponibles dans le contenu complémentaire');
  const cars=[];
  if(carsRoot){
   for(const id of await directories(carsRoot)){
@@ -39,5 +40,20 @@ async function inventory(contentRoot){
   }
  }
  return {cars,tracks};
+}
+async function inventory(contentRoot,extraRoot=''){
+ const first=await scan(contentRoot);
+ if(!extraRoot)return first;
+ const second=await scan(extraRoot,true);
+ function merge(a,b,field){
+  const items=new Map();
+  for(const item of [...a,...b]){
+   const prior=items.get(item.id);
+   if(prior)prior[field]=[...new Set([...prior[field],...item[field]])].sort((x,y)=>x.localeCompare(y,'fr'));
+   else items.set(item.id,{...item,[field]:[...item[field]]});
+  }
+  return [...items.values()].sort((x,y)=>x.id.localeCompare(y.id,'fr'));
+ }
+ return {cars:merge(first.cars,second.cars,'skins'),tracks:merge(first.tracks,second.tracks,'layouts')};
 }
 module.exports={inventory};

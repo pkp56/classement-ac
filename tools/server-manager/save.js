@@ -19,7 +19,7 @@ async function writeTemp(dir,name,text,mode){
  await h.close();return file;
 }
 async function save(args,{checkState,loadInventory=inventory,replace=fs.rename}={}){
- const {root,contentRoot,backupRoot,publicRoot,id,confirmation,configRevision,entryRevision,configChanges=[],entryChanges=[],weatherChanges=[],raceMode,cspConfig,welcomeRevision}=args;
+ const {root,contentRoot,extraContentRoot,backupRoot,publicRoot,id,confirmation,configRevision,entryRevision,configChanges=[],entryChanges=[],weatherChanges=[],raceMode,cspConfig,welcomeRevision}=args;
  if(!Object.hasOwn(IDS,id)||confirmation!==id)throw Error('Confirmation du serveur nécessaire.');
  if(![root,contentRoot,backupRoot,publicRoot].every(x=>typeof x==='string'&&path.isAbsolute(x)))throw Error('Chemins non configurés.');
  if(typeof checkState!=='function')throw Error('Vérification des processus indisponible.');
@@ -34,7 +34,7 @@ async function save(args,{checkState,loadInventory=inventory,replace=fs.rename}=
   if(await require('./pending-store').store(realBackup).has(id))throw Error('Un lancement précédent n’a pas encore été vérifié.');
   const state=await checkState(id);
   if(!state)throw Error('Ferme Content Manager et arrête le serveur avant toute modification.');
-  const files=await readFiles(root,id),inv=await loadInventory(contentRoot);
+  const files=await readFiles(root,id),inv=await loadInventory(contentRoot,extraContentRoot);
   const hasCsp=cspConfig!==undefined;
   const welcome=hasCsp?await require('./welcome-store').readWelcome(root,id,files.config):null;
   const nextWelcome=hasCsp?require('./welcome-store').prepareWelcome(welcome,welcomeRevision,cspConfig):null;
