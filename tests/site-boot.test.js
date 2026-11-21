@@ -1208,6 +1208,13 @@ test('Direction de course : espaces distincts, imports conservés et miniatures 
   run("adminAuth=true;adminToken='ok';adminTab='desk';page='admin'");
   assert.match(run('admin()'),/Événement sélectionné[\s\S]+Administration générale[\s\S]+Télémétrie/);
   assert.match(run('admin()'),/Pilotes[\s\S]+Équipes/);
+  assert.match(run('admin()'),/Télémétrie[\s\S]+Race Control/);
+  const savedEvent=run("eventContext");
+  run("adminTab='race-control';eventContext=null");
+  assert.match(run('admin()'),/Ouvrir le configurateur Race Control/);
+  assert.match(run('admin()'),/href="\/race-control.html"/);
+  assert.doesNotMatch(run('admin()'),/Sélectionne un championnat ou un open/);
+  sandbox.savedEvent=savedEvent;run("eventContext=savedEvent");
   run("adminTab='import'");assert.match(run('admin()'),/ahImport\(\)[\s\S]+bulkImport\(event\)/);
   const id=run('allDrivers()[0].id');sandbox.id=id;
   const src='data:image/jpeg;base64,dGVzdA==';sandbox.file={files:[{type:'image/jpeg',size:10,dataUrl:src}]};

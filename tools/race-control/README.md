@@ -23,3 +23,10 @@ Les détections et pénalités de jeu peuvent être activées selon les options 
 tester d'abord hors course officielle et ne pas assimiler les événements ou
 pénalités du script à une décision de commission. Le script n'a pas encore été
 validé en situation réelle multi-pilotes avec le site et le serveur CM 2.
+
+Dans l'administration GDSP, l'onglet « Race Control » ouvre ce configurateur ;
+la page reste accessible par URL directe et ne contient ni mot de passe ni
+commandes de lancement. Le MOTD `$CSP0:` est généré dans le navigateur par
+compression DEFLATE (API `CompressionStream`), avec limite de 2039 octets et
+copie désactivée au-delà. Le MOTD est une alternative au bloc CSP : vérifier
+au préalable la configuration et le message existants avant remplacement.
