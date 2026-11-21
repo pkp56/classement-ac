@@ -549,6 +549,13 @@ gdsp-track-guide .cir-map-stage{background-color:#17292c;background-image:linear
   .top .brand-title{font-size:9px}
   .top nav button.nav-event-tab .nav-ev-title{max-width:40vw}
 }
+
+/* Brouillon de configuration des serveurs AC */
+.cm-editor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.cm-editor-grid label,.cm-slot label{display:flex;flex-direction:column;gap:5px}
+.cm-editor-grid input,.cm-editor-grid select,.cm-slot input,.cm-slot select{width:100%;box-sizing:border-box}
+.cm-editor section{margin:12px 0}.cm-slot{display:grid;grid-template-columns:minmax(140px,1fr) repeat(2,minmax(150px,2fr));align-items:end;gap:10px;margin:8px 0}
+@media(max-width:600px){.cm-slot{grid-template-columns:1fr}}
 </style>
 <link rel="stylesheet" href="/assets/admin-paddock.css?v=3">
 </head>
@@ -574,7 +581,8 @@ gdsp-track-guide .cir-map-stage{background-color:#17292c;background-image:linear
 <script src="/assets/global-rating.js?v=1"></script>
 <script src="/assets/admin-session.js?v=1"></script>
 <script src="/assets/mod-sheets.js?v=2"></script>
-<script src="/site.js?v=118"></script>
+<script src="/assets/server-manager-editor.js?v=7"></script>
+<script src="/site.js?v=123"></script>
 <script src="/patches-v71.js?v=97"></script>
 </body>
 </html>
