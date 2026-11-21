@@ -987,12 +987,17 @@ app.post('/api/server-manager/presets/:id/:action(start|stop)',async(req,res)=>{
         if(req.body?.directLaunch!==true)throw Error('Confirme le lancement direct.');
         if(!(await require('./tools/server-manager/windows-safety').canEdit(root,id)))throw Error('Ferme Content Manager et arrête le serveur avant tout lancement.');
         await require('./tools/server-manager/presets').readPreset(root,id);
-        await require('./tools/server-manager/direct-launch').assertDirectLaunchSafe(root,id);
+        const collector=liveTimingEnabled()?liveTiming:null;
+        const mode=await require('./tools/server-manager/direct-launch').assertDirectLaunchSafe(root,id,{allowWithoutCmPlugin:req.body?.withoutCmPlugin===true,collector});
+        const result=await controller.start(id,id);
+        if(mode.withoutCmPlugin)result.message='Lancement demandé sans le plugin CM : vérifier l’état, le live et le lobby. Les fonctions CM ne sont pas garanties.';
+        return result;
       }
       return controller[action](id,id);
     });
     res.json(result);
   }catch(e){
+    if(e.code==='CM_PLUGIN_TEST_CONFIRM')return res.status(409).json({error:'Le plugin CM ne sera pas lance. Confirmation supplementaire requise.',code:e.code});
     const safe=/^(Une opération serveur est déjà en cours\.|Ce serveur est déjà en marche\.|Un lancement précédent n’a pas encore été vérifié\.|Lancement en attente : arrêt impossible à identifier\.|Ce serveur ne tourne pas ou son identité est incertaine\.|Identification ambiguë : aucune action autorisée\.|Une sauvegarde nécessite une restauration manuelle\.|Ferme Content Manager et arrête le serveur avant tout lancement\.|Confirme le lancement direct\.|Le plugin CM est actif ou ambigu : lancement depuis Content Manager nécessaire\.|Configuration wrapper CM détectée : lancement depuis Content Manager nécessaire\.)$/;
     res.status(409).json({error:safe.test(e.message)?e.message:'Commande non confirmée. Vérifie l’état du serveur avant toute autre action.'});
   }
