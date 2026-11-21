@@ -1775,3 +1775,67 @@ test('Circuit : variante et jour ambigus ne sont jamais attribués au hasard', a
   assert.notEqual(vm.runInContext('circuitsCache.rounds[0].status',sandbox),'done');
   assert.ok(!vm.runInContext('circuitsCache.rounds[0].date',sandbox));
 });
+
+test('Commission : incidents réciproques et décor sont conservés sans modifier les sanctions',async()=>{
+  const {sandbox,calls}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const raw={Type:'RACE',Date:'2026-11-04T22:42:00+01:00',TrackName:'mexico',
+    Cars:[{CarId:0,Driver:{Guid:'alice',Name:'Alice'}},{CarId:1,Driver:{Guid:'bob',Name:'Bob'}}],
+    Result:[{CarId:0,TotalTime:100000,NumLaps:1,BestLap:100000},{CarId:1,TotalTime:101000,NumLaps:1,BestLap:101000}],Laps:[],
+    Events:[
+      {Type:'COLLISION_WITH_CAR',CarId:0,OtherCarId:1,Timestamp:1793826722,ImpactSpeed:12,WorldPosition:{X:1,Z:2}},
+      {Type:'COLLISION_WITH_CAR',CarId:1,OtherCarId:0,Timestamp:1793826723,ImpactSpeed:10,WorldPosition:{X:2,Z:3}},
+      {Type:'COLLISION_WITH_ENV',CarId:0,Timestamp:1793826730,AfterSessionEnd:true,WorldPosition:{X:4,Z:5}}
+    ]};
+  vm.runInContext(`sessions=[];penMap={'0:0:alice':{timeAdd:5,note:'Commission'}};currentSlug='test';eventContext={slug:'test',name:'Test',data:{}};adminAuth=true;adminToken='token';adminTab='adjust';page='admin'`,sandbox);
+  assert.equal(vm.runInContext(`importSessionJson(${JSON.stringify(JSON.stringify(raw))},'course.json',{silent:true})`,sandbox),true);
+  assert.equal(vm.runInContext('sessions[0].events.length',sandbox),2,'les calculs sportifs gardent seulement les contacts entre voitures');
+  assert.equal(vm.runInContext('sessions[0].incidentEvents.length',sandbox),3);
+  const html=vm.runInContext('admin()',sandbox);
+  assert.match(html,/Journal des incidents/);assert.match(html,/Décor/);assert.match(html,/Correspondance possible : #2/);
+  assert.match(html,/après session/);assert.match(html,/Vitesse indisponible/);
+  assert.equal(vm.runInContext("penMap['0:0:alice'].timeAdd",sandbox),5);
+  vm.runInContext("commissionIncidentPilot=sessions[0].incidentEvents[0].aid",sandbox);
+  assert.match(vm.runInContext('admin()',sandbox),/3 signalement\(s\) affiché/);
+  await vm.runInContext('saveRemote()',sandbox);
+  const saved=calls.filter(c=>c.url==='/api/events/test/data'&&c.method==='POST').at(-1).body;
+  assert.equal(saved.sessions[0].incidentEvents.length,3);
+  assert.equal(saved.sessions[0].incidentEvents[2].afterSessionEnd,true);
+  assert.equal(saved.sessions[0].events.length,2);
+  const partial={...raw,Events:null};
+  vm.runInContext(`importSessionJson(${JSON.stringify(JSON.stringify(partial))},'course.json',{silent:true})`,sandbox);
+  assert.equal(vm.runInContext('sessions[0].incidentEvents.length',sandbox),3,'une actualisation incomplète ne détruit pas le journal');
+});
+
+test('Commission : rapprochements prudents et anciens imports partiels',async()=>{
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext(`adminAuth=true;eventContext={slug:'x',name:'X',data:{}};sessions=[{type:'RACE',date:'2026-11-04T20:00:00Z',track:'x',results:[],events:[
+    {type:'COLLISION_WITH_CAR',aid:'a',bid:'b',a:'<Alice>',b:'Bob',timestamp:100,WorldPosition:{X:0,Z:0}},
+    {type:'COLLISION_WITH_CAR',aid:'b',bid:'a',a:'Bob',b:'<Alice>',timestamp:101,WorldPosition:{X:100,Z:0}},
+    {type:'COLLISION_WITH_CAR',aid:'b',bid:'a',a:'Bob',b:'<Alice>',timestamp:null,WorldPosition:{X:0,Z:0}}
+  ]}];commissionIncidentSession='';commissionIncidentPilot=''`,sandbox);
+  const html=vm.runInContext('renderCommissionIncidents(rounds())',sandbox);
+  assert.match(html,/Archive partielle/);assert.match(html,/&lt;Alice&gt;/);assert.doesNotMatch(html,/<Alice>/);
+  assert.doesNotMatch(html,/Correspondance possible : #/);
+  assert.match(html,/Heure indisponible/);
+  vm.runInContext("commissionIncidentPilot='b'",sandbox);
+  assert.match(vm.runInContext('renderCommissionIncidents(rounds())',sandbox),/3 signalement\(s\) affiché/);
+});
+
+test('Commission : filtrage par session et pilote, suggestions non destructives',async()=>{
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const row=(a,b,t,x)=>({type:'COLLISION_WITH_CAR',aid:a,bid:b,a,b,timestamp:t,WorldPosition:{X:x,Z:0},speed:5});
+  const group=[row('Alice','Bob',1793826722,0),row('Bob','Alice',1793826723,1),row('Bob','Alice',1793826724,2),row('Charlie','David',1793826750,1)];
+  vm.runInContext(`adminAuth=true;eventContext={slug:'x',name:'X',data:{}};sessions=[{type:'RACE',date:'2026-11-04T20:00:00Z',track:'x',results:[],incidentEvents:${JSON.stringify(group)}},{type:'RACE',date:'2026-11-04T21:00:00Z',track:'y',results:[],incidentEvents:[{type:'COLLISION_WITH_ENV',aid:'c',a:'Charlie',timestamp:1793826723}]}];commissionIncidentSession='0:0';commissionIncidentPilot='Alice'`,sandbox);
+  const html=vm.runInContext('renderCommissionIncidents(rounds())',sandbox);
+  assert.match(html,/3 signalement\(s\) affiché\(s\) sur 4/);
+  assert.match(html,/Correspondance possible : #2, #3/);
+  assert.equal(vm.runInContext('sessions[0].incidentEvents.length',sandbox),4);
+  vm.runInContext("commissionIncidentSession='0:1';commissionIncidentPilot=''",sandbox);
+  const other=vm.runInContext('renderCommissionIncidents(rounds())',sandbox);
+  assert.match(other,/1 signalement\(s\) affiché\(s\) sur 1/);assert.match(other,/Décor/);
+  vm.runInContext('adminAuth=false',sandbox);
+  assert.equal(vm.runInContext('renderCommissionIncidents(rounds())',sandbox),'');
+});
