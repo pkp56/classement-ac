@@ -1955,3 +1955,19 @@ test('Liaison AH manuelle : confirmation, conservation des sessions et décision
   await vm.runInContext("loadEvent('open-charade')",sandbox);
   assert.equal(vm.runInContext('ahConfig.uuid',sandbox),champ.uuid,'la liaison persiste au rechargement');
 });
+
+test('Miniatures Lola manquantes : visuels du classement, alias Christophe et priorité aux images personnalisées', async()=>{
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext("eventContext={slug:ACTIVE_LOLA_SLUG,name:'Lola',data:{driverPhotos:{custom:'data:image/jpeg;base64,dGVzdA=='}}}",sandbox);
+  for(const [name,file] of [['Kami_Kaze31','kami'],['Tx3Rony68z','rony'],['Pikoupok','pikoupok'],['thibjedi','thibjedi'],['[APR] Christophe','holden'],['Christophe [APR]','holden']]){
+    sandbox.testName=name;
+    assert.match(vm.runInContext("car(testName,'id')",sandbox),new RegExp('/assets/'+file+'\\.jpg'));
+    assert.ok(fs.existsSync(path.join(root,'assets',file+'.jpg')));
+  }
+  sandbox.testName='Pikoupok';
+  assert.equal(vm.runInContext('number(testName)',sandbox),'—','ne pas inventer de numéro');
+  assert.match(vm.runInContext("car(testName,'custom')",sandbox),/data:image\/jpeg;base64/);
+  vm.runInContext("eventContext={slug:'autre-event',name:'Autre',data:{}}",sandbox);
+  assert.doesNotMatch(vm.runInContext("car(testName,'id')",sandbox),/pikoupok\.jpg/);
+});
