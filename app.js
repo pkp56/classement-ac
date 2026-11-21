@@ -925,6 +925,129 @@ app.post('/api/live/command',async(req,res)=>{
 app.get('/live-timing',(req,res)=>res.sendFile(path.join(ROOT,'live-timing.html')));
 app.get('/live-timing.html',(req,res)=>res.redirect(301,'/live-timing'+(req.originalUrl.includes('?')?req.originalUrl.slice(req.originalUrl.indexOf('?')):'')));
 
+// Gestion des serveurs : consultation expérimentale en lecture seule. L'accès
+// nécessite un chemin configuré sur le PC et une session administrateur.
+// Aucune route d'écriture ou de pilotage n'est exposée ici.
+// Aperçu côté serveur uniquement : aucune écriture de préréglage ni sauvegarde.
+app.get('/api/server-manager/presets/:id/csp',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  const id=req.params.id;if(!['local1','local2'].includes(id))return res.status(404).json({error:'Serveur inconnu.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+  if(!path.isAbsolute(root))return res.status(503).json({error:'Lecture des serveurs non configurée.'});
+  try{
+    const files=await require('./tools/server-manager/presets').readFiles(root,id);
+    const welcome=await require('./tools/server-manager/welcome-store').readWelcome(root,id,files.config);
+    res.json({available:true,config:welcome.decoded.config||'',revision:welcome.revision});
+  }catch(e){res.json({available:false,reason:'Message CSP non disponible ou chemins non pris en charge. Vérifie les options dans Content Manager.'});}
+});
+app.post('/api/server-manager/presets/:id/preview',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  if(!['local1','local2'].includes(req.params.id))return res.status(404).json({error:'Serveur inconnu.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+  const content=String(process.env.GDSP_AC_CONTENT_ROOT||(root&&path.join(root,'..','content'))||'').trim();
+  if(!path.isAbsolute(root)||!path.isAbsolute(content))return res.status(503).json({error:'Lecture des serveurs non configurée.'});
+  try{
+    const files=await require('./tools/server-manager/presets').readFiles(root,req.params.id);
+    const inventory=await require('./tools/server-manager/inventory').inventory(content);
+    const body=req.body||{},hasCsp=body.cspConfig!==undefined;
+    const welcome=hasCsp?await require('./tools/server-manager/welcome-store').readWelcome(root,req.params.id,files.config):null;
+    const next=hasCsp?require('./tools/server-manager/welcome-store').prepareWelcome(welcome,body.welcomeRevision,body.cspConfig):null;
+    const result=require('./tools/server-manager/plan').prepare({...files,inventory,configRevision:body.configRevision,entryRevision:body.entryRevision,configChanges:body.configChanges,entryChanges:body.entryChanges,weatherChanges:body.weatherChanges,raceMode:body.raceMode,hasCsp});
+    result.cspChanged=hasCsp&&next!==welcome.local;
+    res.json(result);
+  }catch(e){
+    const safe=/^(Les fichiers ont changé : recharge avant de modifier\.|La configuration a changé : recharge avant de modifier\.|Aucune modification à préparer|Inventaire du contenu indisponible|Circuit introuvable dans le contenu installé|Configuration de circuit introuvable|Voiture introuvable dans le contenu installé|Skin introuvable pour cette voiture|Une voiture des places ne figure pas dans la liste serveur|Le nombre de places est insuffisant|Liste des voitures du serveur indisponible|Voiture autorisée introuvable dans le contenu installé|Circuit avec configuration CSP : modification non prise en charge|Nom géré par Content Manager : modification non prise en charge|Paramètre non autorisé|Valeur invalide|Valeur booléenne invalide|État de session invalide|Identifiant invalide|Liste de voitures invalide|Valeur numérique invalide|Place absente ou dupliquée|Identifiant de voiture ou skin invalide)$/;
+    res.status(400).json({error:safe.test(e.message)?e.message:'Aperçu impossible : paramètres invalides ou fichiers indisponibles. Aucun fichier modifié.'});
+  }
+});
+let cmOperationBusy=false,cmController=null;
+async function cmExclusive(fn){
+  if(cmOperationBusy)throw Error('Une opération serveur est déjà en cours.');
+  cmOperationBusy=true;try{return await fn();}finally{cmOperationBusy=false;}
+}
+function getCmController(root,backupRoot){
+  if(!cmController)cmController=new (require('./tools/server-manager/controller').ServerController)(root,require('./tools/server-manager/windows-adapter').createWindowsAdapter(),require('./tools/server-manager/pending-store').store(backupRoot));
+  return cmController;
+}
+app.post('/api/server-manager/presets/:id/:action(start|stop)',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  const {id,action}=req.params;
+  if(!['local1','local2'].includes(id))return res.status(404).json({error:'Serveur inconnu.'});
+  if(process.env.GDSP_CM_CONTROL_ENABLED!=='1'||process.platform!=='win32')return res.status(503).json({error:'Contrôle désactivé : essais Windows requis.'});
+  if(req.body?.confirmation!==id)return res.status(400).json({error:'Confirmation du serveur nécessaire.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim(),backupRoot=String(process.env.GDSP_AC_BACKUP_ROOT||'').trim();
+  if(!path.isAbsolute(root)||!path.isAbsolute(backupRoot))return res.status(503).json({error:'Configuration du contrôle incomplète.'});
+  try{
+    const result=await cmExclusive(async()=>{
+      const controller=getCmController(root,backupRoot);
+      if(action==='start'){
+        if(req.body?.directLaunch!==true)throw Error('Confirme le lancement direct.');
+        if(!(await require('./tools/server-manager/windows-safety').canEdit(root,id)))throw Error('Ferme Content Manager et arrête le serveur avant tout lancement.');
+        await require('./tools/server-manager/presets').readPreset(root,id);
+        await require('./tools/server-manager/direct-launch').assertDirectLaunchSafe(root,id);
+      }
+      return controller[action](id,id);
+    });
+    res.json(result);
+  }catch(e){
+    const safe=/^(Une opération serveur est déjà en cours\.|Ce serveur est déjà en marche\.|Un lancement précédent n’a pas encore été vérifié\.|Lancement en attente : arrêt impossible à identifier\.|Ce serveur ne tourne pas ou son identité est incertaine\.|Identification ambiguë : aucune action autorisée\.|Une sauvegarde nécessite une restauration manuelle\.|Ferme Content Manager et arrête le serveur avant tout lancement\.|Confirme le lancement direct\.|Le plugin CM est actif ou ambigu : lancement depuis Content Manager nécessaire\.|Configuration wrapper CM détectée : lancement depuis Content Manager nécessaire\.)$/;
+    res.status(409).json({error:safe.test(e.message)?e.message:'Commande non confirmée. Vérifie l’état du serveur avant toute autre action.'});
+  }
+});
+// Écriture désactivée par défaut. À n'activer qu'après configuration du dossier
+// privé et essais Windows ; CM doit rester fermé pendant toute l'opération.
+app.post('/api/server-manager/presets/:id/save',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  const id=req.params.id;if(!['local1','local2'].includes(id))return res.status(404).json({error:'Serveur inconnu.'});
+  if(process.env.GDSP_CM_WRITES_ENABLED!=='1'||process.platform!=='win32')return res.status(503).json({error:'Enregistrement désactivé : configuration et essais Windows requis.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+  const contentRoot=String(process.env.GDSP_AC_CONTENT_ROOT||(root&&path.join(root,'..','content'))||'').trim();
+  const backupRoot=String(process.env.GDSP_AC_BACKUP_ROOT||'').trim();
+  const body=req.body||{};
+  if(body.confirmation!==id||body.cmClosed!==true)return res.status(400).json({error:'Confirme le serveur et la fermeture de Content Manager.'});
+  try{
+    const result=await cmExclusive(()=>require('./tools/server-manager/save').save({root,contentRoot,backupRoot,publicRoot:ROOT,id,confirmation:body.confirmation,configRevision:body.configRevision,entryRevision:body.entryRevision,configChanges:body.configChanges,entryChanges:body.entryChanges,weatherChanges:body.weatherChanges,raceMode:body.raceMode,cspConfig:body.cspConfig,welcomeRevision:body.welcomeRevision},{checkState:serverId=>require('./tools/server-manager/windows-safety').canEdit(root,serverId)}));
+    res.json(result);
+  }catch(e){
+    if(e.code==='RECOVERY_REQUIRED')return res.status(500).json({error:'Écriture non confirmée : restauration manuelle nécessaire avant toute nouvelle modification.',code:e.code});
+    const safe=/^(Confirmation du serveur nécessaire\.|Ferme Content Manager et arrête le serveur avant toute modification\.|Les fichiers ont changé : recharge avant de modifier\.|Une opération est en cours ou nécessite une restauration manuelle\.|Aucune modification effective\.)$/;
+    res.status(400).json({error:safe.test(e.message)?e.message:'Enregistrement refusé : vérifie la configuration et le brouillon. Aucun fichier modifié.'});
+  }
+});
+app.get('/api/server-manager/inventory',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+  if(!root||!path.isAbsolute(root))return res.status(503).json({error:'Lecture des serveurs non configurée sur le PC serveur.'});
+  const content=String(process.env.GDSP_AC_CONTENT_ROOT||path.join(root,'..','content')).trim();
+  if(!path.isAbsolute(content))return res.status(503).json({error:'Contenu Assetto Corsa non configuré.'});
+  try{res.json(await require('./tools/server-manager/inventory').inventory(content));}
+  catch(e){res.status(503).json({error:'Inventaire des voitures et circuits indisponible.'});}
+});
+app.get('/api/server-manager/state',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+  if(!root||!path.isAbsolute(root))return res.status(503).json({error:'Lecture des serveurs non configurée sur le PC serveur.'});
+  const state=await require('./tools/server-manager/process-state').readProcessState(root);
+  res.json(state);
+});
+app.get('/api/server-manager/presets/:id',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  if(!['local1','local2'].includes(req.params.id))return res.status(404).json({error:'Serveur inconnu.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+  if(!root||!path.isAbsolute(root))return res.status(503).json({error:'Lecture des préréglages non configurée sur le PC serveur.'});
+  try{
+    const result=await require('./tools/server-manager/presets').readPreset(root,req.params.id);
+    res.json(result);
+  }catch(e){res.status(503).json({error:'Préréglage indisponible ou illisible. Aucun fichier modifié.'});}
+});
+
 // --- TÉLÉMÉTRIE & BoP (application séparée, schéma `telemetry`) --------------
 // Rien de ce qui suit ne lit ni n'écrit dans le championnat : ni les événements,
 // ni les classements, ni les fiches pilotes. Le schéma `telemetry` est créé par

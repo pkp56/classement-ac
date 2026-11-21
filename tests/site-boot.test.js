@@ -1214,6 +1214,9 @@ test('Direction de course : espaces distincts, imports conservés et miniatures 
   assert.match(run('admin()'),/Ouvrir le configurateur Race Control/);
   assert.match(run('admin()'),/href="\/race-control.html"/);
   assert.doesNotMatch(run('admin()'),/Sélectionne un championnat ou un open/);
+  run("adminTab='servers'");
+  assert.match(run('admin()'),/Serveurs CM[\s\S]+brouillon/);
+  assert.match(run('admin()'),/Serveur CM 1[\s\S]+Serveur CM 2/);
   sandbox.savedEvent=savedEvent;run("eventContext=savedEvent");
   run("adminTab='import'");assert.match(run('admin()'),/ahImport\(\)[\s\S]+bulkImport\(event\)/);
   const id=run('allDrivers()[0].id');sandbox.id=id;
