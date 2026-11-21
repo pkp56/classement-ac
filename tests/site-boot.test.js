@@ -1920,3 +1920,38 @@ test('Import automatique : aucun scan global ni sauvegarde pour un événement n
     assert.equal(calls.length,count);
   }
 });
+
+test('Liaison AH manuelle : confirmation, conservation des sessions et décisions, puis import lié', async () => {
+  const champ={server:'https://fr2.assettohosting.com:50648',uuid:'11111111-1111-1111-1111-111111111111',name:'Open #5 Charade'};
+  let remote={slug:'open-charade',name:'Open #5 Charade',kind:'open',points_config:{},data:{sessions:[{date:'2026-09-02',type:'RACE',track:'charade',results:[],laps:[],events:[]}],penMap:{'0:0:p':{timeAdd:5}},extra:'conservé'}};
+  const {sandbox,getElementById,calls}=makeBrowser([remote],(url,opts)=>{
+    if(url==='/api/events/open-charade')return response(remote);
+    if(url==='/api/ah-championships')return response({items:[champ],errors:[]});
+    if(url==='/api/events/open-charade/ah-link') {remote={...remote,data:{...remote.data,ahServer:champ.server,ahUuid:champ.uuid}};return response({status:'ok'});}
+    if(url.startsWith('/api/ah-championship-sessions'))return response({championship:champ.name,items:[],events:1});
+    return null;
+  });
+  await new Promise(r=>setImmediate(r));
+  await vm.runInContext("loadEvent('open-charade')",sandbox);
+  vm.runInContext("adminAuth=true;adminToken='tok';adminTab='import';page='admin';render()",sandbox);
+  const before=JSON.stringify(remote.data);
+  await vm.runInContext('ahLinkScan()',sandbox);
+  assert.match(getElementById('ah-link-result').innerHTML,/Open #5 Charade/);
+  getElementById('ah-link-choice').value='0';
+  sandbox.confirm=()=>false;
+  await vm.runInContext('ahLinkSave()',sandbox);
+  assert.equal(JSON.stringify(remote.data),before);
+  assert.equal(calls.filter(c=>c.url.endsWith('/ah-link')).length,0);
+  sandbox.confirm=()=>true;
+  await vm.runInContext('ahLinkSave()',sandbox);
+  assert.equal(remote.data.sessions.length,1);
+  assert.equal(remote.data.penMap['0:0:p'].timeAdd,5);
+  assert.equal(remote.data.extra,'conservé');
+  assert.equal(vm.runInContext('ahConfig.uuid',sandbox),champ.uuid);
+  assert.equal(calls.filter(c=>c.url.startsWith('/api/ah-championship-sessions')).length,0,'la liaison ne lance aucun import');
+  await vm.runInContext('ahImport()',sandbox);
+  assert.ok(calls.some(c=>c.url.includes('/api/ah-championship-sessions?')&&c.url.includes(champ.uuid)));
+  assert.match(getElementById('ah-result').innerHTML,/aucune session récupérable/);
+  await vm.runInContext("loadEvent('open-charade')",sandbox);
+  assert.equal(vm.runInContext('ahConfig.uuid',sandbox),champ.uuid,'la liaison persiste au rechargement');
+});
