@@ -1981,3 +1981,28 @@ test('Miniatures Lola manquantes : visuels du classement, alias Christophe et pr
   vm.runInContext("eventContext={slug:'autre-event',name:'Autre',data:{}}",sandbox);
   assert.doesNotMatch(vm.runInContext("car(testName,'id')",sandbox),/pikoupok\.jpg/);
 });
+
+test('Essai sans plugin CM exige une seconde confirmation explicite',async()=>{
+ let attempts=0,confirmations=[];
+ const {sandbox,getElementById,calls}=makeBrowser([],async(url)=>{
+  if(url==='/api/server-manager/presets/local1/start'){
+   attempts++;return attempts===1?response({code:'CM_PLUGIN_TEST_CONFIRM'},409):response({message:'Lancement demandé sans le plugin CM.'});
+  }
+  return null;
+ });
+ await new Promise(resolve=>setImmediate(resolve));getElementById('cm-server-select').value='local1';
+ sandbox.confirm=text=>{confirmations.push(text);return true;};
+ await vm.runInContext("cmControl('start')",sandbox);
+ const requests=calls.filter(c=>c.url==='/api/server-manager/presets/local1/start');
+ assert.equal(requests.length,2);assert.equal(requests[0].body.withoutCmPlugin,undefined);assert.equal(requests[1].body.withoutCmPlugin,true);
+ assert.equal(confirmations.length,2);assert.match(confirmations[1],/plugin interne Content Manager NE sera PAS lancé/);
+});
+
+test('Refuser la seconde confirmation ne lance pas le serveur',async()=>{
+ let count=0;
+ const {sandbox,getElementById,calls}=makeBrowser([],async url=>url==='/api/server-manager/presets/local1/start'?response({code:'CM_PLUGIN_TEST_CONFIRM'},409):null);
+ await new Promise(resolve=>setImmediate(resolve));getElementById('cm-server-select').value='local1';sandbox.confirm=()=>++count===1;
+ await vm.runInContext("cmControl('start')",sandbox);
+ assert.equal(calls.filter(c=>c.url==='/api/server-manager/presets/local1/start').length,1);
+ assert.equal(getElementById('cm-server-status').textContent,'Lancement annulé.');
+});

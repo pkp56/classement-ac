@@ -3347,8 +3347,15 @@ async function cmControl(action){
   if(!confirm(warning))return;
   const el=document.getElementById('cm-server-status');if(el)el.textContent='Commande en cours…';
   try{
-    const r=await apiPost('/api/server-manager/presets/'+encodeURIComponent(id)+'/'+action,{confirmation:id,directLaunch:action==='start'});
-    const data=await r.json();if(!r.ok)throw Error(data.error||'Commande non confirmée.');
+    const endpoint='/api/server-manager/presets/'+encodeURIComponent(id)+'/'+action;
+    let r=await apiPost(endpoint,{confirmation:id,directLaunch:action==='start'});
+    let data=await r.json();
+    if(action==='start'&&data.code==='CM_PLUGIN_TEST_CONFIRM'){
+      if(!confirm('Essai exceptionnel pour '+name+' : le plugin interne Content Manager NE sera PAS lancé. Ses fonctions peuvent manquer. Les ports et les fichiers ne seront pas modifiés. Continuer pour ce lancement seulement ?')){if(el)el.textContent='Lancement annulé.';return;}
+      if(document.getElementById('cm-server-select')?.value!==id){if(el)el.textContent='Sélection modifiée : lancement annulé.';return;}
+      r=await apiPost(endpoint,{confirmation:id,directLaunch:true,withoutCmPlugin:true});data=await r.json();
+    }
+    if(!r.ok)throw Error(data.error||'Commande non confirmée.');
     if(el)el.textContent=data.message;
   }catch(e){if(el)el.textContent=e.message||'Commande non confirmée.';}
 }

@@ -74,6 +74,28 @@ function inspectDirectLaunch(text){
  if(active.length>1)return false;
  return !active.length||['0','false'].includes(active[0].value.trim().toLowerCase());
 }
+// Cas expérimental limité : CM a son plugin interne activé, mais aucun plugin
+// externe ni conditions réelles ; la liaison est déjà celle du collecteur GDSP.
+function inspectPluginTest(text,{listenPort,pluginPort,host}={}){
+ const {sections,entries}=parse(text);
+ if(sections.get('SERVER')!==1||sections.get('__CM_PLUGIN')!==1)return false;
+ if(!Number.isInteger(listenPort)||listenPort<1||listenPort>65535||!Number.isInteger(pluginPort)||pluginPort<1||pluginPort>65535||listenPort===pluginPort||host!=='127.0.0.1')return false;
+ function get(section,key){const list=entries.get(section+'\0'+key)||[];return list.length===1?list[0].value.trim():null;}
+ const active=get('__CM_PLUGIN','ACTIVE'),real=get('__CM_PLUGIN','REAL_CONDITIONS');
+ if(!['1','true'].includes((active||'').toLowerCase())||!['0','false'].includes((real||'').toLowerCase()))return false;
+ const address=get('SERVER','UDP_PLUGIN_ADDRESS'),local=get('SERVER','UDP_PLUGIN_LOCAL_PORT');
+ if(address!==`127.0.0.1:${listenPort}`||local!==String(pluginPort))return false;
+ const auth=entries.get('SERVER\0AUTH_PLUGIN_ADDRESS')||[];
+ if(auth.length>1||(auth.length===1&&auth[0].value.trim()))return false;
+ for(const [name,list] of entries){
+  const [section,key]=name.split('\0');if(section!=='__CM_PLUGIN')continue;
+  if(list.length!==1)return false;
+  if(['ACTIVE','REAL_CONDITIONS','REAL_CONDITIONS_PARAMS'].includes(key))continue;
+  if(/^EXTRA_PLUGIN_\d+_(ADDRESS|PORT)$/.test(key)&&(!list[0].value.trim()||list[0].value.trim()==='0'))continue;
+  return false;
+ }
+ return true;
+}
 function trackParts(raw){
   if(/^[a-zA-Z0-9_-]+$/.test(raw))return {prefix:'',id:raw};
   const match=raw.match(/^(csp\/\d+\/\.\.\/(?:[a-zA-Z0-9_-]+\/\.\.\/)?)([a-zA-Z0-9_-]+)$/);
@@ -168,4 +190,4 @@ function patchIni(text, updates) {
   }
   return lines.join('');
 }
-module.exports={patchIni,inspectIni,inspectExtra,trackParts,inspectDirectLaunch,welcomePaths};
+module.exports={patchIni,inspectIni,inspectExtra,trackParts,inspectDirectLaunch,inspectPluginTest,welcomePaths};
