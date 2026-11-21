@@ -18,3 +18,8 @@ test('Le brouillon relève seulement les changements, sans appliquer',()=>{
  const container={querySelectorAll:()=>[{disabled:false,value:'new',dataset:{cmOriginal:'old',cmSection:'SERVER',cmKey:'NAME'}},{disabled:false,value:'red',dataset:{cmOriginal:'red',cmSlot:'0',cmSlotField:'skin'}},{disabled:true,value:'new',dataset:{cmOriginal:'old',cmSection:'SERVER',cmKey:'TRACK'}}]};
  const changes=editor.collect(container);assert.equal(changes.length,1);assert.equal(changes[0].section,'SERVER');assert.equal(changes[0].after,'new');
 });
+
+test('Les options CSP sont visibles sans exécuter le contenu HTML',()=>{
+ const html=editor.render({settings:{},extra:{},slots:[],cspWelcome:{available:true,config:'[SCRIPT_2]\n<script>alert(1)</script>'}},null);
+ assert.match(html,/data-cm-csp/);assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>alert/);
+});

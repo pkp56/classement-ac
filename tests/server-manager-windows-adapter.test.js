@@ -7,6 +7,8 @@ test('Adaptateur Windows utilise une commande fixe et transporte l’identité s
  await a.stopVerified({pid:123,creationTime:'date',executablePath:'C:\\AC\\acServer.exe',commandHash:'a'.repeat(64)});
  const [exe,args,opts]=calls[1];assert.equal(exe,'powershell.exe');assert.equal(args[args.length-2],'-Command');assert.doesNotMatch(args.at(-1),/C:\\AC/);
  assert.equal(JSON.parse(Buffer.from(opts.env.GDSP_STOP_IDENTITY,'base64')).pid,123);
+ assert.match(args.at(-1),/\$deltaTicks -gt 9/);assert.match(args.at(-1),/\$cimDate -ne \$pdata\.creationTime/);
+ assert.match(args.at(-1),/TerminateProcess\(\$handle, 0\)/);
  await assert.rejects(a.stopVerified({pid:0}),/Identité invalide/);
 });
 test('Démarrage sans shell et refus hors Windows',async()=>{
