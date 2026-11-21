@@ -170,3 +170,18 @@ test('autoStart démarre la collecte sans appel explicite (agent distant)', asyn
   assert.equal(collector.socket, null);
   assert.ok(collector instanceof EventEmitter);
 });
+
+
+test('La sonde ACSP interroge aussi un serveur silencieux encore considéré en ligne', () => {
+  const collector = new LiveTimingCollector({ autoStart: false });
+  let requests = 0;
+  collector.requestSessionInfo = () => { requests++; };
+  collector.lastPacketAt = Date.now() - 5000;
+  assert.equal(collector.statusSnapshot().status, 'live');
+  collector.heartbeat();
+  assert.equal(requests, 1);
+  collector.lastPacketAt = Date.now() - 9000;
+  collector.heartbeat();
+  assert.equal(requests, 2);
+  assert.equal(collector.statusSnapshot().status, 'waiting');
+});

@@ -216,8 +216,7 @@ class LiveTimingCollector extends EventEmitter {
       this.requestSessionInfo();
       this.send(Buffer.from([0x38])); // demande la version du protocole
     });
-    // Re-réclame les infos de session tant que rien n'arrive (acServer peut
-    // démarrer après nous) et garde la liaison vivante.
+    // Sonde régulièrement la session, y compris quand aucun pilote ne roule.
     this.timers.push(setInterval(() => this.heartbeat(), 5000));
     if (this.options.httpUrl) {
       this.pollHttp();
@@ -236,11 +235,10 @@ class LiveTimingCollector extends EventEmitter {
   }
 
   heartbeat() {
-    const since = this.lastPacketAt ? Date.now() - this.lastPacketAt : Infinity;
-    if (since > STALE_AFTER_MS) {
-      // Toujours en attente : on redemande la session, sans spammer le log.
-      this.requestSessionInfo();
-    }
+    // Une session vide peut rester silencieuse plus de 8 s. Une sonde toutes
+    // les 5 s maintient l'état live tant que le serveur répond, sans masquer
+    // une véritable interruption (le statut dépend toujours des paquets reçus).
+    this.requestSessionInfo();
   }
 
   send(buf) {
