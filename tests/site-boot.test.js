@@ -1900,3 +1900,23 @@ test('Import et sauvegarde : un secteur absent ne décale pas les suivants',asyn
   const saved=calls.filter(c=>c.url==='/api/events/test/data'&&c.method==='POST').at(-1).body;
   assert.deepEqual(saved.sessions[0].laps[0].sectors,[30000,null,30000]);
 });
+
+test('Import automatique : aucun scan global ni sauvegarde pour un événement non lié', async () => {
+  const {sandbox,getElementById,calls}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext("currentSlug='open-sugo';ahConfig=null;adminToken='tok';",sandbox);
+  const before=vm.runInContext('JSON.stringify({sessions,penMap})',sandbox);
+  const start=calls.length;
+  await vm.runInContext('ahImport()',sandbox);
+  assert.match(getElementById('ah-result').innerHTML,/Import automatique indisponible/);
+  assert.match(getElementById('ah-result').innerHTML,/fichiers JSON manuellement/);
+  assert.deepEqual(calls.slice(start),[]);
+  assert.equal(vm.runInContext('JSON.stringify({sessions,penMap})',sandbox),before);
+  // La protection couvre également le mode historique et les liens incomplets.
+  for(const setup of ["currentSlug='';ahConfig=null", "currentSlug='open-sugo';ahConfig={server:'https://example.org'}"]){
+    vm.runInContext(setup,sandbox);
+    const count=calls.length;
+    await vm.runInContext('ahImport()',sandbox);
+    assert.equal(calls.length,count);
+  }
+});
