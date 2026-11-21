@@ -16,6 +16,7 @@ let eventContext = null;          // {slug,name,kind,pointsConfig,data}
 let ahConfig = null;              // {server, uuid} when event is bound to an AH championship
 let page='accueil', ranktab='pilotes', eventtab='resultats', round=0, sessionIndex=1, driverId='', globalDriverId='', compareA='', compareB='';
 let sessions=[], penMap={}, manualDrivers=null, customCalendar=null;
+let analysisDriverId='';
 let adminAuth=false, adminUser='', adminTab='desk', selectedRaceAdj=null;
 let commissionIncidentSession='', commissionIncidentPilot='';
 // Les anciens jetons persistants ne sont plus réutilisés : reconnexion requise.
@@ -2519,6 +2520,65 @@ function circuit(){
     + (metadataPanel?`<div class="cir-cols" style="grid-template-columns:1fr">${metadataPanel}</div>`:'');
 }
 
+// Analyse descriptive uniquement : aucune mutation des sessions ni des points.
+function raceAnalysisDriver(session,driver){
+  const raw=(session.laps||[]).filter(l=>l&&l.id===driver.id);
+  const timestamp=l=>typeof l.timestamp==='number'&&Number.isFinite(l.timestamp)?l.timestamp:null;
+  const times=raw.map(timestamp);
+  const ordered=raw.length>0&&times.every(t=>t!==null)&&new Set(times).size===times.length;
+  const laps=ordered?[...raw].sort((a,b)=>timestamp(a)-timestamp(b)):[...raw];
+  const complete=ordered&&Number.isInteger(driver.laps)&&driver.laps>0&&driver.laps===laps.length;
+  const clean=l=>Number.isFinite(Number(l.time))&&Number(l.time)>0&&Number(l.time)<600000&&Number(l.cuts||0)===0;
+  const cleanLaps=laps.filter(clean);
+  const best=cleanLaps.length?Math.min(...cleanLaps.map(l=>Number(l.time))):null;
+  const sectorBest=[];
+  cleanLaps.forEach(l=>(Array.isArray(l.sectors)?l.sectors:[]).forEach((v,i)=>{
+    const n=Number(v);if(v==null||!Number.isFinite(n)||n<=0||n>Number(l.time))return;
+    if(sectorBest[i]==null||n<sectorBest[i])sectorBest[i]=n;
+  }));
+  let consistency=null, sample=0;
+  if(complete){
+    const rest=laps.slice(1).filter(clean);
+    if(rest.length>=2){
+      const base=Math.min(...rest.map(l=>Number(l.time)));
+      const usable=rest.filter(l=>Number(l.time)-base<=PIT_SLOW_MS);
+      if(usable.length>=2){
+        const nonBest=usable.map(l=>Number(l.time)).filter(t=>t>base);
+        sample=usable.length;
+        consistency=nonBest.length?nonBest.reduce((sum,t)=>sum+t-base,0)/nonBest.length:0;
+      }
+    }
+  }
+  return {laps,ordered,complete,best,sectorBest,consistency,sample};
+}
+function renderRaceAnalysis(session){
+  const drivers=(session.results||[]).filter(r=>r&&r.id);
+  if(!drivers.length)return '<h2>Analyse après-course</h2><p class="note">Aucun pilote disponible pour cette session.</p>';
+  const selected=drivers.find(d=>d.id===analysisDriverId)||drivers[0];
+  const a=raceAnalysisDriver(session,selected);
+  const count=a.laps.length;
+  const options=drivers.map(d=>`<option value="${esc(d.id)}" ${d.id===selected.id?'selected':''}>${esc(d.name||'Pilote inconnu')}</option>`).join('');
+  const bestSectors=a.sectorBest.map((n,i)=>n==null?'':`S${i+1} : ${fmt(n)}`).filter(Boolean).join(' · ')||'Indisponibles';
+  const consistency=a.consistency==null?'Indisponible':`+${(a.consistency/1000).toFixed(3)} s (${a.sample} tours retenus)`;
+  const comparison=drivers.map(d=>({d,a:raceAnalysisDriver(session,d)}));
+  const comparisonRows=comparison.map(({d,a})=>`<tr><td>${esc(d.name||'Pilote inconnu')}</td><td>${a.best==null?'—':fmt(a.best)}</td><td>${a.consistency==null?'Indisponible':`+${(a.consistency/1000).toFixed(3)} s`}</td><td>${a.consistency==null?'—':a.sample}</td></tr>`);
+  const lapRows=a.laps.map((lap,i)=>{
+    const cuts=Number(lap.cuts||0),valid=Number.isFinite(Number(lap.time))&&Number(lap.time)>0&&Number(lap.time)<600000;
+    const status=!valid?'Temps indisponible':cuts>0?`Coupé (${cuts})`:'Sans coupe enregistrée';
+    const sectors=(Array.isArray(lap.sectors)?lap.sectors:[]).map((v,j)=>`S${j+1} ${v!=null&&Number.isFinite(Number(v))&&Number(v)>0&&Number(v)<=Number(lap.time)?fmt(Number(v)):'—'}`).join(' · ')||'Indisponibles';
+    return `<tr><td>${a.complete?i+1:'—'}</td><td>${valid?fmt(Number(lap.time)):'—'}</td><td>${esc(sectors)}</td><td>${esc(status)}</td></tr>`;
+  });
+  return `<h2>Analyse après-course</h2><p class="note">Données de la session sélectionnée, sans incidence sur les points ni les décisions de commission.</p>`
+    +`<div class="controls"><label>Pilote <select aria-label="Pilote à analyser" onchange="analysisDriverId=this.value;render()">${options}</select></label></div>`
+    +`<p><b>${esc(selected.name||'Pilote inconnu')}</b> · ${count} tour(s) enregistré(s)${Number.isInteger(selected.laps)?` sur ${selected.laps} annoncé(s) au résultat`:''}.</p>`
+    +(!a.complete?'<p class="note">Historique incomplet ou ordre non vérifiable : les numéros de tour et la régularité ne sont pas déduits. Réimporte la session si la source contient davantage de données.</p>':'')
+    +`<p><b>Meilleur tour sans coupe enregistrée :</b> ${a.best==null?'Indisponible':fmt(a.best)}<br><b>Meilleurs secteurs sans coupe enregistrée :</b> ${esc(bestSectors)}<br><b>Écart de régularité :</b> ${esc(consistency)}</p>`
+    +`<p class="note">Régularité : sur un historique complet et ordonné, on retire le premier tour, les tours coupés ou invalides et ceux à plus de 21 secondes du meilleur tour restant ; on calcule ensuite l’écart moyen au meilleur, sans compter les tours égaux à ce meilleur. Un minimum de deux tours retenus est nécessaire. Un tour lent n’est pas forcément un arrêt aux stands. Ce calcul descriptif peut différer du score Global.</p>`
+    +`<h3>Comparaison de régularité</h3>${table(['Pilote','Meilleur tour propre','Écart moyen','Tours retenus'],comparisonRows)}`
+    +`<h3>Tour par tour</h3>${lapRows.length?table(['Tour','Temps','Secteurs','Statut'],lapRows):'<p class="note">Aucun tour disponible dans cette session.</p>'}`
+    +`<p class="note">Graphiques de positions et d’écarts non disponibles : leur fiabilité doit être vérifiée avant affichage.</p>`;
+}
+
 // ---------- Pages Manches / Pilotes ----------
 function manche(){
   if(backendMulti&&!eventContext)return hub();
@@ -2575,7 +2635,7 @@ function manche(){
   const headers=s.type==='QUALIFY'
     ?['Pos.','Pilote','Équipe','Tours','Meilleur tour','Pénal.','Pts']
     :['Pos.','Pilote','Équipe','Grille','Tours','Meilleur tour','Pénal.','Écart / tête','Écart / préc.','Pts'];
-  return `${head('résultats','Les manches','Toutes les sessions importées, regroupées par date.')}<div class="controls"><select onchange="round=+this.value;sessionIndex=0;eventtab='resultats';render()">${rs.map((x,i)=>`<option value="${i}" ${i===round?'selected':''}>Manche ${i+1} · ${esc(x.track)}</option>`).join('')}</select><select onchange="sessionIndex=+this.value;eventtab='resultats';render()">${r.sessions.map((x,i)=>`<option value="${i}" ${i===sessionIndex?'selected':''}>${x.type==='QUALIFY'?'Qualification':'Course '+r.sessions.slice(0,i+1).filter(y=>y.type==='RACE').length}${r.tracks&&r.tracks.length>1?' · '+esc(track(x.track)):''}</option>`).join('')}</select><span class="tag">${date(r.date)}</span></div>${tabs([['resultats','Résultats'],...(s.type==='RACE'?[['collisions','Collisions entre pilotes']]:[])],eventtab,'showevent')}<div class="panel">${eventtab==='collisions'?`<h2>Incidents enregistrés</h2><p class="note">Événements bruts entre voitures en course, sans attribution de responsabilité.</p>${table(['#','Pilote','Autre pilote','Vitesse','Temps de course'],eventrows)}`:`<h2>${esc(track(s.track)||r.track)} · ${s.type==='QUALIFY'?'Qualification':'Course'}</h2><p class="note">Classement officiel : meilleur tour pour les qualifications, ordre d'arrivée (avec pénalités Commission) pour les courses.</p>${table(headers,resultrows)}`}</div>`;
+  return `${head('résultats','Les manches','Toutes les sessions importées, regroupées par date.')}<div class="controls"><select onchange="round=+this.value;sessionIndex=0;eventtab='resultats';render()">${rs.map((x,i)=>`<option value="${i}" ${i===round?'selected':''}>Manche ${i+1} · ${esc(x.track)}</option>`).join('')}</select><select onchange="sessionIndex=+this.value;eventtab='resultats';render()">${r.sessions.map((x,i)=>`<option value="${i}" ${i===sessionIndex?'selected':''}>${x.type==='QUALIFY'?'Qualification':'Course '+r.sessions.slice(0,i+1).filter(y=>y.type==='RACE').length}${r.tracks&&r.tracks.length>1?' · '+esc(track(x.track)):''}</option>`).join('')}</select><span class="tag">${date(r.date)}</span></div>${tabs([['resultats','Résultats'],...(s.type==='RACE'?[['analyse','Analyse après-course'],['collisions','Collisions entre pilotes']]:[])],eventtab,'showevent')}<div class="panel">${s.type==='RACE'&&eventtab==='analyse'?renderRaceAnalysis(s):eventtab==='collisions'?`<h2>Incidents enregistrés</h2><p class="note">Événements bruts entre voitures en course, sans attribution de responsabilité.</p>${table(['#','Pilote','Autre pilote','Vitesse','Temps de course'],eventrows)}`:`<h2>${esc(track(s.track)||r.track)} · ${s.type==='QUALIFY'?'Qualification':'Course'}</h2><p class="note">Classement officiel : meilleur tour pour les qualifications, ordre d'arrivée (avec pénalités Commission) pour les courses.</p>${table(headers,resultrows)}`}</div>`;
 }
 
 // Performance ratings (par week-end : Régularité iRacing, Propreté Option 3, Vitesse Q+R, Résultats v45)
@@ -2944,8 +3004,8 @@ function importSessionJson(text,fileName,opts){
       const time=Number(l.LapTime??l.time);
       if(!Number.isFinite(time)||time<=0)return null;
       const lp={id:meta.id,time,cuts:l.Cuts||0};
-      const secs=(Array.isArray(l.Sectors)?l.Sectors:toArr(l.Sectors)).map(Number).filter(n=>Number.isFinite(n)&&n>0);
-      if(secs.length)lp.sectors=secs;
+      const secs=(Array.isArray(l.Sectors)?l.Sectors:toArr(l.Sectors)).map(v=>{const n=Number(v);return v!=null&&Number.isFinite(n)&&n>0?n:null});
+      if(secs.some(n=>n!==null))lp.sectors=secs;
       if(l.Timestamp!=null)lp.timestamp=l.Timestamp;
       return lp;
     }).filter(Boolean);

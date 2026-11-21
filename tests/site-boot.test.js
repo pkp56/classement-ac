@@ -1839,3 +1839,56 @@ test('Commission : filtrage par session et pilote, suggestions non destructives'
   vm.runInContext('adminAuth=false',sandbox);
   assert.equal(vm.runInContext('renderCommissionIncidents(rounds())',sandbox),'');
 });
+
+test('Analyse après-course : tours ordonnés, secteurs et régularité sans toucher aux résultats', async()=>{
+  const {sandbox}=makeBrowser();await new Promise(resolve=>setImmediate(resolve));
+  const race={type:'RACE',date:'2026-11-04T21:00:00Z',track:'mexico',results:[
+    {id:'a',name:'Alice',laps:5,time:500000,best:90000},{id:'b',name:'Bob',laps:2,time:200000,best:95000}
+  ],laps:[
+    {id:'a',time:91000,cuts:0,sectors:[30000,null,61000],timestamp:103},
+    {id:'a',time:110000,cuts:0,sectors:[40000,40000,30000],timestamp:100},
+    {id:'a',time:90000,cuts:0,sectors:[29000,31000,30000],timestamp:102},
+    {id:'a',time:85000,cuts:1,sectors:[10000,30000,45000],timestamp:101},
+    {id:'a',time:125000,cuts:0,sectors:[45000,45000,35000],timestamp:104},
+    {id:'b',time:95000,cuts:0,timestamp:100}
+  ]};
+  vm.runInContext(`eventContext={slug:'test',name:'Test',kind:'open',data:{}};backendMulti=true;sessions=${JSON.stringify([race])};round=0;sessionIndex=0;eventtab='analyse';analysisDriverId='a';penMap={}`,sandbox);
+  const before=vm.runInContext('JSON.stringify(sessions)',sandbox);
+  const html=vm.runInContext('manche()',sandbox);
+  assert.match(html,/Analyse après-course/);assert.match(html,/5 tour\(s\) enregistré\(s\) sur 5/);
+  assert.match(html,/\+1\.000 s \(2 tours retenus\)/);assert.match(html,/S1 : 0:29\.000/);assert.doesNotMatch(html,/S1 : 0:10\.000/);
+  assert.match(html,/S1 0:30\.000 · S2 — · S3 1:01\.000/);assert.match(html,/Coupé \(1\)/);
+  assert.match(html,/Graphiques de positions et d’écarts non disponibles/);
+  assert.equal(vm.runInContext('JSON.stringify(sessions)',sandbox),before);
+  const bob=vm.runInContext("raceAnalysisDriver(sessions[0],sessions[0].results[1])",sandbox);
+  assert.equal(bob.consistency,null);assert.equal(bob.complete,false);
+  vm.runInContext("analysisDriverId='b'",sandbox);
+  assert.match(vm.runInContext('manche()',sandbox),/Historique incomplet ou ordre non vérifiable/);
+});
+
+test('Analyse après-course : ordre ambigu et secteurs absents ne sont pas inventés', async()=>{
+  const {sandbox}=makeBrowser();await new Promise(resolve=>setImmediate(resolve));
+  const race={type:'RACE',date:'2026-11-04T21:00:00Z',track:'x',results:[{id:'a',name:'<Alice>',laps:3,time:300000}],laps:[
+    {id:'a',time:90000,cuts:0,sectors:[30000,null,30000],timestamp:100},
+    {id:'a',time:91000,cuts:0,sectors:[30000,31000,30000],timestamp:100},
+    {id:'a',time:92000,cuts:0}
+  ]};
+  vm.runInContext(`sessions=${JSON.stringify([race])};analysisDriverId='a'`,sandbox);
+  const before=vm.runInContext('JSON.stringify(sessions)',sandbox);
+  const html=vm.runInContext('renderRaceAnalysis(sessions[0])',sandbox);
+  assert.match(html,/Historique incomplet ou ordre non vérifiable/);assert.match(html,/Indisponible/);
+  assert.match(html,/&lt;Alice&gt;/);assert.doesNotMatch(html,/<Alice>/);
+  assert.match(html,/S1 0:30\.000 · S2 — · S3 0:30\.000/);
+  assert.equal(vm.runInContext('JSON.stringify(sessions)',sandbox),before);
+});
+
+test('Import et sauvegarde : un secteur absent ne décale pas les suivants',async()=>{
+  const {sandbox,calls}=makeBrowser();await new Promise(resolve=>setImmediate(resolve));
+  const raw={Type:'RACE',Date:'2026-11-04T20:00:00Z',TrackName:'x',Cars:[{CarId:0,Driver:{Guid:'a',Name:'Alice'}}],Result:[{CarId:0,TotalTime:90000,NumLaps:1,BestLap:90000}],Laps:[{CarId:0,LapTime:90000,Cuts:0,Timestamp:100,Sectors:[30000,0,30000]}]};
+  vm.runInContext("sessions=[];currentSlug='test';eventContext={slug:'test',name:'Test',data:{}};adminAuth=true;adminToken='token'",sandbox);
+  assert.equal(vm.runInContext(`importSessionJson(${JSON.stringify(JSON.stringify(raw))},'course.json',{silent:true})`,sandbox),true);
+  assert.deepEqual(Array.from(vm.runInContext('sessions[0].laps[0].sectors',sandbox)),[30000,null,30000]);
+  await vm.runInContext('saveRemote()',sandbox);
+  const saved=calls.filter(c=>c.url==='/api/events/test/data'&&c.method==='POST').at(-1).body;
+  assert.deepEqual(saved.sessions[0].laps[0].sectors,[30000,null,30000]);
+});
