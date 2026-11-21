@@ -103,6 +103,7 @@
       <h2>Filtres</h2>
       <div class="body">
         <div class="filters">
+          <label>Serveur<select id="fServer"><option value="">Tous les serveurs</option></select></label>
           <label>Voiture<select id="fCar"><option value="">Toutes</option></select></label>
           <label>Circuit<select id="fTrack"><option value="">Tous</option></select></label>
           <label>Pilote<select id="fDriver"><option value="">Tous</option></select></label>
@@ -113,7 +114,7 @@
           </select></label>
           <button id="reloadBtn">Actualiser</button>
         </div>
-        <p class="note" style="margin:10px 0 0">Les filtres portent sur des mesures réelles : une case vide (« — ») veut dire <b>non mesuré</b>, jamais zéro. C'est ce qui empêche un BoP de reposer sur des chiffres inventés.</p>
+        <p class="note" style="margin:10px 0 0">Le serveur est identifié par son nom envoyé par CSP : utilise des noms distincts. Les séances sans nom ne sont visibles que sur « Tous ». Le profil pit-lane reste partagé par circuit. Les filtres portent sur des mesures réelles : une case vide (« — ») veut dire <b>non mesuré</b>, jamais zéro. C'est ce qui empêche un BoP de reposer sur des chiffres inventés.</p>
       </div>
     </div>
 
@@ -204,6 +205,7 @@
   var activeMeasurementId = '';
   var activeMeasurementStatus = null;
   var measurementBusy = false;
+  var refreshSequence = 0;
 
   function $(id) { return document.getElementById(id); }
   function esc(v) {
@@ -227,7 +229,7 @@
   }
   function query() {
     var p = new URLSearchParams();
-    ['fCar:car', 'fTrack:track', 'fDriver:driver', 'fCampaign:campaign', 'fByDriver:byDriver'].forEach(function (pair) {
+    ['fServer:serverName', 'fCar:car', 'fTrack:track', 'fDriver:driver', 'fCampaign:campaign', 'fByDriver:byDriver'].forEach(function (pair) {
       var parts = pair.split(':');
       var v = $(parts[0]).value;
       if (v) p.set(parts[1], v);
@@ -256,6 +258,7 @@
   function fillSelect(id, values, labels) {
     var el = $(id);
     var current = el.value;
+    if(id==='fServer' && current && values.indexOf(current)<0)values=values.concat([current]);
     el.innerHTML = '<option value="">' + (id === 'fCar' ? 'Toutes' : id === 'fTrack' ? 'Tous' : id === 'fCampaign' ? 'Toutes' : 'Tous') + '</option>' +
       values.map(function (v) {
         var label = (labels && labels[v]) || v;
@@ -315,6 +318,7 @@
       .then(function (r) { return r.json(); })
       .then(function (c) {
         catalog = c;
+        fillSelect('fServer', c.servers || []);
         fillSelect('fCar', c.cars || []);
         fillSelect('fTrack', c.tracks || []);
         fillSelect('fDriver', c.drivers || [], c.driverNames || {});
@@ -401,14 +405,15 @@
   }
 
   function loadSessions() {
-    return authFetch('/api/telemetry/sessions', { cache: 'no-store', headers: headers() })
+    var requestedServer=$('fServer').value;
+    return authFetch('/api/telemetry/sessions?' + new URLSearchParams({serverName:requestedServer}), { cache: 'no-store', headers: headers() })
       .then(function (r) { return r.ok ? r.json() : { sessions: null }; })
       .then(function (j) {
         var sessions = j && Array.isArray(j.sessions) ? j.sessions : null;
-        renderSessions(sessions);
+        if(requestedServer===$('fServer').value)renderSessions(sessions);
         return sessions;
       })
-      .catch(function () { renderSessions(null); return null; });
+      .catch(function () { if(requestedServer===$('fServer').value)renderSessions(null); return null; });
   }
   function renderSessions(list) {
     var box = $('sessions');
@@ -460,6 +465,7 @@
 
   function refresh() {
     var q = query().toString();
+    var sequence=++refreshSequence;
     return Promise.all([
       loadCatalog().catch(function () {}),
       loadSessions(),
@@ -474,6 +480,7 @@
     ]).then(function (res) {
       // Les séances sont renvoyées les plus récentes d'abord; le circuit auto
       // est choisi à partir du contexte détecté par le serveur.
+      if(sequence!==refreshSequence)return;
       var summary = res[2];
       if (Array.isArray(res[1])) updatePitTrackOptions(res[1]);
       showApp();
@@ -491,6 +498,7 @@
       }
       renderLinks();
     }).catch(function (e) {
+      if(sequence!==refreshSequence)return;
       if (e.message === 'auth') {
         token = '';
         sessionStorage.removeItem(STORAGE_KEY);
@@ -591,7 +599,7 @@
     $('measureRefuelBtn').disabled = !ready || !isFinite(liters) || liters < 0.1 || liters > 200;
   }
   function renderMeasurementClients(clients) {
-    measurementClients = Array.isArray(clients) ? clients : [];
+    measurementClients = Array.isArray(clients) ? clients.filter(function(c){return !$('fServer').value || c.serverName === $('fServer').value;}) : [];
     var select = $('pitMeasureClient');
     var previous = select.value;
     var chosen = measurementClients.some(function (client) { return client.sessionKey === previous })
@@ -887,8 +895,8 @@
   $('dlCsv').addEventListener('click', function (e) { e.preventDefault(); fetchReport('csv'); });
   $('dlMd').addEventListener('click', function (e) { e.preventDefault(); fetchReport('md'); });
   $('dlHtml').addEventListener('click', function (e) { e.preventDefault(); fetchReport('html'); });
-  ['fCar', 'fTrack', 'fDriver', 'fCampaign', 'fByDriver'].forEach(function (id) {
-    $(id).addEventListener('change', refresh);
+  ['fServer', 'fCar', 'fTrack', 'fDriver', 'fCampaign', 'fByDriver'].forEach(function (id) {
+    $(id).addEventListener('change', function(){if(id==='fServer'){renderMeasurementClients([]);$('cars').innerHTML='<div class="empty">Chargement du serveur sélectionné…</div>';renderLinks();}refresh();refreshMeasurementState();});
   });
   $('pTrack').addEventListener('input', function () {
     pitAutoMode = false;

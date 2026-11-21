@@ -625,6 +625,7 @@ app.post('/api/admin/circuits/import', async (req, res) => {
 //    aucun port entrant à ouvrir sur le PC).
 // Doc : tools/live-timing/README.md. Réglage : LIVE_PUSH_TOKEN.
 let liveTiming = null;
+let liveTimingSecond = null;
 let livePush = null;
 let liveHttpSources = null;
 const liveClients = new Set();
@@ -723,14 +724,36 @@ function getLiveTiming(){
   if(!liveTiming){
     const {LiveTimingCollector}=require('./tools/live-timing/collector');
     liveTiming=new LiveTimingCollector();
-    liveTiming.on('event',entry=>broadcastLive('log',entry));
+    liveTiming.on('event',entry=>broadcastLive('log',entry,'local1'));
     liveTiming.start();
   }
   return liveTiming;
 }
-function broadcastLive(event,payload){
+function secondLiveConfig(){
+  const listen=Number(process.env.AC_SECOND_LISTEN_PORT), plugin=Number(process.env.AC_SECOND_PLUGIN_PORT);
+  if(!Number.isInteger(listen)||!Number.isInteger(plugin)||listen<1||listen>65535||plugin<1||plugin>65535||listen===plugin)return null;
+  const used=[Number(process.env.AC_LISTEN_PORT||12000),Number(process.env.AC_PLUGIN_PORT||12001)];
+  if(used.includes(listen)||used.includes(plugin))return null;
+  return {listenPort:listen,pluginPort:plugin,host:'127.0.0.1',label:process.env.AC_SECOND_LABEL||'Serveur CM 2',httpUrl:process.env.AC_SECOND_HTTP_URL||''};
+}
+function getSecondLiveTiming(){
+  const cfg=secondLiveConfig();if(!cfg)return null;
+  if(!liveTimingSecond){
+    const {LiveTimingCollector}=require('./tools/live-timing/collector');
+    liveTimingSecond=new LiveTimingCollector(cfg);
+    liveTimingSecond.on('event',entry=>broadcastLive('log',entry,'local2'));
+  }
+  return liveTimingSecond;
+}
+function broadcastLive(event,payload,source){
   const frame='event: '+event+'\ndata: '+JSON.stringify(payload)+'\n\n';
-  for(const res of liveClients){try{res.write(frame);if(typeof res.flush==='function')res.flush()}catch(e){/* client parti */}}
+  for(const client of liveClients){
+    // Le flux d'une source ne reçoit jamais les messages d'une autre.
+    const defaultIsLocal=!getLivePush().current()&&!getLiveMirror()&&!liveSourceUrls().length;
+    if(source==='local1' ? !(client.source==='local1'||(client.source===''&&defaultIsLocal)) :
+       source==='local2' ? client.source!=='local2' : client.source!=='')continue;
+    try{client.res.write(frame);if(typeof client.res.flush==='function')client.res.flush()}catch(e){/* client parti */}
+  }
 }
 // Historique persistant : chaque séance vue (agent push, UDP, source HTTP)
 // est conservée en base — le direct ne survit pas à un redémarrage, l'historique
@@ -766,7 +789,7 @@ async function recordLiveHistory(snap){
 if(liveTimingEnabled()){
   setInterval(()=>{
     if(!liveTimingEnabled())return;
-    try{recordLiveHistory(liveSnapshot())}catch(e){/* silence */}
+    try{recordLiveHistory(liveSnapshot());if(secondLiveConfig())recordLiveHistory(liveSnapshot('local2'))}catch(e){/* silence */}
   },10000).unref();
 }
 // Priorité : source HTTP demandée > agent qui pousse > écoute UDP locale.
@@ -786,9 +809,12 @@ function resolveLiveSource(param){
 // source HTTP configurée > écoute UDP locale. L'agent a la priorité sur les
 // sources HTTP : c'est lui qui voit le serveur quand l'hébergeur est filtré.
 function liveSnapshot(sourceIndex){
+  if(sourceIndex==='local1')return getLiveTiming().snapshot();
+  if(sourceIndex==='local2'){const second=getSecondLiveTiming();return second?second.snapshot():{status:{status:'offline',mode:'error',error:'Deuxième serveur non configuré.'},server:{},session:{},cars:[],events:[]};}
   if(sourceIndex!=null&&sourceIndex!==''){
     const remote=resolveLiveSource(sourceIndex);
     if(remote)return remote.snapshot();
+    return {status:{status:'offline',mode:'error',error:'Source inconnue.'},server:{},session:{},cars:[],events:[]};
   }
   const pushed=getLivePush().current();
   if(pushed)return pushed;
@@ -801,7 +827,7 @@ function liveSnapshot(sourceIndex){
   }
 }
 if(liveTimingEnabled()){
-  try{getLiveTiming()}catch(e){console.error('live-timing: démarrage impossible —',e.message)}
+  try{getLiveTiming();getSecondLiveTiming()}catch(e){console.error('live-timing: démarrage impossible —',e.message)}
 }
 function safeEqual(a,b){
   const A=Buffer.from(String(a||'')),B=Buffer.from(String(b||''));
@@ -815,6 +841,7 @@ app.get('/api/live/config',(req,res)=>{
     enabled:liveTimingEnabled(),
     push:{enabled:!!livePushToken(),endpoint:'/api/live/push'},
     udp:{listenPort:Number(process.env.AC_LISTEN_PORT||12000),serverPort:Number(process.env.AC_PLUGIN_PORT||12001)},
+    localSources:[{id:'local1',name:process.env.AC_SERVER_LABEL||'Serveur CM 1'},...(secondLiveConfig()?[{id:'local2',name:secondLiveConfig().label}]:[])],
     httpSources:liveSourceUrls().map((url,i)=>({index:i,url,name:'Serveur '+(i+1)})),
     mirror:liveMirrorConfig()
   });
@@ -871,8 +898,9 @@ app.get('/api/live/stream',(req,res)=>{
   const push=()=>{try{res.write('event: snapshot\ndata: '+JSON.stringify(liveSnapshot(req.query.source))+'\n\n');if(typeof res.flush==='function')res.flush()}catch(e){/* client parti */}};
   push();
   const timer=setInterval(push,1000);
-  liveClients.add(res);
-  req.on('close',()=>{clearInterval(timer);liveClients.delete(res)});
+  const client={res,source:String(req.query.source||'')};
+  liveClients.add(client);
+  req.on('close',()=>{clearInterval(timer);liveClients.delete(client)});
 });
 // Commandes admin (chat, kick, changement de session) : mêmes règles d'auth que le reste.
 // En mode push elles sont impossibles : le PC n'est pas joignable depuis le site.
@@ -880,13 +908,17 @@ app.post('/api/live/command',async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!liveTimingEnabled())return res.status(503).json({error:'Live timing désactivé.'});
   if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
-  if(resolveLiveSource(req.query.source||req.body&&req.body.source))return res.status(409).json({error:'Serveur public consulté en lecture seule : aucune commande possible.'});
-  if(getLivePush().current())return res.status(409).json({error:'Serveur distant : les commandes doivent être envoyées depuis le PC qui héberge acServer.'});
+  const source=String(req.query.source||req.body&&req.body.source||'');
+  if(source&&source!=='local1'&&source!=='local2')return res.status(409).json({error:'Source distante ou inconnue : aucune commande possible.'});
+  if(!source&&getLivePush().current())return res.status(409).json({error:'Serveur distant : les commandes doivent être envoyées depuis le PC qui héberge acServer.'});
+  if(!source&&(getLiveMirror()||liveSourceUrls().length))return res.status(409).json({error:'Source automatique distante ou capture : aucune commande possible.'});
   const {action,message,carId}=req.body||{};
   const allowed=['chat','kick','next-session','restart-session'];
   if(!allowed.includes(action))return res.status(400).json({error:'Action inconnue.'});
   try{
-    const ok=getLiveTiming().command(action,{message,carId});
+    const collector=source==='local2'?getSecondLiveTiming():getLiveTiming();
+    if(!collector)return res.status(409).json({error:'Serveur sélectionné indisponible.'});
+    const ok=collector.command(action,{message,carId});
     res.json({ok});
   }catch(e){res.status(502).json({error:e.message})}
 });
@@ -936,6 +968,7 @@ function telemetryFilters(q){
     trackConfig: q.trackConfig ? String(q.trackConfig) : undefined,
     driver: q.driver ? String(q.driver) : undefined,
     campaign: q.campaign ? String(q.campaign) : undefined,
+    serverName: q.serverName ? String(q.serverName) : undefined,
     byDriver: q.byDriver === '1' || q.byDriver === 'true'
   };
 }
@@ -1077,7 +1110,8 @@ app.get('/api/telemetry/summary', async(req,res)=>{
     const detectedSession=recentSessions.find(session=>
       (!filters.track||session.track===filters.track)
       && (!configSpecified||(session.trackConfig||null)===(filters.trackConfig||null))
-      && (!filters.campaign||session.campaign===filters.campaign))||null;
+      && (!filters.campaign||session.campaign===filters.campaign)
+      && (!filters.serverName||session.serverName===filters.serverName))||null;
     const fallbackCar=summary.cars.find(car=>
       (!filters.track||car.track===filters.track)
       && (!configSpecified||(car.trackConfig||null)===(filters.trackConfig||null)))||null;
@@ -1128,7 +1162,9 @@ app.get('/api/telemetry/sessions', async(req,res)=>{
   if(!(await telemetryAdmin(req,res)))return undefined;
   try{
     const service=await getTelemetry();
-    res.json({sessions:await service.listSessions()});
+    const all=await service.listSessions();
+    const server=String(req.query.serverName||'');
+    res.json({sessions:server?all.filter(s=>s.serverName===server):all});
   }catch(e){res.status(503).json({error:e.message})}
 });
 app.patch('/api/telemetry/sessions/:id', async(req,res)=>{

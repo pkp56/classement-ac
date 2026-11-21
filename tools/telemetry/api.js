@@ -354,7 +354,7 @@ class TelemetryService {
     // regroupe comme avant par circuit/config/type/campagne.
     const key = info.sessionKey
       ? 'key:' + info.sessionKey
-      : [info.track, info.trackConfig || '', info.sessionType || '', info.campaign || ''].join('|');
+      : [info.serverName || '', info.track, info.trackConfig || '', info.sessionType || '', info.campaign || ''].join('|');
     if (this.sessions.has(key)) return this.sessions.get(key);
     let existing = [];
     try {
@@ -365,7 +365,8 @@ class TelemetryService {
     const match = existing
       .filter(row => info.sessionKey
         ? true
-        : (row.track_config || null) === (info.trackConfig || null)
+        : (row.server_name || null) === (info.serverName || null)
+          && (row.track_config || null) === (info.trackConfig || null)
           && (row.session_type || null) === (info.sessionType || null)
           && (row.campaign || null) === (info.campaign || null))
       .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0];
@@ -471,6 +472,7 @@ class TelemetryService {
         track_config: session.track_config,
         session_type: session.session_type,
         campaign: session.campaign,
+        server_name: session.server_name,
         fuel_rate: session.fuel_rate,
         tyre_wear_rate: session.tyre_wear_rate,
         started_at: session.started_at
@@ -489,6 +491,7 @@ class TelemetryService {
       drivers: uniq('driver_guid'),
       driverNames: Object.fromEntries(rows.filter(r => r.driver_guid).map(r => [r.driver_guid, r.driver_name || r.driver_guid])),
       campaigns: uniq('campaign'),
+      servers: [...new Set([...(await this.store.select('session')).map(s=>s.server_name),...this.measurementClientList().map(c=>c.serverName)].filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'fr')),
       sessions: [...new Set(rows.map(r => `${r.track}|${r.session_type || ''}|${r.started_at}`))]
     };
   }
@@ -525,7 +528,7 @@ class TelemetryService {
       // Une lecture globale suffit même si l'écran agrège plusieurs voitures :
       // les filtres voiture/pilote/campagne ne doivent pas réduire les passages
       // qui servent au profil partagé du circuit.
-      const pitRowsPromise = filters.car || filters.driver || filters.campaign
+      const pitRowsPromise = filters.car || filters.driver || filters.campaign || filters.serverName
         ? this.rows()
         : Promise.resolve(rows);
       const [storedProfiles, pitRows] = await Promise.all([
@@ -1205,12 +1208,14 @@ function filterRows(rows, filters = {}) {
   const trackConfig = filters.trackConfig ? String(filters.trackConfig) : null;
   const driver = filters.driver ? String(filters.driver) : null;
   const campaign = filters.campaign ? String(filters.campaign) : null;
+  const serverName = filters.serverName ? String(filters.serverName) : null;
   return rows.filter(row => {
     if (car && row.car !== car) return false;
     if (track && row.track !== track) return false;
     if (trackConfig && (row.track_config || null) !== trackConfig) return false;
     if (driver && row.driver_guid !== driver) return false;
     if (campaign && row.campaign !== campaign) return false;
+    if (serverName && row.server_name !== serverName) return false;
     return true;
   });
 }
