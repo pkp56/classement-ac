@@ -161,6 +161,11 @@
       <p class="note" style="margin:0 0 10px">Choisis une séance observée : seules les données de temps conservés sont archivées, y compris celles des pilotes encore connectés à la fin. Ce ne sont pas des résultats officiels.</p>
       <div id="history"><div class="empty">Chargement…</div></div>
       <div id="historyBanner" style="display:none;margin-top:12px"></div>
+      <details style="margin-top:14px"><summary>Nettoyer les doublons probables (administrateur)</summary>
+        <p class="note">Aperçu obligatoire : seules les archives closes très courtes, contiguës, de même source et avec les mêmes temps sont proposées. La plus ancienne est conservée. Une sauvegarde privée contient toutes les archives concernées, y compris celle conservée. Les autres cas restent intacts.</p>
+        <button type="button" id="previewDuplicateArchives">Rechercher les doublons probables</button>
+        <div id="duplicateArchivesResult" aria-live="polite"></div>
+      </details>
       <details style="margin-top:14px"><summary>Nettoyer les archives sans tour (administrateur)</summary>
         <p class="note">Aperçu avant suppression. Les séances en cours, sans fin connue ou ambiguës sont conservées. Les archives supprimées sont sauvegardées dans le dossier privé du serveur.</p>
         <button type="button" id="previewEmptyArchives">Rechercher les archives sans tour</button>
@@ -670,6 +675,25 @@
     html += '</select> <button type="button" class="hopen" style="font:inherit;padding:8px;cursor:pointer">Ouvrir</button> <button type="button" class="hrefresh" style="font:inherit;padding:8px;cursor:pointer">Actualiser la liste</button><button type="button" class="hprev" ' + (historyOffset ? '' : 'disabled') + '>← Plus récentes</button> <button type="button" class="hnext" ' + (list.length < historyPageSize ? 'disabled' : '') + '>Plus anciennes →</button><p class="note">Une interruption peut laisser la fin d’une séance inconnue.</p>';
     $('history').innerHTML = html;
   }
+  var duplicateCandidates=[];
+  $('previewDuplicateArchives').addEventListener('click',function(){
+    duplicateCandidates=[];var result=$('duplicateArchivesResult');result.textContent='Recherche…';
+    window.gdspAuth.fetch('/api/live/duplicate-archives',{cache:'no-store'})
+      .then(function(r){return r.json().then(function(j){if(!r.ok)throw Error(j.error||'Recherche impossible');return j;});})
+      .then(function(j){duplicateCandidates=j.groups||[];var html='<p>'+Number(j.count||0)+' archive(s) proposée(s) à la suppression.</p>';
+        if(duplicateCandidates.length){html+='<ul>'+duplicateCandidates.map(function(g){return '<li>'+esc(fmtWhen(g.started_at))+' · '+esc(g.source)+' · '+esc(g.server_name)+' · '+esc(g.track)+' / '+esc(g.track_config||'')+' · '+esc(g.session_type)+' : conserver ID '+esc(g.keep.id)+', supprimer ID '+g.remove.map(function(r){return esc(r.id);}).join(', ')+'</li>';}).join('')+'</ul><button type="button" id="deleteDuplicateArchives">Confirmer la suppression des doublons listés</button>';}
+        result.innerHTML=html;
+      }).catch(function(e){result.textContent=e.message;});
+  });
+  $('duplicateArchivesResult').addEventListener('click',function(e){
+    if(!e.target.closest('#deleteDuplicateArchives') || !duplicateCandidates.length)return;
+    if(!window.confirm('Sauvegarder les archives listées puis supprimer les doublons proposés ?'))return;
+    var result=$('duplicateArchivesResult');result.textContent='Sauvegarde et suppression…';
+    window.gdspAuth.fetch('/api/live/duplicate-archives',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({groups:duplicateCandidates})})
+      .then(function(r){return r.json().then(function(j){if(!r.ok)throw Error(j.error||'Suppression impossible');return j;});})
+      .then(function(j){duplicateCandidates=[];result.textContent=j.deleted+' archive(s) supprimée(s). Sauvegarde privée : '+j.backup;historyOffset=0;loadHistory();})
+      .catch(function(e){duplicateCandidates=[];result.textContent=e.message+' Relance la recherche avant de réessayer.';});
+  });
   var emptyCandidates=[];
   $('previewEmptyArchives').addEventListener('click',function(){
     emptyCandidates=[];var result=$('emptyArchivesResult');result.textContent='Recherche…';

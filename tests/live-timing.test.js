@@ -261,3 +261,12 @@ test('La moyenne comprend les tours avec coupures sans recompter les doublons',(
  const lap=lapCompleted(0,100000,1,[{id:0,lapMs:100000,laps:2}]);feed(lap);feed(lap);
  const row=c.snapshot().storedTimes[0];assert.equal(row.laps,2);assert.equal(row.averageLapMs,95000);assert.equal(row.bestLapMs,90000);
 });
+
+test('Un elapsed ACSP constant dans les informations périodiques ne fait pas reculer le temps de séance',()=>{
+ const c=new LiveTimingCollector({autoStart:false});c.socket={send(){}};
+ const real=Date.now;let now=100000;Date.now=()=>now;
+ try{
+  c.handleDatagram(sessionPacket(0),{});assert.equal(c.snapshot().session.elapsedMs,0);
+  for(let i=1;i<=4;i++){now+=10000;const info=sessionPacket(0);info[0]=EVENT.SESSION_INFO;c.handleDatagram(info,{});assert.equal(c.snapshot().session.elapsedMs,i*10000);}
+ }finally{Date.now=real;}
+});

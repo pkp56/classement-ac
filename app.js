@@ -903,6 +903,17 @@ app.get('/api/live/sessions', async(req,res)=>{
     res.json({sessions:await store.list(Number(req.query.limit)||50,Number(req.query.offset)||0),history:true});
   }catch(e){res.status(503).json({error:e.message})}
 });
+// Nettoyage proposé puis confirmé, jamais sur la seule heure affichée.
+app.get('/api/live/duplicate-archives',async(req,res)=>{
+  res.set('Cache-Control','no-store');if(!(await telemetryAdmin(req,res)))return;
+  try{const result=await queueLiveHistory(async()=>{const store=await getLiveHistory();if(!store)throw new Error('Historique indisponible.');return require('./tools/live-timing/history-duplicates').preview(store);});res.json(result);}
+  catch(e){res.status(503).json({error:e.message});}
+});
+app.post('/api/live/duplicate-archives',async(req,res)=>{
+  res.set('Cache-Control','no-store');if(!(await telemetryAdmin(req,res)))return;
+  try{const result=await queueLiveHistory(async()=>{const store=await getLiveHistory();if(!store)throw new Error('Historique indisponible.');return require('./tools/live-timing/history-duplicates').remove(store,req.body?.groups,process.env.GDSP_AC_BACKUP_ROOT,ROOT);});res.json(result);}
+  catch(e){res.status(400).json({error:e.message});}
+});
 // Nettoyage explicite des seules séances closes identifiées sans tour.
 app.get('/api/live/empty-archives',async(req,res)=>{
   res.set('Cache-Control','no-store');if(!(await telemetryAdmin(req,res)))return;

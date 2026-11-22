@@ -75,4 +75,4 @@ async function remove(store,selection,backupRoot,siteRoot){
   }
   throw new Error('Stockage historique inconnu.');
 }
-module.exports={noLapArchive,preview,remove};
+module.exports={noLapArchive,preview,remove,fingerprint,backupDirectory,backup,listRows};
