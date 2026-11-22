@@ -63,7 +63,7 @@
       const skin=skins.length?`<select class="admin-input" data-cm-slot="${Number(slot.id)}" data-cm-slot-field="skin" data-cm-original="${esc(slot.skin)}" ${slot.skinEditable===false?'disabled':''}><option value="">—</option>${options(skins,slot.skin)}</select>`:`<input class="admin-input" data-cm-slot="${Number(slot.id)}" data-cm-slot-field="skin" data-cm-original="${esc(slot.skin)}" value="${esc(slot.skin)}" ${slot.skinEditable===false?'disabled':''}>`;
       return `<div class="cm-slot"><b>Place ${Number(slot.id)+1}${slot.reserved?' · réservée':''}${slot.cspSkin?' · options CSP conservées':''}${slot.skinEditable===false?' · options inconnues, modification bloquée':''}</b><label>Voiture ${models}</label><label>Skin ${skin}</label><label><input type="checkbox" data-cm-remove="${Number(slot.id)}" ${slot.reserved||slot.cspSkin||slot.skinEditable===false?'disabled':''}> Supprimer</label></div>`;
     }).join('');
-    return `<div class="cm-editor"><p class="note"><b>Brouillon :</b> rien n’est enregistré tant que tu ne confirmes pas l’enregistrement. Les champs absents ne sont pas inventés, sauf la variante du circuit si tu en choisis une. Vérifie les valeurs avec Content Manager.</p>${inventory?'':'<p class="note">Inventaire indisponible : les identifiants sont à vérifier dans Content Manager.</p>'}${sections}<section class="panel"><h3>Voitures et places existantes</h3><p class="note">Les réservations pilotes sont conservées. Seules les dernières places sans données protégées peuvent être supprimées.</p>${cars||'<p class="note">Aucune place détectée.</p>'}<div class="cm-slot"><b>Ajouter une place</b><label>Voiture <select class="admin-input" data-cm-add-model><option value="">— Choisir —</option>${options((settings.SERVER?.CARS||'').split(';').filter(Boolean),'')}</select></label><label>Skin <input class="admin-input" data-cm-add-skin placeholder="Facultatif"></label></div><p class="note">Ajuste aussi le nombre maximum de pilotes et la liste des voitures autorisées si nécessaire.</p></section>${weather}<section class="panel"><h3>Ajouter une météo</h3><label>Identifiant météo Assetto Corsa <input class="admin-input" data-cm-weather-add placeholder="Ex. 3_clear"></label><p class="note">Valeurs initiales : 18 °C, piste +6 °C, vent nul ; recharge après ajout pour les modifier. Seule la dernière météo peut être supprimée et il faut en conserver au moins une.</p></section><section class="panel"><h3>Options CSP et scripts</h3><p class="note">CSP ${extra.csp?.encodedInTrack?'détecté dans la configuration du circuit':'non identifié dans le circuit'}. Les scripts Race Control et télémétrie existants sont compris dans ces options : ne les efface pas si tu veux les garder.</p>${data.cspWelcome?.available?`<label>Extra options CSP (INI)<textarea class="admin-input" data-cm-csp rows="10" maxlength="65536">${esc(data.cspWelcome.config)}</textarea></label><p class="note">Le message d’accueil reste inchangé. La configuration complète ci-dessus remplacera les options CSP actuelles après confirmation.</p>`:'<p class="note">Fichier CSP indisponible ou chemin non pris en charge : utilise Content Manager.</p>'}<a class="btn secondary" href="/race-control.html" target="_blank" rel="noopener">Ouvrir Race Control</a></section><button type="button" class="btn" id="cm-preview-btn">Voir les changements du brouillon</button><button type="button" class="btn secondary" id="cm-check-btn">Vérifier le brouillon sur le serveur</button><button type="button" class="btn" id="cm-save-btn">Enregistrer après confirmation</button><p class="note">Enregistrement expérimental, désactivé par défaut : nécessite une sauvegarde privée configurée, Content Manager fermé et le serveur sélectionné arrêté. Une interruption peut nécessiter une restauration manuelle.</p><pre class="note" id="cm-preview" style="white-space:pre-wrap"></pre></div>`;
+    return `<div class="cm-editor"><p class="note"><b>Brouillon :</b> rien n’est enregistré tant que tu ne confirmes pas l’enregistrement. Les champs absents ne sont pas inventés, sauf la variante du circuit si tu en choisis une. Vérifie les valeurs avec Content Manager.</p>${inventory?'':'<p class="note">Inventaire indisponible : les identifiants sont à vérifier dans Content Manager.</p>'}${sections}<section class="panel"><h3>Voitures et places existantes</h3><p class="note">Les réservations pilotes sont conservées. Seules les dernières places sans données protégées peuvent être supprimées.</p>${cars||'<p class="note">Aucune place détectée.</p>'}<div class="cm-slot"><b>Ajouter une place</b><label>Voiture <select class="admin-input" data-cm-add-model><option value="">— Choisir —</option>${options((settings.SERVER?.CARS||'').split(';').filter(Boolean),'')}</select></label><label>Skin <input class="admin-input" data-cm-add-skin placeholder="Facultatif"></label></div><button type="button" class="btn secondary" id="cm-add-slot-btn">+ Ajouter la place au brouillon</button><div id="cm-added-slots" aria-live="polite"></div><p class="note">Clique sur le bouton pour ajouter chaque place au brouillon : elle ne sera enregistrée qu’après vérification et confirmation.</p><p class="note">Ajuste aussi le nombre maximum de pilotes et la liste des voitures autorisées si nécessaire.</p></section>${weather}<section class="panel"><h3>Ajouter une météo</h3><label>Identifiant météo Assetto Corsa <input class="admin-input" data-cm-weather-add placeholder="Ex. 3_clear"></label><p class="note">Valeurs initiales : 18 °C, piste +6 °C, vent nul ; recharge après ajout pour les modifier. Seule la dernière météo peut être supprimée et il faut en conserver au moins une.</p></section><section class="panel"><h3>Options CSP et scripts</h3><p class="note">CSP ${extra.csp?.encodedInTrack?'détecté dans la configuration du circuit':'non identifié dans le circuit'}. Les scripts Race Control et télémétrie existants sont compris dans ces options : ne les efface pas si tu veux les garder.</p>${data.cspWelcome?.available?`<label>Extra options CSP (INI)<textarea class="admin-input" data-cm-csp rows="10" maxlength="65536">${esc(data.cspWelcome.config)}</textarea></label><p class="note">Le message d’accueil reste inchangé. La configuration complète ci-dessus remplacera les options CSP actuelles après confirmation.</p>`:'<p class="note">Fichier CSP indisponible ou chemin non pris en charge : utilise Content Manager.</p>'}<a class="btn secondary" href="/race-control.html" target="_blank" rel="noopener">Ouvrir Race Control</a></section><button type="button" class="btn" id="cm-preview-btn">Voir les changements du brouillon</button><button type="button" class="btn secondary" id="cm-check-btn">Vérifier le brouillon sur le serveur</button><button type="button" class="btn" id="cm-save-btn">Enregistrer après confirmation</button><p class="note">Enregistrement expérimental, désactivé par défaut : nécessite une sauvegarde privée configurée, Content Manager fermé et le serveur sélectionné arrêté. Une interruption peut nécessiter une restauration manuelle.</p><pre class="note" id="cm-preview" style="white-space:pre-wrap"></pre></div>`;
   }
   function collect(container){
     const changes=[];
@@ -75,6 +75,26 @@
     return changes;
   }
   function attach(container,inventory,data,check,save,id){
+    const additions=[];
+    const addedView=container.querySelector('#cm-added-slots');
+    function showAdded(message=''){
+      if(!addedView)return;
+      addedView.innerHTML=(message?`<p class="note">${esc(message)}</p>`:'')+additions.map((slot,i)=>`<div class="cm-added-slot">Place à ajouter : <b>${esc(slot.model)}</b>${slot.skin?' · '+esc(slot.skin):''} <button type="button" class="btn secondary small" data-cm-undo-add="${i}">Retirer du brouillon</button></div>`).join('');
+    }
+    container.querySelector('#cm-add-slot-btn')?.addEventListener('click',()=>{
+      const model=container.querySelector('[data-cm-add-model]')?.value.trim()||'',skin=container.querySelector('[data-cm-add-skin]')?.value.trim()||'';
+      const allowed=(container.querySelector('[data-cm-cars]')?.value??container.querySelector('[data-cm-section="SERVER"][data-cm-key="CARS"]')?.value??data.settings?.SERVER?.CARS??'').split(';').map(x=>x.trim()).filter(Boolean);
+      if(!model||!allowed.includes(model)){showAdded('Choisis une voiture autorisée avant d’ajouter une place.');return;}
+      if(!/^[a-zA-Z0-9_-]{1,120}$/.test(model)||! /^[a-zA-Z0-9_-]{0,120}$/.test(skin)){showAdded('Identifiant de voiture ou skin invalide.');return;}
+      if(additions.length>=200){showAdded('Limite de 200 modifications de places par enregistrement.');return;}
+      additions.push({model,skin});showAdded('Place ajoutée au brouillon, aucun fichier modifié.');
+    });
+    container.addEventListener('click',event=>{
+      const button=event.target.closest?.('[data-cm-undo-add]');
+      if(!button)return;
+      const index=Number(button.dataset.cmUndoAdd);
+      if(Number.isInteger(index)&&index>=0&&index<additions.length){additions.splice(index,1);showAdded('Place retirée du brouillon.');}
+    });
     // Initialiser explicitement : le parseur HTML peut retirer le premier saut de ligne.
     const cspInput=container.querySelector('[data-cm-csp]');
     if(cspInput&&data.cspWelcome?.available)cspInput.value=normaliseCsp(data.cspWelcome.config);
@@ -104,14 +124,13 @@
     async function send(event,saving){
       const out=container.querySelector('#cm-preview'),changes=collect(container);
       const removed=[...container.querySelectorAll('[data-cm-remove]:checked')].map(el=>Number(el.dataset.cmRemove));
-      const addModel=container.querySelector('[data-cm-add-model]')?.value.trim()||'',addSkin=container.querySelector('[data-cm-add-skin]')?.value.trim()||'';
       const weatherRemoved=[...container.querySelectorAll('[data-cm-weather-remove]:checked')].map(el=>Number(el.dataset.cmWeatherRemove)).sort((a,b)=>b-a);
       const weatherAdd=container.querySelector('[data-cm-weather-add]')?.value.trim()||'';
       const cspValue=container.querySelector('[data-cm-csp]')?.value;
       const cspIsChanged=cspValue!==undefined&&cspChanged(cspValue,data.cspWelcome?.config);
       const raceModeEl=container.querySelector('[data-race-mode]'),raceValueEl=container.querySelector('[data-race-value]');
       const raceChanged=!!raceModeEl&&(raceModeEl.value!==raceModeEl.dataset.original||raceValueEl.value!==raceValueEl.dataset.original);
-      if(!changes.length&&!removed.length&&!addModel&&!weatherRemoved.length&&!weatherAdd&&!cspIsChanged&&!raceChanged){out.textContent='Aucun changement dans le brouillon.';return;}
+      if(!changes.length&&!removed.length&&!additions.length&&!weatherRemoved.length&&!weatherAdd&&!cspIsChanged&&!raceChanged){out.textContent='Aucun changement dans le brouillon.';return;}
       const configChanges=[],slots=new Map();
       for(const c of changes){
         if(c.section){
@@ -122,10 +141,10 @@
         }
       }
       for(const slot of removed){if(slots.has(slot)){out.textContent='Annule les modifications des places à supprimer avant de continuer.';return;}slots.set(slot,{id:slot,operation:'remove'});}
-      if(addModel){
+      if(additions.length){
         if(removed.length){out.textContent='Enregistre les suppressions avant d’ajouter une place.';return;}
         const next=data.slots.length?Math.max(...data.slots.map(x=>x.id))+1:0;
-        slots.set(next,{id:next,operation:'add',model:addModel,skin:addSkin});
+        additions.forEach((slot,i)=>slots.set(next+i,{id:next+i,operation:'add',...slot}));
       }
       if(weatherRemoved.length&&weatherAdd){out.textContent='Enregistre les suppressions avant d’ajouter une météo.';return;}
       const weatherChanges=weatherRemoved.map(id=>({id,operation:'remove'}));
@@ -141,7 +160,7 @@
         if(plan.raceChange)lines.push(`Course : ${plan.raceChange.value} ${plan.raceChange.mode==='time'?'minutes':'tours'}.`);
         if(plan.cspChanged)lines.push('Extra options CSP modifiées ; message d’accueil conservé.');
         out.textContent=(lines.length?lines.join('\n'):'Aucun changement effectif.')+(saving?'\n\nEnregistrement confirmé et sauvegarde créée. Recharge le serveur avant une autre modification.':'\n\nVérifié en lecture seule : aucun fichier enregistré.');
-        if(saving){container.querySelector('#cm-save-btn').disabled=true;container.querySelector('#cm-check-btn').disabled=true;}
+        if(saving){container.querySelector('#cm-save-btn').disabled=true;container.querySelector('#cm-check-btn').disabled=true;const addButton=container.querySelector('#cm-add-slot-btn');if(addButton)addButton.disabled=true;}
       }catch(error){out.textContent=(error.message||'Opération non confirmée.')+(saving?' Vérifie les fichiers avant de réessayer.':' Aucun fichier modifié.');}
       finally{if(!saving||!out.textContent.includes('Enregistrement confirmé'))event.target.disabled=false;}
     }
@@ -152,8 +171,8 @@
       const lines=changes.map(c=>`${c.section||'Place '+(c.slot+1)} · ${c.key} : ${c.before||'(vide)'} → ${c.after||'(vide)'}`);
       for(const el of container.querySelectorAll('[data-cm-remove]:checked'))lines.push(`Place ${Number(el.dataset.cmRemove)+1} : suppression demandée`);
       for(const el of container.querySelectorAll('[data-cm-weather-remove]:checked'))lines.push(`Météo ${Number(el.dataset.cmWeatherRemove)+1} : suppression demandée`);
-      const model=container.querySelector('[data-cm-add-model]')?.value.trim(),weather=container.querySelector('[data-cm-weather-add]')?.value.trim();
-      if(model)lines.push(`Nouvelle place : ${model}`);if(weather)lines.push(`Nouvelle météo : ${weather}`);
+      const weather=container.querySelector('[data-cm-weather-add]')?.value.trim();
+      for(const slot of additions)lines.push(`Nouvelle place : ${slot.model}${slot.skin?' / '+slot.skin:''}`);if(weather)lines.push(`Nouvelle météo : ${weather}`);
       const mode=container.querySelector('[data-race-mode]'),rv=container.querySelector('[data-race-value]');if(mode&&(mode.value!==mode.dataset.original||rv.value!==rv.dataset.original))lines.push(`Course : ${rv.value} ${mode.value==='time'?'minutes':'tours'}.`);
       const csp=container.querySelector('[data-cm-csp]');if(csp&&cspChanged(csp.value,data.cspWelcome?.config))lines.push('Extra options CSP modifiées.');
       out.textContent=lines.length?lines.join('\n')+'\n\nAucun changement n’a été enregistré.':'Aucun changement dans le brouillon.';
