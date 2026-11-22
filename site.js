@@ -3375,14 +3375,14 @@ async function loadCmPreset(){
     if(request!==cmPresetRequest||document.getElementById('cm-server-select')?.value!==id)return;
     const target=document.getElementById('cm-server-result');if(!target)return;
     if(!window.gdspServerEditor)throw Error('Interface indisponible. Recharge la page.');
-    target.innerHTML=window.gdspServerEditor.render(data,inventory);
+    target.innerHTML=window.gdspServerEditor.render(data,inventory,eventContext);
     window.gdspServerEditor.attach(target,inventory,data,async body=>{
       const response=await apiPost('/api/server-manager/presets/'+encodeURIComponent(id)+'/preview',body);
       const result=await response.json();if(!response.ok)throw Error(result.error||'Vérification impossible.');return result;
     },async body=>{
       const response=await apiPost('/api/server-manager/presets/'+encodeURIComponent(id)+'/save',body);
       const result=await response.json();if(!response.ok)throw Error(result.error||'Enregistrement impossible.');return result;
-    },id);
+    },id,eventContext);
   }catch(e){if(request===cmPresetRequest&&document.getElementById('cm-server-select')?.value===id){const el=document.getElementById('cm-server-result');if(el)el.textContent=e.message;}}
 }
 function adminTabs(x){cmPresetRequest++;cmStatusRequest++;adminTab=x;render()}

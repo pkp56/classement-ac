@@ -72,3 +72,49 @@ test('Le bouton ajoute explicitement des places au brouillon, sans écriture imp
  onClick({target:{closest:()=>({dataset:{cmUndoAdd:'0'}})}});
  await buttons['#cm-check-btn'].click({target:buttons['#cm-check-btn']});assert.equal(payload.entryChanges.length,1);assert.equal(payload.entryChanges[0].id,1);
 });
+
+test('Préparation Cup : manche structurée et validations conservatrices',()=>{
+ const event={kind:'cup',name:'Cup',data:{customCalendar:{'2026-12-03':{track:'ks_monza66',layout:'junior',trackName:'Monza Junior'}},carSheets:[{id:'alfa',name:'Alfa'}],eventInfo:{formatText:'texte libre'}}};
+ const inventory={tracks:[{id:'ks_monza66',layouts:['junior']}],cars:[{id:'alfa',skins:['white']} ]};
+ const preset={extra:{sessions:{QUALIFY:'active',RACE:'active'}},slots:[{id:0,model:'alfa',skin:'white',reserved:true,skinEditable:true},{id:1,model:'old',skin:'red',reserved:false,skinEditable:true}]};
+ const plan=editor.cupDraft(preset,inventory,event,0,'alfa','20','10','15');
+ assert.equal(plan.round.track,'ks_monza66');assert.equal(plan.round.layout,'junior');assert.equal(plan.additions,18);assert.equal(plan.slots.join(','),'1');
+ assert.equal(preset.slots[1].model,'old','le brouillon pur ne modifie pas les places');
+ const html=editor.render({settings:{},extra:{},slots:[]},inventory,event);assert.match(html,/Préparer une manche/);assert.match(html,/Monza Junior/);assert.match(html,/setup fixe, la grille inversée/);
+ assert.throws(()=>editor.cupDraft(preset,inventory,event,0,'alfa','','10','15'),/Renseigne/);
+ assert.throws(()=>editor.cupDraft(preset,{tracks:[],cars:inventory.cars},event,0,'alfa','20','10','15'),/non trouvé/);
+ assert.throws(()=>editor.cupDraft({...preset,slots:[{...preset.slots[1],id:0,reserved:true}]},inventory,event,0,'alfa','20','10','15'),/réservée/);
+ assert.throws(()=>editor.cupDraft({...preset,slots:[{...preset.slots[1],id:0,cspSkin:true}]},inventory,event,0,'alfa','20','10','15'),/protégée/);
+ assert.throws(()=>editor.cupDraft({...preset,extra:{sessions:{QUALIFY:'absente',RACE:'active'}}},inventory,event,0,'alfa','20','10','15'),/absente/);
+ assert.equal(editor.cupOptions({...event,kind:'open'}).rounds.length,0);
+});
+
+test('Bouton Cup prépare puis transmet seulement les modifications au contrôle existant',async()=>{
+ sandbox.Event=class {constructor(type){this.type=type}};
+ const buttons={};for(const id of ['#cm-preview-btn','#cm-check-btn','#cm-save-btn','#cm-cup-prepare','#cm-add-slot-btn'])buttons[id]={disabled:false,addEventListener(_n,fn){this.click=fn;}};
+ const inputs=[],listeners={};
+ function field(section,key,value,extra={}){const el={value,disabled:false,dataset:{cmSection:section,cmKey:key,cmOriginal:value},...extra};inputs.push(el);return el;}
+ const track=field('SERVER','TRACK','old',{tagName:'SELECT',options:[{value:'old'},{value:'monza'}]}),layout=field('SERVER','CONFIG_TRACK','oldlayout'),hidden=field('SERVER','CARS','old'),max=field('SERVER','MAX_CLIENTS','1'),qe=field('QUALIFY','ENABLED','0'),re=field('RACE','ENABLED','1'),qt=field('__CM_QUALIFY_OFF','TIME','5');
+ const model={value:'old',disabled:false,dataset:{cmSlot:'0',cmSlotField:'model',cmOriginal:'old'},tagName:'SELECT',hasAttribute(){return false}};inputs.push(model);
+ const skin={value:'red',disabled:false,dataset:{cmSlot:'0',cmSlotField:'skin',cmOriginal:'red'},tagName:'SELECT'};inputs.push(skin);
+ const allowed={options:[{value:'old',selected:true},{value:'alfa',selected:false}],get selectedOptions(){return this.options.filter(x=>x.selected)},matches(s){return s==='[data-cm-allowed]'}};
+ const mode={value:'laps',dataset:{original:'laps'}},race={value:'5',dataset:{original:'5'}},out={textContent:''},result={textContent:''},added={innerHTML:''};
+ const els={'[data-cm-track]':track,'[data-cm-layout]':layout,'[data-cm-allowed]':allowed,'[data-cm-cars]':hidden,'[data-race-mode]':mode,'[data-race-value]':race,'#cm-preview':out,'#cm-cup-result':result,'#cm-added-slots':added,'[data-cup-round]':{value:'0'},'[data-cup-car]':{value:'alfa'},'[data-cup-places]':{value:'2'},'[data-cup-qualify]':{value:'10'},'[data-cup-race]':{value:'15'}};
+ const container={addEventListener(type,fn){listeners[type]=fn},querySelector(q){
+   if(buttons[q]||els[q])return buttons[q]||els[q];
+   let m=q.match(/^\[data-cm-section="([^"]+)"\]\[data-cm-key="([^"]+)"\]$/);if(m)return inputs.find(e=>e.dataset.cmSection===m[1]&&e.dataset.cmKey===m[2])||null;
+   m=q.match(/^\[data-cm-slot="(\d+)"\]\[data-cm-slot-field="([^"]+)"\]$/);if(m)return inputs.find(e=>e.dataset.cmSlot===m[1]&&e.dataset.cmSlotField===m[2])||null;
+   return null;
+ },querySelectorAll(q){if(q==='[data-cm-original]')return inputs;if(q.includes('[data-cm-slot-field="model"]'))return [model];return [];}};
+ for(const el of [track,allowed,model]){el.dispatchEvent=()=>listeners.change?.({target:el});if(!el.matches)el.matches=s=>s==='[data-cm-track]'&&el===track;}
+ const event={kind:'cup',name:'Cup',data:{customCalendar:{'2026-12-03':{track:'monza',layout:'junior'}},carSheets:[{id:'alfa'}]}};
+ const inventory={tracks:[{id:'monza',layouts:['junior']}],cars:[{id:'alfa',skins:['white']}]};
+ const data={revision:'r',entryRevision:'e',settings:{SERVER:{CARS:'old'}},extra:{sessions:{QUALIFY:'inactive',RACE:'active'}},slots:[{id:0,model:'old',skin:'red',skinEditable:true}]};
+ let payload;editor.attach(container,inventory,data,async p=>{payload=p;return {configChanges:[],slotChanges:[],weatherChanges:[]}},async()=>{throw Error('ecriture non demandee')},'local2',event);
+ buttons['#cm-cup-prepare'].click();assert.match(result.textContent,/Brouillon préparé/);assert.equal(payload,undefined);
+ await buttons['#cm-check-btn'].click({target:buttons['#cm-check-btn']});
+ assert.equal(payload.configChanges.find(x=>x.key==='TRACK').value,'monza');assert.equal(payload.configChanges.find(x=>x.key==='CONFIG_TRACK').value,'junior');
+ assert.equal(payload.configChanges.find(x=>x.key==='CARS').value,'alfa');assert.equal(payload.configChanges.find(x=>x.key==='MAX_CLIENTS').value,'2');
+ assert.equal(payload.configChanges.find(x=>x.section==='QUALIFY'&&x.key==='ENABLED').value,'1');assert.equal(payload.configChanges.find(x=>x.key==='TIME').value,'10');
+ assert.equal(payload.raceMode.mode,'time');assert.equal(payload.raceMode.value,'15');assert.equal(payload.entryChanges.length,2);assert.equal(payload.entryChanges[1].operation,'add');
+});
