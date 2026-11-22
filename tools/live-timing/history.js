@@ -5,10 +5,10 @@
  * La page /live-timing montre le DIRECT (SSE, mémoire) : au redémarrage du
  * site — ou simplement une fois la séance finie — il ne reste rien. Ici, chaque
  * séance vue par le site (agent push, UDP local, source HTTP) est conservée :
- * identité, durée, classement final, meilleurs tours, fil d'événements.
+ * identité, durée et temps observés ; les anciennes archives restent lisibles.
  *
  * Rien n'est fabriqué : on stocke les instantanés tels qu'ils arrivent, et la
- * séance se ferme quand une différente commence (ou qu'on ne la voit plus).
+ * séance se ferme quand une différente commence ; une interruption seule ne prouve pas un arrêt.
  *
  * Stockage : PostgreSQL (LIVE_DATABASE_URL ou DATABASE_URL, table
  * gdsp_live_sessions) sinon fichier JSON (data/live-history.json) — le site
@@ -51,6 +51,16 @@ function classification(snap) {
   }));
 }
 
+// Les nouvelles archives contiennent le tableau des temps observés seulement.
+// Les anciens formats restent lisibles sans les modifier.
+function archivedSnapshot(snap){
+  if(!Array.isArray(snap.storedTimes))return snap;
+  return {...snap,cars:[],bestLaps:[],events:[],collisions:[],storedTimes:snap.storedTimes.map(row=>({...row,connected:false}))};
+}
+function archiveClassification(snap){
+  if(!Array.isArray(snap.storedTimes))return classification(snap);
+  return snap.storedTimes.map(row=>({name:row.name||'',team:row.team||null,model:row.model||null,laps:row.laps||0,lastLap:row.lastLap||null,bestLap:row.bestLap||null,topSpeedKmh:row.topSpeedKmh??null,identityUncertain:!!row.identityUncertain,connected:false}));
+}
 /** Un enregistreur : accumule, détecte les changements de séance, écrit. */
 class LiveHistoryRecorder {
   constructor(store, options = {}) {
@@ -62,7 +72,7 @@ class LiveHistoryRecorder {
   }
 
   /** Un instantané à prendre en compte (ou pas : le vide n'ouvre pas une séance). */
-  async record(snap, nowMs = Date.now()) {
+  async record(snap, nowMs = Date.now(), force = false) {
     try {
       if (!snap || !snap.server) return;
       // Une capture rejouée (miroir) n'est PAS une séance de plus : l'historique
@@ -106,10 +116,10 @@ class LiveHistoryRecorder {
           last_seen_at: at,
           ended_at: null,
           drivers: cars.filter(c => c.connected !== false).length,
-          snapshot: snap,
-          classification: classification(snap),
-          best_laps: (snap.bestLaps || []).slice(0, 20),
-          events: (snap.events || []).slice(-EVENTS_CAP)
+          snapshot: archivedSnapshot(snap),
+          classification: archiveClassification(snap),
+          best_laps: Array.isArray(snap.storedTimes)?[]:(snap.bestLaps || []).slice(0, 20),
+          events: Array.isArray(snap.storedTimes)?[]:(snap.events || []).slice(-EVENTS_CAP)
         });
         this.current = { signature, id: row.id, lastWriteMs: nowMs };
         return;
@@ -117,14 +127,14 @@ class LiveHistoryRecorder {
 
       // Même séance : écriture au plus toutes les writeIntervalMs, et toujours
       // la dernière photo avant fermeture.
-      if (nowMs - this.current.lastWriteMs >= this.writeIntervalMs) {
+      if (force || nowMs - this.current.lastWriteMs >= this.writeIntervalMs) {
         await this.store.update(this.current.id, {
           last_seen_at: at,
           drivers: cars.filter(c => c.connected !== false).length,
-          snapshot: snap,
-          classification: classification(snap),
-          best_laps: (snap.bestLaps || []).slice(0, 20),
-          events: (snap.events || []).slice(-EVENTS_CAP)
+          snapshot: archivedSnapshot(snap),
+          classification: archiveClassification(snap),
+          best_laps: Array.isArray(snap.storedTimes)?[]:(snap.bestLaps || []).slice(0, 20),
+          events: Array.isArray(snap.storedTimes)?[]:(snap.events || []).slice(-EVENTS_CAP)
         });
         this.current.lastWriteMs = nowMs;
       }
@@ -144,10 +154,10 @@ class LiveHistoryRecorder {
         await this.store.update(this.current.id, {
           last_seen_at: new Date(nowMs).toISOString(),
           drivers: cars.filter(c => c.connected !== false).length,
-          snapshot: finalSnap,
-          classification: classification(finalSnap),
-          best_laps: (finalSnap.bestLaps || []).slice(0, 20),
-          events: (finalSnap.events || []).slice(-EVENTS_CAP)
+          snapshot: archivedSnapshot(finalSnap),
+          classification: archiveClassification(finalSnap),
+          best_laps: Array.isArray(finalSnap.storedTimes)?[]:(finalSnap.bestLaps || []).slice(0, 20),
+          events: Array.isArray(finalSnap.storedTimes)?[]:(finalSnap.events || []).slice(-EVENTS_CAP)
         });
       }
       await this.store.close(this.current.id, new Date(nowMs).toISOString());

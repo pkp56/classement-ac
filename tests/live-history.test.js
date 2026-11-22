@@ -210,3 +210,9 @@ test('Les archives anciennes restent accessibles par pagination',async()=>{
  const page1=await store.list(2,0),page2=await store.list(2,2),page3=await store.list(2,4);
  assert.deepEqual(page1.map(r=>r.session_key),['4','3']);assert.deepEqual(page2.map(r=>r.session_key),['2','1']);assert.equal(page3[0].session_key,'0');
 });
+test('Une archive récente conserve uniquement les temps, y compris les pilotes encore connectés',async()=>{
+ const store=tmpHistory(),rec=new LiveHistoryRecorder(store,{writeIntervalMs:0});
+ const data=snap({storedTimes:[{name:'A',model:'lola',laps:3,bestLap:'1:30.000',connected:true},{name:'B',model:'alfa',laps:1,connected:false}]});
+ await rec.record(data);const row=(await store.list())[0];
+ assert.equal(row.snapshot.cars.length,0);assert.equal(row.snapshot.events.length,0);assert.equal(row.snapshot.storedTimes.length,2);assert.ok(row.snapshot.storedTimes.every(r=>!r.connected));assert.deepEqual(row.classification.map(r=>r.name),['A','B']);
+});
