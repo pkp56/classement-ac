@@ -26,10 +26,10 @@ const http = require('http');
 const https = require('https');
 const { EventEmitter } = require('events');
 const { parsePacket, encode, SESSION_TYPE } = require('./acsp');
+const path = require('node:path');
+const {loadPitGeometry, updatePit} = require('./pit-detection');
 
 const STALE_AFTER_MS = 8000;      // plus de paquet depuis 8 s → liaison perdue
-const PIT_SPEED_KMH = 3;          // sous ce seuil, on considère l'arrêt en stand
-const PIT_MIN_MS = 4000;
 const MAX_EVENTS = 60;
 const MAX_COLLISIONS = 30;
 
@@ -91,8 +91,9 @@ function computeStandings(state, now = Date.now()) {
       speedKmh: speedKmh != null ? Math.round(speedKmh) : null,
       topSpeedKmh: Number.isFinite(c.topSpeedKmh) ? Math.round(c.topSpeedKmh) : null,
       worldPosition: c.connected && c.pos && c.lastUpdateAt && now-c.lastUpdateAt<5000 && [c.pos.x,c.pos.z].every(Number.isFinite) ? {x:c.pos.x,z:c.pos.z} : null,
-      inPit: !!c.inPit,
-      pitStops: c.pitStops || 0,
+      inPit: !!c.inPit && !!c.lastUpdateAt && now-c.lastUpdateAt<5000,
+      pitState: c.lastUpdateAt && now-c.lastUpdateAt<5000 ? (c.pitState || 'unknown') : 'unknown',
+      pitStops: c.pitTrackingAvailable ? (c.pitStops || 0) : null,
       gapMs: estGapMs,
       gap: estGapMs == null ? '' : estGapMs === 0 ? 'leader' : '+' + fmtMs(estGapMs),
       gapEstimated: true,
@@ -150,6 +151,8 @@ class LiveTimingCollector extends EventEmitter {
     this.httpError = null;
     this.error = null;
     this.bindState = 'idle';
+    this.pitGeometry = null;
+    this.pitGeometryKey = null;
     this.reset();
     if (this.options.autoStart) this.start();
   }
@@ -178,6 +181,19 @@ class LiveTimingCollector extends EventEmitter {
     };
   }
 
+  loadPitForTrack(track, layout) {
+    const key=JSON.stringify([track,layout||'']);
+    if(this.pitGeometryKey===key)return;
+    this.pitGeometryKey=key; this.pitGeometry=null;
+    const serverRoot=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+    const content=String(process.env.GDSP_AC_CONTENT_ROOT||(serverRoot&&path.join(serverRoot,'..','content'))||'').trim();
+    const extra=String(process.env.GDSP_AC_EXTRA_CONTENT_ROOT||'').trim();
+    if(!content && !extra)return;
+    loadPitGeometry([content,extra],track,layout||'').then(geometry=>{
+      if(this.pitGeometryKey===key)this.pitGeometry=geometry;
+    }).catch(()=>{});
+  }
+
   log(kind, text, extra = {}) {
     const entry = { at: new Date().toISOString(), kind, text, ...extra };
     this.state.events.unshift(entry);
@@ -195,7 +211,7 @@ class LiveTimingCollector extends EventEmitter {
         spline: 0, laps: 0, lastLapMs: null, lastLapCuts: 0,
         bestLapMs: null, bestLapCuts: 0, totalMs: 0,
         pos: null, gear: null, rpm: null, speedKmh: null,
-        inPit: false, slowSince: null, pitStops: 0,
+        inPit: false, slowSince: null, pitStops: 0, pitTrackingAvailable: false,
         lapStartedAt: null, lastUpdateAt: null, infoRequestedAt: 0
       };
       this.state.cars.set(carId, c);
@@ -213,7 +229,7 @@ class LiveTimingCollector extends EventEmitter {
     if(!Number.isFinite(lapTimeMs)||lapTimeMs<=0)return;
     const key=this.resultKey(car);if(!key)return;
     let row=this.savedTimes.get(key);
-    if(!row){row={name:car.name,team:car.team||'',model:car.model,laps:0,totalLapMs:0,lastLapMs:null,bestLapMs:null,topSpeedKmh:null,pitStops:car.pitStops||0,identityUncertain:!car.guid,lastToken:null};this.savedTimes.set(key,row);}
+    if(!row){row={name:car.name,team:car.team||'',model:car.model,laps:0,totalLapMs:0,lastLapMs:null,bestLapMs:null,topSpeedKmh:null,pitStops:car.pitTrackingAvailable ? (car.pitStops||0) : null,identityUncertain:!car.guid,lastToken:null};this.savedTimes.set(key,row);}
     const token=Number.isFinite(lapCount) ? [this.lapEpoch,car.instance,lapCount,lapTimeMs].join(':') : null;
     if(token && token===row.lastToken)return;
     row.lastToken=token;row.name=car.name;row.team=car.team||row.team;row.laps++;
@@ -338,7 +354,8 @@ class LiveTimingCollector extends EventEmitter {
         state.sessionElapsedMs = payload.elapsedMs;
         state.serverName = payload.serverName || state.serverName;
         state.track = payload.track || state.track;
-        state.trackConfig = payload.trackConfig || state.trackConfig;
+        state.trackConfig = payload.track ? (payload.trackConfig || null) : state.trackConfig;
+        if(state.track) this.loadPitForTrack(state.track,state.trackConfig);
         state.weather = payload.weather || state.weather;
         state.ambientTemp = payload.ambientTemp;
         state.roadTemp = payload.roadTemp;
@@ -360,7 +377,7 @@ class LiveTimingCollector extends EventEmitter {
           for (const car of state.cars.values()) {
             car.laps = 0; car.totalMs = 0; car.lastLapMs = null; car.lastLapCuts = 0;
             car.bestLapMs = null; car.bestLapCuts = 0; car.lapStartedAt = null;
-            car.pitStops = 0; car.spline = 0;
+            car.pitStops = 0; car.spline = 0; car.inPit=false; car.pitState='unknown'; car.pitCandidate=null; car.slowSince=null; car.pitLast=null; car.pitStopRecorded=false; car.pitTrackingAvailable=false;
           }
           this.log('session', `Session ${state.session.type} : ${state.session.name || state.track || ''}`);
         }
@@ -426,24 +443,17 @@ class LiveTimingCollector extends EventEmitter {
         car.pos = payload.pos;
         car.gear = payload.gear;
         car.rpm = payload.engineRpm;
-        const v = payload.velocity || { x: 0, y: 0, z: 0 };
-        car.speedKmh = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) * 3.6;
+        const v = payload.velocity;
+        car.speedKmh = v && [v.x,v.y,v.z].every(Number.isFinite) ? Math.hypot(v.x,v.y,v.z)*3.6 : null;
         if(Number.isFinite(car.speedKmh))car.topSpeedKmh=Math.max(car.topSpeedKmh||0,car.speedKmh);
         const existing=this.savedTimes.get(this.resultKey(car));if(existing&&Number.isFinite(car.topSpeedKmh))existing.topSpeedKmh=Math.max(existing.topSpeedKmh||0,car.topSpeedKmh);
         car.connected = true;
         car.lastUpdateAt = Date.now();
-        // Détection stand : immobile plusieurs secondes dans le tour.
-        if (car.speedKmh < PIT_SPEED_KMH) {
-          if (!car.slowSince) car.slowSince = Date.now();
-          else if (!car.inPit && Date.now() - car.slowSince > PIT_MIN_MS) {
-            car.inPit = true;
-            car.pitStops = (car.pitStops || 0) + 1;
-            const stored=this.savedTimes.get(this.resultKey(car));if(stored)stored.pitStops++;
-            this.log('pit', `${car.name || 'Voiture #' + car.carId} aux stands`, { carId: car.carId });
-          }
-        } else {
-          car.slowSince = null;
-          car.inPit = false;
+        car.pitTrackingAvailable = !!this.pitGeometry && !!car.pos && [car.pos.x,car.pos.y,car.pos.z,car.speedKmh].every(Number.isFinite);
+        if (updatePit(car, this.pitGeometry, car.pos, car.speedKmh, Date.now())) {
+          car.pitStops = (car.pitStops || 0) + 1;
+          const stored=this.savedTimes.get(this.resultKey(car));if(stored)stored.pitStops=(stored.pitStops||0)+1;
+          this.log('pit', `${car.name || 'Voiture #' + car.carId} arrêt probable aux stands`, { carId: car.carId });
         }
         if (previousSpline > 0.9 && car.spline < 0.1 && !car.lapStartedAt) car.lapStartedAt = Date.now();
         if (!car.name) this.requestCarInfo(payload.carId);
@@ -570,6 +580,7 @@ class LiveTimingCollector extends EventEmitter {
         name: this.state.serverName || (this.httpInfo && this.httpInfo.name) || this.options.label,
         track: this.state.track || (this.httpInfo && this.httpInfo.track) || null,
         trackConfig: this.state.trackConfig || null,
+        pitGeometryAvailable: !!this.pitGeometry,
         weather: this.state.weather || null,
         ambientTemp: this.state.ambientTemp ?? null,
         roadTemp: this.state.roadTemp ?? null,

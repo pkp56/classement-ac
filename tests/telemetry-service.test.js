@@ -389,7 +389,7 @@ test('les passages détectés donnent une médiane pit-lane par circuit/layout',
   assert.equal(automatic.pit_lane_loss_ms, 18600);
   assert.equal(automatic.automatic_pit_lane_loss_ms, 18600);
   assert.equal(automatic.pit_lane_samples, 2);
-  assert.match(automatic.source, /automatique.*80 km\/h/);
+  assert.match(automatic.source, /automatique.*anciennes mesures/);
   assert.equal(await service.pitProfile(track, 'other-layout'), null,
     'une configuration ne récupère pas les temps pit d’une autre');
 
@@ -503,7 +503,7 @@ test('le temps pit-lane est commun à toutes les voitures du même circuit/layou
   for (const car of summary.cars) {
     assert.equal(car.pitLaneLossMs, 20000, 'la médiane des deux voitures est partagée');
     assert.equal(car.pitLaneSamples, 2, 'le compteur compte les passages, pas les tours de cette voiture');
-    assert.equal(car.pitLaneSource, 'mesure automatique (limiteur 80 km/h)');
+    assert.equal(car.pitLaneSource, 'estimation automatique (anciennes mesures comprises)');
   }
   const filtered = await service.summary({ car: 'car_alpha', track, trackConfig });
   assert.equal(filtered.cars[0].pitLaneLossMs, 20000, 'le filtre voiture ne ramène pas le temps à son seul passage');
@@ -734,13 +734,13 @@ test('le limiteur 80 km/h mesure le roulage pit-lane, sans compter l’arrêt au
   const run = simulate({
     steps: [
       0.016,
-      (L) => setCar(L, 'speedKmh', 80),
+      (L) => { setCar(L, 'isInPitlane', true); setCar(L, 'speedKmh', 80); },
       ...Array.from({ length: 12 }, () => 0.5), // 6 s au plateau du limiteur
       (L) => setCar(L, 'speedKmh', 50),
       ...Array.from({ length: 4 }, () => 0.5),  // 2 s supplémentaires dans la voie
       (L) => setCar(L, 'speedKmh', 0),
       ...Array.from({ length: 10 }, () => 0.5), // service au box : exclu
-      (L) => setCar(L, 'speedKmh', 90),
+      (L) => { setCar(L, 'isInPitlane', false); setCar(L, 'speedKmh', 90); },
       0.25, 0.25,                               // sortie confirmée au-dessus de 84
       ...unTour()
     ]
@@ -773,7 +773,7 @@ test('la procédure CSP impose un tour avant, confirme les pneus neufs et attend
     ]),
     ...Array.from({ length: 11 }, () => 0.5), // le poll armé après le ping délivre START
     (L) => setCar(L, 'lapCount', 2), 0.1,      // un tour complet avant les stands
-    (L) => setCar(L, 'speedKmh', 80),
+    (L) => { setCar(L, 'isInPitlane', true); setCar(L, 'speedKmh', 80); },
     ...Array.from({ length: 7 }, () => 0.5),  // plateau 80 confirmé
     (L) => setCar(L, 'speedKmh', 50),
     ...Array.from({ length: 4 }, () => 0.5),  // roulage dans la voie des stands
@@ -783,7 +783,7 @@ test('la procédure CSP impose un tour avant, confirme les pneus neufs et attend
       { tyreWear: 1 }, { tyreWear: 1 }, { tyreWear: 1 }, { tyreWear: 1 }
     ]),
     0.5, 0.5,                                 // retour à neuf observé pendant l'arrêt
-    (L) => setCar(L, 'speedKmh', 90),
+    (L) => { setCar(L, 'isInPitlane', false); setCar(L, 'speedKmh', 90); },
     0.25, 0.25,                               // sortie confirmée > 84 km/h
     (L) => setCar(L, 'lapCount', 3), 0.1,      // le tour après est terminé
     0.5                                       // poll de confirmation du protocole complet
@@ -820,7 +820,7 @@ test('la procédure de ravitaillement calcule un débit à partir du carburant e
   const steps = [
     ...Array.from({ length: 11 }, () => 0.5), // START après le ping
     (L) => setCar(L, 'lapCount', 2), 0.1,
-    (L) => setCar(L, 'speedKmh', 80),
+    (L) => { setCar(L, 'isInPitlane', true); setCar(L, 'speedKmh', 80); },
     ...Array.from({ length: 7 }, () => 0.5),
     (L) => setCar(L, 'speedKmh', 50),
     ...Array.from({ length: 4 }, () => 0.5),
@@ -830,7 +830,7 @@ test('la procédure de ravitaillement calcule un débit à partir du carburant e
     (L) => setCar(L, 'fuel', 36.5), 0.5,
     (L) => setCar(L, 'fuel', 40.5), 0.5,       // 10 L effectivement ajoutés
     0.5, 0.5,                                  // stabilisation avant de repartir
-    (L) => setCar(L, 'speedKmh', 90),
+    (L) => { setCar(L, 'isInPitlane', false); setCar(L, 'speedKmh', 90); },
     0.25, 0.25,
     (L) => setCar(L, 'lapCount', 3), 0.1,
     0.5
@@ -2292,4 +2292,24 @@ test('Une lecture des pneus sans diminution ne prétend pas mesurer une usure',(
  const result=simulate({callInit:true,steps:[0.016,L=>setCar(L,'lapCount',2),0.016,...Array.from({length:60},()=>0.1)]});
  assert.equal(result.error,null);assert.ok(result.ui.some(s=>/pneus: LUS \(4 roues\).*aucune diminution exploitable/.test(s)),result.ui.join(' | '));
  const lap=JSON.parse(result.sent[0]).laps[0];assert.equal(lap.tyreWearPct,undefined);
+});
+
+test('pit-lane CSP : plateau 120 en zone seulement ; arrêt sur piste ignoré', () => {
+  for(const inLane of [false,true]) {
+    const run=simulate({steps:[0.016,
+      (L)=>{setCar(L,'isInPitlane',inLane);setCar(L,'speedKmh',120);},
+      ...Array.from({length:12},()=>0.5),
+      (L)=>setCar(L,'speedKmh',0),...Array.from({length:10},()=>0.5),
+      (L)=>{setCar(L,'isInPitlane',false);setCar(L,'speedKmh',130);},0.25,0.25,...unTour()]});
+    assert.equal(run.error,null);
+    const lap=run.sent.map(JSON.parse).find(p=>p.laps?.length)?.laps[0];
+    assert.ok(lap);
+    assert.equal(lap.pitLaneMs,inLane?6000:undefined);
+  }
+});
+test('pit-lane CSP : position absente ne crée pas de mesure même avec plateau 80',()=>{
+  const run=simulate({steps:[0.016,(L)=>setCar(L,'speedKmh',80),...Array.from({length:12},()=>0.5),
+    (L)=>setCar(L,'speedKmh',0),...Array.from({length:10},()=>0.5),...unTour()]});
+  assert.equal(run.error,null);
+  assert.equal(run.sent.map(JSON.parse).find(p=>p.laps?.length)?.laps[0].pitLaneMs,undefined);
 });
