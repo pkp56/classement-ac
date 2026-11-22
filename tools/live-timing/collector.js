@@ -370,7 +370,9 @@ class LiveTimingCollector extends EventEmitter {
           waitTimeMinutes: payload.waitTimeMinutes,
           elapsedMs: payload.elapsedMs
         };
-        state.sessionStartedAt = Date.now() - Math.max(0, payload.elapsedMs || 0);
+        // Certains serveurs renvoient un elapsedMs constant dans SESSION_INFO.
+        // Ne pas faire reculer le chronomètre à chaque réponse périodique.
+        if (changed || !state.sessionStartedAt) state.sessionStartedAt = Date.now() - Math.max(0, payload.elapsedMs || 0);
         if (changed) {
           // Nouvelle session : remise à zéro des compteurs de la manche,
           // les identités des pilotes sont conservées.
