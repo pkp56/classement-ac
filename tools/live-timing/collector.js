@@ -291,7 +291,7 @@ class LiveTimingCollector extends EventEmitter {
       case 'session_info': {
         // Une nouvelle manche commence si l'index change, ou si le chrono de
         // session repart de zéro (même index relancé, LOOP_MODE par exemple).
-        const previousIndex = state.session ? state.session.sessionIndex : null;
+        const previousIndex = state.session ? state.session.index : null;
         const previousElapsed = state.sessionElapsedMs;
         const restarted = previousElapsed != null && payload.elapsedMs + 2000 < previousElapsed;
         const changed = !state.session || previousIndex !== payload.sessionIndex || restarted;

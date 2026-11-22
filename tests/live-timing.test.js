@@ -185,3 +185,15 @@ test('La sonde ACSP interroge aussi un serveur silencieux encore considéré en 
   assert.equal(requests, 2);
   assert.equal(collector.statusSnapshot().status, 'waiting');
 });
+
+test('Les informations périodiques ne remettent pas les tours à zéro, mais une nouvelle session oui',()=>{
+ const collector=new LiveTimingCollector({autoStart:false});collector.socket={send(){return true;}};
+ const feed=buf=>collector.handleDatagram(buf,{address:'127.0.0.1'});
+ const info=(elapsed,index=0)=>{const packet=sessionPacket(elapsed);packet[0]=EVENT.SESSION_INFO;packet[2]=index;return packet;};
+ feed(connection(0,'Pilote',''));feed(sessionPacket(5000));
+ feed(lapCompleted(0,80000,0,[{id:0,lapMs:80000,laps:1}]));
+ feed(info(10000));feed(info(15000));
+ let snap=collector.snapshot();assert.equal(snap.cars[0].laps,1);assert.equal(snap.cars[0].bestLapMs,80000);assert.equal(snap.events.filter(e=>e.kind==='session').length,1);
+ feed(info(1000));snap=collector.snapshot();assert.equal(snap.cars[0].laps,0);assert.equal(snap.cars[0].bestLapMs,null);assert.equal(snap.events.filter(e=>e.kind==='session').length,2);
+ feed(lapCompleted(0,81000,0,[{id:0,lapMs:81000,laps:1}]));feed(info(3000,1));snap=collector.snapshot();assert.equal(snap.cars[0].laps,0);assert.equal(snap.cars[0].bestLapMs,null);
+});
