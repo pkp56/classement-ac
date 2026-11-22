@@ -141,8 +141,7 @@
   <div class="panel" style="margin-top:18px" id="historyPanel">
     <h3>Historique des séances <span class="tag">persistant</span></h3>
     <div style="padding:10px 16px">
-      <p class="note" style="margin:0 0 10px">Chaque séance vue par le site est conservée (agent, UDP ou source HTTP) :
-      le direct ne survit pas à un redémarrage, l'historique oui. Clique pour revoir le classement d'une séance passée.</p>
+      <p class="note" style="margin:0 0 10px">Choisis une séance observée : les archives conservent la dernière photo reçue, pas des résultats officiels. Les écarts sont estimés et les données non reçues ne peuvent pas être reconstruites.</p>
       <div id="history"><div class="empty">Chargement…</div></div>
       <div id="historyBanner" style="display:none;margin-top:12px"></div>
     </div>
@@ -193,6 +192,7 @@
       : mirror ? 'Capture enregistrée'
       : stale ? (remote ? 'Serveur injoignable' : 'Instantané périmé')
       : http ? 'Serveur joignable (résumé)' : 'Hors ligne';
+    if (viewingHistory) $('stateText').textContent = 'Archive · dernière photo observée';
     $('clock').textContent = new Date(d.updatedAt).toLocaleTimeString('fr-FR');
 
     $('kServer').textContent = (d.server && d.server.name) || '—';
@@ -491,30 +491,28 @@
     if (!iso) return '—';
     return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
   }
+  var historyOffset = 0, historyPageSize = 100, historyRequest = 0;
   function loadHistory() {
-    fetch('/api/live/sessions?limit=30', { cache: 'no-store' })
+    var request = ++historyRequest;
+    fetch('/api/live/sessions?limit=' + historyPageSize + '&offset=' + historyOffset, { cache: 'no-store' })
       .then(function (r) { return r.json(); })
-      .then(function (j) { renderHistory(j); })
-      .catch(function () { $('history').innerHTML = '<div class="empty">Historique indisponible.</div>'; });
+      .then(function (j) { if (request === historyRequest) renderHistory(j); })
+      .catch(function () { if (request !== historyRequest) return; $('history').innerHTML = '<div class="empty">Historique indisponible.</div>'; });
   }
   function renderHistory(j) {
     if (!j || !j.history) { $('history').innerHTML = '<div class="empty">Historique non actif sur ce site.</div>'; return; }
     var list = j.sessions || [];
-    if (!list.length) { $('history').innerHTML = '<div class="empty">Aucune séance conservée pour l\'instant — la première qui passe sera gardée.</div>'; return; }
-    var html = '<table style="width:100%;font-size:13px"><thead><tr><th>Début</th><th>Serveur</th><th>Circuit</th>' +
-      '<th>Type</th><th>Pilotes</th><th>Dernière vue</th><th></th></tr></thead><tbody>';
+    if (!list.length) { $('history').innerHTML = '<div class="empty">Aucune séance sur cette page.</div>' + (historyOffset ? '<button type="button" class="hprev">← Plus récentes</button>' : ''); return; }
+    var html = '<label for="historySelect">Séance archivée ou en cours</label> <select id="historySelect" style="max-width:100%;padding:8px"><option value="">— Choisir une séance —</option>';
     list.forEach(function (row) {
-      html += '<tr>' +
-        '<td>' + esc(fmtWhen(row.started_at)) + '</td>' +
-        '<td>' + esc(row.server_name || '—') + '</td>' +
-        '<td><b>' + esc(row.track || '—') + '</b>' + (row.track_config ? ' <span style="opacity:.6">· ' + esc(row.track_config) + '</span>' : '') + '</td>' +
-        '<td>' + esc(row.session_type || '—') + '</td>' +
-        '<td>' + (row.drivers == null ? '—' : row.drivers) + '</td>' +
-        '<td>' + esc(fmtWhen(row.last_seen_at)) + (row.ended_at ? ' <span style="opacity:.6">(finie)</span>' : '') + '</td>' +
-        '<td><button class="hopen" data-id="' + row.id + '" style="font:inherit;padding:3px 10px;cursor:pointer">Ouvrir</button></td>' +
-        '</tr>';
+      var models = row.archive_models || (row.snapshot && row.snapshot.archiveModels) || (row.classification || []).map(function(c){return c.model;}).filter(Boolean);
+      models = Array.from(new Set(models));
+      var source = row.archive_source || (row.snapshot && row.snapshot.archiveSource);
+      var sourceLabel = source === 'local1' ? 'CM1 · ' : source === 'local2' ? 'CM2 · ' : '';
+      var label = fmtWhen(row.started_at) + ' · ' + sourceLabel + (row.server_name || 'Serveur inconnu') + ' · ' + (row.track || 'Circuit inconnu') + (row.track_config ? ' / ' + row.track_config : '') + ' · ' + (row.session_type || 'séance inconnue') + ' · ' + (models.length ? models.join(', ') : 'voitures non identifiées');
+      html += '<option value="' + esc(row.id) + '">' + esc(label) + '</option>';
     });
-    html += '</tbody></table>';
+    html += '</select> <button type="button" class="hopen" style="font:inherit;padding:8px;cursor:pointer">Ouvrir</button> <button type="button" class="hrefresh" style="font:inherit;padding:8px;cursor:pointer">Actualiser la liste</button><button type="button" class="hprev" ' + (historyOffset ? '' : 'disabled') + '>← Plus récentes</button> <button type="button" class="hnext" ' + (list.length < historyPageSize ? 'disabled' : '') + '>Plus anciennes →</button><p class="note">Une interruption peut laisser la fin d’une séance inconnue.</p>';
     $('history').innerHTML = html;
   }
   function openHistory(id) {
@@ -523,6 +521,7 @@
       .then(function (j) {
         if (!j || !j.session) throw new Error('séance inconnue');
         viewingHistory = true;
+        sectorRows = []; sectorContext = '';
         var row = j.session;
         render(row.snapshot || {});
         $('historyBanner').style.display = '';
@@ -546,7 +545,10 @@
   }
   $('history').addEventListener('click', function (e) {
     var btn = e.target.closest('button.hopen');
-    if (btn) openHistory(btn.getAttribute('data-id'));
+    if (btn) { var id = $('historySelect') && $('historySelect').value; if (id) openHistory(id); }
+    if (e.target.closest('button.hrefresh')) loadHistory();
+    if (e.target.closest('button.hprev') && historyOffset>0) { historyOffset=Math.max(0,historyOffset-historyPageSize); loadHistory(); }
+    if (e.target.closest('button.hnext')) { historyOffset+=historyPageSize; loadHistory(); }
   });
 
   function showLiveError() {
@@ -578,7 +580,7 @@
       if(socket!==es)return;
       // Les événements arrivent aussi par le flux : on les ajoute tout de suite
       // au fil pour un retour immédiat, sans attendre la photo suivante.
-      if (!last) return;
+      if (!last || viewingHistory) return;
       try {
         var entry = JSON.parse(ev.data);
         last.events = [entry].concat(last.events || []).slice(0, 60);
@@ -604,6 +606,7 @@
   }, 3000);
 
   $('reload').addEventListener('click', function () {
+    if (viewingHistory) { loadHistory(); return; }
     fetchLiveJson(statusUrl()).then(render).catch(showLiveError);
     connect();
   });

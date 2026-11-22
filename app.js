@@ -725,6 +725,8 @@ function getLiveTiming(){
     const {LiveTimingCollector}=require('./tools/live-timing/collector');
     liveTiming=new LiveTimingCollector();
     liveTiming.on('event',entry=>broadcastLive('log',entry,'local1'));
+    liveTiming.on('beforeSessionChange',snap=>recordLiveHistory(snap,'local1'));
+    liveTiming.on('packet',packet=>{if(['lap_completed','new_session','session_info'].includes(packet.typeName))recordLiveHistory(liveTiming.snapshot(),'local1')});
     liveTiming.start();
   }
   return liveTiming;
@@ -742,6 +744,8 @@ function getSecondLiveTiming(){
     const {LiveTimingCollector}=require('./tools/live-timing/collector');
     liveTimingSecond=new LiveTimingCollector(cfg);
     liveTimingSecond.on('event',entry=>broadcastLive('log',entry,'local2'));
+    liveTimingSecond.on('beforeSessionChange',snap=>recordLiveHistory(snap,'local2'));
+    liveTimingSecond.on('packet',packet=>{if(['lap_completed','new_session','session_info'].includes(packet.typeName))recordLiveHistory(liveTimingSecond.snapshot(),'local2')});
   }
   return liveTimingSecond;
 }
@@ -758,38 +762,37 @@ function broadcastLive(event,payload,source){
 // Historique persistant : chaque séance vue (agent push, UDP, source HTTP)
 // est conservée en base — le direct ne survit pas à un redémarrage, l'historique
 // oui. Le miroir (capture rejouée) n'est jamais enregistré.
-let liveHistory=null,liveRecorder=null;
+let liveHistoryPromise=null;
+const liveRecorders=new Map(),liveHistoryQueues=new Map();
 async function getLiveHistory(){
-  if(!liveHistory){
-    try{
-      const {openLiveHistory}=require('./tools/live-timing/history');
-      liveHistory=await openLiveHistory();
-    }catch(e){
-      console.error('live-history: indisponible —',e.message);
-      liveHistory=false;
-    }
-  }
-  return liveHistory||null;
+  if(!liveHistoryPromise)liveHistoryPromise=require('./tools/live-timing/history').openLiveHistory().catch(e=>{console.error('live-history: indisponible —',e.message);return null;});
+  return liveHistoryPromise;
 }
-async function getLiveRecorder(){
-  if(!liveRecorder){
+async function getLiveRecorder(source){
+  if(!liveRecorders.has(source)){
     const store=await getLiveHistory();
     if(!store)return null;
     const {LiveHistoryRecorder}=require('./tools/live-timing/history');
-    liveRecorder=new LiveHistoryRecorder(store,{writeIntervalMs:10000});
+    if(!liveRecorders.has(source))liveRecorders.set(source,new LiveHistoryRecorder(store,{writeIntervalMs:10000,source}));
   }
-  return liveRecorder;
+  return liveRecorders.get(source);
 }
-async function recordLiveHistory(snap){
-  try{
-    const recorder=await getLiveRecorder();
-    if(recorder)await recorder.record(snap);
-  }catch(e){/* l'historique ne casse jamais le direct */}
+function recordLiveHistory(snap,source='auto'){
+  // Les données locales en repli HTTP peuvent contenir une ancienne photo ACSP.
+  if((source==='local1'||source==='local2')&&snap?.status?.mode!=='acsp')return;
+  // Une copie fige la photo avant que le collecteur ne réinitialise sa session.
+  const frozen=JSON.parse(JSON.stringify(snap));
+  const before=liveHistoryQueues.get(source)||Promise.resolve();
+  const next=before.then(async()=>{const recorder=await getLiveRecorder(source);if(recorder)await recorder.record(frozen);}).catch(e=>console.error('live-history:',e.message));
+  liveHistoryQueues.set(source,next);
 }
 if(liveTimingEnabled()){
   setInterval(()=>{
-    if(!liveTimingEnabled())return;
-    try{recordLiveHistory(liveSnapshot());if(secondLiveConfig())recordLiveHistory(liveSnapshot('local2'))}catch(e){/* silence */}
+    try{
+      recordLiveHistory(liveSnapshot('local1'),'local1');
+      if(secondLiveConfig())recordLiveHistory(liveSnapshot('local2'),'local2');
+      if(getLivePush().current()||getLiveMirror()||liveSourceUrls().length)recordLiveHistory(liveSnapshot(),'auto');
+    }catch(e){console.error('live-history:',e.message)}
   },10000).unref();
 }
 // Priorité : source HTTP demandée > agent qui pousse > écoute UDP locale.
@@ -883,7 +886,7 @@ app.get('/api/live/sessions', async(req,res)=>{
       if(!row)return res.status(404).json({error:'séance inconnue'});
       return res.json({session:row});
     }
-    res.json({sessions:await store.list(Number(req.query.limit)||50),history:true});
+    res.json({sessions:await store.list(Number(req.query.limit)||50,Number(req.query.offset)||0),history:true});
   }catch(e){res.status(503).json({error:e.message})}
 });
 app.get('/api/live/stream',(req,res)=>{

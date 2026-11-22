@@ -298,3 +298,9 @@ Ouvre `/live-timing` : le classement se remplit en quelques secondes.
 | « Instantané périmé » en mode push | l'agent s'est arrêté, le PC a perdu le réseau, ou acServer ne tourne plus |
 | `401 Jeton invalide` dans l'agent | `PUSH_TOKEN` de l'agent ≠ `LIVE_PUSH_TOKEN` du site |
 | `503 mode push non activé` dans l'agent | ajoute `LIVE_PUSH_TOKEN` sur le site puis redéploie |
+
+### Archives des deux serveurs et boucles de séance
+
+Les collecteurs locaux CM1 et CM2 enregistrent séparément leurs séances. Lorsqu'une séance change ou redémarre avec le même index, la dernière photo observée est conservée avant la réinitialisation ; une nouvelle archive est créée pour la nouvelle séance. La page propose un menu avec date, serveur, circuit, variante et voitures identifiées. Les séances sont proposées par pages, les anciennes ne sont pas supprimées. Les archives déjà existantes restent consultables.
+
+Une archive contient les données observées, pas une reconstruction complète ni un classement officiel : les écarts restent estimés, les secteurs CSP du direct ne sont pas archivés, et le fil est limité aux événements disponibles dans les instantanés (150 maximum). Une coupure de réception ou un arrêt brutal de GDSP peut faire perdre les données depuis la dernière écriture (au maximum normalement dix secondes), et la fin d'une séance peut rester inconnue. Après redémarrage de GDSP, une nouvelle archive peut être créée pour la même séance encore en cours. Aucune archive ne peut restituer des données non reçues avant cette évolution. Vérifier les droits et sauvegardes du fichier ou de la base de données configurée.

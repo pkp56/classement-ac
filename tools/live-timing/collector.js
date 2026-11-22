@@ -295,6 +295,7 @@ class LiveTimingCollector extends EventEmitter {
         const previousElapsed = state.sessionElapsedMs;
         const restarted = previousElapsed != null && payload.elapsedMs + 2000 < previousElapsed;
         const changed = !state.session || previousIndex !== payload.sessionIndex || restarted;
+        if(changed && state.session) this.emit('beforeSessionChange',this.snapshot());
         state.sessionElapsedMs = payload.elapsedMs;
         state.serverName = payload.serverName || state.serverName;
         state.track = payload.track || state.track;
