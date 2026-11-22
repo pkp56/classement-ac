@@ -174,6 +174,17 @@ en-tête pour le déplacer ou son bord droit pour le redimensionner ; les flèch
 et champs du menu permettent aussi ces réglages au clavier. Visibilité, ordre et
 largeur sont enregistrés dans le navigateur.
 
+Le panneau historique propose « Nettoyer les archives sans tour » aux
+administrateurs connectés (la connexion peut se faire depuis la Télémétrie).
+L’aperçu montre au maximum 500 archives closes à la fois ; la confirmation ne
+supprime que les entrées listées et inchangées. Les séances encore ouvertes,
+à fin inconnue ou de format ambigu restent intactes. Une sauvegarde JSON des
+archives supprimées est obligatoire dans `GDSP_AC_BACKUP_ROOT` : dossier privé
+existant, hors du site, dont les ACL doivent être restreintes par l’administrateur.
+La suppression échoue si la sauvegarde ne peut pas être écrite. Le stockage
+fichier suppose une seule instance GDSP, sans programme externe écrivant le même
+historique. Les archives non détectées nécessitent une vérification manuelle.
+
 Stockage : PostgreSQL (`LIVE_DATABASE_URL`, sinon `DATABASE_URL`, table
 `gdsp_live_sessions`) ou fichier `data/live-history.json` en local. Une
 capture rejouée (`LIVE_MIRROR_FILE`) n'entre **jamais** dans l'historique :

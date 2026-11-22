@@ -763,7 +763,13 @@ function broadcastLive(event,payload,source){
 // est conservée en base — le direct ne survit pas à un redémarrage, l'historique
 // oui. Le miroir (capture rejouée) n'est jamais enregistré.
 let liveHistoryPromise=null;
-const liveRecorders=new Map(),liveHistoryQueues=new Map();
+const liveRecorders=new Map();
+let liveHistoryQueue=Promise.resolve();
+function queueLiveHistory(job){
+  const next=liveHistoryQueue.then(job);
+  liveHistoryQueue=next.catch(e=>console.error('live-history:',e.message));
+  return next;
+}
 async function getLiveHistory(){
   if(!liveHistoryPromise)liveHistoryPromise=require('./tools/live-timing/history').openLiveHistory().catch(e=>{console.error('live-history: indisponible —',e.message);return null;});
   return liveHistoryPromise;
@@ -782,9 +788,7 @@ function recordLiveHistory(snap,source='auto',force=false){
   if((source==='local1'||source==='local2')&&snap?.status?.mode!=='acsp')return;
   // Une copie fige la photo avant que le collecteur ne réinitialise sa session.
   const frozen=JSON.parse(JSON.stringify(snap));
-  const before=liveHistoryQueues.get(source)||Promise.resolve();
-  const next=before.then(async()=>{const recorder=await getLiveRecorder(source);if(recorder)await recorder.record(frozen,Date.now(),force);}).catch(e=>console.error('live-history:',e.message));
-  liveHistoryQueues.set(source,next);
+  queueLiveHistory(async()=>{const recorder=await getLiveRecorder(source);if(recorder)await recorder.record(frozen,Date.now(),force);}).catch(()=>{});
 }
 if(liveTimingEnabled()){
   setInterval(()=>{
@@ -898,6 +902,17 @@ app.get('/api/live/sessions', async(req,res)=>{
     }
     res.json({sessions:await store.list(Number(req.query.limit)||50,Number(req.query.offset)||0),history:true});
   }catch(e){res.status(503).json({error:e.message})}
+});
+// Nettoyage explicite des seules séances closes identifiées sans tour.
+app.get('/api/live/empty-archives',async(req,res)=>{
+  res.set('Cache-Control','no-store');if(!(await telemetryAdmin(req,res)))return;
+  try{const result=await queueLiveHistory(async()=>{const store=await getLiveHistory();if(!store)throw new Error('Historique indisponible.');return require('./tools/live-timing/history-cleanup').preview(store);});res.json(result);}
+  catch(e){res.status(503).json({error:e.message});}
+});
+app.post('/api/live/empty-archives',async(req,res)=>{
+  res.set('Cache-Control','no-store');if(!(await telemetryAdmin(req,res)))return;
+  try{const result=await queueLiveHistory(async()=>{const store=await getLiveHistory();if(!store)throw new Error('Historique indisponible.');return require('./tools/live-timing/history-cleanup').remove(store,req.body?.items,process.env.GDSP_AC_BACKUP_ROOT,ROOT);});res.json(result);}
+  catch(e){res.status(400).json({error:e.message});}
 });
 app.get('/api/live/stream',(req,res)=>{
   if(!liveTimingEnabled())return res.status(503).end();
