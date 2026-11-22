@@ -61,6 +61,10 @@ function archiveClassification(snap){
   if(!Array.isArray(snap.storedTimes))return classification(snap);
   return snap.storedTimes.map(row=>({name:row.name||'',team:row.team||null,model:row.model||null,laps:row.laps||0,lastLap:row.lastLap||null,bestLap:row.bestLap||null,topSpeedKmh:row.topSpeedKmh??null,identityUncertain:!!row.identityUncertain,connected:false}));
 }
+function connectedDrivers(cars){
+  return cars.filter(c=>c.connected===true &&
+    (c.driverIdentified===true || (c.driverIdentified==null && typeof c.name==='string' && c.name.trim() && !/^Voiture #\d+$/i.test(c.name.trim())))).length;
+}
 /** Un enregistreur : accumule, détecte les changements de séance, écrit. */
 class LiveHistoryRecorder {
   constructor(store, options = {}) {
@@ -80,16 +84,12 @@ class LiveHistoryRecorder {
       if (snap.status && ['mirror','offline','error'].includes(snap.status.mode)) return;
       const server = snap.server;
       const cars = Array.isArray(snap.cars) ? snap.cars : [];
-      // N'ouvre une séance que sur du contenu RÉEL : un circuit connu, un type
-      // de séance, ou des pilotes connectés. Les tout premiers envois d'un
-      // agent (label par défaut, zéro voiture, rien encore reçu d'acServer)
-      // créaient une « séance fantôme » vide dans l'historique à chaque
-      // démarrage.
-      const connected = cars.filter(c => c.connected !== false).length;
-      const hasContent = String(server.track || '') !== ''
-        || (snap.session && String(snap.session.type || '') !== '')
-        || connected > 0;
-      if (!hasContent) return;
+      // Un emplacement sans pilote (ou un nom provisoire) ne suffit pas.
+      // Pour les sources plus anciennes sans indicateur explicite, ne garder
+      // qu'un nom réel et un état connecté confirmé.
+      const connected = connectedDrivers(cars);
+      const hasSession=String(server.track||'')!=='' || (snap.session && String(snap.session.type||'')!=='');
+      if(!hasSession)return;
       const signature = sessionSignature(snap);
       const at = new Date(nowMs).toISOString();
 
@@ -100,6 +100,9 @@ class LiveHistoryRecorder {
       if (this.current && (this.current.signature !== signature || restarted)) {
         await this.closeCurrent(nowMs, this.lastSnap);
       }
+      // Fermer d'abord l'ancienne séance si nécessaire, mais n'ouvrir la
+      // suivante qu'après observation d'un pilote connecté identifiable.
+      if(!this.current && !connected){this.lastSnap=null;return;}
       if (!this.current) this.models = new Set();
       for(const car of cars)if(car.model)this.models.add(String(car.model));
       snap = {...snap, archiveSource:this.source, archiveModels:[...this.models].sort((a,b)=>a.localeCompare(b,'fr'))};
@@ -115,7 +118,7 @@ class LiveHistoryRecorder {
           started_at: at,
           last_seen_at: at,
           ended_at: null,
-          drivers: cars.filter(c => c.connected !== false).length,
+          drivers: connected,
           snapshot: archivedSnapshot(snap),
           classification: archiveClassification(snap),
           best_laps: Array.isArray(snap.storedTimes)?[]:(snap.bestLaps || []).slice(0, 20),
@@ -130,7 +133,7 @@ class LiveHistoryRecorder {
       if (force || nowMs - this.current.lastWriteMs >= this.writeIntervalMs) {
         await this.store.update(this.current.id, {
           last_seen_at: at,
-          drivers: cars.filter(c => c.connected !== false).length,
+          drivers: connected,
           snapshot: archivedSnapshot(snap),
           classification: archiveClassification(snap),
           best_laps: Array.isArray(snap.storedTimes)?[]:(snap.bestLaps || []).slice(0, 20),
@@ -153,7 +156,7 @@ class LiveHistoryRecorder {
         const cars = Array.isArray(finalSnap.cars) ? finalSnap.cars : [];
         await this.store.update(this.current.id, {
           last_seen_at: new Date(nowMs).toISOString(),
-          drivers: cars.filter(c => c.connected !== false).length,
+          drivers: connectedDrivers(cars),
           snapshot: archivedSnapshot(finalSnap),
           classification: archiveClassification(finalSnap),
           best_laps: Array.isArray(finalSnap.storedTimes)?[]:(finalSnap.bestLaps || []).slice(0, 20),

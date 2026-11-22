@@ -216,3 +216,16 @@ test('Une archive récente conserve uniquement les temps, y compris les pilotes 
  await rec.record(data);const row=(await store.list())[0];
  assert.equal(row.snapshot.cars.length,0);assert.equal(row.snapshot.events.length,0);assert.equal(row.snapshot.storedTimes.length,2);assert.ok(row.snapshot.storedTimes.every(r=>!r.connected));assert.deepEqual(row.classification.map(r=>r.name),['A','B']);
 });
+test('Une session sans pilote connecté identifiable ne crée pas d’archive',async()=>{
+ const store=tmpHistory(),rec=new LiveHistoryRecorder(store,{writeIntervalMs:0});const t=Date.parse('2026-01-01T12:00:00Z');
+ const empty=snap({cars:[],session:{type:'practice',index:0,elapsedMs:20000},storedTimes:[{name:'Ancien',model:'lola',laps:2,connected:false}]});
+ await rec.record(empty,t);
+ await rec.record({...empty,cars:[{name:'Voiture #0',driverIdentified:false,connected:true}]},t+1000);
+ await rec.record({...empty,cars:[{name:'Ancien',connected:false}]},t+2000);
+ assert.equal((await store.list()).length,0);
+ await rec.record({...empty,cars:[{name:'Alice',driverIdentified:true,connected:true}]},t+3000);
+ await rec.record({...empty,cars:[{name:'Alice',driverIdentified:true,connected:false}]},t+4000);
+ await rec.record({...empty,session:{type:'qualify',index:1,elapsedMs:0}},t+5000);
+ const rows=await store.list();assert.equal(rows.length,1);assert.ok(rows[0].ended_at);
+ await rec.record({...empty,session:{type:'qualify',index:1,elapsedMs:5000}},t+10000);assert.equal((await store.list()).length,1);
+});

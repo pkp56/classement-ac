@@ -71,6 +71,7 @@ function computeStandings(state, now = Date.now()) {
     return {
       carId: c.carId,
       name: c.name || `Voiture #${c.carId}`,
+      driverIdentified: !!String(c.name || '').trim(),
       team: c.team || '',
       model: c.model || '',
       skin: c.skin || '',

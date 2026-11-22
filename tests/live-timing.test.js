@@ -215,7 +215,7 @@ test('Archives des deux collecteurs : sources isolées et boucle conservée',asy
  t.after(()=>{child.kill();fs.rmSync(dir,{recursive:true,force:true});});
  await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Démarrage trop long')),15000);child.stdout.on('data',v=>{if(String(v).includes('démarré')){clearTimeout(timeout);resolve();}});child.once('exit',()=>{clearTimeout(timeout);reject(Error('Serveur arrêté'));});});
  const udp=dgram.createSocket('udp4');t.after(()=>udp.close());const send=(buf,port)=>new Promise((resolve,reject)=>udp.send(buf,port,'127.0.0.1',e=>e?reject(e):resolve()));
- await send(sessionPacket(50000),p1);await send(sessionPacket(50000),p2);
+ await send(sessionPacket(50000),p1);await send(sessionPacket(50000),p2);await send(connection(1,'Pilote CM2',''),p2);
  await send(connection(0,'Pilote',''),p1);await send(lapCompleted(0,80000,0,[{id:0,lapMs:80000,laps:1}]),p1);
  const next=sessionPacket(1000);next[0]=EVENT.SESSION_INFO;await send(next,p1);
  let rows=[];const deadline=Date.now()+5000;

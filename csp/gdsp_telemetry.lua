@@ -319,8 +319,11 @@ local function readTyreWear()
         if not c or not c.wheels then return nil end
         local w = c.wheels[base + i]
         if not w then return nil end
-        local wear = w.tyreWear
-        if wear == nil then wear = w.wear end
+        local okWear, wear = pcall(function() return w.tyreWear end)
+        if not okWear or wear == nil then
+          okWear, wear = pcall(function() return w.wear end)
+        end
+        if not okWear then return nil end
         return wear
       end)
       if ok and type(v) == 'number' and v >= 0 and v <= 1.5 then
@@ -1116,7 +1119,14 @@ local function completeLap(lapNumber)
   end
 
   local delta = wearDeltaPct(state.lapStartWear, wearNow)
-  if delta then lap.tyreWearPct = delta end
+  if delta then
+    lap.tyreWearPct = delta
+    state.lastWearDiagnostic = 'variation positive mesurée'
+  elseif not wearNow or not state.lapStartWear then
+    state.lastWearDiagnostic = 'comparaison indisponible'
+  else
+    state.lastWearDiagnostic = 'aucune diminution exploitable'
+  end
 
   state.lapStartFuel = fuelNow
   state.lapStartWear = wearNow
@@ -1431,6 +1441,8 @@ function script.drawUI()
         or 'ABSENT (API)') ..
       ' tours=' .. tostring(state.sentLaps) ..
       ((state.lapsWithoutGuid or 0) > 0 and (' sansguid=' .. state.lapsWithoutGuid) or ''),
+    'pneus: ' .. (readTyreWear() and 'LUS (4 roues)' or 'NON LUS') ..
+      ' · dernier tour: ' .. (state.lastWearDiagnostic or 'pas encore mesuré'),
     'essais=' .. tostring(state.pingAttempts) ..
       (state.inflight and (' · en vol ' .. string.format('%.0f', state.now - state.inflightSince) .. 's') or ''),
     -- Compteur BRUT de la voiture : s'il ne monte pas en franchissant la
