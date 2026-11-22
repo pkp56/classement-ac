@@ -42,7 +42,39 @@
     }
     return `<label>${esc(label)} <input class="admin-input" ${data} value="${esc(current)}" maxlength="500"></label>`;
   }
-  function render(data,inventory){
+  // Seules les données structurées de la Cup sont reprises. Les durées et le
+  // nombre de places restent saisis explicitement par l'administrateur.
+  function cupOptions(event){
+    if(event?.kind!=='cup')return {rounds:[],cars:[]};
+    const rounds=[];
+    for(const [date,raw] of Object.entries(event.data?.customCalendar||{})){
+      const list=Array.isArray(raw)?raw:(Array.isArray(raw?.tracks)?raw.tracks:[raw]);
+      for(const item of list){
+        const track=String(item?.track||item?.trackId||''),layout=String(item?.layout||item?.layoutId||'');
+        if(/^[a-zA-Z0-9_-]{1,120}$/.test(track)&&(!layout||/^[a-zA-Z0-9_-]{1,120}$/.test(layout)))rounds.push({date,track,layout,name:String(item.trackName||item.name||track)});
+      }
+    }
+    const seen=new Set();const cars=[];
+    for(const c of event.data?.carSheets||[]){const id=String(c?.id||'');if(/^[a-zA-Z0-9_-]{1,120}$/.test(id)&&!seen.has(id)){seen.add(id);cars.push({id,name:String(c.name||id)});}}
+    return {rounds,cars};
+  }
+  function cupDraft(data,inventory,event,roundIndex,carId,places,qualify,race){
+    const opts=cupOptions(event),round=opts.rounds[roundIndex];
+    if(!round||!opts.cars.some(c=>c.id===carId))throw Error('Choisis une manche et une voiture de la Cup.');
+    if(!inventory||!Array.isArray(inventory.tracks)||!Array.isArray(inventory.cars))throw Error('Inventaire local indisponible.');
+    const track=inventory.tracks.find(t=>t.id===round.track),car=inventory.cars.find(c=>c.id===carId);
+    if(!track||round.layout&&!(track.layouts||[]).includes(round.layout)||!car)throw Error('Circuit, variante ou voiture non trouvé dans le contenu installé.');
+    const nums=[places,qualify,race].map(v=>String(v).trim());
+    if(nums.some(v=>!/^\d+$/.test(v)||Number(v)<1)||Number(nums[0])>200||Number(nums[1])>1440||Number(nums[2])>1440)throw Error('Renseigne des nombres valides pour les places et durées.');
+    const slots=data.slots||[];if(slots.some((s,i)=>s.id!==i))throw Error('Numérotation des places ambiguë.');
+    for(const slot of slots){
+      if(slot.model!==carId && (slot.reserved||slot.cspSkin||slot.skinEditable===false))throw Error('Une place réservée ou protégée utilise une autre voiture : adaptation manuelle nécessaire.');
+      if(slot.model===carId&&slot.skin&&!(car.skins||[]).includes(slot.skin))throw Error('Un skin existant est introuvable : vérification manuelle nécessaire.');
+    }
+    if(!['active','inactive'].includes(data.extra?.sessions?.QUALIFY)||!['active','inactive'].includes(data.extra?.sessions?.RACE))throw Error('Séance qualification ou course absente : configure-la dans Content Manager.');
+    return {round,carId,places:nums[0],qualify:nums[1],race:nums[2],slots:slots.filter(s=>s.model!==carId).map(s=>s.id),additions:Math.max(0,Number(nums[0])-slots.length)};
+  }
+  function render(data,inventory,event){
     const settings=data?.settings||{},extra=data?.extra||{};
     if(!extra.csp?.trackId && settings.SERVER?.TRACK)extra.csp={...(extra.csp||{}),trackId:settings.SERVER.TRACK};
     const sections=groups.map(g=>{
@@ -63,7 +95,17 @@
       const skin=skins.length?`<select class="admin-input" data-cm-slot="${Number(slot.id)}" data-cm-slot-field="skin" data-cm-original="${esc(slot.skin)}" ${slot.skinEditable===false?'disabled':''}><option value="">—</option>${options(skins,slot.skin)}</select>`:`<input class="admin-input" data-cm-slot="${Number(slot.id)}" data-cm-slot-field="skin" data-cm-original="${esc(slot.skin)}" value="${esc(slot.skin)}" ${slot.skinEditable===false?'disabled':''}>`;
       return `<div class="cm-slot"><b>Place ${Number(slot.id)+1}${slot.reserved?' · réservée':''}${slot.cspSkin?' · options CSP conservées':''}${slot.skinEditable===false?' · options inconnues, modification bloquée':''}</b><label>Voiture ${models}</label><label>Skin ${skin}</label><label><input type="checkbox" data-cm-remove="${Number(slot.id)}" ${slot.reserved||slot.cspSkin||slot.skinEditable===false?'disabled':''}> Supprimer</label></div>`;
     }).join('');
-    return `<div class="cm-editor"><p class="note"><b>Brouillon :</b> rien n’est enregistré tant que tu ne confirmes pas l’enregistrement. Les champs absents ne sont pas inventés, sauf la variante du circuit si tu en choisis une. Vérifie les valeurs avec Content Manager.</p>${inventory?'':'<p class="note">Inventaire indisponible : les identifiants sont à vérifier dans Content Manager.</p>'}${sections}<section class="panel"><h3>Voitures et places existantes</h3><p class="note">Les réservations pilotes sont conservées. Seules les dernières places sans données protégées peuvent être supprimées.</p>${cars||'<p class="note">Aucune place détectée.</p>'}<div class="cm-slot"><b>Ajouter une place</b><label>Voiture <select class="admin-input" data-cm-add-model><option value="">— Choisir —</option>${options((settings.SERVER?.CARS||'').split(';').filter(Boolean),'')}</select></label><label>Skin <input class="admin-input" data-cm-add-skin placeholder="Facultatif"></label></div><button type="button" class="btn secondary" id="cm-add-slot-btn">+ Ajouter la place au brouillon</button><div id="cm-added-slots" aria-live="polite"></div><p class="note">Clique sur le bouton pour ajouter chaque place au brouillon : elle ne sera enregistrée qu’après vérification et confirmation.</p><p class="note">Ajuste aussi le nombre maximum de pilotes et la liste des voitures autorisées si nécessaire.</p></section>${weather}<section class="panel"><h3>Ajouter une météo</h3><label>Identifiant météo Assetto Corsa <input class="admin-input" data-cm-weather-add placeholder="Ex. 3_clear"></label><p class="note">Valeurs initiales : 18 °C, piste +6 °C, vent nul ; recharge après ajout pour les modifier. Seule la dernière météo peut être supprimée et il faut en conserver au moins une.</p></section><section class="panel"><h3>Options CSP et scripts</h3><p class="note">CSP ${extra.csp?.encodedInTrack?'détecté dans la configuration du circuit':'non identifié dans le circuit'}. Les scripts Race Control et télémétrie existants sont compris dans ces options : ne les efface pas si tu veux les garder.</p>${data.cspWelcome?.available?`<label>Extra options CSP (INI)<textarea class="admin-input" data-cm-csp rows="10" maxlength="65536">${esc(data.cspWelcome.config)}</textarea></label><p class="note">Le message d’accueil reste inchangé. La configuration complète ci-dessus remplacera les options CSP actuelles après confirmation.</p>`:'<p class="note">Fichier CSP indisponible ou chemin non pris en charge : utilise Content Manager.</p>'}<a class="btn secondary" href="/race-control.html" target="_blank" rel="noopener">Ouvrir Race Control</a></section><button type="button" class="btn" id="cm-preview-btn">Voir les changements du brouillon</button><button type="button" class="btn secondary" id="cm-check-btn">Vérifier le brouillon sur le serveur</button><button type="button" class="btn" id="cm-save-btn">Enregistrer après confirmation</button><p class="note">Enregistrement expérimental, désactivé par défaut : nécessite une sauvegarde privée configurée, Content Manager fermé et le serveur sélectionné arrêté. Une interruption peut nécessiter une restauration manuelle.</p><pre class="note" id="cm-preview" style="white-space:pre-wrap"></pre></div>`;
+    const cup=cupOptions(event);
+    const cupPanel=event?.kind==='cup'?`<section class="panel"><h3>Préparer une manche de ${esc(event.name||'la Cup')}</h3>
+      <p class="note">Préremplit le brouillon seulement. Saisis les places et durées après vérification du règlement. Contrôle les places de stands du circuit. Les skins réservés sont conservés ; les nouvelles places ont un skin vide à vérifier. Le setup fixe, la grille inversée et une deuxième course ne sont pas configurés automatiquement.</p>
+      ${event.data?.eventInfo?.formatText?`<p class="note">Format indiqué dans la fiche : ${esc(event.data.eventInfo.formatText)}</p>`:''}
+      <label>Manche <select class="admin-input" data-cup-round><option value="">— Choisir —</option>${cup.rounds.map((r,i)=>`<option value="${i}">${esc(r.date)} · ${esc(r.name)} · ${esc(r.track)} / ${esc(r.layout||'principal')}</option>`).join('')}</select></label>
+      <label>Voiture de la Cup <select class="admin-input" data-cup-car><option value="">— Choisir —</option>${cup.cars.map(c=>`<option value="${esc(c.id)}">${esc(c.name)} · ${esc(c.id)}</option>`).join('')}</select></label>
+      <label>Places <input class="admin-input" type="number" min="1" max="200" data-cup-places placeholder="Ex. 20"></label>
+      <label>Qualifications (minutes) <input class="admin-input" type="number" min="1" max="1440" data-cup-qualify placeholder="Ex. 10"></label>
+      <label>Course 1 (minutes) <input class="admin-input" type="number" min="1" max="1440" data-cup-race placeholder="Ex. 15"></label>
+      <button type="button" class="btn secondary" id="cm-cup-prepare">Préparer la course 1 en brouillon</button><p class="note" id="cm-cup-result" aria-live="polite"></p></section>`:'';
+    return `<div class="cm-editor">${cupPanel}<p class="note"><b>Brouillon :</b> rien n’est enregistré tant que tu ne confirmes pas l’enregistrement. Les champs absents ne sont pas inventés, sauf la variante du circuit si tu en choisis une. Vérifie les valeurs avec Content Manager.</p>${inventory?'':'<p class="note">Inventaire indisponible : les identifiants sont à vérifier dans Content Manager.</p>'}${sections}<section class="panel"><h3>Voitures et places existantes</h3><p class="note">Les réservations pilotes sont conservées. Seules les dernières places sans données protégées peuvent être supprimées.</p>${cars||'<p class="note">Aucune place détectée.</p>'}<div class="cm-slot"><b>Ajouter une place</b><label>Voiture <select class="admin-input" data-cm-add-model><option value="">— Choisir —</option>${options((settings.SERVER?.CARS||'').split(';').filter(Boolean),'')}</select></label><label>Skin <input class="admin-input" data-cm-add-skin placeholder="Facultatif"></label></div><button type="button" class="btn secondary" id="cm-add-slot-btn">+ Ajouter la place au brouillon</button><div id="cm-added-slots" aria-live="polite"></div><p class="note">Clique sur le bouton pour ajouter chaque place au brouillon : elle ne sera enregistrée qu’après vérification et confirmation.</p><p class="note">Ajuste aussi le nombre maximum de pilotes et la liste des voitures autorisées si nécessaire.</p></section>${weather}<section class="panel"><h3>Ajouter une météo</h3><label>Identifiant météo Assetto Corsa <input class="admin-input" data-cm-weather-add placeholder="Ex. 3_clear"></label><p class="note">Valeurs initiales : 18 °C, piste +6 °C, vent nul ; recharge après ajout pour les modifier. Seule la dernière météo peut être supprimée et il faut en conserver au moins une.</p></section><section class="panel"><h3>Options CSP et scripts</h3><p class="note">CSP ${extra.csp?.encodedInTrack?'détecté dans la configuration du circuit':'non identifié dans le circuit'}. Les scripts Race Control et télémétrie existants sont compris dans ces options : ne les efface pas si tu veux les garder.</p>${data.cspWelcome?.available?`<label>Extra options CSP (INI)<textarea class="admin-input" data-cm-csp rows="10" maxlength="65536">${esc(data.cspWelcome.config)}</textarea></label><p class="note">Le message d’accueil reste inchangé. La configuration complète ci-dessus remplacera les options CSP actuelles après confirmation.</p>`:'<p class="note">Fichier CSP indisponible ou chemin non pris en charge : utilise Content Manager.</p>'}<a class="btn secondary" href="/race-control.html" target="_blank" rel="noopener">Ouvrir Race Control</a></section><button type="button" class="btn" id="cm-preview-btn">Voir les changements du brouillon</button><button type="button" class="btn secondary" id="cm-check-btn">Vérifier le brouillon sur le serveur</button><button type="button" class="btn" id="cm-save-btn">Enregistrer après confirmation</button><p class="note">Enregistrement expérimental, désactivé par défaut : nécessite une sauvegarde privée configurée, Content Manager fermé et le serveur sélectionné arrêté. Une interruption peut nécessiter une restauration manuelle.</p><pre class="note" id="cm-preview" style="white-space:pre-wrap"></pre></div>`;
   }
   function collect(container){
     const changes=[];
@@ -74,13 +116,37 @@
     }
     return changes;
   }
-  function attach(container,inventory,data,check,save,id){
+  function attach(container,inventory,data,check,save,id,event){
     const additions=[];
     const addedView=container.querySelector('#cm-added-slots');
     function showAdded(message=''){
       if(!addedView)return;
       addedView.innerHTML=(message?`<p class="note">${esc(message)}</p>`:'')+additions.map((slot,i)=>`<div class="cm-added-slot">Place à ajouter : <b>${esc(slot.model)}</b>${slot.skin?' · '+esc(slot.skin):''} <button type="button" class="btn secondary small" data-cm-undo-add="${i}">Retirer du brouillon</button></div>`).join('');
     }
+    container.querySelector('#cm-cup-prepare')?.addEventListener('click',()=>{
+      const out=container.querySelector('#cm-cup-result');
+      try{
+        if(collect(container).length||additions.length||container.querySelector('[data-cm-remove]:checked, [data-cm-weather-remove]:checked')||container.querySelector('[data-cm-weather-add]')?.value.trim()||cspChanged(container.querySelector('[data-cm-csp]')?.value||'',data.cspWelcome?.config||'')||((container.querySelector('[data-race-mode]')?.value||'')!==(container.querySelector('[data-race-mode]')?.dataset.original||''))||((container.querySelector('[data-race-value]')?.value||'')!==(container.querySelector('[data-race-value]')?.dataset.original||'')))throw Error('Recharge le serveur avant de préparer une Cup : le brouillon contient déjà des changements.');
+        const index=container.querySelector('[data-cup-round]').value;
+        const plan=cupDraft(data,inventory,event,index===''?-1:Number(index),container.querySelector('[data-cup-car]').value,container.querySelector('[data-cup-places]').value,container.querySelector('[data-cup-qualify]').value,container.querySelector('[data-cup-race]').value);
+        const get=(section,key)=>container.querySelector(`[data-cm-section="${section}"][data-cm-key="${key}"]`);
+        const track=get('SERVER','TRACK'),layout=get('SERVER','CONFIG_TRACK'),cars=container.querySelector('[data-cm-allowed]'),hidden=container.querySelector('[data-cm-cars]'),max=get('SERVER','MAX_CLIENTS');
+        const qualifyEnable=get('QUALIFY','ENABLED'),raceEnable=get('RACE','ENABLED');
+        const qualSection=data.extra.sessions.QUALIFY==='inactive'?'__CM_QUALIFY_OFF':'QUALIFY';
+        const qual=get(qualSection,'TIME'),mode=container.querySelector('[data-race-mode]'),value=container.querySelector('[data-race-value]');
+        const slotFields=plan.slots.map(id=>({model:container.querySelector(`[data-cm-slot="${id}"][data-cm-slot-field="model"]`),skin:container.querySelector(`[data-cm-slot="${id}"][data-cm-slot-field="skin"]`)}));
+        if([track,layout,cars,hidden,max,qualifyEnable,raceEnable,qual,mode,value,...slotFields.flatMap(x=>[x.model,x.skin])].some(x=>!x||x.disabled))throw Error('Certains champs ne peuvent pas être préremplis : vérifie le préréglage dans Content Manager.');
+        if(![...cars.options].some(o=>o.value===plan.carId)||track.tagName==='SELECT'&&![...track.options].some(o=>o.value===plan.round.track))throw Error('La voiture ou le circuit ne figure pas dans les choix disponibles.');
+        // Aucun fichier n'est modifié : on remplit les mêmes champs que l'éditeur.
+        track.value=plan.round.track;track.dispatchEvent(new Event('change',{bubbles:true}));layout.value=plan.round.layout;
+        for(const option of cars.options)option.selected=option.value===plan.carId;
+        cars.dispatchEvent(new Event('change',{bubbles:true}));max.value=plan.places;
+        for(const field of slotFields){field.model.value=plan.carId;field.model.dispatchEvent(new Event('change',{bubbles:true}));field.skin.value='';}
+        for(let i=0;i<plan.additions;i++)additions.push({model:plan.carId,skin:''});
+        qualifyEnable.value='1';raceEnable.value='1';qual.value=plan.qualify;mode.value='time';value.value=plan.race;
+        showAdded();out.textContent='Brouillon préparé, aucun fichier modifié. Vérifie les places et les skins, puis utilise Vérifier le brouillon. Setup fixe et course 2 non configurés.';
+      }catch(error){out.textContent=error.message||'Préparation impossible. Aucun fichier modifié.';}
+    });
     container.querySelector('#cm-add-slot-btn')?.addEventListener('click',()=>{
       const model=container.querySelector('[data-cm-add-model]')?.value.trim()||'',skin=container.querySelector('[data-cm-add-skin]')?.value.trim()||'';
       const allowed=(container.querySelector('[data-cm-cars]')?.value??container.querySelector('[data-cm-section="SERVER"][data-cm-key="CARS"]')?.value??data.settings?.SERVER?.CARS??'').split(';').map(x=>x.trim()).filter(Boolean);
@@ -178,5 +244,5 @@
       out.textContent=lines.length?lines.join('\n')+'\n\nAucun changement n’a été enregistré.':'Aucun changement dans le brouillon.';
     });
   }
-  global.gdspServerEditor={render,collect,attach,cspChanged};
+  global.gdspServerEditor={render,collect,attach,cspChanged,cupOptions,cupDraft};
 })(window);
