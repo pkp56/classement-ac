@@ -2007,3 +2007,17 @@ test('Refuser la seconde confirmation ne lance pas le serveur',async()=>{
  assert.equal(calls.filter(c=>c.url==='/api/server-manager/presets/local1/start').length,1);
  assert.equal(getElementById('cm-server-status').textContent,'Lancement annulé.');
 });
+
+test('Événement clôturé : nombre de pilotes sans lien d’inscription, même sans résultat',async()=>{
+  const {sandbox}=makeBrowser();await new Promise(r=>setImmediate(r));
+  const run=src=>vm.runInContext(src,sandbox);
+  run("eventContext={slug:'test',name:'Test',kind:'archive',data:{eventInfo:{registrationUrl:'https://example.org/inscription'}}}; rounds=()=>[]; allDrivers=()=>[{id:'a'},{id:'b'}]");
+  const card=()=>run('eventHome()').match(/<div class="ev-kpi gold">[\s\S]*?<\/div>/)[0];
+  assert.match(card(),/Pilotes engagés<\/span><strong>2<\/strong>/);
+  assert.doesNotMatch(card(),/ev-register|Inscriptions|<svg/);
+  run('allDrivers=()=>[]');
+  assert.match(card(),/<strong>0<\/strong>/);assert.doesNotMatch(card(),/ev-register|Inscriptions|<svg/);
+  run("eventContext.kind='championship'");
+  assert.match(card(),/ev-register/);
+  run("allDrivers=()=>[{id:'a'}]");assert.match(card(),/<strong>1<\/strong>[\s\S]*ev-register/);
+});
