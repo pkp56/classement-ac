@@ -3,7 +3,7 @@
 // Une liste blanche empêche notamment la modification des ports, secrets et
 // données internes Content Manager. Ces fonctions ne sont reliées à aucune API.
 const ALLOWED = Object.freeze({
-  SERVER: new Set(['NAME','TRACK','CONFIG_TRACK','CARS','MAX_CLIENTS','PICKUP_MODE_ENABLED','LOOP_MODE','SLEEP_TIME','MAX_CONTACTS_PER_KM','VOTING_QUORUM','VOTE_DURATION','KICK_QUORUM','CLIENT_SEND_INTERVAL_HZ','REGISTER_TO_LOBBY','SUN_ANGLE','TIME_OF_DAY_MULT','ABS_ALLOWED','TC_ALLOWED','STABILITY_ALLOWED','AUTOCLUTCH_ALLOWED','TYRE_BLANKETS_ALLOWED','FORCE_VIRTUAL_MIRROR','FUEL_RATE','DAMAGE_MULTIPLIER','TYRE_WEAR_RATE','ALLOWED_TYRES_OUT','MAX_BALLAST_KG']),
+  SERVER: new Set(['NAME','TRACK','CONFIG_TRACK','CARS','MAX_CLIENTS','PICKUP_MODE_ENABLED','LOOP_MODE','SLEEP_TIME','MAX_CONTACTS_PER_KM','VOTING_QUORUM','VOTE_DURATION','KICK_QUORUM','CLIENT_SEND_INTERVAL_HZ','REGISTER_TO_LOBBY','SUN_ANGLE','TIME_OF_DAY_MULT','ABS_ALLOWED','TC_ALLOWED','STABILITY_ALLOWED','AUTOCLUTCH_ALLOWED','TYRE_BLANKETS_ALLOWED','FORCE_VIRTUAL_MIRROR','FUEL_RATE','DAMAGE_MULTIPLIER','TYRE_WEAR_RATE','ALLOWED_TYRES_OUT','MAX_BALLAST_KG','REVERSED_GRID_RACE_POSITIONS']),
   PRACTICE: new Set(['NAME','TIME','IS_OPEN']),
   QUALIFY: new Set(['NAME','TIME','IS_OPEN']),
   RACE: new Set(['NAME','TIME','LAPS','WAIT_TIME','IS_OPEN']),
@@ -37,6 +37,7 @@ function keyAllowed(section,key){
 function validate(section,key,value){
   if(value.length>500 || /[\r\n\x00-\x1f]/.test(value))throw new Error('Valeur invalide');
   if((BOOLS.has(key)||key==='ENABLED')&&!['0','1'].includes(value))throw new Error('Valeur booléenne invalide');
+  if(key==='REVERSED_GRID_RACE_POSITIONS'&&(!/^(?:-1|0|[1-9]\d*)$/.test(value)||Number(value)>200))throw new Error('Grille inversée invalide');
   if(key==='IS_OPEN' && !(baseSession(section)==='RACE'?['0','1','2']:['0','1']).includes(value))throw new Error('État de session invalide');
   if(IDS.has(key)&&((key==='TRACK'&&!value)||(value&&!/^[a-zA-Z0-9_-]+$/.test(value))))throw new Error('Identifiant invalide');
   if(key==='CARS'&&(!value||!value.split(';').every(v=>/^[a-zA-Z0-9_-]+$/.test(v))))throw new Error('Liste de voitures invalide');
@@ -178,8 +179,8 @@ function patchIni(text, updates) {
       toggles.push({from:onCount?section:off,to:value==='1'?section:off});continue;
     }
     const found=entries.get(id)||[];
-    if(section==='SERVER'&&key==='CONFIG_TRACK'&&found.length===0&&sections.get(section)===1){
-      if(value)insertions.push(value);
+    if(section==='SERVER'&&['CONFIG_TRACK','REVERSED_GRID_RACE_POSITIONS'].includes(key)&&found.length===0&&sections.get(section)===1){
+      if(value)insertions.push({key,value});
       continue;
     }
     if(found.length!==1||sections.get(section)!==1)throw new Error('Paramètre absent ou ambigu : '+section+'.'+key);
@@ -197,7 +198,7 @@ function patchIni(text, updates) {
     if(index<0)throw new Error('Section serveur absente');
     const newline=text.match(/\r\n|\n|\r/)?.[0]||'\r\n';
     if(!/(?:\r\n|\n|\r)$/.test(lines[index]))lines[index]+=newline;
-    lines[index]+='CONFIG_TRACK='+insertions[0]+newline;
+    for(const insertion of insertions)lines[index]+=insertion.key+'='+insertion.value+newline;
   }
   return lines.join('');
 }
