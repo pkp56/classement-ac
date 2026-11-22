@@ -1208,7 +1208,8 @@ test('Direction de course : espaces distincts, imports conservés et miniatures 
   run("adminAuth=true;adminToken='ok';adminTab='desk';page='admin'");
   assert.match(run('admin()'),/Événement sélectionné[\s\S]+Administration générale[\s\S]+Télémétrie/);
   assert.match(run('admin()'),/Pilotes[\s\S]+Équipes/);
-  assert.match(run('admin()'),/Télémétrie[\s\S]+Race Control/);
+  assert.match(run('admin()'),/Télémétrie[\s\S]+Serveurs CM/);
+  assert.doesNotMatch(run('admin()'),/adminTabs\('race-control'\)/);
   const savedEvent=run("eventContext");
   run("adminTab='race-control';eventContext=null");
   assert.match(run('admin()'),/Ouvrir le configurateur Race Control/);

@@ -7,7 +7,7 @@ test('Brouillon sépare les séances, météo, voitures et signale les options C
  const html=editor.render(data,{tracks:[{id:'sugo',layouts:['gp']}],cars:[{id:'car_a',skins:['red']}]});
  assert.match(html,/Brouillon :/);assert.match(html,/Serveur &lt;test&gt;/);assert.doesNotMatch(html,/Serveur <test>/);
  assert.match(html,/Essais[\s\S]+Active/);assert.match(html,/Qualifications[\s\S]+Désactivée/);
- assert.match(html,/Place 1 · réservée/);assert.match(html,/Température ambiante/);assert.match(html,/Options CSP et scripts/);
+ assert.match(html,/Place 1 · réservée/);assert.match(html,/Température ambiante/);assert.match(html,/Options CSP et scripts/);assert.match(html,/href="\/race-control.html"/);
  assert.doesNotMatch(html,/UDP_PORT|ADMIN_PASSWORD|GUID/);
 });
 test('Un circuit CSP encodé ne propose pas une modification destructrice',()=>{
