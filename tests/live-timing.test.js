@@ -218,6 +218,11 @@ test('Archives des deux collecteurs : sources isolées et boucle conservée',asy
  await send(sessionPacket(50000),p1);await send(sessionPacket(50000),p2);await send(connection(1,'Pilote CM2',''),p2);
  await send(connection(0,'Pilote',''),p1);await send(lapCompleted(0,80000,0,[{id:0,lapMs:80000,laps:1}]),p1);
  const next=sessionPacket(1000);next[0]=EVENT.SESSION_INFO;await send(next,p1);
+ // Ni CM2 sans tour, ni la boucle suivante qui ne possède que des temps
+ // hérités ne doivent encore ouvrir une archive.
+ let before=[];const waitFirst=Date.now()+3000;while(Date.now()<waitFirst){before=(await (await fetch(`http://127.0.0.1:${port}/api/live/sessions?limit=50`)).json()).sessions;if(before.some(r=>r.ended_at))break;await new Promise(r=>setTimeout(r,50));}
+ assert.equal(before.length,1);assert.ok(before[0].ended_at);
+ await send(lapCompleted(0,81000,0,[{id:0,lapMs:81000,laps:1}]),p1);await send(lapCompleted(1,90000,0,[{id:1,lapMs:90000,laps:1}]),p2);
  let rows=[];const deadline=Date.now()+5000;
  while(Date.now()<deadline){rows=(await (await fetch(`http://127.0.0.1:${port}/api/live/sessions?limit=50`)).json()).sessions;if(rows.length>=3)break;await new Promise(r=>setTimeout(r,50));}
  assert.equal(rows.filter(r=>r.snapshot?.archiveSource==='local1').length,2);assert.equal(rows.filter(r=>r.snapshot?.archiveSource==='local2').length,1);
@@ -234,7 +239,7 @@ test('Les temps restent distincts après déconnexion, réutilisation de place e
  feed(conn(EVENT.NEW_CONNECTION,0,'Bob','222222','lola'));feed(lapCompleted(0,88000,0,[{id:0,lapMs:88000,laps:1}]));
  rows=c.snapshot().storedTimes;assert.equal(rows.length,2);assert.equal(rows.find(r=>r.name==='Alice').bestLapMs,90000);assert.equal(rows.find(r=>r.name==='Bob').connected,true);assert.equal(c.snapshot().cars[0].name,'Bob');
  const again=sessionPacket(1000);again[0]=EVENT.SESSION_INFO;feed(again);feed(lapCompleted(0,87000,0,[{id:0,lapMs:87000,laps:1}]));
- rows=c.snapshot().storedTimes;assert.equal(rows.find(r=>r.name==='Bob').laps,2);assert.equal(rows.find(r=>r.name==='Bob').averageLapMs,87500);assert.equal(rows.find(r=>r.name==='Bob').bestLapMs,87000);assert.doesNotMatch(JSON.stringify(c.snapshot()),/111111|222222/);
+ rows=c.snapshot().storedTimes;assert.equal(c.snapshot().sessionObservedLaps,1);assert.equal(rows.find(r=>r.name==='Bob').laps,2);assert.equal(rows.find(r=>r.name==='Bob').averageLapMs,87500);assert.equal(rows.find(r=>r.name==='Bob').bestLapMs,87000);assert.doesNotMatch(JSON.stringify(c.snapshot()),/111111|222222/);
 });
 test('Sans GUID, des noms identiques ne sont pas fusionnés lors de la réutilisation de place',()=>{
  const c=new LiveTimingCollector({autoStart:false});c.socket={send(){}};const feed=buf=>c.handleDatagram(buf,{});

@@ -223,9 +223,28 @@ test('Une session sans pilote connecté identifiable ne crée pas d’archive',a
  await rec.record({...empty,cars:[{name:'Voiture #0',driverIdentified:false,connected:true}]},t+1000);
  await rec.record({...empty,cars:[{name:'Ancien',connected:false}]},t+2000);
  assert.equal((await store.list()).length,0);
- await rec.record({...empty,cars:[{name:'Alice',driverIdentified:true,connected:true}]},t+3000);
+ await rec.record({...empty,cars:[{name:'Alice',driverIdentified:true,connected:true}],sessionObservedLaps:1,storedTimes:[{name:'Alice',model:'lola',laps:1,bestLapMs:90000}]},t+3000);
  await rec.record({...empty,cars:[{name:'Alice',driverIdentified:true,connected:false}]},t+4000);
  await rec.record({...empty,session:{type:'qualify',index:1,elapsedMs:0}},t+5000);
  const rows=await store.list();assert.equal(rows.length,1);assert.ok(rows[0].ended_at);
  await rec.record({...empty,session:{type:'qualify',index:1,elapsedMs:5000}},t+10000);assert.equal((await store.list()).length,1);
+});
+
+test('Les séances sans temps courant ne créent aucune archive même si les anciens temps sont conservés',async()=>{
+ const store=tmpHistory(),rec=new LiveHistoryRecorder(store,{writeIntervalMs:0});const t=Date.now();
+ const base=snap({session:{type:'practice',index:0,elapsedMs:1000},cars:[{name:'Alice',model:'lola',connected:true}],storedTimes:[],sessionObservedLaps:0,bestLaps:[],events:[]});
+ await rec.record(base,t);assert.equal((await store.list()).length,0);
+ const lap={...base,sessionObservedLaps:1,storedTimes:[{name:'Alice',model:'lola',laps:1,bestLapMs:90000}]};
+ await rec.record(lap,t+1000);assert.equal((await store.list()).length,1);
+ const emptyNext={...base,session:{type:'qualify',index:1,elapsedMs:0},storedTimes:lap.storedTimes};
+ await rec.record(emptyNext,t+2000);let rows=await store.list();assert.equal(rows.length,1);assert.ok(rows[0].ended_at);
+ await rec.record({...emptyNext,session:{...emptyNext.session,elapsedMs:10000}},t+3000);assert.equal((await store.list()).length,1);
+ await rec.record({...emptyNext,sessionObservedLaps:1},t+4000);assert.equal((await store.list()).length,2);
+});
+test('Une photo vide tardive ne remplace pas le dernier temps archivé',async()=>{
+ const store=tmpHistory(),rec=new LiveHistoryRecorder(store,{writeIntervalMs:0});
+ const timed=snap({sessionObservedLaps:1,storedTimes:[{name:'A',model:'lola',bestLapMs:90000,laps:1}]});
+ await rec.record(timed);await rec.record({...timed,storedTimes:[]});
+ await rec.record({...timed,session:{type:'qualify',index:3},sessionObservedLaps:0,storedTimes:[]});
+ const rows=await store.list();assert.equal(rows.length,1);assert.equal(rows[0].snapshot.storedTimes[0].bestLapMs,90000);
 });

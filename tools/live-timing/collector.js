@@ -158,6 +158,7 @@ class LiveTimingCollector extends EventEmitter {
     this.savedTimes = new Map();
     this.driverSerial = 0;
     this.lapEpoch = 0;
+    this.sessionObservedLaps = 0;
     this.state = {
       protocolVersion: null,
       serverName: null,
@@ -219,6 +220,7 @@ class LiveTimingCollector extends EventEmitter {
     row.totalLapMs+=lapTimeMs;row.lastLapMs=lapTimeMs;row.lastLapCuts=cuts||0;
     if(!cuts && lapTimeMs>0 && (!row.bestLapMs||lapTimeMs<row.bestLapMs))row.bestLapMs=lapTimeMs;
     if(Number.isFinite(car.topSpeedKmh))row.topSpeedKmh=Math.max(row.topSpeedKmh||0,car.topSpeedKmh);
+    return true;
   }
 
   storedResults() {
@@ -328,9 +330,10 @@ class LiveTimingCollector extends EventEmitter {
         const previousIndex = state.session ? state.session.index : null;
         const previousElapsed = state.sessionElapsedMs;
         const restarted = previousElapsed != null && payload.elapsedMs + 2000 < previousElapsed;
-        const changed = !state.session || previousIndex !== payload.sessionIndex || restarted;
+        const trackChanged=!!(state.track && payload.track && (state.track!==payload.track || (state.trackConfig||'')!==(payload.trackConfig||'')));
+        const changed = !state.session || previousIndex !== payload.sessionIndex || restarted || trackChanged;
         if(changed && state.session) this.emit('beforeSessionChange',this.snapshot());
-        if(changed) this.lapEpoch++;
+        if(changed) { this.lapEpoch++; this.sessionObservedLaps = 0; }
         if(state.track && payload.track && (state.track!==payload.track || (state.trackConfig||'')!==(payload.trackConfig||''))) this.savedTimes.clear();
         state.sessionElapsedMs = payload.elapsedMs;
         state.serverName = payload.serverName || state.serverName;
@@ -468,7 +471,7 @@ class LiveTimingCollector extends EventEmitter {
           if (entry.completed) car.connected = true;
           if (!car.name) this.requestCarInfo(entry.carId);
         }
-        this.rememberLap(author,payload.lapTimeMs,payload.cuts,payload.cars.find(e=>e.carId===payload.carId)?.laps);
+        if(this.rememberLap(author,payload.lapTimeMs,payload.cuts,payload.cars.find(e=>e.carId===payload.carId)?.laps))this.sessionObservedLaps++;
         this.log('lap', `${author.name || 'Voiture #' + payload.carId} — tour ${fmtMs(payload.lapTimeMs)}${payload.cuts ? ' (coupures)' : ''}`, { carId: payload.carId });
         break;
       }
@@ -590,6 +593,7 @@ class LiveTimingCollector extends EventEmitter {
       },
       cars: rows,
       storedTimes: this.storedResults(),
+      sessionObservedLaps: this.sessionObservedLaps,
       bestLaps,
       referenceLapMs,
       events: this.state.events,

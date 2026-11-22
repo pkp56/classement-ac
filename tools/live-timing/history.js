@@ -65,6 +65,23 @@ function connectedDrivers(cars){
   return cars.filter(c=>c.connected===true &&
     (c.driverIdentified===true || (c.driverIdentified==null && typeof c.name==='string' && c.name.trim() && !/^Voiture #\d+$/i.test(c.name.trim())))).length;
 }
+function hasLapTime(row){
+  if(!row || typeof row!=='object')return false;
+  return ['bestLapMs','lastLapMs','averageLapMs'].some(k=>typeof row[k]==='number' && Number.isFinite(row[k]) && row[k]>0) ||
+    ['bestLap','lastLap'].some(k=>typeof row[k]==='string' && /^(?:\d+:)?\d{1,2}\.\d{1,3}$/.test(row[k].trim()));
+}
+function hasSessionTime(snap){
+  if(Array.isArray(snap.storedTimes)){
+    // Les temps conservés traversent les séances : leur seule présence ne
+    // prouve pas qu'un tour a été observé dans la séance courante.
+    const hasStored=snap.storedTimes.some(hasLapTime);
+    if(!hasStored)return false;
+    if(typeof snap.sessionObservedLaps==='number')return Number.isFinite(snap.sessionObservedLaps) && snap.sessionObservedLaps>0;
+    // Ancien agent : utiliser seulement un temps courant réellement reçu.
+    return Array.isArray(snap.cars) && snap.cars.some(hasLapTime);
+  }
+  return (Array.isArray(snap.cars) && snap.cars.some(hasLapTime)) || (Array.isArray(snap.bestLaps) && snap.bestLaps.some(hasLapTime));
+}
 /** Un enregistreur : accumule, détecte les changements de séance, écrit. */
 class LiveHistoryRecorder {
   constructor(store, options = {}) {
@@ -73,6 +90,8 @@ class LiveHistoryRecorder {
     this.current = null;          // { signature, id, lastWriteMs }
     this.models = new Set();
     this.source = options.source || null;
+    this.pendingConnected = false;
+    this.lastArchiveSnap = null;
   }
 
   /** Un instantané à prendre en compte (ou pas : le vide n'ouvre pas une séance). */
@@ -97,16 +116,21 @@ class LiveHistoryRecorder {
       // sa dernière photo (la ligne d'arrivée vaut plus qu'un dixième d'écart).
       const prevElapsed=Number(this.lastSnap?.session?.elapsedMs),elapsed=Number(snap.session?.elapsedMs);
       const restarted=this.lastSnap?.session?.elapsedMs != null && snap.session?.elapsedMs != null && Number.isFinite(prevElapsed) && Number.isFinite(elapsed) && elapsed + 2000 < prevElapsed;
-      if (this.current && (this.current.signature !== signature || restarted)) {
-        await this.closeCurrent(nowMs, this.lastSnap);
+      const previousSignature=this.lastSnap ? sessionSignature(this.lastSnap) : null;
+      if (previousSignature && (previousSignature !== signature || restarted)) {
+        if(this.current)await this.closeCurrent(nowMs, this.lastArchiveSnap);
+        this.pendingConnected=false;
+        this.models=new Set();
       }
-      // Fermer d'abord l'ancienne séance si nécessaire, mais n'ouvrir la
-      // suivante qu'après observation d'un pilote connecté identifiable.
-      if(!this.current && !connected){this.lastSnap=null;return;}
-      if (!this.current) this.models = new Set();
+      if(connected)this.pendingConnected=true;
       for(const car of cars)if(car.model)this.models.add(String(car.model));
       snap = {...snap, archiveSource:this.source, archiveModels:[...this.models].sort((a,b)=>a.localeCompare(b,'fr'))};
       this.lastSnap = snap;
+      // Une connexion sans temps ne produit pas d'archive ; un résultat
+      // hérité d'une séance précédente ne suffit pas non plus.
+      if(!hasSessionTime(snap))return;
+      if(!this.current && !this.pendingConnected)return;
+      this.lastArchiveSnap = snap;
 
       if (!this.current) {
         const row = await this.store.upsert({
@@ -168,6 +192,7 @@ class LiveHistoryRecorder {
       console.error('live-history:', e.message);
     }
     this.current = null;
+    this.lastArchiveSnap = null;
   }
 }
 
