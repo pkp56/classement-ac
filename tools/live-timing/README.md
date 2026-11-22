@@ -153,7 +153,7 @@ Notes pratiques :
 ## 1 quater. Historique persistant
 
 Le direct ne survit pas à un redémarrage du site — et une fois la séance
-finie, il ne restait rien. **Chaque séance vue par le site est maintenant
+finie, il ne restait rien. **Chaque séance avec un pilote connecté identifiable observé est
 conservée** (agent push, UDP local ou source HTTP) :
 
 * identité (serveur, circuit, type, début/fin), nombre de pilotes ;
@@ -301,7 +301,7 @@ Ouvre `/live-timing` : le classement se remplit en quelques secondes.
 
 ### Archives des deux serveurs et boucles de séance
 
-Les collecteurs locaux CM1 et CM2 enregistrent séparément leurs séances. Lorsqu'une séance change ou redémarre avec le même index, la dernière photo observée est conservée avant la réinitialisation ; une nouvelle archive est créée pour la nouvelle séance. La page propose un menu avec date, serveur, circuit, variante et voitures identifiées. Les séances sont proposées par pages, les anciennes ne sont pas supprimées. Les archives déjà existantes restent consultables.
+Les collecteurs locaux CM1 et CM2 enregistrent séparément les séances où un pilote identifiable a été observé connecté. Les séances sans pilote observé ne créent plus d’archive ; les anciennes archives ne sont pas effacées. Lorsqu'une séance change ou redémarre avec le même index, la dernière photo observée est conservée avant la réinitialisation ; une nouvelle archive est créée pour la nouvelle séance. La page propose un menu avec date, serveur, circuit, variante et voitures identifiées. Les séances sont proposées par pages, les anciennes ne sont pas supprimées. Les archives déjà existantes restent consultables.
 
 Une archive contient les données observées, pas une reconstruction complète ni un classement officiel : les écarts restent estimés, les secteurs CSP du direct ne sont pas archivés, et le fil est limité aux événements disponibles dans les instantanés (150 maximum). Une coupure de réception ou un arrêt brutal de GDSP peut faire perdre les données depuis la dernière écriture (au maximum normalement dix secondes), et la fin d'une séance peut rester inconnue. Après redémarrage de GDSP, une nouvelle archive peut être créée pour la même séance encore en cours. Aucune archive ne peut restituer des données non reçues avant cette évolution. Vérifier les droits et sauvegardes du fichier ou de la base de données configurée.
 

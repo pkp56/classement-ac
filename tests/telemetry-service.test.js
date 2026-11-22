@@ -2276,3 +2276,20 @@ test('Anciennes télémétries sans clé : ne pas réunir deux serveurs sur un m
   assert.equal((await service.rows({serverName:'CM 1'})).length,3);
   assert.equal((await service.rows({serverName:'CM 2'})).length,3);
 });
+test('Le diagnostic visible indique si les quatre pneus sont lus et la variation au tour',()=>{
+ const good=simulate({callInit:true,steps:unTour()});assert.equal(good.error,null);
+ assert.ok(good.ui.some(s=>/pneus: LUS \(4 roues\)/.test(s)),good.ui.join(' | '));
+ assert.ok(good.ui.some(s=>/dernier tour: variation positive mesurée/.test(s)),good.ui.join(' | '));
+ const bad=simulate({callInit:true,car:{wheels:undefined},steps:[0.016]});assert.equal(bad.error,null);
+ assert.ok(bad.ui.some(s=>/pneus: NON LUS/.test(s)),bad.ui.join(' | '));
+});
+test('La lecture essaie wear même si accéder à tyreWear lève une erreur CSP',()=>{
+ const beforeSteps=`for i=1,4 do local w=car.wheels[i];w.tyreWear=nil;w.wear=1;setmetatable(w,{__index=function(_,k) if k=='tyreWear' then error('champ indisponible') end end}) end`;
+ const result=simulate({callInit:true,beforeSteps,steps:[0.016]});assert.equal(result.error,null);
+ assert.ok(result.ui.some(s=>/pneus: LUS \(4 roues\)/.test(s)),result.ui.join(' | '));
+});
+test('Une lecture des pneus sans diminution ne prétend pas mesurer une usure',()=>{
+ const result=simulate({callInit:true,steps:[0.016,L=>setCar(L,'lapCount',2),0.016,...Array.from({length:60},()=>0.1)]});
+ assert.equal(result.error,null);assert.ok(result.ui.some(s=>/pneus: LUS \(4 roues\).*aucune diminution exploitable/.test(s)),result.ui.join(' | '));
+ const lap=JSON.parse(result.sent[0]).laps[0];assert.equal(lap.tyreWearPct,undefined);
+});

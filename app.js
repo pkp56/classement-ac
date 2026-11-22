@@ -726,7 +726,7 @@ function getLiveTiming(){
     liveTiming=new LiveTimingCollector();
     liveTiming.on('event',entry=>broadcastLive('log',entry,'local1'));
     liveTiming.on('beforeSessionChange',snap=>recordLiveHistory(snap,'local1'));
-    liveTiming.on('packet',packet=>{if(['lap_completed','new_session','session_info','closed_connection'].includes(packet.typeName))recordLiveHistory(liveTiming.snapshot(),'local1',packet.typeName==='lap_completed'||packet.typeName==='closed_connection')});
+    liveTiming.on('packet',packet=>{if(['lap_completed','new_session','session_info','new_connection','car_info','closed_connection'].includes(packet.typeName))recordLiveHistory(liveTiming.snapshot(),'local1',packet.typeName==='lap_completed'||packet.typeName==='closed_connection')});
     liveTiming.start();
   }
   return liveTiming;
@@ -745,7 +745,7 @@ function getSecondLiveTiming(){
     liveTimingSecond=new LiveTimingCollector(cfg);
     liveTimingSecond.on('event',entry=>broadcastLive('log',entry,'local2'));
     liveTimingSecond.on('beforeSessionChange',snap=>recordLiveHistory(snap,'local2'));
-    liveTimingSecond.on('packet',packet=>{if(['lap_completed','new_session','session_info','closed_connection'].includes(packet.typeName))recordLiveHistory(liveTimingSecond.snapshot(),'local2',packet.typeName==='lap_completed'||packet.typeName==='closed_connection')});
+    liveTimingSecond.on('packet',packet=>{if(['lap_completed','new_session','session_info','new_connection','car_info','closed_connection'].includes(packet.typeName))recordLiveHistory(liveTimingSecond.snapshot(),'local2',packet.typeName==='lap_completed'||packet.typeName==='closed_connection')});
   }
   return liveTimingSecond;
 }
