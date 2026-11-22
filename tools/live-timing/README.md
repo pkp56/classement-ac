@@ -163,6 +163,10 @@ conservée** (agent push, UDP local ou source HTTP) :
 Sur la page `/live-timing`, le panneau **« Historique des séances »** liste
 les séances les plus récentes ; « Ouvrir » montre les temps conservés
 (bandeau « Archives »), « Retour au direct » revient au flux temps réel.
+La moyenne des temps conservés porte sur les tours effectivement reçus, y compris
+les tours avec coupures, par pilote et voiture depuis le démarrage du collecteur.
+Les anciennes archives sans moyenne affichent « — ». Dans le classement direct,
+le menu de colonnes enregistre visibilité, ordre et largeur dans le navigateur.
 
 Stockage : PostgreSQL (`LIVE_DATABASE_URL`, sinon `DATABASE_URL`, table
 `gdsp_live_sessions`) ou fichier `data/live-history.json` en local. Une

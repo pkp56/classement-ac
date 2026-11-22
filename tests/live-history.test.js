@@ -212,9 +212,9 @@ test('Les archives anciennes restent accessibles par pagination',async()=>{
 });
 test('Une archive récente conserve uniquement les temps, y compris les pilotes encore connectés',async()=>{
  const store=tmpHistory(),rec=new LiveHistoryRecorder(store,{writeIntervalMs:0});
- const data=snap({storedTimes:[{name:'A',model:'lola',laps:3,bestLap:'1:30.000',connected:true},{name:'B',model:'alfa',laps:1,connected:false}]});
+ const data=snap({storedTimes:[{name:'A',model:'lola',laps:3,bestLap:'1:30.000',averageLapMs:94000,connected:true},{name:'B',model:'alfa',laps:1,connected:false}]});
  await rec.record(data);const row=(await store.list())[0];
- assert.equal(row.snapshot.cars.length,0);assert.equal(row.snapshot.events.length,0);assert.equal(row.snapshot.storedTimes.length,2);assert.ok(row.snapshot.storedTimes.every(r=>!r.connected));assert.deepEqual(row.classification.map(r=>r.name),['A','B']);
+ assert.equal(row.snapshot.cars.length,0);assert.equal(row.snapshot.events.length,0);assert.equal(row.snapshot.storedTimes.length,2);assert.equal(row.snapshot.storedTimes[0].averageLapMs,94000);assert.ok(row.snapshot.storedTimes.every(r=>!r.connected));assert.deepEqual(row.classification.map(r=>r.name),['A','B']);
 });
 test('Une session sans pilote connecté identifiable ne crée pas d’archive',async()=>{
  const store=tmpHistory(),rec=new LiveHistoryRecorder(store,{writeIntervalMs:0});const t=Date.parse('2026-01-01T12:00:00Z');
