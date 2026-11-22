@@ -4825,7 +4825,7 @@ function adminWorkspace(){
   const general=adminTab==='general'||adminGeneralTools.some(([id])=>id===adminTab),telemetry=adminTab==='telemetry',raceControl=adminTab==='race-control',servers=adminTab==='servers';
   const current=servers?'servers':raceControl?'race-control':telemetry?'telemetry':general?'general':'desk';
   const hasEvent=!!eventContext||!backendMulti;
-  const nav=[['desk','Événement sélectionné'],...(backendMulti?[['general','Administration générale']]:[]),['telemetry','Télémétrie'],['race-control','Race Control'],['servers','Serveurs CM']];
+  const nav=[['desk','Événement sélectionné'],...(backendMulti?[['general','Administration générale']]:[]),['telemetry','Télémétrie'],['servers','Serveurs CM']];
   const buttons=(items,compact=false)=>`<div class="adm-actions ${compact?'compact':''}">${items.map(([id,title,desc],i)=>`<button type="button" aria-pressed="${adminTab===id}" onclick="adminOpenTool('${id}')"><small>${String(i+1).padStart(2,'0')} /</small><b>${title}</b><span>${desc}</span></button>`).join('')}</div>`;
   return `${head('paddock / administration','Direction de course','')}<div class="adm-user"><span>Connecté : <b>${esc(adminUser)}</b></span><button class="btn secondary small" onclick="adminLogout()">Déconnexion</button></div>`
     +`<div class="adm-shell"><div class="adm-banner"><div><div class="eyebrow">${servers?'Serveurs CM / Consultation':raceControl?'Race Control / Configuration':telemetry?'Télémétrie / Station de mesure':general?'Administration générale':'Événement sélectionné'}</div><h2>${servers?'Serveurs CM':raceControl?'Race Control':telemetry?'Mur des stands':general?'Gestion du paddock':esc(eventContext?.name||(hasEvent?'Championnat':'Choisir un événement'))}</h2></div>`
