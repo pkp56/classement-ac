@@ -227,7 +227,7 @@ function pitProfileFromRows(track, trackConfig, profiles, rows) {
     source: manualPitLaneMs != null
       ? (row.source || 'mesure manuelle')
       : automaticPitLaneMs != null
-        ? 'mesure automatique (limiteur 80 km/h)'
+        ? 'estimation automatique (anciennes mesures comprises)'
         : (row && row.source) || null
   };
 }
@@ -595,7 +595,7 @@ class TelemetryService {
 
   /**
    * Profil pit-lane : une saisie admin garde la priorité ; à défaut, la médiane
-   * des passages réellement détectés au limiteur 80 km/h sert de mesure auto.
+   * des passages estimés sert de mesure auto ; les données anciennes restent incluses.
    */
   async pitProfile(track, trackConfig = null) {
     if (!track) return null;

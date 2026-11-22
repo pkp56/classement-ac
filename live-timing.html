@@ -49,7 +49,7 @@
   tbody td:nth-child(1),tbody td:nth-child(2){text-align:left}
   tbody tr:nth-child(even){background:#f2ead8}
   tbody tr.best td.best-cell{color:#2f6b39;font-weight:bold}
-  tbody tr.pit td.driver-cell::after{content:' PIT';font-size:9px;background:#9c3021;color:#fff;padding:1px 4px;margin-left:6px;letter-spacing:1px;vertical-align:middle}
+  tbody tr.pit td.driver-cell::after{content:' PIT estimé';font-size:9px;background:#9c3021;color:#fff;padding:1px 4px;margin-left:6px;letter-spacing:1px;vertical-align:middle}
   tbody tr.off td{opacity:.45}
   .pos{font-family:Impact,sans-serif;font-size:16px}
   .drv{display:flex;flex-direction:column;line-height:1.25}
@@ -127,6 +127,7 @@
     <div>
     <div class="panel" id="liveStandingsPanel">
       <h3>Classement en direct <span class="tag" id="rowCount">0 voiture</span></h3>
+      <div class="timing-hint" id="pitHint">Stands : détection expérimentale, en attente des données.</div>
       <div class="timing-hint">Le potentiel = somme des meilleurs secteurs personnels (données CSP). Secteurs visibles après un tour bouclé et l'envoi du script de télémétrie.</div>
       <details class="column-menu"><summary>Personnaliser les colonnes</summary><p>Choisis les colonnes à afficher. Dans le tableau, fais glisser leur nom pour les déplacer ou tire leur bord droit pour les redimensionner. Les flèches et largeurs ci-dessous restent utilisables au clavier. Réglages conservés dans ce navigateur.</p><div id="columnSettings"></div><button type="button" id="resetColumns">Réinitialiser</button></details>
       <div id="standings"><div class="empty">En attente des données du serveur…</div></div>
@@ -220,6 +221,7 @@
     $('kServer').textContent = (d.server && d.server.name) || '—';
     var track = d.server && d.server.track ? d.server.track + (d.server.trackConfig ? ' · ' + d.server.trackConfig : '') : 'circuit inconnu';
     $('kTrack').textContent = track;
+    $('pitHint').textContent = d.server && d.server.pitGeometryAvailable === true ? 'Stands : estimation par lignes AI et plateau 80/120 ; passages ou arrêts peuvent être manqués.' : 'Stands : géométrie indisponible ou non confirmée ; PIT ne peut pas être estimé.';
     $('kSession').textContent = sessionLabel(d.session);
     $('kSessionSub').textContent = d.session.remaining ? 'reste ' + d.session.remaining : d.session.elapsed ? 'écoulé ' + d.session.elapsed : 'en attente';
     $('kDrivers').textContent = String((d.cars || []).filter(function (c) { return c.connected; }).length);
@@ -394,7 +396,7 @@
   }
 
   var columnDefs = [
-    ['position','#',70],['driver','Pilote',180],['tyres','Pneus',90],['current','Tour en cours',130],['delta','Delta',90],['laps','Tours',75],['gap','Écart',90],['interval','Interv.',90],['last','Dernier',150],['best','Meilleur tour',150],['potential','Potentiel',150],['pits','Arrêts observés',135],['speed','Vit.',80],['topSpeed','Vitesse max.',120],['ping','Ping',80]
+    ['position','#',70],['driver','Pilote',180],['tyres','Pneus',90],['current','Tour en cours',130],['delta','Delta',90],['laps','Tours',75],['gap','Écart',90],['interval','Interv.',90],['last','Dernier',150],['best','Meilleur tour',150],['potential','Potentiel',150],['pits','Arrêts estimés',135],['speed','Vit.',80],['topSpeed','Vitesse max.',120],['ping','Ping',80]
   ];
   var columnKey = 'gdsp-live-columns-v1';
   function defaultColumns(){return columnDefs.map(function(d){return {id:d[0],visible:true,width:d[2]};});}
@@ -500,7 +502,7 @@
       var potentialMs=timing&&timing.potentialLapMs!=null?timing.potentialLapMs:sumSectorTimes(bestSectors);
       var cells={
         position:'<td class="pos">'+(c.position==null?'—':esc(c.position))+'</td>',
-        driver:'<td class="driver-cell"><span class="drv"><b>'+esc(c.name)+'</b><span>'+esc(c.team||c.model||'')+'</span></span></td>',
+        driver:'<td class="driver-cell"><span class="drv"><b>'+esc(c.name)+'</b><span>'+esc(c.team||c.model||'')+'</span></span>'+(c.pitState==='stopped'?'<small> · arrêt estimé</small>':c.pitState==='lane'?'<small> · voie estimée</small>':'')+'</td>',
         tyres:'<td>—</td>',current:'<td>'+(c.currentLapMs!=null?esc(formatTimingMs(c.currentLapMs)):'—')+'</td>',delta:'<td>—</td>',
         laps:'<td>'+esc(c.laps||0)+'</td>',gap:'<td>'+esc(c.gap==='leader'?'—':c.gap)+'</td>',interval:'<td class="muted">'+esc(c.position===1?'':c.interval||'')+'</td>',
         last:'<td class="lap-cell"><span class="time-main">'+esc(lastLap)+(c.lastLapCuts?' c':'')+'</span>'+renderSectorChips(timing&&timing.lastSectorsMs,bestSectors)+'</td>',
