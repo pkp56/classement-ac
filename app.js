@@ -726,7 +726,7 @@ function getLiveTiming(){
     liveTiming=new LiveTimingCollector();
     liveTiming.on('event',entry=>broadcastLive('log',entry,'local1'));
     liveTiming.on('beforeSessionChange',snap=>recordLiveHistory(snap,'local1'));
-    liveTiming.on('packet',packet=>{if(['lap_completed','new_session','session_info'].includes(packet.typeName))recordLiveHistory(liveTiming.snapshot(),'local1')});
+    liveTiming.on('packet',packet=>{if(['lap_completed','new_session','session_info','closed_connection'].includes(packet.typeName))recordLiveHistory(liveTiming.snapshot(),'local1',packet.typeName==='lap_completed'||packet.typeName==='closed_connection')});
     liveTiming.start();
   }
   return liveTiming;
@@ -745,7 +745,7 @@ function getSecondLiveTiming(){
     liveTimingSecond=new LiveTimingCollector(cfg);
     liveTimingSecond.on('event',entry=>broadcastLive('log',entry,'local2'));
     liveTimingSecond.on('beforeSessionChange',snap=>recordLiveHistory(snap,'local2'));
-    liveTimingSecond.on('packet',packet=>{if(['lap_completed','new_session','session_info'].includes(packet.typeName))recordLiveHistory(liveTimingSecond.snapshot(),'local2')});
+    liveTimingSecond.on('packet',packet=>{if(['lap_completed','new_session','session_info','closed_connection'].includes(packet.typeName))recordLiveHistory(liveTimingSecond.snapshot(),'local2',packet.typeName==='lap_completed'||packet.typeName==='closed_connection')});
   }
   return liveTimingSecond;
 }
@@ -777,13 +777,13 @@ async function getLiveRecorder(source){
   }
   return liveRecorders.get(source);
 }
-function recordLiveHistory(snap,source='auto'){
+function recordLiveHistory(snap,source='auto',force=false){
   // Les données locales en repli HTTP peuvent contenir une ancienne photo ACSP.
   if((source==='local1'||source==='local2')&&snap?.status?.mode!=='acsp')return;
   // Une copie fige la photo avant que le collecteur ne réinitialise sa session.
   const frozen=JSON.parse(JSON.stringify(snap));
   const before=liveHistoryQueues.get(source)||Promise.resolve();
-  const next=before.then(async()=>{const recorder=await getLiveRecorder(source);if(recorder)await recorder.record(frozen);}).catch(e=>console.error('live-history:',e.message));
+  const next=before.then(async()=>{const recorder=await getLiveRecorder(source);if(recorder)await recorder.record(frozen,Date.now(),force);}).catch(e=>console.error('live-history:',e.message));
   liveHistoryQueues.set(source,next);
 }
 if(liveTimingEnabled()){
@@ -854,6 +854,16 @@ app.get(['/api/live/status','/api/live/state'],(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!liveTimingEnabled())return res.json({enabled:false,status:{status:'offline',mode:'disabled'},server:{},session:{},cars:[]});
   res.json({enabled:true,...liveSnapshot(req.query.source)});
+});
+app.get('/api/live/map',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  try{
+    const snap=liveSnapshot(req.query.source),root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+    if(snap.status?.mode!=='acsp'||!path.isAbsolute(root))return res.json({available:false,reason:'Carte disponible uniquement pour un collecteur local actif.'});
+    const content=String(process.env.GDSP_AC_CONTENT_ROOT||path.join(root,'..','content')).trim(),extra=String(process.env.GDSP_AC_EXTRA_CONTENT_ROOT||'').trim();
+    const map=await require('./tools/live-timing/track-map').trackMap([content,extra],snap.server?.track,snap.server?.trackConfig);
+    res.json({available:true,...map,sourceTrack:snap.server.track,sourceLayout:snap.server.trackConfig||''});
+  }catch(e){res.json({available:false,reason:'Géométrie de circuit indisponible ou ambiguë.'});}
 });
 app.get('/api/live/snapshot',(req,res)=>{
   res.set('Cache-Control','no-store');

@@ -88,6 +88,8 @@ function computeStandings(state, now = Date.now()) {
       gear: c.gear ?? null,
       rpm: c.rpm ?? null,
       speedKmh: speedKmh != null ? Math.round(speedKmh) : null,
+      topSpeedKmh: Number.isFinite(c.topSpeedKmh) ? Math.round(c.topSpeedKmh) : null,
+      worldPosition: c.connected && c.pos && c.lastUpdateAt && now-c.lastUpdateAt<5000 && [c.pos.x,c.pos.z].every(Number.isFinite) ? {x:c.pos.x,z:c.pos.z} : null,
       inPit: !!c.inPit,
       pitStops: c.pitStops || 0,
       gapMs: estGapMs,
@@ -152,6 +154,9 @@ class LiveTimingCollector extends EventEmitter {
   }
 
   reset() {
+    this.savedTimes = new Map();
+    this.driverSerial = 0;
+    this.lapEpoch = 0;
     this.state = {
       protocolVersion: null,
       serverName: null,
@@ -184,7 +189,7 @@ class LiveTimingCollector extends EventEmitter {
     if (!c) {
       c = {
         carId, name: null, team: null, model: null, skin: null, guid: null,
-        connected: true,
+        connected: false, instance: ++this.driverSerial,
         spline: 0, laps: 0, lastLapMs: null, lastLapCuts: 0,
         bestLapMs: null, bestLapCuts: 0, totalMs: 0,
         pos: null, gear: null, rpm: null, speedKmh: null,
@@ -194,6 +199,34 @@ class LiveTimingCollector extends EventEmitter {
       this.state.cars.set(carId, c);
     }
     return c;
+  }
+
+  resultKey(car) {
+    if(!car || !car.model || !car.name) return null;
+    // Jamais fusionner deux noms identiques sans identité stable.
+    return JSON.stringify([car.guid ? 'guid:'+car.guid : 'instance:'+car.instance,car.model]);
+  }
+
+  rememberLap(car, lapTimeMs, cuts, lapCount) {
+    if(!Number.isFinite(lapTimeMs)||lapTimeMs<=0)return;
+    const key=this.resultKey(car);if(!key)return;
+    let row=this.savedTimes.get(key);
+    if(!row){row={name:car.name,team:car.team||'',model:car.model,laps:0,lastLapMs:null,bestLapMs:null,topSpeedKmh:null,pitStops:car.pitStops||0,identityUncertain:!car.guid,lastToken:null};this.savedTimes.set(key,row);}
+    const token=Number.isFinite(lapCount) ? [this.lapEpoch,car.instance,lapCount,lapTimeMs].join(':') : null;
+    if(token && token===row.lastToken)return;
+    row.lastToken=token;row.name=car.name;row.team=car.team||row.team;row.laps++;
+    row.lastLapMs=lapTimeMs;row.lastLapCuts=cuts||0;
+    if(!cuts && lapTimeMs>0 && (!row.bestLapMs||lapTimeMs<row.bestLapMs))row.bestLapMs=lapTimeMs;
+    if(Number.isFinite(car.topSpeedKmh))row.topSpeedKmh=Math.max(row.topSpeedKmh||0,car.topSpeedKmh);
+  }
+
+  storedResults() {
+    const active=new Set();for(const car of this.state.cars.values())if(car.connected){const key=this.resultKey(car);if(key)active.add(key);if(car.model)active.add(JSON.stringify(['instance:'+car.instance,car.model]));}
+    return [...this.savedTimes.entries()].map(([key,row])=>({
+      name:row.name,team:row.team,model:row.model,laps:row.laps,lastLapMs:row.lastLapMs,lastLap:fmtMs(row.lastLapMs),
+      bestLapMs:row.bestLapMs,bestLap:fmtMs(row.bestLapMs),lastLapCuts:row.lastLapCuts||0,pitStops:row.pitStops,topSpeedKmh:row.topSpeedKmh==null?null:Math.round(row.topSpeedKmh),
+      identityUncertain:row.identityUncertain,connected:active.has(key)
+    })).sort((a,b)=>(a.bestLapMs||Infinity)-(b.bestLapMs||Infinity)||a.name.localeCompare(b.name));
   }
 
   start() {
@@ -296,6 +329,8 @@ class LiveTimingCollector extends EventEmitter {
         const restarted = previousElapsed != null && payload.elapsedMs + 2000 < previousElapsed;
         const changed = !state.session || previousIndex !== payload.sessionIndex || restarted;
         if(changed && state.session) this.emit('beforeSessionChange',this.snapshot());
+        if(changed) this.lapEpoch++;
+        if(state.track && payload.track && (state.track!==payload.track || (state.trackConfig||'')!==(payload.trackConfig||''))) this.savedTimes.clear();
         state.sessionElapsedMs = payload.elapsedMs;
         state.serverName = payload.serverName || state.serverName;
         state.track = payload.track || state.track;
@@ -334,7 +369,8 @@ class LiveTimingCollector extends EventEmitter {
         break;
       }
       case 'new_connection': {
-        const car = this.car(payload.carId);
+        let car = this.car(payload.carId);
+        if(!car.connected || (payload.driverGuid && car.guid && payload.driverGuid!==car.guid)){state.cars.delete(payload.carId);car=this.car(payload.carId);}
         car.connected = true;
         car.name = payload.driverName || car.name;
         car.guid = payload.driverGuid || car.guid;
@@ -347,18 +383,29 @@ class LiveTimingCollector extends EventEmitter {
       }
       case 'closed_connection': {
         const car = this.car(payload.carId);
+        if(payload.driverGuid && car.guid && payload.driverGuid!==car.guid) break;
         car.connected = false;
         if (payload.driverName) car.name = payload.driverName;
         this.log('driver', `${car.name || 'Pilote #' + payload.carId} quitte le serveur`, { carId: payload.carId });
         break;
       }
       case 'car_info': {
-        const car = this.car(payload.carId);
+        let car = this.car(payload.carId);
+        if(payload.isConnected && payload.driverGuid && car.guid && payload.driverGuid!==car.guid){state.cars.delete(payload.carId);car=this.car(payload.carId);}
         if (payload.driverName) car.name = payload.driverName;
         if (payload.team) car.team = payload.team;
         if (payload.model) car.model = payload.model;
         if (payload.skin) car.skin = payload.skin;
-        if (payload.driverGuid) car.guid = payload.driverGuid;
+        if (payload.driverGuid) {
+          // Promouvoir seulement la même instance continue ; ne pas fusionner
+          // par nom ni écraser une éventuelle entrée connue précédemment.
+          if(!car.guid && car.model){
+            const from=JSON.stringify(['instance:'+car.instance,car.model]),to=JSON.stringify(['guid:'+payload.driverGuid,car.model]);
+            const row=this.savedTimes.get(from);
+            if(row&&!this.savedTimes.has(to)){this.savedTimes.delete(from);row.identityUncertain=false;this.savedTimes.set(to,row);}
+          }
+          car.guid = payload.driverGuid;
+        }
         car.connected = payload.isConnected;
         break;
       }
@@ -377,6 +424,8 @@ class LiveTimingCollector extends EventEmitter {
         car.rpm = payload.engineRpm;
         const v = payload.velocity || { x: 0, y: 0, z: 0 };
         car.speedKmh = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) * 3.6;
+        if(Number.isFinite(car.speedKmh))car.topSpeedKmh=Math.max(car.topSpeedKmh||0,car.speedKmh);
+        const existing=this.savedTimes.get(this.resultKey(car));if(existing&&Number.isFinite(car.topSpeedKmh))existing.topSpeedKmh=Math.max(existing.topSpeedKmh||0,car.topSpeedKmh);
         car.connected = true;
         car.lastUpdateAt = Date.now();
         // Détection stand : immobile plusieurs secondes dans le tour.
@@ -385,6 +434,7 @@ class LiveTimingCollector extends EventEmitter {
           else if (!car.inPit && Date.now() - car.slowSince > PIT_MIN_MS) {
             car.inPit = true;
             car.pitStops = (car.pitStops || 0) + 1;
+            const stored=this.savedTimes.get(this.resultKey(car));if(stored)stored.pitStops++;
             this.log('pit', `${car.name || 'Voiture #' + car.carId} aux stands`, { carId: car.carId });
           }
         } else {
@@ -417,6 +467,7 @@ class LiveTimingCollector extends EventEmitter {
           if (entry.completed) car.connected = true;
           if (!car.name) this.requestCarInfo(entry.carId);
         }
+        this.rememberLap(author,payload.lapTimeMs,payload.cuts,payload.cars.find(e=>e.carId===payload.carId)?.laps);
         this.log('lap', `${author.name || 'Voiture #' + payload.carId} — tour ${fmtMs(payload.lapTimeMs)}${payload.cuts ? ' (coupures)' : ''}`, { carId: payload.carId });
         break;
       }
@@ -537,6 +588,7 @@ class LiveTimingCollector extends EventEmitter {
         elapsed: this.state.sessionStartedAt ? fmtMs(now - this.state.sessionStartedAt) : null
       },
       cars: rows,
+      storedTimes: this.storedResults(),
       bestLaps,
       referenceLapMs,
       events: this.state.events,

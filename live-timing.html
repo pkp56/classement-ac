@@ -37,17 +37,18 @@
   .kpi .label{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--grey);font-weight:bold}
   .kpi strong{display:block;font-family:Impact,sans-serif;font-size:24px;font-weight:normal;letter-spacing:.5px;margin-top:3px;line-height:1.15}
   .kpi small{color:var(--grey);font-size:11px}
-  .grid{display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start}
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
   .panel{background:var(--paper);border:1px solid var(--line)}
   .panel h3{font-family:Impact,sans-serif;font-size:16px;letter-spacing:1.2px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line);text-transform:uppercase;font-weight:normal;display:flex;justify-content:space-between;align-items:center}
   .panel h3 .tag{font-size:9px;letter-spacing:1.4px;background:#d6c6a4;padding:4px 7px}
+  #standings,#storedStandings{overflow-x:auto}
   table{width:100%;border-collapse:collapse;font-size:13px}
   thead th{background:var(--ink);color:var(--cream);font-size:10px;letter-spacing:1.1px;text-transform:uppercase;padding:8px 8px;text-align:right;font-weight:bold;white-space:nowrap;position:sticky;top:0}
   thead th:nth-child(1),thead th:nth-child(2){text-align:left}
   tbody td{padding:7px 8px;border-bottom:1px solid #e0d6bf;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   tbody td:nth-child(1),tbody td:nth-child(2){text-align:left}
   tbody tr:nth-child(even){background:#f2ead8}
-  tbody tr.best td:nth-child(7){color:#2f6b39;font-weight:bold}
+  tbody tr.best td:nth-child(10){color:#2f6b39;font-weight:bold}
   tbody tr.pit td:nth-child(2)::after{content:' PIT';font-size:9px;background:#9c3021;color:#fff;padding:1px 4px;margin-left:6px;letter-spacing:1px;vertical-align:middle}
   tbody tr.off td{opacity:.45}
   .pos{font-family:Impact,sans-serif;font-size:16px}
@@ -108,7 +109,7 @@
     </div>
   </div>
 
-  <div class="kpis">
+  <div class="kpis" id="liveKpis">
     <div class="kpi"><div class="label">Serveur</div><strong id="kServer">—</strong><small id="kTrack">circuit inconnu</small></div>
     <div class="kpi"><div class="label">Session</div><strong id="kSession">—</strong><small id="kSessionSub">en attente</small></div>
     <div class="kpi"><div class="label">Pilotes en piste</div><strong id="kDrivers">0</strong><small id="kDriversSub">—</small></div>
@@ -116,13 +117,21 @@
     <div class="kpi"><div class="label">Météo</div><strong id="kWeather">—</strong><small id="kTemp">—</small></div>
   </div>
 
-  <div class="grid">
-    <div class="panel">
+  <div class="grid" id="liveGrid">
+    <div>
+    <div class="panel" id="liveStandingsPanel">
       <h3>Classement en direct <span class="tag" id="rowCount">0 voiture</span></h3>
       <div class="timing-hint">Le potentiel = somme des meilleurs secteurs personnels (données CSP). Secteurs visibles après un tour bouclé et l'envoi du script de télémétrie.</div>
       <div id="standings"><div class="empty">En attente des données du serveur…</div></div>
     </div>
-    <div>
+    <div class="panel" style="margin-top:18px">
+      <h3>Temps conservés <span class="tag" id="storedCount">0 pilote</span></h3>
+      <div class="timing-hint">Pilotes déconnectés ayant bouclé un tour observé. Le total couvre les tours reçus depuis le démarrage du collecteur ; les secteurs et données absentes ne sont pas inventés.</div>
+      <div id="storedStandings"><div class="empty">Aucun temps conservé pour le moment.</div></div>
+    </div>
+    </div>
+    <div id="liveSidebar">
+      <div class="panel" style="margin-bottom:18px"><h3>Carte en direct</h3><div id="trackMap" class="empty">Recherche du tracé…</div></div>
       <div class="panel" style="margin-bottom:18px">
         <h3>Meilleurs tours</h3>
         <div class="bestlap" id="bestLaps"><div class="empty">—</div></div>
@@ -141,7 +150,7 @@
   <div class="panel" style="margin-top:18px" id="historyPanel">
     <h3>Historique des séances <span class="tag">persistant</span></h3>
     <div style="padding:10px 16px">
-      <p class="note" style="margin:0 0 10px">Choisis une séance observée : les archives conservent la dernière photo reçue, pas des résultats officiels. Les écarts sont estimés et les données non reçues ne peuvent pas être reconstruites.</p>
+      <p class="note" style="margin:0 0 10px">Choisis une séance observée : seules les données de temps conservés sont archivées, y compris celles des pilotes encore connectés à la fin. Ce ne sont pas des résultats officiels.</p>
       <div id="history"><div class="empty">Chargement…</div></div>
       <div id="historyBanner" style="display:none;margin-top:12px"></div>
     </div>
@@ -209,7 +218,13 @@
     $('kWeather').textContent = d.server && d.server.weather ? d.server.weather : (d.server && d.server.ambientTemp != null ? d.server.ambientTemp + '°C' : '—');
     $('kTemp').textContent = d.server && d.server.roadTemp != null ? 'air ' + d.server.ambientTemp + '° / piste ' + d.server.roadTemp + '°' : '—';
 
+    $('liveGrid').style.gridTemplateColumns = viewingHistory ? 'minmax(0,1fr)' : '';
+    $('liveStandingsPanel').style.display = viewingHistory ? 'none' : '';
+    $('liveSidebar').style.display = viewingHistory ? 'none' : '';
+    $('liveKpis').style.display = viewingHistory ? 'none' : '';
     renderStandings(d);
+    renderStored(d);
+    renderTrackMap(d);
     renderBest(d);
     maybeLoadSectorTimes(d);
     renderFeed(d);
@@ -357,6 +372,7 @@
         sectorRows = Array.isArray(j.drivers) ? j.drivers : [];
         if (last && !viewingHistory) {
           renderStandings(last);
+          renderStored(last);
           renderBest(last);
         }
       })
@@ -365,7 +381,7 @@
   }
 
   function renderStandings(d) {
-    var cars = Array.isArray(d.cars) ? d.cars : [];
+    var cars = Array.isArray(d.cars) ? d.cars.filter(function(c){return c.connected === true;}) : [];
     $('rowCount').textContent = cars.length + (cars.length > 1 ? ' voitures' : ' voiture');
     if (!cars.length) {
       $('standings').innerHTML = '<div class="empty">Aucune voiture connectée pour le moment.</div>';
@@ -375,7 +391,7 @@
       var ms = bestLapTimeFor(c, sectorRecordFor(c.name, c.model));
       return ms != null && ms < fastest ? ms : fastest;
     }, Infinity);
-    var html = '<table><thead><tr><th>#</th><th>Pilote</th><th>Tours</th><th>Écart</th><th>Interv.</th><th>Dernier</th><th>Meilleur tour</th><th>Potentiel</th><th>Vit.</th></tr></thead><tbody>';
+    var html = '<table><thead><tr><th>#</th><th>Pilote</th><th>Pneus</th><th>Tour en cours</th><th>Delta</th><th>Tours</th><th>Écart</th><th>Interv.</th><th>Dernier</th><th>Meilleur tour</th><th>Potentiel</th><th>Arrêts observés</th><th>Vit.</th><th>Vitesse max.</th><th>Ping</th></tr></thead><tbody>';
     cars.forEach(function (c) {
       var timing = sectorRecordFor(c.name, c.model);
       var bestSectors = timing && timing.bestSectorsMs;
@@ -388,6 +404,7 @@
       html += '<tr class="' + cls + '">' +
         '<td class="pos">' + (c.position == null ? '—' : c.position) + '</td>' +
         '<td><span class="drv"><b>' + esc(c.name) + '</b><span>' + esc(c.team || c.model || '') + '</span></span></td>' +
+        '<td>—</td><td>' + (c.currentLapMs != null ? esc(formatTimingMs(c.currentLapMs)) : '—') + '</td><td>—</td>' +
         '<td>' + (c.laps || 0) + '</td>' +
         '<td>' + esc(c.gap === 'leader' ? '—' : c.gap) + '</td>' +
         '<td class="muted">' + esc(c.position === 1 ? '' : c.interval || '') + '</td>' +
@@ -397,11 +414,57 @@
           renderSectorChips(timing && timing.bestLapSectorsMs, bestSectors) + '</td>' +
         '<td class="potential-cell"><span class="time-main">' + esc(potential) + '</span>' +
           renderSectorChips(bestSectors, bestSectors) + '</td>' +
-        '<td>' + (c.speedKmh != null ? c.speedKmh : '—') + '</td>' +
+        '<td>' + (c.pitStops != null ? esc(c.pitStops) : '—') + '</td>' +
+        '<td>' + (c.speedKmh != null ? esc(c.speedKmh) : '—') + '</td>' +
+        '<td>' + (c.topSpeedKmh != null ? esc(c.topSpeedKmh) : '—') + '</td><td>—</td>' +
         '</tr>';
     });
     html += '</tbody></table>';
     $('standings').innerHTML = html;
+  }
+
+  var mapContext = '', mapData = null, mapLoading = false;
+  function renderTrackMap(d) {
+    if (viewingHistory) return;
+    var server=d.server||{}, status=d.status||{};
+    if (status.mode !== 'acsp' || !server.track) { $('trackMap').textContent='Carte indisponible : positions locales non reçues.'; return; }
+    var context=activeSource+'|'+server.track+'|'+(server.trackConfig||'');
+    if(context!==mapContext){
+      mapContext=context;mapData=null;mapLoading=true;
+      fetch('/api/live/map'+(activeSource?'?source='+encodeURIComponent(activeSource):''),{cache:'no-store'})
+        .then(function(r){return r.json();}).then(function(result){if(mapContext!==context)return;if(result.available && (result.sourceTrack!==server.track || result.sourceLayout!==(server.trackConfig||'')))result={available:false};mapData=result;mapLoading=false;if(last&&!viewingHistory)renderTrackMap(last);})
+        .catch(function(){if(mapContext===context){mapData={available:false};mapLoading=false;if(last&&!viewingHistory)renderTrackMap(last);}});
+    }
+    if(mapLoading){$('trackMap').textContent='Chargement du tracé…';return;}
+    if(!mapData || !mapData.available){$('trackMap').textContent='Carte indisponible : géométrie de cette variante introuvable ou ambiguë.';return;}
+    var p=mapData.projection;
+    if(!p || ![p.scale,p.originX,p.originY].every(Number.isFinite)){$('trackMap').textContent='Projection du circuit indisponible.';return;}
+    var html='<svg role="img" aria-label="Carte du circuit et positions en direct" viewBox="0 0 1000 560" style="width:100%;display:block;background:#f6f1e5">'+
+      '<path d="'+esc(mapData.path)+'" fill="none" stroke="#8b8f89" stroke-width="13" stroke-linejoin="round"/><path d="'+esc(mapData.path)+'" fill="none" stroke="#fff" stroke-width="6" stroke-linejoin="round"/>';
+    (d.cars||[]).forEach(function(car){
+      var pos=car.worldPosition;if(!car.connected || !pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.z))return;
+      var x=pos.x*p.scale+p.originX,y=pos.z*p.scale+p.originY;
+      if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||x>1000||y<0||y>560)return;
+      html+='<g><circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="8" fill="#ac372e" stroke="#fff" stroke-width="3"/><text x="'+(x+10).toFixed(1)+'" y="'+(y-10).toFixed(1)+'" font-size="17" fill="#152a2d" paint-order="stroke" stroke="#fff" stroke-width="4">'+esc(car.name||'Pilote')+'</text></g>';
+    });
+    $('trackMap').innerHTML=html+'</svg><div class="timing-hint">Position ACSP récente sur la ligne AI locale. Les positions non reçues ne sont pas affichées.</div>';
+  }
+
+  function renderStored(d) {
+    var rows = Array.isArray(d.storedTimes) ? d.storedTimes : (Array.isArray(d.cars) ? d.cars.filter(function(c){return c.laps > 0 || c.bestLapMs;}) : []);
+    if (!viewingHistory) rows = rows.filter(function(c){return c.connected === false;});
+    $('storedCount').textContent = rows.length + (rows.length > 1 ? ' pilotes' : ' pilote');
+    if (!rows.length) { $('storedStandings').innerHTML = '<div class="empty">Aucun temps conservé pour le moment.</div>'; return; }
+    rows = rows.slice().sort(function(a,b){return (a.bestLapMs||Infinity)-(b.bestLapMs||Infinity);});
+    var html = '<table><thead><tr><th>Pilote</th><th>Voiture</th><th>Pneus</th><th>Tour en cours</th><th>Delta</th><th>Dernier tour</th><th>Meilleur tour</th><th>Potentiel</th><th>Écart</th><th>Tours observés</th><th>Arrêts observés</th><th>Vitesse max.</th><th>Ping</th></tr></thead><tbody>';
+    rows.forEach(function(c){
+      // Aucun secteur CSP n'est archivé : ne pas attribuer ceux d'un autre pilote.
+      var potential = '—';
+      html += '<tr><td><b>' + esc(c.name || 'Pilote inconnu') + '</b>' + (c.identityUncertain ? ' <small>(identité non confirmée)</small>' : '') + '</td>' +
+        '<td>' + esc(c.model || '—') + '</td><td>—</td><td>—</td><td>—</td><td>' + esc(c.lastLap || '—') + (c.lastLapCuts ? ' c' : '') + '</td><td>' + esc(c.bestLap || '—') + '</td><td>' + esc(potential) + '</td><td>—</td>' +
+        '<td>' + (c.laps != null && Number.isFinite(Number(c.laps)) ? Number(c.laps) : '—') + '</td><td>' + (c.pitStops != null ? esc(c.pitStops) : '—') + '</td><td>' + (c.topSpeedKmh != null ? esc(c.topSpeedKmh) + ' km/h' : '—') + '</td><td>—</td></tr>';
+    });
+    $('storedStandings').innerHTML = html + '</tbody></table>';
   }
 
   function renderBest(d) {

@@ -157,11 +157,11 @@ finie, il ne restait rien. **Chaque séance vue par le site est maintenant
 conservée** (agent push, UDP local ou source HTTP) :
 
 * identité (serveur, circuit, type, début/fin), nombre de pilotes ;
-* **classement final complet** (positions, tours, écarts, meilleur tour) ;
-* meilleurs tours et fil d'événements (150 derniers).
+* pour les anciennes archives : dernière photo reçue et fil d’événements disponible ;
+* pour les nouvelles archives ACSP : tableau des temps observés, y compris les pilotes encore connectés à la dernière observation ; ce n’est pas un classement officiel.
 
 Sur la page `/live-timing`, le panneau **« Historique des séances »** liste
-les séances les plus récentes ; « Ouvrir » rejoue le classement conservé
+les séances les plus récentes ; « Ouvrir » montre les temps conservés
 (bandeau « Archives »), « Retour au direct » revient au flux temps réel.
 
 Stockage : PostgreSQL (`LIVE_DATABASE_URL`, sinon `DATABASE_URL`, table
@@ -304,3 +304,11 @@ Ouvre `/live-timing` : le classement se remplit en quelques secondes.
 Les collecteurs locaux CM1 et CM2 enregistrent séparément leurs séances. Lorsqu'une séance change ou redémarre avec le même index, la dernière photo observée est conservée avant la réinitialisation ; une nouvelle archive est créée pour la nouvelle séance. La page propose un menu avec date, serveur, circuit, variante et voitures identifiées. Les séances sont proposées par pages, les anciennes ne sont pas supprimées. Les archives déjà existantes restent consultables.
 
 Une archive contient les données observées, pas une reconstruction complète ni un classement officiel : les écarts restent estimés, les secteurs CSP du direct ne sont pas archivés, et le fil est limité aux événements disponibles dans les instantanés (150 maximum). Une coupure de réception ou un arrêt brutal de GDSP peut faire perdre les données depuis la dernière écriture (au maximum normalement dix secondes), et la fin d'une séance peut rester inconnue. Après redémarrage de GDSP, une nouvelle archive peut être créée pour la même séance encore en cours. Aucune archive ne peut restituer des données non reçues avant cette évolution. Vérifier les droits et sauvegardes du fichier ou de la base de données configurée.
+
+### Temps des pilotes déconnectés et carte
+
+Le premier tableau affiche seulement les voitures déclarées connectées. Le second conserve les pilotes dont au moins un tour a été observé puis qui sont déconnectés, par identité ACSP et voiture ; une identité absente n'est jamais fusionnée par nom. Les tours et arrêts sont ceux observés depuis le démarrage du collecteur, la vitesse maximale est échantillonnée, et les valeurs non reçues restent « — ». Les données restent visibles lors des boucles de séance sur le même circuit. Les nouvelles archives sauvegardent ce tableau de temps, en y incluant aussi les pilotes encore connectés lors de la dernière observation ; elles ne sauvegardent pas le tableau direct. Les anciennes archives restent inchangées.
+
+Le contenu du second tableau est en mémoire pendant le direct : après redémarrage de GDSP, il repart de zéro, mais les photos déjà archivées restent accessibles. Une interruption réseau ne permet pas de prouver qu'acServer a été arrêté : le collecteur ne supprime pas automatiquement les temps sur ce seul signal. Les données non observées, notamment avant démarrage de GDSP, ne peuvent pas être récupérées.
+
+La carte ne s'affiche que pour un collecteur local ACSP et une géométrie `fast_lane.ai` lisible et non ambiguë pour le circuit et la variante dans les racines configurées. Les coordonnées x/z reçues récemment sont projetées sur la ligne AI ; ce n'est pas une carte détaillée des limites de piste. En cas d'absence ou de plusieurs copies possibles, elle est indiquée indisponible au lieu d'estimer une position. Tester sur le PC réel, et vérifier que chaque copie de circuit correspond à celle utilisée par le serveur.
