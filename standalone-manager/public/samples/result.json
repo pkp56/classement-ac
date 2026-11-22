@@ -1,0 +1,1 @@
+{"Type":"RACE","Date":"2026-12-03T20:00:00Z","TrackName":"ks_monza66","TrackConfig":"junior","Cars":[{"CarId":0,"Driver":{"Name":"Alice Exemple","Guid":"11111111111111111"}},{"CarId":1,"Driver":{"Name":"Bob Exemple","Guid":"22222222222222222"}}],"Result":[{"CarId":0,"NumLaps":5},{"CarId":1,"NumLaps":5}]}
