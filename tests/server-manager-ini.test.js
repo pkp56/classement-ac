@@ -61,3 +61,18 @@ test('Protège le mode de course et les valeurs de durée conservées par CM',()
  assert.throws(()=>patchIni(text,[{section:'RACE',key:'LAPS',value:'0'}]),/Changement de mode/);
  assert.match(patchIni(text,[{section:'RACE',key:'LAPS',value:'12'}]),/LAPS=12\nTIME=0\n__CM_TIME_OFF=15/);
 });
+
+test('Deuxième course native : ajout explicite, validation et conservation des autres champs',()=>{
+ const {inspectIni}=require('../tools/server-manager/ini');
+ const {inspect,preview}=require('../tools/server-manager/draft');
+ const text='[SERVER]\r\nTRACK=monza\r\nUDP_PORT=9601\r\nPASSWORD=secret\r\n[RACE]\r\nLAPS=0\r\nTIME=15\r\n';
+ const changes=[{section:'SERVER',key:'CONFIG_TRACK',value:'junior'},{section:'SERVER',key:'REVERSED_GRID_RACE_POSITIONS',value:'-1'}];
+ const result=patchIni(text,changes);
+ assert.match(result,/CONFIG_TRACK=junior\r\nREVERSED_GRID_RACE_POSITIONS=-1\r\n/);
+ assert.match(result,/UDP_PORT=9601\r\nPASSWORD=secret/);
+ assert.equal(inspectIni(result).SERVER.REVERSED_GRID_RACE_POSITIONS,'-1');
+ assert.equal(preview(text,inspect(text).revision,changes).changes[1].after,'-1');
+ for(const value of ['-2','201','1.5','a','1\nPORT=1'])assert.throws(()=>patchIni(text,[{section:'SERVER',key:'REVERSED_GRID_RACE_POSITIONS',value}]));
+ assert.throws(()=>patchIni(text+'[SERVER]\nNAME=x\n',[changes[1]]),/ambigu/);
+ assert.throws(()=>patchIni(text.replace('TRACK=monza','REVERSED_GRID_RACE_POSITIONS=0\r\nREVERSED_GRID_RACE_POSITIONS=1\r\nTRACK=monza'),[changes[1]]),/ambigu/);
+});

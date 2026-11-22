@@ -118,3 +118,12 @@ test('Bouton Cup prépare puis transmet seulement les modifications au contrôle
  assert.equal(payload.configChanges.find(x=>x.section==='QUALIFY'&&x.key==='ENABLED').value,'1');assert.equal(payload.configChanges.find(x=>x.key==='TIME').value,'10');
  assert.equal(payload.raceMode.mode,'time');assert.equal(payload.raceMode.value,'15');assert.equal(payload.entryChanges.length,2);assert.equal(payload.entryChanges[1].operation,'add');
 });
+
+test('La seconde course native est explicite et annonce les limites de durée',()=>{
+ const html=editor.render({settings:{SERVER:{TRACK:'monza'}},extra:{},slots:[]},null);
+ assert.match(html,/data-cm-key="REVERSED_GRID_RACE_POSITIONS" data-cm-original=""/);
+ assert.match(html,/Non indiqué dans le fichier/);assert.match(html,/grille inversée complète/);
+ assert.match(html,/pas 15 puis 25 minutes/);assert.match(html,/aucun fichier|rien n’est enregistré/);
+ const existing=editor.render({settings:{SERVER:{REVERSED_GRID_RACE_POSITIONS:'8'}},extra:{},slots:[]},null);
+ assert.match(existing,/8 positions inversées \(actuel\)/);
+});
