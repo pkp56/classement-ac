@@ -58,3 +58,17 @@ test('La modification des voitures autorisées filtre les choix des places et co
  onChange({target:{matches:s=>s==='[data-cm-allowed]',selectedOptions:[{value:'car_a'}]}});
  assert.equal(hidden.value,'car_a');assert.equal(select.value,'car_b');assert.match(html,/car_b \(actuelle, non autorisée\)/);assert.match(html,/value="car_a"/);
 });
+test('Le bouton ajoute explicitement des places au brouillon, sans écriture implicite',async()=>{
+ const buttons={};for(const id of ['#cm-preview-btn','#cm-check-btn','#cm-save-btn','#cm-add-slot-btn'])buttons[id]={disabled:false,addEventListener(_event,fn){this.click=fn;}};
+ const out={textContent:''},added={innerHTML:''},model={value:'car_a'},skin={value:'red'};let onClick;
+ const items={'#cm-preview':out,'#cm-added-slots':added,'[data-cm-add-model]':model,'[data-cm-add-skin]':skin};
+ const container={addEventListener(type,fn){if(type==='click')onClick=fn;},querySelector(s){return buttons[s]||items[s]||null;},querySelectorAll(){return []}};
+ let calls=0,payload;
+ editor.attach(container,{cars:[{id:'car_a',skins:['red']}]},{slots:[{id:0}],settings:{SERVER:{CARS:'car_a'}},revision:'r',entryRevision:'e'},async p=>{calls++;payload=p;return {configChanges:[],slotChanges:[],weatherChanges:[]}},async()=>{throw Error('save imprévu')},'local1');
+ await buttons['#cm-check-btn'].click({target:buttons['#cm-check-btn']});assert.equal(calls,0);assert.match(out.textContent,/Aucun changement/);
+ buttons['#cm-add-slot-btn'].click();buttons['#cm-add-slot-btn'].click();assert.match(added.innerHTML,/Place ajoutée au brouillon/);
+ buttons['#cm-preview-btn'].click();assert.equal((out.textContent.match(/Nouvelle place/g)||[]).length,2);
+ await buttons['#cm-check-btn'].click({target:buttons['#cm-check-btn']});assert.equal(calls,1);assert.equal(payload.entryChanges.length,2);assert.equal(payload.entryChanges[0].id,1);assert.equal(payload.entryChanges[1].id,2);
+ onClick({target:{closest:()=>({dataset:{cmUndoAdd:'0'}})}});
+ await buttons['#cm-check-btn'].click({target:buttons['#cm-check-btn']});assert.equal(payload.entryChanges.length,1);assert.equal(payload.entryChanges[0].id,1);
+});
