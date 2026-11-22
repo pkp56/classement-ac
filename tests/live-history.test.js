@@ -179,3 +179,34 @@ test("l'amorçage de l'agent (rien reçu d'acServer) n'ouvre pas de séance fant
   assert.equal(list.length, 1);
   assert.equal(list[0].track, 'oesterreichring1979');
 });
+
+test('Deux boucles identiques dans la même minute créent des archives distinctes avec leurs voitures',async()=>{
+ const store=tmpHistory(),rec=new LiveHistoryRecorder(store,{writeIntervalMs:0});
+ const t=Date.parse('2026-11-14T20:00:00Z');
+ await rec.record(snap({session:{type:'race',index:2,elapsedMs:50000}}),t);
+ await rec.record(snap({session:{type:'race',index:2,elapsedMs:55000},cars:[{name:'B',model:'alfa',laps:3,connected:true}]}),t+5000);
+ await rec.record(snap({session:{type:'race',index:2,elapsedMs:1000}}),t+6000);
+ const list=await store.list();assert.equal(list.length,2);const first=list.find(r=>r.ended_at);assert.ok(first);assert.deepEqual(first.snapshot.archiveModels,['alfa','lola']);assert.equal(first.classification[0].model,'alfa');assert.notEqual(list[0].session_key,list[1].session_key);
+});
+test('Un instantané hors ligne ne réécrit pas les dernières données reçues',async()=>{
+ const store=tmpHistory(),rec=new LiveHistoryRecorder(store,{writeIntervalMs:0});const t=Date.now();
+ await rec.record(snap(),t);await rec.record(snap({status:{mode:'offline',status:'waiting'},cars:[]}),t+20000);
+ const row=(await store.list())[0];assert.equal(row.classification.length,2);assert.equal(row.last_seen_at,new Date(t).toISOString());
+});
+test('Un historique fichier illisible ne doit jamais être écrasé',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'gdsp-live-corrupt-')),file=path.join(dir,'history.json');fs.writeFileSync(file,'{corrompu');
+ assert.throws(()=>new FileLiveHistory(file),/illisible/);assert.equal(fs.readFileSync(file,'utf8'),'{corrompu');fs.rmSync(dir,{recursive:true,force:true});
+});
+test('PostgreSQL reçoit les champs JSON sous forme JSON et expose les modèles dans la liste',async()=>{
+ const {PgLiveHistory}=require('../tools/live-timing/history'),queries=[];
+ const pg=new PgLiveHistory({async query(sql,args){queries.push({sql,args});return {rows:[{id:1}]};}});
+ await pg.upsert({session_key:'a',snapshot:{archiveModels:['lola']},classification:[{model:'lola'}],best_laps:[],events:[]});
+ assert.equal(queries[0].args[1],'{"archiveModels":["lola"]}');assert.equal(queries[0].args[2],'[{"model":"lola"}]');
+ await pg.update(1,{classification:[{model:'car'}]});assert.equal(queries[1].args[0],'[{"model":"car"}]');
+ await pg.list(500);assert.match(queries[2].sql,/archive_models/);assert.match(queries[2].sql,/archive_source/);
+});
+test('Les archives anciennes restent accessibles par pagination',async()=>{
+ const store=tmpHistory();for(let i=0;i<5;i++)await store.upsert({session_key:String(i),last_seen_at:new Date(1000+i).toISOString()});
+ const page1=await store.list(2,0),page2=await store.list(2,2),page3=await store.list(2,4);
+ assert.deepEqual(page1.map(r=>r.session_key),['4','3']);assert.deepEqual(page2.map(r=>r.session_key),['2','1']);assert.equal(page3[0].session_key,'0');
+});

@@ -17,6 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const EVENTS_CAP = 150;   // fil conservé par séance : au-delà, on garde la queue
 
@@ -54,9 +55,10 @@ function classification(snap) {
 class LiveHistoryRecorder {
   constructor(store, options = {}) {
     this.store = store;
-    this.writeIntervalMs = Number(options.writeIntervalMs || 10000);
+    this.writeIntervalMs = Number(options.writeIntervalMs ?? 10000);
     this.current = null;          // { signature, id, lastWriteMs }
-    this.lastSeenBySignature = new Map();
+    this.models = new Set();
+    this.source = options.source || null;
   }
 
   /** Un instantané à prendre en compte (ou pas : le vide n'ouvre pas une séance). */
@@ -65,7 +67,7 @@ class LiveHistoryRecorder {
       if (!snap || !snap.server) return;
       // Une capture rejouée (miroir) n'est PAS une séance de plus : l'historique
       // ne doit contenir que ce qui s'est vraiment passé sur le serveur.
-      if (snap.status && snap.status.mode === 'mirror') return;
+      if (snap.status && ['mirror','offline','error'].includes(snap.status.mode)) return;
       const server = snap.server;
       const cars = Array.isArray(snap.cars) ? snap.cars : [];
       // N'ouvre une séance que sur du contenu RÉEL : un circuit connu, un type
@@ -83,14 +85,19 @@ class LiveHistoryRecorder {
 
       // La séance précédente n'est plus vue : on la ferme, en écrivant d'abord
       // sa dernière photo (la ligne d'arrivée vaut plus qu'un dixième d'écart).
-      if (this.current && this.current.signature !== signature) {
+      const prevElapsed=Number(this.lastSnap?.session?.elapsedMs),elapsed=Number(snap.session?.elapsedMs);
+      const restarted=this.lastSnap?.session?.elapsedMs != null && snap.session?.elapsedMs != null && Number.isFinite(prevElapsed) && Number.isFinite(elapsed) && elapsed + 2000 < prevElapsed;
+      if (this.current && (this.current.signature !== signature || restarted)) {
         await this.closeCurrent(nowMs, this.lastSnap);
       }
+      if (!this.current) this.models = new Set();
+      for(const car of cars)if(car.model)this.models.add(String(car.model));
+      snap = {...snap, archiveSource:this.source, archiveModels:[...this.models].sort((a,b)=>a.localeCompare(b,'fr'))};
       this.lastSnap = snap;
 
       if (!this.current) {
         const row = await this.store.upsert({
-          session_key: signature + '@' + at.slice(0, 16),   // identité stable par créneau
+          session_key: signature + '@' + crypto.randomUUID(), // pas de collision entre deux boucles
           server_name: server.name || null,
           track: server.track || null,
           track_config: server.trackConfig || null,
@@ -161,16 +168,19 @@ class FileLiveHistory {
     if (file && fs.existsSync(file)) {
       try {
         const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-        this.rows = Array.isArray(data) ? data : [];
+        if(!Array.isArray(data))throw new Error('Format invalide');
+        this.rows = data;
         for (const row of this.rows) this.byId.set(row.id, row);
-      } catch (e) { /* fichier illisible : on repart propre */ }
+      } catch (e) { throw new Error('Fichier historique illisible : aucune archive ne sera écrasée'); }
     }
   }
   _nextId() { return this.rows.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1; }
   _persist() {
     if (!this.file) return;
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    fs.writeFileSync(this.file, JSON.stringify(this.rows, null, 1));
+    const temp=this.file+'.'+crypto.randomUUID()+'.tmp';
+    try{fs.writeFileSync(temp,JSON.stringify(this.rows,null,1),{flag:'wx'});fs.renameSync(temp,this.file);}
+    finally{try{fs.unlinkSync(temp)}catch(e){if(e.code!=='ENOENT')throw e;}}
   }
   async upsert(row) {
     const existing = this.rows.find(r => r.session_key === row.session_key);
@@ -199,9 +209,11 @@ class FileLiveHistory {
     this._persist();
     return row;
   }
-  async list(limit = 50) {
+  async list(limit = 50, offset = 0) {
+    limit=Math.max(1,Math.min(500,Math.floor(Number(limit)||50)));
+    offset=Math.max(0,Math.floor(Number(offset)||0));
     return this.rows.slice().sort((a, b) =>
-      String(b.last_seen_at || '').localeCompare(String(a.last_seen_at || ''))).slice(0, limit);
+      String(b.last_seen_at || '').localeCompare(String(a.last_seen_at || '')) || b.id-a.id).slice(offset, offset+limit);
   }
   async get(id) { return this.byId.get(Number(id)) || null; }
   async closeStore() { this._persist(); }
@@ -241,10 +253,11 @@ class PgLiveHistory {
     const params = keys.map((_, i) => `$${i + 1}`).join(', ');
     const updates = keys.filter(k => k !== 'session_key' && k !== 'started_at')
       .map((k, i) => `"${k}" = $${keys.length + 1 + i}`).join(', ');
+    const value=(k,v)=>['snapshot','classification','best_laps','events'].includes(k)?JSON.stringify(v):v;
     const res = await this.pool.query(
       `INSERT INTO gdsp_live_sessions (${cols}) VALUES (${params})
        ON CONFLICT (session_key) DO UPDATE SET ${updates} RETURNING *`,
-      [...keys.map(k => row[k]), ...keys.filter(k => k !== 'session_key' && k !== 'started_at').map(k => row[k])]
+      [...keys.map(k => value(k,row[k])), ...keys.filter(k => k !== 'session_key' && k !== 'started_at').map(k => value(k,row[k]))]
     );
     return res.rows[0];
   }
@@ -254,7 +267,7 @@ class PgLiveHistory {
     const sets = keys.map((k, i) => `"${k}" = $${i + 1}`).join(', ');
     const res = await this.pool.query(
       `UPDATE gdsp_live_sessions SET ${sets} WHERE id = $${keys.length + 1} RETURNING *`,
-      [...keys.map(k => patch[k]), Number(id)]
+      [...keys.map(k => ['snapshot','classification','best_laps','events'].includes(k)?JSON.stringify(patch[k]):patch[k]), Number(id)]
     );
     return res.rows[0] || null;
   }
@@ -265,11 +278,11 @@ class PgLiveHistory {
     );
     return res.rows[0] || null;
   }
-  async list(limit = 50) {
+  async list(limit = 50, offset = 0) {
     const res = await this.pool.query(
       `SELECT id, session_key, server_name, track, track_config, session_type,
-              started_at, last_seen_at, ended_at, drivers
-       FROM gdsp_live_sessions ORDER BY last_seen_at DESC LIMIT $1`, [Math.min(500, Number(limit) || 50)]
+              started_at, last_seen_at, ended_at, drivers, classification, snapshot->'archiveModels' AS archive_models, snapshot->>'archiveSource' AS archive_source
+       FROM gdsp_live_sessions ORDER BY last_seen_at DESC, id DESC LIMIT $1 OFFSET $2`, [Math.max(1, Math.min(500, Math.floor(Number(limit) || 50))), Math.max(0, Math.floor(Number(offset) || 0))]
     );
     return res.rows;
   }

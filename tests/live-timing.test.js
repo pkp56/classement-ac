@@ -197,3 +197,29 @@ test('Les informations périodiques ne remettent pas les tours à zéro, mais un
  feed(info(1000));snap=collector.snapshot();assert.equal(snap.cars[0].laps,0);assert.equal(snap.cars[0].bestLapMs,null);assert.equal(snap.events.filter(e=>e.kind==='session').length,2);
  feed(lapCompleted(0,81000,0,[{id:0,lapMs:81000,laps:1}]));feed(info(3000,1));snap=collector.snapshot();assert.equal(snap.cars[0].laps,0);assert.equal(snap.cars[0].bestLapMs,null);
 });
+test('Le collecteur capture la dernière photo avant de remettre les données à zéro',()=>{
+ const c=new LiveTimingCollector({autoStart:false});c.socket={send(){}};const snapshots=[];
+ c.on('beforeSessionChange',snap=>snapshots.push(snap));
+ c.handleDatagram(connection(0,'Pilote',''),{});c.handleDatagram(sessionPacket(50000),{});
+ c.handleDatagram(lapCompleted(0,80000,0,[{id:0,lapMs:80000,laps:1}]),{});
+ const next=sessionPacket(1000);next[0]=EVENT.SESSION_INFO;c.handleDatagram(next,{});
+ assert.equal(snapshots.length,1);assert.equal(snapshots[0].cars[0].laps,1);assert.equal(snapshots[0].cars[0].bestLapMs,80000);assert.equal(c.snapshot().cars[0].laps,0);
+});
+
+test('Archives des deux collecteurs : sources isolées et boucle conservée',async t=>{
+ const dgram=require('node:dgram'),http=require('node:http'),{once}=require('node:events'),{spawn}=require('node:child_process'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+ async function freeUdp(){const s=dgram.createSocket('udp4');s.bind(0,'127.0.0.1');await once(s,'listening');const port=s.address().port;await new Promise(r=>s.close(r));return port;}
+ const p1=await freeUdp();let p2=await freeUdp();while(p2===p1)p2=await freeUdp();
+ const reservation=http.createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');const port=reservation.address().port;await new Promise(r=>reservation.close(r));
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'gdsp-two-history-'));const child=spawn(process.execPath,['app.js'],{cwd:path.resolve(__dirname,'..'),env:{...process.env,PORT:String(port),LIVE_TIMING_ENABLED:'1',LIVE_HISTORY_FILE:path.join(dir,'history.json'),DATABASE_URL:'',LIVE_MIRROR_FILE:'off',AC_LISTEN_PORT:String(p1),AC_PLUGIN_PORT:'1',AC_SECOND_LISTEN_PORT:String(p2),AC_SECOND_PLUGIN_PORT:'2',AC_SECOND_HTTP_URL:''}});
+ t.after(()=>{child.kill();fs.rmSync(dir,{recursive:true,force:true});});
+ await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Démarrage trop long')),15000);child.stdout.on('data',v=>{if(String(v).includes('démarré')){clearTimeout(timeout);resolve();}});child.once('exit',()=>{clearTimeout(timeout);reject(Error('Serveur arrêté'));});});
+ const udp=dgram.createSocket('udp4');t.after(()=>udp.close());const send=(buf,port)=>new Promise((resolve,reject)=>udp.send(buf,port,'127.0.0.1',e=>e?reject(e):resolve()));
+ await send(sessionPacket(50000),p1);await send(sessionPacket(50000),p2);
+ await send(connection(0,'Pilote',''),p1);await send(lapCompleted(0,80000,0,[{id:0,lapMs:80000,laps:1}]),p1);
+ const next=sessionPacket(1000);next[0]=EVENT.SESSION_INFO;await send(next,p1);
+ let rows=[];const deadline=Date.now()+5000;
+ while(Date.now()<deadline){rows=(await (await fetch(`http://127.0.0.1:${port}/api/live/sessions?limit=50`)).json()).sessions;if(rows.length>=3)break;await new Promise(r=>setTimeout(r,50));}
+ assert.equal(rows.filter(r=>r.snapshot?.archiveSource==='local1').length,2);assert.equal(rows.filter(r=>r.snapshot?.archiveSource==='local2').length,1);
+ const previous=rows.find(r=>r.snapshot?.archiveSource==='local1'&&r.ended_at);assert.ok(previous);assert.equal(previous.classification[0].laps,1);
+});
