@@ -234,7 +234,7 @@ test('Les temps restent distincts après déconnexion, réutilisation de place e
  feed(conn(EVENT.NEW_CONNECTION,0,'Bob','222222','lola'));feed(lapCompleted(0,88000,0,[{id:0,lapMs:88000,laps:1}]));
  rows=c.snapshot().storedTimes;assert.equal(rows.length,2);assert.equal(rows.find(r=>r.name==='Alice').bestLapMs,90000);assert.equal(rows.find(r=>r.name==='Bob').connected,true);assert.equal(c.snapshot().cars[0].name,'Bob');
  const again=sessionPacket(1000);again[0]=EVENT.SESSION_INFO;feed(again);feed(lapCompleted(0,87000,0,[{id:0,lapMs:87000,laps:1}]));
- rows=c.snapshot().storedTimes;assert.equal(rows.find(r=>r.name==='Bob').laps,2);assert.equal(rows.find(r=>r.name==='Bob').bestLapMs,87000);assert.doesNotMatch(JSON.stringify(c.snapshot()),/111111|222222/);
+ rows=c.snapshot().storedTimes;assert.equal(rows.find(r=>r.name==='Bob').laps,2);assert.equal(rows.find(r=>r.name==='Bob').averageLapMs,87500);assert.equal(rows.find(r=>r.name==='Bob').bestLapMs,87000);assert.doesNotMatch(JSON.stringify(c.snapshot()),/111111|222222/);
 });
 test('Sans GUID, des noms identiques ne sont pas fusionnés lors de la réutilisation de place',()=>{
  const c=new LiveTimingCollector({autoStart:false});c.socket={send(){}};const feed=buf=>c.handleDatagram(buf,{});
@@ -248,4 +248,11 @@ test('Un pilote identifiable qui revient dans une autre place conserve ses temps
  feed(sessionPacket());feed(conn(EVENT.NEW_CONNECTION,0));feed(lapCompleted(0,90000,0,[{id:0,lapMs:90000,laps:1}]));feed(conn(EVENT.CLOSED_CONNECTION,0));
  feed(conn(EVENT.NEW_CONNECTION,1));feed(lapCompleted(1,88000,0,[{id:1,lapMs:88000,laps:1}]));
  const rows=c.snapshot().storedTimes;assert.equal(rows.length,1);assert.equal(rows[0].laps,2);assert.equal(rows[0].bestLapMs,88000);assert.equal(rows[0].connected,true);
+});
+
+test('La moyenne comprend les tours avec coupures sans recompter les doublons',()=>{
+ const c=new LiveTimingCollector({autoStart:false});c.socket={send(){}};const feed=buf=>c.handleDatagram(buf,{});
+ feed(sessionPacket());feed(connection(0,'Alice',''));feed(lapCompleted(0,90000,0,[{id:0,lapMs:90000,laps:1}]));
+ const lap=lapCompleted(0,100000,1,[{id:0,lapMs:100000,laps:2}]);feed(lap);feed(lap);
+ const row=c.snapshot().storedTimes[0];assert.equal(row.laps,2);assert.equal(row.averageLapMs,95000);assert.equal(row.bestLapMs,90000);
 });

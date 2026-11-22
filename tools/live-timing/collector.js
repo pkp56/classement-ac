@@ -212,11 +212,11 @@ class LiveTimingCollector extends EventEmitter {
     if(!Number.isFinite(lapTimeMs)||lapTimeMs<=0)return;
     const key=this.resultKey(car);if(!key)return;
     let row=this.savedTimes.get(key);
-    if(!row){row={name:car.name,team:car.team||'',model:car.model,laps:0,lastLapMs:null,bestLapMs:null,topSpeedKmh:null,pitStops:car.pitStops||0,identityUncertain:!car.guid,lastToken:null};this.savedTimes.set(key,row);}
+    if(!row){row={name:car.name,team:car.team||'',model:car.model,laps:0,totalLapMs:0,lastLapMs:null,bestLapMs:null,topSpeedKmh:null,pitStops:car.pitStops||0,identityUncertain:!car.guid,lastToken:null};this.savedTimes.set(key,row);}
     const token=Number.isFinite(lapCount) ? [this.lapEpoch,car.instance,lapCount,lapTimeMs].join(':') : null;
     if(token && token===row.lastToken)return;
     row.lastToken=token;row.name=car.name;row.team=car.team||row.team;row.laps++;
-    row.lastLapMs=lapTimeMs;row.lastLapCuts=cuts||0;
+    row.totalLapMs+=lapTimeMs;row.lastLapMs=lapTimeMs;row.lastLapCuts=cuts||0;
     if(!cuts && lapTimeMs>0 && (!row.bestLapMs||lapTimeMs<row.bestLapMs))row.bestLapMs=lapTimeMs;
     if(Number.isFinite(car.topSpeedKmh))row.topSpeedKmh=Math.max(row.topSpeedKmh||0,car.topSpeedKmh);
   }
@@ -224,7 +224,7 @@ class LiveTimingCollector extends EventEmitter {
   storedResults() {
     const active=new Set();for(const car of this.state.cars.values())if(car.connected){const key=this.resultKey(car);if(key)active.add(key);if(car.model)active.add(JSON.stringify(['instance:'+car.instance,car.model]));}
     return [...this.savedTimes.entries()].map(([key,row])=>({
-      name:row.name,team:row.team,model:row.model,laps:row.laps,lastLapMs:row.lastLapMs,lastLap:fmtMs(row.lastLapMs),
+      name:row.name,team:row.team,model:row.model,laps:row.laps,averageLapMs:row.laps ? Math.round(row.totalLapMs / row.laps) : null,lastLapMs:row.lastLapMs,lastLap:fmtMs(row.lastLapMs),
       bestLapMs:row.bestLapMs,bestLap:fmtMs(row.bestLapMs),lastLapCuts:row.lastLapCuts||0,pitStops:row.pitStops,topSpeedKmh:row.topSpeedKmh==null?null:Math.round(row.topSpeedKmh),
       identityUncertain:row.identityUncertain,connected:active.has(key)
     })).sort((a,b)=>(a.bestLapMs||Infinity)-(b.bestLapMs||Infinity)||a.name.localeCompare(b.name));
