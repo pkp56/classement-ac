@@ -86,6 +86,10 @@
   @media(max-width:620px){.page{padding:14px}}
   .column-menu{padding:8px 14px;border-bottom:1px solid var(--line);font-size:12px}.column-menu summary{cursor:pointer;font-weight:bold}.column-row{display:flex;align-items:center;gap:6px;padding:4px 0}.column-row label{min-width:150px}.column-row input[type=number]{width:65px}.column-row button{cursor:pointer}.column-row span{color:var(--grey)}
   #standings table{table-layout:fixed;width:max-content} #standings th,#standings td{overflow:hidden;text-overflow:ellipsis}
+  #standings th{position:sticky;cursor:grab;touch-action:none;user-select:none;padding-right:16px}
+  #standings th.drag-source{opacity:.55} #standings th.drop-before{box-shadow:inset 4px 0 #e9b34d} #standings th.drop-after{box-shadow:inset -4px 0 #e9b34d}
+  #standings .column-resize{position:absolute;right:0;top:0;bottom:0;width:12px;cursor:col-resize;touch-action:none;border-right:2px solid #b5ab94}
+  #standings .column-resize:hover{border-color:#e9b34d}
 </style>
 </head>
 <body>
@@ -124,7 +128,7 @@
     <div class="panel" id="liveStandingsPanel">
       <h3>Classement en direct <span class="tag" id="rowCount">0 voiture</span></h3>
       <div class="timing-hint">Le potentiel = somme des meilleurs secteurs personnels (données CSP). Secteurs visibles après un tour bouclé et l'envoi du script de télémétrie.</div>
-      <details class="column-menu"><summary>Personnaliser les colonnes</summary><p>Afficher, déplacer et régler la largeur en pixels. Réglages conservés dans ce navigateur.</p><div id="columnSettings"></div><button type="button" id="resetColumns">Réinitialiser</button></details>
+      <details class="column-menu"><summary>Personnaliser les colonnes</summary><p>Choisis les colonnes à afficher. Dans le tableau, fais glisser leur nom pour les déplacer ou tire leur bord droit pour les redimensionner. Les flèches et largeurs ci-dessous restent utilisables au clavier. Réglages conservés dans ce navigateur.</p><div id="columnSettings"></div><button type="button" id="resetColumns">Réinitialiser</button></details>
       <div id="standings"><div class="empty">En attente des données du serveur…</div></div>
     </div>
     <div class="panel" style="margin-top:18px">
@@ -417,14 +421,71 @@
   $('resetColumns').addEventListener('click',function(){columns=defaultColumns();drawColumnSettings();saveColumns();});
   drawColumnSettings();
 
+  // Le conteneur reste en place pendant les rafraîchissements du direct :
+  // capturer le pointeur ici et différer le rendu du tableau pendant le geste.
+  var columnGesture = null;
+  var standingsElement = $('standings');
+  function headerAt(x,y){
+    var el=document.elementFromPoint(x,y);
+    var header=el && el.closest('th[data-column]');
+    return header && standingsElement.contains(header) ? header : null;
+  }
+  function clearDropMarker(){
+    if(columnGesture && columnGesture.marker){columnGesture.marker.classList.remove('drop-before','drop-after');columnGesture.marker=null;}
+  }
+  standingsElement.addEventListener('pointerdown',function(e){
+    if(columnGesture || !e.isPrimary || (e.pointerType==='mouse' && e.button!==0))return;
+    var header=e.target.closest('th[data-column]');
+    if(!header || !standingsElement.contains(header))return;
+    var col=columns.find(function(c){return c.id===header.dataset.column;});if(!col)return;
+    var resizing=!!e.target.closest('.column-resize');
+    columnGesture={pointerId:e.pointerId,id:col.id,mode:resizing?'resize':'move',startX:e.clientX,startY:e.clientY,width:col.width,previewWidth:col.width,header:header,marker:null,target:null,after:false,moved:false};
+    standingsElement.setPointerCapture(e.pointerId);e.preventDefault();
+  });
+  standingsElement.addEventListener('pointermove',function(e){
+    var g=columnGesture;if(!g || g.pointerId!==e.pointerId)return;
+    if(g.mode==='resize'){
+      g.previewWidth=Math.max(60,Math.min(500,Math.round(g.width+e.clientX-g.startX)));
+      var visible=columns.filter(function(c){return c.visible;}), index=visible.findIndex(function(c){return c.id===g.id;});
+      var table=standingsElement.querySelector('table'), cols=standingsElement.querySelectorAll('col');
+      if(table && cols[index]){cols[index].style.width=g.previewWidth+'px';table.style.width=(visible.reduce(function(n,c){return n+c.width;},0)-g.width+g.previewWidth)+'px';}
+      return;
+    }
+    if(!g.moved && Math.hypot(e.clientX-g.startX,e.clientY-g.startY)<5)return;
+    g.moved=true;g.header.classList.add('drag-source');clearDropMarker();g.target=null;
+    var target=headerAt(e.clientX,e.clientY);
+    if(target && target.dataset.column!==g.id){
+      g.target=target.dataset.column;g.after=e.clientX>=target.getBoundingClientRect().left+target.getBoundingClientRect().width/2;
+      g.marker=target;target.classList.add(g.after?'drop-after':'drop-before');
+    }
+  });
+  function finishColumnGesture(e,cancelled){
+    var g=columnGesture;if(!g || g.pointerId!==e.pointerId)return;
+    clearDropMarker();g.header.classList.remove('drag-source');
+    if(!cancelled && g.mode==='resize'){
+      var col=columns.find(function(c){return c.id===g.id;});if(col)col.width=g.previewWidth;
+    } else if(!cancelled && g.mode==='move' && g.moved && g.target){
+      var from=columns.findIndex(function(c){return c.id===g.id;});
+      if(from>=0){var moved=columns.splice(from,1)[0],to=columns.findIndex(function(c){return c.id===g.target;});columns.splice(to+(g.after?1:0),0,moved);}
+    }
+    columnGesture=null;
+    if(standingsElement.hasPointerCapture(e.pointerId))standingsElement.releasePointerCapture(e.pointerId);
+    drawColumnSettings();
+    if(cancelled){if(last&&!viewingHistory)renderStandings(last);}else saveColumns();
+  }
+  standingsElement.addEventListener('pointerup',function(e){finishColumnGesture(e,false);});
+  standingsElement.addEventListener('pointercancel',function(e){finishColumnGesture(e,true);});
+  standingsElement.addEventListener('lostpointercapture',function(e){finishColumnGesture(e,true);});
+
   function renderStandings(d) {
+    if(columnGesture)return;
     var cars = Array.isArray(d.cars) ? d.cars.filter(function(c){return c.connected === true;}) : [];
     $('rowCount').textContent = cars.length + (cars.length > 1 ? ' voitures' : ' voiture');
     if (!cars.length) { $('standings').innerHTML = '<div class="empty">Aucune voiture connectée pour le moment.</div>'; return; }
     var visible=columns.filter(function(c){return c.visible;});
     if(!visible.length){$('standings').innerHTML='<div class="empty">Sélectionnez au moins une colonne.</div>';return;}
     var fastestLapMs=cars.reduce(function(f,c){var ms=bestLapTimeFor(c,sectorRecordFor(c.name,c.model));return ms!=null&&ms<f?ms:f;},Infinity);
-    var html='<table style="width:'+visible.reduce(function(n,c){return n+c.width;},0)+'px"><colgroup>'+visible.map(function(c){return '<col style="width:'+c.width+'px">';}).join('')+'</colgroup><thead><tr>'+visible.map(function(c){return '<th>'+esc(columnLabel(c.id))+'</th>';}).join('')+'</tr></thead><tbody>';
+    var html='<table style="width:'+visible.reduce(function(n,c){return n+c.width;},0)+'px"><colgroup>'+visible.map(function(c){return '<col style="width:'+c.width+'px">';}).join('')+'</colgroup><thead><tr>'+visible.map(function(c){return '<th data-column="'+c.id+'" title="Faire glisser pour déplacer">'+esc(columnLabel(c.id))+'<span class="column-resize" title="Tirer pour redimensionner" aria-hidden="true"></span></th>';}).join('')+'</tr></thead><tbody>';
     cars.forEach(function(c){
       var timing=sectorRecordFor(c.name,c.model), bestSectors=timing&&timing.bestSectorsMs;
       var currentBestLapMs=bestLapTimeFor(c,timing);

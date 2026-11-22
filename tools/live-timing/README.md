@@ -166,7 +166,10 @@ les séances les plus récentes ; « Ouvrir » montre les temps conservés
 La moyenne des temps conservés porte sur les tours effectivement reçus, y compris
 les tours avec coupures, par pilote et voiture depuis le démarrage du collecteur.
 Les anciennes archives sans moyenne affichent « — ». Dans le classement direct,
-le menu de colonnes enregistre visibilité, ordre et largeur dans le navigateur.
+le menu de colonnes permet de choisir les colonnes visibles. Faire glisser un
+en-tête pour le déplacer ou son bord droit pour le redimensionner ; les flèches
+et champs du menu permettent aussi ces réglages au clavier. Visibilité, ordre et
+largeur sont enregistrés dans le navigateur.
 
 Stockage : PostgreSQL (`LIVE_DATABASE_URL`, sinon `DATABASE_URL`, table
 `gdsp_live_sessions`) ou fichier `data/live-history.json` en local. Une
