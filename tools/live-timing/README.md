@@ -153,8 +153,11 @@ Notes pratiques :
 ## 1 quater. Historique persistant
 
 Le direct ne survit pas à un redémarrage du site — et une fois la séance
-finie, il ne restait rien. **Chaque séance avec un pilote connecté identifiable observé est
-conservée** (agent push, UDP local ou source HTTP) :
+finie, il ne restait rien. **Une séance est archivée après observation d’un pilote connecté identifiable
+et d’un temps enregistré dans cette séance** (agent push, UDP local ou source
+HTTP). Une connexion seule ne suffit pas ; les temps hérités des séances
+précédentes ne suffisent pas pour les collecteurs ACSP récents. Les données
+non reçues ne peuvent pas être archivées :
 
 * identité (serveur, circuit, type, début/fin), nombre de pilotes ;
 * pour les anciennes archives : dernière photo reçue et fil d’événements disponible ;
