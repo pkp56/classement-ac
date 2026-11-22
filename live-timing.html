@@ -160,9 +160,15 @@
       <p class="note" style="margin:0 0 10px">Choisis une séance observée : seules les données de temps conservés sont archivées, y compris celles des pilotes encore connectés à la fin. Ce ne sont pas des résultats officiels.</p>
       <div id="history"><div class="empty">Chargement…</div></div>
       <div id="historyBanner" style="display:none;margin-top:12px"></div>
+      <details style="margin-top:14px"><summary>Nettoyer les archives sans tour (administrateur)</summary>
+        <p class="note">Aperçu avant suppression. Les séances en cours, sans fin connue ou ambiguës sont conservées. Les archives supprimées sont sauvegardées dans le dossier privé du serveur.</p>
+        <button type="button" id="previewEmptyArchives">Rechercher les archives sans tour</button>
+        <div id="emptyArchivesResult" aria-live="polite"></div>
+      </details>
     </div>
   </div>
 </div>
+<script src="/assets/admin-session.js?v=1"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -662,6 +668,26 @@
     html += '</select> <button type="button" class="hopen" style="font:inherit;padding:8px;cursor:pointer">Ouvrir</button> <button type="button" class="hrefresh" style="font:inherit;padding:8px;cursor:pointer">Actualiser la liste</button><button type="button" class="hprev" ' + (historyOffset ? '' : 'disabled') + '>← Plus récentes</button> <button type="button" class="hnext" ' + (list.length < historyPageSize ? 'disabled' : '') + '>Plus anciennes →</button><p class="note">Une interruption peut laisser la fin d’une séance inconnue.</p>';
     $('history').innerHTML = html;
   }
+  var emptyCandidates=[];
+  $('previewEmptyArchives').addEventListener('click',function(){
+    emptyCandidates=[];var result=$('emptyArchivesResult');result.textContent='Recherche…';
+    window.gdspAuth.fetch('/api/live/empty-archives',{cache:'no-store'})
+      .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Recherche impossible');return j;});})
+      .then(function(j){
+        emptyCandidates=j.items||[];
+        var html='<p>'+j.count+' archive(s) sans tour détectée(s)'+(j.count>emptyCandidates.length?' ; les 500 premières sont proposées':'')+'.</p>';
+        if(emptyCandidates.length){html+='<ul>'+emptyCandidates.map(function(row){return '<li>'+esc(fmtWhen(row.started_at))+' · '+esc(row.source||'source inconnue')+' · '+esc(row.server_name||'serveur inconnu')+' · '+esc(row.track||'circuit inconnu')+' · '+esc(row.session_type||'séance inconnue')+' (ID '+esc(row.id)+')</li>';}).join('')+'</ul><button type="button" id="deleteEmptyArchives">Confirmer la suppression des '+emptyCandidates.length+' archives listées</button>';}
+        result.innerHTML=html;
+      }).catch(function(e){result.textContent=e.message+' Connecte-toi comme administrateur sur la page Télémétrie, puis réessaie.';});
+  });
+  $('emptyArchivesResult').addEventListener('click',function(e){
+    if(!e.target.closest('#deleteEmptyArchives') || !emptyCandidates.length)return;
+    var btn=e.target;btn.disabled=true;
+    window.gdspAuth.fetch('/api/live/empty-archives',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({items:emptyCandidates})})
+      .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Suppression impossible');return j;});})
+      .then(function(j){emptyCandidates=[];$('emptyArchivesResult').textContent=j.deleted+' archive(s) supprimée(s). Sauvegarde privée : '+j.backup;historyOffset=0;loadHistory();})
+      .catch(function(e){emptyCandidates=[];$('emptyArchivesResult').textContent=e.message+' Relance la recherche avant de réessayer.';});
+  });
   function openHistory(id) {
     fetch('/api/live/sessions?id=' + encodeURIComponent(id), { cache: 'no-store' })
       .then(function (r) { return r.json(); })
