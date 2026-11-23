@@ -13,15 +13,24 @@ function Set-UpdateStatus([string]$state,[string]$message) {
     [IO.File]::WriteAllText($statusFile,($result | ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
 }
 function Git {
-    param([Parameter(ValueFromRemainingArguments=$true)][string[]]$arguments)
+    param([string[]]$arguments)
+    # Git peut écrire des messages normaux sur stderr (notamment fetch).
+    # Windows PowerShell 5 traite ceux-ci comme des erreurs si Stop est actif.
+    $ErrorActionPreference = 'Continue'
     $result = & git.exe @arguments 2>$null
     if ($LASTEXITCODE -ne 0) { throw 'git-failed' }
     return ($result | Out-String).Trim()
 }
+function Install-Dependencies {
+    # npm écrit normalement sur stderr ; seul son code de sortie indique l'échec.
+    $ErrorActionPreference = 'Continue'
+    & npm.cmd ci --no-audit --no-fund 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'npm-failed' }
+}
 function Assert-Clean {
-    if ((Git @('branch','--show-current')) -ne 'main') { throw 'branch' }
-    if ((Git @('remote','get-url','origin')).TrimEnd('/') -ne 'https://github.com/pkp56/classement-ac.git') { throw 'origin' }
-    if (Git @('status','--porcelain')) { throw 'dirty' }
+    if ((Git -arguments @('branch','--show-current')) -ne 'main') { throw 'branch' }
+    if ((Git -arguments @('remote','get-url','origin')).TrimEnd('/') -ne 'https://github.com/pkp56/classement-ac.git') { throw 'origin' }
+    if (Git -arguments @('status','--porcelain')) { throw 'dirty' }
 }
 function Is-PortListening([int]$number) {
     return [bool](Get-NetTCPConnection -State Listen -LocalPort $number -ErrorAction SilentlyContinue)
@@ -47,17 +56,17 @@ try {
     if ($LASTEXITCODE -ne 0 -or -not [int]::TryParse([string]$portValue,[ref]$port) -or $port -lt 1 -or $port -gt 65535) { throw 'invalid-port' }
     try { $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/healthz" -TimeoutSec 3 } catch { throw 'health-before' }
     if ($health.ok -ne $true -or $health.service -ne 'gdsp-frontend') { throw 'health-before' }
-    $oldHead = Git @('rev-parse','HEAD')
-    [void](Git @('fetch','--no-tags','origin','main'))
-    if ((Git @('rev-parse','FETCH_HEAD')) -cne $target) { throw 'target-changed' }
+    $oldHead = Git -arguments @('rev-parse','HEAD')
+    [void](Git -arguments @('fetch','--no-tags','origin','main'))
+    if ((Git -arguments @('rev-parse','FETCH_HEAD')) -cne $target) { throw 'target-changed' }
     & git.exe merge-base --is-ancestor $oldHead $target 2>$null
     if ($LASTEXITCODE -ne 0) { throw 'not-fast-forward' }
     # Exiger une vraie sauvegarde PostgreSQL + .env avant toute interruption.
     & (Join-Path $PSScriptRoot 'Backup-GDSP.ps1') -Mode Backup | Out-Null
     Assert-Clean
-    if ((Git @('rev-parse','HEAD')) -cne $oldHead) { throw 'head-changed' }
-    $oldLock = Git @('rev-parse','HEAD:package-lock.json')
-    $oldPackage = Git @('rev-parse','HEAD:package.json')
+    if ((Git -arguments @('rev-parse','HEAD')) -cne $oldHead) { throw 'head-changed' }
+    $oldLock = Git -arguments @('rev-parse','HEAD:package-lock.json')
+    $oldPackage = Git -arguments @('rev-parse','HEAD:package.json')
     Set-UpdateStatus 'running' 'Sauvegarde terminée. Mise à jour et redémarrage en cours.'
     Stop-ScheduledTask -TaskName 'GDSP Node' -ErrorAction Stop
     $stopped = $true
@@ -65,15 +74,14 @@ try {
     do { Start-Sleep -Seconds 1; $state = (Get-ScheduledTask -TaskName 'GDSP Node').State } while ($state -eq 'Running' -and [DateTime]::UtcNow -lt $limit)
     if ($state -eq 'Running' -or (Is-PortListening $port)) { throw 'node-still-running' }
     Assert-Clean
-    if ((Git @('rev-parse','HEAD')) -cne $oldHead) { throw 'head-changed' }
+    if ((Git -arguments @('rev-parse','HEAD')) -cne $oldHead) { throw 'head-changed' }
     # Refuser aussi l'écrasement de fichiers locaux ignorés par Git (par exemple
     # un script conservé dans .git/info/exclude). Ne jamais les supprimer.
-    [void](Git @('merge','--ff-only','--no-overwrite-ignore',$target))
-    $newLock = Git @('rev-parse','HEAD:package-lock.json')
-    $newPackage = Git @('rev-parse','HEAD:package.json')
+    [void](Git -arguments @('merge','--ff-only','--no-overwrite-ignore',$target))
+    $newLock = Git -arguments @('rev-parse','HEAD:package-lock.json')
+    $newPackage = Git -arguments @('rev-parse','HEAD:package.json')
     if ($oldLock -ne $newLock -or $oldPackage -ne $newPackage) {
-        & npm.cmd ci --no-audit --no-fund 2>$null | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'npm-failed' }
+        Install-Dependencies
     }
     Start-ScheduledTask -TaskName 'GDSP Node' -ErrorAction Stop
     $stopped = $false
