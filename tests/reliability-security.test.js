@@ -13,7 +13,7 @@ async function server(t,env={}){
   const exclusions=path.join(temp,'exclusions.json');
   const reservation=http.createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');
   const port=reservation.address().port;await new Promise(r=>reservation.close(r));
-  const child=spawn(process.execPath,['app.js'],{cwd:ROOT,env:{...process.env,PORT:String(port),EVENTS_SOURCE:'local',DATABASE_URL:'',EVENTS_DATABASE_URL:'',ADMIN_USERNAME:'staff',ADMIN_PASSWORD:'test-password-only',JWT_SECRET:'test-secret-local-with-enough-characters',GLOBAL_EXCLUSIONS_FILE:exclusions,LIVE_TIMING_ENABLED:'0',LIVE_MIRROR_FILE:'off',TELEMETRY_ENABLED:'0',...env}});
+  const child=spawn(process.execPath,['app.js'],{cwd:ROOT,env:{...process.env,PORT:String(port),EVENTS_SOURCE:'local',DATABASE_URL:'',EVENTS_DATABASE_URL:'',ADMIN_USERNAME:'staff',ADMIN_PASSWORD:'test-password-only',JWT_SECRET:'test-secret-local-with-enough-characters',GLOBAL_EXCLUSIONS_FILE:exclusions,LIVE_TIMING_ENABLED:'0',LIVE_MIRROR_FILE:'off',TELEMETRY_ENABLED:'0',TELEMETRY_DATABASE_URL:'',TELEMETRY_STORE_FILE:path.join(temp,'telemetry.json'),...env}});
   t.after(()=>{child.kill()});
   await new Promise((resolve,reject)=>{
     const timer=setTimeout(()=>reject(Error('startup timeout')),10000);
@@ -62,6 +62,45 @@ test('proxy AssettoHosting : les trois routes rejettent les origines forgées sa
   for(const route of ['/api/ah-championship-sessions','/api/ah-championship-session-json']){
     r=await call(route+'?'+params);assert.equal(r.status,400,route);assert.match((await r.json()).error,/non autorisé/);
   }
+});
+test('aperçus de skin AH : rejettent les origines et chemins forgés',async t=>{
+  const {call,url}=await server(t);
+  const forged='http://fr2.assettohosting.com@127.0.0.1:'+new URL(url).port;
+  for(const args of [
+    {server:forged,model:'car',skin:'blue'},
+    {server:'https://fr2.assettohosting.com:50648',model:'../secret',skin:'blue'},
+    {server:'https://fr2.assettohosting.com:50648',model:'car',skin:'../secret'}
+  ])assert.equal((await call('/api/ah-skin-preview?'+new URLSearchParams(args))).status,400);
+});
+test('aperçu AssettoHosting : réservé aux administrateurs et origine exacte obligatoire',async t=>{
+  const {call,login}=await server(t);
+  const path='/api/admin/ah-championship-preview?server='+encodeURIComponent('https://fr2.assettohosting.com@127.0.0.1:10000')+'&uuid=11111111-1111-1111-1111-111111111111';
+  assert.equal((await call(path)).status,401);
+  const token=await login();
+  assert.equal((await call(path,{headers:{authorization:'Bearer '+token}})).status,400);
+});
+test('télémétrie : quota appliqué avant authentification et parse JSON',async t=>{
+  const {call}=await server(t,{TELEMETRY_ENABLED:'1',TELEMETRY_TOKEN:'test-token',TELEMETRY_RATE_LIMIT_PER_MINUTE:'3'});
+  const options={method:'POST',headers:{'content-type':'application/json'},body:'{}'};
+  assert.equal((await call('/api/telemetry/push',options)).status,401);
+  assert.equal((await call('/api/telemetry/push',{...options,body:'{invalid'})).status,400);
+  assert.equal((await call('/api/telemetry/push',options)).status,401);
+  const limited=await call('/api/telemetry/push',options);
+  assert.equal(limited.status,429);assert.ok(Number(limited.headers.get('retry-after'))>0);
+  assert.equal(limited.headers.get('cache-control'),'no-store');assert.equal((await limited.json()).code,'telemetry-rate-limited');
+  assert.equal((await call('/healthz')).status,200);
+});
+test('télémétrie : limite de taille JSON et texte, enveloppe contrôlée',async t=>{
+  const {call}=await server(t,{TELEMETRY_ENABLED:'1',TELEMETRY_TOKEN:'test-token'});
+  function post(body,type){return call('/api/telemetry/push',{method:'POST',headers:{'content-type':type,'x-telemetry-token':'test-token'},body})}
+  const big=JSON.stringify({track:'x'.repeat(270000)});
+  for(const type of ['application/json','text/plain']){
+    const r=await post(big,type);assert.equal(r.status,413,type);assert.match(r.headers.get('content-type'),/json/);
+  }
+  for(const body of [JSON.stringify({kind:'ping',track:'a'.repeat(161)}),JSON.stringify({kind:'measurement-poll',driver:[]})]){
+    const r=await post(body,'text/plain');assert.equal(r.status,400);assert.equal((await r.json()).code,'telemetry-invalid-payload');
+  }
+  const ping=await post(JSON.stringify({kind:'ping',track:'essai',driver:{guid:'123',name:'Pilote'},car:'voiture'}),'text/plain');assert.equal(ping.status,200);
 });
 test('écritures locales refusées sans authentification, y compris reset, import et API inconnue',async t=>{
   const {call,login}=await server(t);

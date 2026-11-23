@@ -1537,6 +1537,7 @@ function eventHome(){
   const gallery=getEventGallery(ev);
   const rs=rounds();
   const ds=allDrivers();
+  const ahEntrants=Array.isArray(ev.data?.ahEntrants)?ev.data.ahEntrants.filter(e=>e&&typeof e.name==='string'&&e.name.trim()).slice(0,500):[];
   const cfg=pointsConfig();
   const posterBlock=renderEventPosterBlock();
   const adminPosterHint=(!posterBlock&&adminAuth&&currentSlug)
@@ -1560,7 +1561,7 @@ function eventHome(){
   const registerLink=`<a class="ev-register" href="${esc(infoObj.registrationUrl||infoObj.discordUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Ouvrir les inscriptions (nouvel onglet)">Inscriptions<svg aria-hidden="true" width="22" height="18" viewBox="0 0 24 18"><path fill="#d7a347" stroke="#765623" d="M2 3h20v4a2 2 0 0 0 0 4v4H2v-4a2 2 0 0 0 0-4z"/><path stroke="#765623" stroke-dasharray="2 1" d="M16 4v10"/></svg></a>`;
   const kpisHtml=`<div class="ev-kpis">`
     +`<div class="ev-kpi"><span class="label">Progression saison</span><strong>${totalExpected?`${String(rs.length).padStart(2,'0')} / ${String(totalExpected).padStart(2,'0')}`:String(rs.length).padStart(2,'0')}</strong><small>${rs.length?`${rs.length} manche(s) disputée(s)`:'Coup d’envoi à venir'}</small></div>`
-    +`<div class="ev-kpi gold"><span class="label">Pilotes engagés</span>${ev.kind==='archive'?`<strong>${ds.length}</strong><small>Classés ou ayant pris un départ</small>`:`<strong>${ds.length||registerLink}</strong>${ds.length?registerLink:''}<small>${ds.length?'Classés ou ayant pris un départ':infoObj.registrationUrl?'Accéder aux inscriptions':'Ouvertes sur le Discord GDSP'}</small>`}</div>`
+    +`<div class="ev-kpi gold"><span class="label">Pilotes engagés</span>${ev.kind==='archive'?`<strong>${ds.length}</strong><small>Classés ou ayant pris un départ</small>`:`<strong>${ahEntrants.length||ds.length||registerLink}</strong>${ahEntrants.length||ds.length?registerLink:''}<small>${ahEntrants.length?'Engagés AssettoHosting':ds.length?'Classés ou ayant pris un départ':infoObj.registrationUrl?'Accéder aux inscriptions':'Ouvertes sur le Discord GDSP'}</small>`}</div>`
     +`<div class="ev-kpi green"><span class="label">Voiture / Plateau</span><strong style="font-size:21px;line-height:1.2">${esc(carMain)}</strong><small>${esc(carSub)}</small></div>`
     +`<div class="ev-kpi red"><span class="label">Coefficient Global</span><strong>×${formatGlobalCoef(cfg.globalCoef??eventKindMeta(ev.kind).coef)}</strong><small>${cfg.polePoints?`+${cfg.polePoints} pt pole · `:''}${Math.round((cfg.minPercentDistance||0.75)*100)} % distance min.</small></div>`
     +`</div>`;
@@ -1622,17 +1623,57 @@ function eventHome(){
     podiumPanel=`<div class="panel"><div class="eyebrow">Inscriptions &amp; Départ</div><h2 style="margin-top:4px">Événement à venir</h2><p class="note">Aucune session n'a encore été disputée sur cet événement. Dès que la première manche sera importée, le podium provisoire, les résultats et les fiches pilotes apparaîtront automatiquement ici.</p><div style="margin-top:16px"><a class="btn" href="${esc(infoObj.discordUrl||'https://discord.gg/kDZXwRgRS')}" target="_blank" rel="noopener">Rejoindre sur Discord ↗</a></div></div>`;
   }
 
-  return `<div class="ev-home-wrap"><div class="ev-home-poster">${posterBlock}${adminPosterHint}</div>${kpisHtml}${infoGridHtml}${galleryHtml}<div class="ev-two-col">${calendarPanel}${podiumPanel}</div></div>`;
+  const entrantsPanel=ahEntrants.length?`<div class="panel" style="margin-top:18px"><div class="eyebrow">AssettoHosting · Inscriptions</div><h2>Pilotes engagés (${ahEntrants.length})</h2><p class="note">Liste relevée lors de la dernière actualisation, distincte des résultats et du classement.</p><ul>${ahEntrants.map(d=>`<li>${esc(d.name)}${d.team?' · '+esc(d.team):''}${d.car?' · '+esc(d.car):''}</li>`).join('')}</ul></div>`:'';
+  return `<div class="ev-home-wrap"><div class="ev-home-poster">${posterBlock}${adminPosterHint}</div>${kpisHtml}${infoGridHtml}${galleryHtml}<div class="ev-two-col">${calendarPanel}${podiumPanel}</div>${entrantsPanel}</div>`;
+}
+function ahSkinImage(entrant,ctx=eventContext){
+  const data=ctx?.data||{},server=data.ahEntrantsServer||data.ahServer;
+  const valid=s=>typeof s==='string'&&s.length>0&&s.length<=128&&s===s.trim()&&!/[\\/\0<>:"|?*]/.test(s)&&!/^\.+$/.test(s)&&!/[. ]$/.test(s);
+  if(!server||!valid(entrant?.car)||!valid(entrant?.skin))return '';
+  return '/api/ah-skin-preview?'+new URLSearchParams({server,model:entrant.car,skin:entrant.skin});
+}
+function entrantForDriver(d){
+  const norm=s=>String(s||'').trim().toLocaleLowerCase('fr');
+  const matches=(eventContext?.data?.ahEntrants||[]).filter(e=>norm(e.name)===norm(d.name));
+  const resultMatches=allDrivers().filter(r=>norm(r.name)===norm(d.name));
+  return matches.length===1&&resultMatches.length<=1&&(!d.team||!matches[0].team||norm(d.team)===norm(matches[0].team))?matches[0]:null;
+}
+function driverSkin(d){
+  const e=entrantForDriver(d),model=e?.car||d.model,skin=e?.skin||d.skin;
+  const local=(eventContext?.data?.carSheets||[]).find(c=>c.id===model)?.liveries?.find(l=>l.id===skin&&isSafeCarMedia(l.image));
+  if(local)return localMediaSrc(local.image);
+  return ahSkinImage({car:model,skin});
+}
+function eventDrivers(){
+  const ds=allDrivers(),names=new Set(ds.map(d=>String(d.name||'').trim().toLocaleLowerCase('fr')));
+  const entrants=eventContext?.data?.ahEntrants||[];
+  for(const e of entrants){
+    const name=String(e?.name||'').trim(),key=name.toLocaleLowerCase('fr');
+    if(!name||names.has(key))continue;
+    names.add(key);ds.push({id:'ah-entrant-'+shaShort(key),name,team:e.team||''});
+  }
+  return ds.sort((a,b)=>a.name.localeCompare(b.name));
 }
 function eventCarSheets(evCtx){
   const ctx=evCtx||eventContext||{},data=ctx.data||{};
-  if(Array.isArray(data.carSheets)&&data.carSheets.length)return data.carSheets.slice(0,12).map(localCarSnapshot);
+  const enrich=cars=>{
+    const models=[...new Set((data.ahEntrants||[]).map(e=>e.car).filter(Boolean))];
+    const extras=models.filter(id=>!cars.some(c=>c.id===id||c.name===id)).map(id=>localCarSnapshot({id,name:id}));
+    return [...cars,...extras].slice(0,12).map(car=>{
+      const entries=(data.ahEntrants||[]).filter(e=>e.car===car.id||e.car===car.name);
+      const remote=entries.map(e=>({image:ahSkinImage(e,ctx),name:e.name,team:e.team||'',number:''})).filter(e=>e.image);
+      return {...car,liveries:[...remote,...(car.liveries||[])].slice(0,80)};
+    });
+  };
+  if(Array.isArray(data.carSheets)&&data.carSheets.length)return enrich(data.carSheets.slice(0,12).map(localCarSnapshot));
   const selected=data.modSelection&&Array.isArray(data.modSelection.cars)?data.modSelection.cars:[];
-  if(selected.length)return selected.slice(0,12).map(localCarSnapshot);
+  if(selected.length)return enrich(selected.slice(0,12).map(localCarSnapshot));
   const manual=String(data.eventInfo&&data.eventInfo.car||'').trim();
-  if(manual)return manual.split(/\s*\/\s*/).filter(Boolean).slice(0,12).map((name,index)=>({
+  if(manual)return enrich(manual.split(/\s*\/\s*/).filter(Boolean).slice(0,12).map((name,index)=>({
     id:'event-car-'+(index+1),name,brand:'',category:'',year:'',author:'',version:'',description:'',tags:[],specs:{},metadataAvailable:false
-  }));
+  })));
+  const models=[...new Set((data.ahEntrants||[]).map(e=>e.car).filter(Boolean))].slice(0,12);
+  if(models.length)return enrich(models.map(id=>localCarSnapshot({id,name:id})));
   const isLola=!ctx.slug||ctx.slug===LEGACY_DEFAULT_SLUG||ctx.slug===ACTIVE_LOLA_SLUG;
   return isLola?[{id:'lola-t290',name:'Lola T290',brand:'Lola',category:'Prototypes historiques',year:'',author:'',version:'',description:'',tags:[],specs:{},metadataAvailable:false}]:[];
 }
@@ -1642,12 +1683,12 @@ function carTabBadge(){
 }
 function localMediaSrc(src){
   const s=String(src||'').trim();
-  if(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(s))return s;
+  if(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(s)||s.startsWith('/api/ah-skin-preview?'))return s;
   return '/'+s.replace(/^\/+/,'');
 }
 function liveryGallery(car){
   const rows=car.liveries;
-  return `<gdsp-liveries aria-label="Livrées de ${esc(car.name)}"><img loading="lazy" src="${esc(localMediaSrc(rows[0].image))}" alt="${esc(rows[0].name)}"><div><small>LIVRÉES · <span data-count>1 / ${rows.length}</span></small><select aria-label="Choisir une livrée">${rows.map(s=>`<option data-image="${esc(localMediaSrc(s.image))}">${esc([s.number?'N° '+s.number:'',s.name,s.team&&s.team!==s.name?s.team:''].filter(Boolean).join(' · '))}</option>`).join('')}</select>${rows.length>1?`<div role="group" aria-label="Diaporama"><button type="button" data-step="-1" aria-label="Livrée précédente">←</button><button type="button" data-play>Pause</button><button type="button" data-step="1" aria-label="Livrée suivante">→</button></div>`:''}</div></gdsp-liveries>`;
+  return `<gdsp-liveries aria-label="Livrées de ${esc(car.name)}"><img loading="lazy" src="${esc(localMediaSrc(rows[0].image))}" alt="${esc(rows[0].name)}" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><p data-image-missing hidden>Aperçu de livrée indisponible.</p><div><small>LIVRÉES · <span data-count>1 / ${rows.length}</span></small><select aria-label="Choisir une livrée">${rows.map(s=>`<option data-image="${esc(localMediaSrc(s.image))}">${esc([s.number?'N° '+s.number:'',s.name,s.team&&s.team!==s.name?s.team:''].filter(Boolean).join(' · '))}</option>`).join('')}</select>${rows.length>1?`<div role="group" aria-label="Diaporama"><button type="button" data-step="-1" aria-label="Livrée précédente">←</button><button type="button" data-play>Pause</button><button type="button" data-step="1" aria-label="Livrée suivante">→</button></div>`:''}</div></gdsp-liveries>`;
 }
 function carSheet(){
   if(backendMulti&&!eventContext)return hub();
@@ -2743,7 +2784,7 @@ function ratingCard(id){
 function plotHistory(metrics,mode){if(!metrics.length)return '<p class="note">Aucune course disponible.</p>';let w=700,h=190,left=42,right=20,top=16,bottom=42,vals=metrics.map(m=>mode==='position'?m.position:m.collisions),max=Math.max(mode==='position'?5:1,...vals),x=i=>left+(metrics.length===1?(w-left-right)/2:i*(w-left-right)/(metrics.length-1)),y=v=>mode==='position'?top+(v-1)*(h-top-bottom)/Math.max(max-1,1):top+(max-v)*(h-top-bottom)/max;let line=vals.map((v,i)=>`${x(i)},${y(v)}`).join(' '),ticks=[1,Math.ceil(max/2),max].filter((v,i,a)=>a.indexOf(v)===i);let grid=ticks.map(t=>`<line x1="${left}" y1="${y(t)}" x2="${w-right}" y2="${y(t)}" stroke="#d8cdbb"/><text x="${left-8}" y="${y(t)+4}" text-anchor="end" font-size="11" fill="#69756e">${t}</text>`).join('');let points=vals.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="5" fill="#9c3021"><title>${esc(track(metrics[i].race.track))} — ${date(metrics[i].race.date)} : ${v}</title></circle><text x="${x(i)}" y="${h-17}" text-anchor="middle" font-size="10" fill="#69756e">C${i+1}</text>`).join('');return `<svg viewBox="0 0 ${w} ${h}" role="img" style="width:100%;height:auto;display:block">${grid}<polyline fill="none" stroke="#a83729" stroke-width="2.5" points="${line}"/>${points}</svg><p class="note">${metrics.map((m,i)=>`C${i+1} : ${esc(track(m.race.track))} · ${date(m.race.date)}`).join(' &nbsp; / &nbsp; ')}</p>`}
 function drivers(){
   if(backendMulti&&!eventContext)return hub();
-  let ds=allDrivers();
+  let ds=eventDrivers();
   if(driverId){
     let d=ds.find(x=>x.id===driverId);if(!d){driverId='';return drivers()}
     const evRounds=groupSessionsByDate(sessions).map(rd=>({...rd,penMap}));
@@ -2778,7 +2819,7 @@ function drivers(){
       carNumLabel=l&&l[2]?`N° ${esc(l[2])}`:'N° —';
       carFootLeft='Lola T290 · International Series';
     }
-    const photo=driverPhoto(d.id);if(photo)carVisual=`<img class="driver-car" src="${esc(photo)}" alt="Voiture de ${esc(d.name)}">`;
+    const photo=driverPhoto(d.id)||driverSkin(d);if(photo)carVisual=`<img class="driver-car" src="${esc(photo)}" alt="Aperçu de la voiture de ${esc(d.name)}" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><div class="drv-car-placeholder" hidden>Aperçu de livrée indisponible</div>`;
     const rPerf=performanceRatings().find(x=>x.id===driverId);
     const lvlStamp=rPerf?`<span class="drv-lvl-stamp"><b>Niveau ${rPerf.level} / 4</b> · ${rPerf.score.toFixed(1)} / 100</span>`:`<span class="drv-lvl-stamp">Niveau à déterminer · ${races.length} course(s)</span>`;
     const heroEye=backendMulti&&eventContext&&eventContext.name?`${(eventContext.kind||'').toUpperCase()} · ${eventContext.name}`:'GDSP · Fiche pilote engagé';
@@ -2826,11 +2867,11 @@ function driverGrid(ds){
   const isLola=!eventContext||eventContext.slug===LEGACY_DEFAULT_SLUG||eventContext.slug===ACTIVE_LOLA_SLUG;
   return `<div class="pilot-grid" id="drivers">${ds.map(d=>{
     const l=isLola?livery(d.name):null;
-    const image=driverPhoto(d.id)||(l?`/assets/${l[1]}.jpg?v=6`:'');
+    const image=driverPhoto(d.id)||driverSkin(d)||(l?`/assets/${l[1]}.jpg?v=6`:'');
     const rank=standings.findIndex(x=>x.id===d.id),standing=standings[rank];
     const initials=d.name.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
     return `<article class="driver pilot-tile" data-name="${esc(d.name.toLowerCase())}" data-did="${esc(d.id)}">
-      <div class="pilot-visual">${image?`<img loading="lazy" src="${esc(image)}" alt="Voiture de ${esc(d.name)}">`:`<span class="pilot-initials">${esc(initials)}</span>`}<span class="pilot-number">${l?esc(l[2]):'—'}</span><span class="pilot-series">${isLola?'LOLA T290':'GDSP'}</span></div>
+      <div class="pilot-visual">${image?`<img loading="lazy" src="${esc(image)}" alt="Voiture de ${esc(d.name)}" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="pilot-initials" hidden>${esc(initials)}</span>`:`<span class="pilot-initials">${esc(initials)}</span>`}<span class="pilot-number">${l?esc(l[2]):'—'}</span><span class="pilot-series">${isLola?'LOLA T290':'GDSP'}</span></div>
       <div class="pilot-body"><h3>${esc(d.name)}</h3><div class="pilot-team">${esc(d.team)||'Pilote indépendant'}</div><div class="pilot-stats"><div><span>Championnat</span><strong>${rank>=0?'P'+(rank+1):'—'}</strong></div><div><span>Points</span><strong>${standing?esc(String(standing.total)):'—'}</strong></div></div><button type="button" aria-label="Voir la fiche de ${esc(d.name)}" onclick="driverId=this.closest('[data-did]').dataset.did;render()">Voir la fiche <span aria-hidden="true">↗</span></button></div></article>`;
   }).join('')}</div>`;
 }
@@ -2914,6 +2955,8 @@ async function saveRemote(){
     if(Array.isArray(o.results)){
       o.results=o.results.map(r=>{
         const rr={id:r.id,name:r.name,team:r.team||'',grid:r.grid,laps:r.laps,best:r.best,time:r.time};
+        if(r.model)rr.model=r.model;
+        if(r.skin)rr.skin=r.skin;
         if(r.disqualified)rr.disqualified=true;
         if(r.hasPenalty)rr.hasPenalty=true;
         if(r.penaltyTime)rr.penaltyTime=r.penaltyTime;
@@ -2927,6 +2970,8 @@ async function saveRemote(){
   const payload={};
   if(baseData.ahServer)payload.ahServer=baseData.ahServer;
   if(baseData.ahUuid)payload.ahUuid=baseData.ahUuid;
+  if(Array.isArray(baseData.ahEntrants))payload.ahEntrants=baseData.ahEntrants;
+  if(baseData.ahEntrantsServer)payload.ahEntrantsServer=baseData.ahEntrantsServer;
   if(baseData.posterImage)payload.posterImage=baseData.posterImage;
   if(Array.isArray(baseData.galleryImages)&&baseData.galleryImages.length)payload.galleryImages=baseData.galleryImages;
   if(baseData.eventInfo&&typeof baseData.eventInfo==='object')payload.eventInfo=baseData.eventInfo;
@@ -3025,7 +3070,7 @@ function importSessionJson(text,fileName,opts){
       const best=(Number.isFinite(rawBest)&&rawBest>0&&rawBest<99999999)
         ?((lapBest!=null&&lapBest<rawBest)?lapBest:rawBest)
         :(lapBest??0);
-      return {id:meta.id,name:meta.name,team:meta.team||'',skin:meta.skin||'',grid:(typeof r.GridPosition==='number')?r.GridPosition:null,laps:r.NumLaps||0,best,time:r.TotalTime,disqualified:!!r.Disqualified,hasPenalty:!!r.HasPenalty,penaltyTime:r.PenaltyTime||0,lapPenalty:r.LapPenalty||0};
+      return {id:meta.id,name:meta.name,team:meta.team||'',skin:meta.skin||'',model:meta.model||'',grid:(typeof r.GridPosition==='number')?r.GridPosition:null,laps:r.NumLaps||0,best,time:r.TotalTime,disqualified:!!r.Disqualified,hasPenalty:!!r.HasPenalty,penaltyTime:r.PenaltyTime||0,lapPenalty:r.LapPenalty||0};
     }).filter(Boolean);
     if(!results.length){if(!opts.silent)alert('Aucun pilote dans ce fichier, session ignorée.');return false}
 
@@ -4222,7 +4267,7 @@ function localCarSnapshot(car){
     description:String(source.description||'').trim().slice(0,4000),
     tags:Array.isArray(source.tags)?source.tags.slice(0,12).map(tag=>String(tag||'').trim().slice(0,80)).filter(Boolean):[],
     ...(logo?{logo}:{}),
-    liveries:(Array.isArray(source.liveries)?source.liveries:[]).slice(0,80).filter(s=>s&&isSafeCarMedia(s.image)).map(s=>({image:String(s.image).trim(),name:String(s.name||'Livrée').slice(0,120),team:String(s.team||'').slice(0,120),number:String(s.number||'').slice(0,16)})),
+    liveries:(Array.isArray(source.liveries)?source.liveries:[]).slice(0,80).filter(s=>s&&isSafeCarMedia(s.image)).map(s=>({id:String(s.id||'').slice(0,128),image:String(s.image).trim(),name:String(s.name||'Livrée').slice(0,120),team:String(s.team||'').slice(0,120),number:String(s.number||'').slice(0,16)})),
     specs:safeSpecs,
     powerCurve:localCarCurveSnapshot(source.powerCurve,'power'),
     torqueCurve:localCarCurveSnapshot(source.torqueCurve,'torque'),
@@ -4740,11 +4785,13 @@ function renderEventsAdmin(){
     <div class="adm-subhead">
       <div><div class="eyebrow">Événement courant · Onglet Accueil public</div><h3>${esc(eventContext.name||currentSlug||'')}</h3></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn secondary small" onclick="scanCurrentEventAH()">⟳ Actualiser depuis AssettoHosting</button>
         <button type="button" class="btn secondary small" onclick="go('event')">Voir l'Accueil événement →</button>
         <button type="button" class="btn secondary small" onclick="openEventSheetTab('translation')">🌐 Traduire les fiches</button>
         ${currentPoster?`<button type="button" class="btn secondary small" onclick="removeEventPoster('${safeCurrentSlug}')">Retirer l'affiche</button>`:''}
       </div>
     </div>
+    <div id="ah-current-sync" aria-live="polite"></div>
     ${currentPoster?`<img src="${esc(currentPoster)}" alt="Aperçu affiche" style="display:block;max-width:440px;width:100%;height:auto;border:1px solid var(--line);margin-bottom:14px">`:''}
     <div class="admin-evhome-grid">
       <label style="grid-column:1 / -1">Sorte d’événement (poids dans Global)
@@ -5036,6 +5083,119 @@ function openAdjForm(rj,sj,did){
 // ---------- AssettoHosting auto-import ----------
 // ---------- AH championship discovery ----------
 let ahChampsCache=null;
+// Actualisation explicite d'un événement existant. Aucun export AH brut n'est
+// stocké : l'API renvoie une projection limitée et l'admin choisit les champs.
+let ahCurrentSync=null;
+const AH_CURRENT_SERVER='https://fr2.assettohosting.com:50648';
+async function scanCurrentEventAH(){
+  if(!adminAuth||!currentSlug)return;
+  const slug=currentSlug,out=document.getElementById('ah-current-sync');
+  if(!out)return;
+  ahCurrentSync=null;
+  out.innerHTML='<p class="note">Lecture des championnats GDSP #1…</p>';
+  try{
+    const r=await apiGet('/api/ah-championships?server='+encodeURIComponent(AH_CURRENT_SERVER)+'&refresh=1');
+    const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);
+    if(!Array.isArray(j.items))throw Error('Réponse de la liste invalide.');
+    if(currentSlug!==slug)return;
+    const items=j.items.filter(c=>c&&c.server===AH_CURRENT_SERVER&&/^[0-9a-f-]{36}$/i.test(c.uuid)&&c.name);
+    ahCurrentSync={slug,items};
+    const linked=eventContext?.data?.ahServer===AH_CURRENT_SERVER?eventContext?.data?.ahUuid:'';
+    const warning=Array.isArray(j.errors)&&j.errors.length?'<p class="note" style="color:#9c3021">Liste peut-être incomplète : certains championnats sont indisponibles. Réessaie si le tien manque.</p>':'';
+    out.innerHTML=`<div class="panel" style="margin:12px 0"><h4>Actualiser « ${esc(eventContext.name)} » depuis GDSP #1</h4>${warning}`
+      +(items.length?`<label for="ah-current-choice">Championnat AssettoHosting à utiliser</label><select id="ah-current-choice"><option value="">— Choisir le championnat source —</option>${items.map((c,i)=>`<option value="${i}" ${linked===c.uuid?'selected':''}>${esc(c.name)} · progression ${esc(String(c.progress??'—'))} %</option>`).join('')}</select> <button type="button" class="btn secondary small" onclick="previewCurrentEventAH()">Comparer les informations</button><p class="note">Choisis le championnat source ; l’événement GDSP sélectionné reste la destination. Rien n’est enregistré avant confirmation.</p>`:'<p class="note">Aucun championnat trouvé sur ce serveur.</p>')
+      +`<div id="ah-current-preview"></div></div>`;
+  }catch(e){if(currentSlug===slug)out.innerHTML=`<p class="note" style="color:#9c3021">Impossible de lire AssettoHosting : ${esc(e.message)}</p>`;}
+}
+async function previewCurrentEventAH(){
+  const state=ahCurrentSync,choice=document.getElementById('ah-current-choice');
+  const out=document.getElementById('ah-current-preview');
+  if(!state||!out||state.slug!==currentSlug)return;
+  const index=choice&&choice.value!==''?Number(choice.value):-1;
+  const item=Number.isInteger(index)?state.items[index]:null;
+  if(!item){out.textContent='Choisis d’abord un championnat.';return;}
+  out.innerHTML='<p class="note">Lecture du championnat et comparaison…</p>';
+  try{
+    const qs=new URLSearchParams({server:item.server,uuid:item.uuid});
+    const [pr,er]=await Promise.all([apiGet('/api/admin/ah-championship-preview?'+qs),apiGet('/api/events/'+encodeURIComponent(state.slug))]);
+    const p=await pr.json(),ev=await er.json();
+    if(!pr.ok)throw Error(p.error||'Aperçu indisponible.');
+    if(!er.ok||ev.slug!==state.slug)throw Error('Événement GDSP indisponible.');
+    if(ahCurrentSync!==state||currentSlug!==state.slug||!choice||choice.value!==String(index))return;
+    if(p.server!==item.server||p.uuid!==item.uuid||!Array.isArray(p.entrants)||!Array.isArray(p.rounds))throw Error('Aperçu invalide.');
+    state.preview=p;state.event=ev;state.index=index;
+    const info=ev.data?.eventInfo||{};
+    const itemRow=(key,label,oldValue,newValue,checked=false)=>`<label style="display:block;margin:10px 0;padding:8px;background:#f8f2e4"><input type="checkbox" id="ah-sync-${key}" ${checked?'checked':''}> <b>${esc(label)}</b><br><small>Actuel : ${esc(oldValue||'—')}<br>AssettoHosting : ${esc(newValue||'—')}</small></label>`;
+    const dated=p.rounds.filter(r=>r.date&&r.track);
+    const list=p.rounds.map(r=>[r.name,r.track+(r.layout?' / '+r.layout:''),r.date||'date non renseignée',r.format].filter(Boolean).join(' · ')).join(' | ');
+    let html='<p class="note">Coche uniquement les données à appliquer. Les autres, les affiches, les pénalités et les résultats restent inchangés.</p>';
+    html+=itemRow('link','Lier la source pour les prochains imports',ev.data?.ahUuid||'Aucune',p.name);
+    if(p.name)html+=itemRow('name','Nom de l’événement',ev.name,p.name);
+    if(p.briefing)html+=itemRow('briefing','Présentation',info.briefing,p.briefing);
+    if(p.car)html+=itemRow('car','Voiture / catégorie (identifiant du mod)',info.car,p.car);
+    if(p.formatText)html+=itemRow('format','Format sportif',info.formatText,p.formatText);
+    if(p.registrationUrl)html+=itemRow('registration','Lien d’inscription',info.registrationUrl,p.registrationUrl);
+    if(p.entrantsAvailable)html+=itemRow('entrants','Liste des engagés et leurs skins (sans modifier les classements)',`${(ev.data?.ahEntrants||[]).length} pilote(s)`,p.entrants.length?p.entrants.map(x=>[x.name,x.team,x.car,x.skin].filter(Boolean).join(' · ')).join(' | '):'Aucun engagé');
+    if(dated.length)html+=itemRow('calendar','Ajouter les manches datées au calendrier',`${Object.keys(ev.data?.customCalendar||{}).length} date(s)`,dated.map(r=>`${r.date} : ${r.track}${r.layout?' / '+r.layout:''}`).join(' | '));
+    if(p.points)html+=itemRow('points','Barème — peut modifier les classements',JSON.stringify(ev.points_config||{}),JSON.stringify(p.points));
+    html+=`<p class="note"><b>Manches détectées :</b> ${esc(list||'aucune')}. Les manches sans date ne sont pas ajoutées automatiquement.${p.note?' '+esc(p.note):''}</p>`
+      +'<p class="note">Les résultats existants ne sont pas modifiés ici. Pour les actualiser, utilise ensuite « Importer les résultats » de cet événement.</p>'
+      +'<button type="button" class="btn small" onclick="applyCurrentEventAH()">Appliquer les cases cochées</button>';
+    out.innerHTML=html;
+  }catch(e){if(ahCurrentSync===state&&currentSlug===state.slug)out.innerHTML=`<p class="note" style="color:#9c3021">Aperçu impossible : ${esc(e.message)}</p>`;}
+}
+async function applyCurrentEventAH(){
+  const state=ahCurrentSync,p=state?.preview,original=state?.event;
+  if(!state||!p||!original||state.slug!==currentSlug||!adminAuth||state.busy)return;
+  if(document.getElementById('ah-current-choice')?.value!==String(state.index)){alert('Le championnat source a changé. Compare de nouveau avant d’appliquer.');return;}
+  const checked=key=>!!document.getElementById('ah-sync-'+key)?.checked;
+  const keys=['link','name','briefing','car','format','registration','entrants','calendar','points'].filter(checked);
+  if(!keys.length){alert('Coche au moins une donnée à appliquer.');return;}
+  if(!confirm('Appliquer les données cochées à « '+original.name+' » ? Les modifications non enregistrées dans ce formulaire seront perdues. Les résultats et pénalités seront conservés.'))return;
+  state.busy=true;
+  try{
+    const get=await apiGet('/api/events/'+encodeURIComponent(state.slug));
+    const latest=await get.json();if(!get.ok||latest.slug!==state.slug)throw Error('Impossible de relire l’événement.');
+    if(ahCurrentSync!==state||currentSlug!==state.slug||document.getElementById('ah-current-choice')?.value!==String(state.index))throw Error('L’événement ou la source sélectionnée a changé : recommence la comparaison.');
+    const fingerprint=e=>JSON.stringify([e.name,e.kind,e.updated_at,e.points_config,e.data]);
+    if(fingerprint(latest)!==fingerprint(original))throw Error('L’événement a changé depuis la comparaison. Recharge l’aperçu avant de réessayer.');
+    const data={...(latest.data||{})},info={...(data.eventInfo||{})};
+    const selected=key=>keys.includes(key);
+    if(selected('link')){data.ahServer=p.server;data.ahUuid=p.uuid;}
+    if(selected('briefing')&&p.briefing)info.briefing=p.briefing;
+    if(selected('car')&&p.car)info.car=p.car;
+    if(selected('format')&&p.formatText)info.formatText=p.formatText;
+    if(selected('registration')&&p.registrationUrl)info.registrationUrl=p.registrationUrl;
+    if(keys.some(k=>['briefing','car','format','registration'].includes(k)))data.eventInfo=info;
+    if(selected('entrants')&&p.entrantsAvailable){data.ahEntrants=p.entrants;data.ahEntrantsServer=p.server;}
+    if(selected('calendar')){
+      const calendar={...(data.customCalendar||{})};
+      for(const r of p.rounds){
+        if(!r.date||!r.track)continue;
+        calendar[r.date]=mergeCalendarRoundTracks(calendar[r.date],[{trackId:r.track,layoutId:r.layout,trackName:r.track}]);
+      }
+      data.customCalendar=calendar;
+    }
+    const body={data};
+    if(selected('name')&&p.name)body.name=p.name;
+    if(selected('points')&&p.points)body.pointsConfig={...(latest.points_config||{}),...p.points};
+    const result=await apiPut('/api/events/'+encodeURIComponent(state.slug),body);
+    const response=await result.json().catch(()=>({}));if(!result.ok)throw Error(response.error||'HTTP '+result.status);
+    const listed=events.find(e=>e.slug===state.slug);
+    if(listed){
+      if(body.name)listed.name=body.name;
+      if(body.pointsConfig)listed.points_config=body.pointsConfig;
+      if(listed.data)listed.data=data;
+      if(response.event?.updated_at)listed.updated_at=response.event.updated_at;
+    }
+    ahCurrentSync=null;
+    const reloaded=await loadEvent(state.slug);
+    render();
+    if(!reloaded)alert('Mise à jour enregistrée, mais le rechargement a échoué. Recharge la page.');
+    else alert('Mise à jour enregistrée pour « '+reloaded.name+' ». Les résultats et pénalités n’ont pas été modifiés.');
+  }catch(e){alert('Actualisation impossible : '+e.message);}
+  finally{state.busy=false;}
+}
 async function ahScanChamps(){
   const out=document.getElementById('ah-champs-result');
   if(out)out.innerHTML='<p class="note">Scan des serveurs AssettoHosting en cours… (peut prendre 10-20s, les serveurs doivent être réveillés)</p>';

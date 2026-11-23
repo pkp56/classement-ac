@@ -6,7 +6,7 @@ customElements.define('gdsp-liveries',class extends HTMLElement {
     if(!pick||!play)return;
     const show=i=>{
       pick.selectedIndex=(i+pick.length)%pick.length;
-      const opt=pick.selectedOptions[0];img.src=opt.dataset.image;img.alt=opt.text;
+      const opt=pick.selectedOptions[0];img.hidden=false;const missing=this.querySelector('[data-image-missing]');if(missing)missing.hidden=true;img.src=opt.dataset.image;img.alt=opt.text;
       this.querySelector('[data-count]').textContent=`${pick.selectedIndex+1} / ${pick.length}`;
     };
     const pause=()=>{clearInterval(this.timer);this.timer=null;play.textContent='Lecture';};

@@ -1749,6 +1749,110 @@ test('Carte des collisions : explique l’absence de repère GPS quand worldProj
 
 
 
+test('Actualiser événement AH : choix, aperçu, application sélective et conservation des données',async()=>{
+  const server='https://fr2.assettohosting.com:50648';
+  const uuid='11111111-1111-1111-1111-111111111111';
+  let remote={slug:'cup-sync',name:'Cup locale',kind:'cup',updated_at:'2026-11-20T10:00:00Z',points_config:{pointsScale:[10,8],globalCoef:0.75},data:{
+    sessions:[{date:'2026-11-01',track:'spa',type:'RACE',results:[{id:'a',name:'Alice',team:'A',laps:2,best:90000,time:200000}],laps:[],events:[]}],
+    penMap:{'0:0:a':{timeAdd:2}},posterImage:'data:image/png;base64,AAAA',
+    eventInfo:{car:'Voiture choisie',briefing:'Texte personnel',formatText:'Format personnel'},
+    customCalendar:{'2026-12-10':{track:'spa'}}
+  }};
+  const summary={server,uuid,name:'Cup AH',briefing:'Texte AH',car:'modele_ah',formatText:'Course : 15 min',registrationUrl:server+'/championship/'+uuid,
+    entrantsAvailable:true,entrants:[{name:'Pilote B',team:'Bleu',car:'modele_ah'}],rounds:[{name:'Manche',date:'2026-12-01',track:'monza',layout:'junior',format:'Course : 15 min'},{name:'Sans date',date:'',track:'spa',layout:''}],points:{pointsScale:[13,11],polePoints:1},note:''};
+  const listed=[{server,uuid:'22222222-2222-2222-2222-222222222222',name:'Autre source',progress:0},{server,uuid,name:'Cup AH',progress:0}];
+  const {sandbox,getElementById,calls}=makeBrowser([remote],(url,opts)=>{
+    if(url.startsWith('/api/ah-championships?'))return response({items:listed,errors:[]});
+    if(url.startsWith('/api/admin/ah-championship-preview?'))return response(summary);
+    if(url==='/api/events/cup-sync'&&(!opts.method||opts.method==='GET'))return response(JSON.parse(JSON.stringify(remote)));
+    if(url==='/api/events/cup-sync'&&opts.method==='PUT'){
+      const body=JSON.parse(opts.body);remote={...remote,...(body.name?{name:body.name}:{}),...(body.pointsConfig?{points_config:body.pointsConfig}:{}),data:body.data,updated_at:'2026-11-20T10:01:00Z'};
+      return response({event:remote});
+    }
+    if(url==='/api/events/cup-sync/data'&&opts.method==='POST'){remote={...remote,data:JSON.parse(opts.body)};return response({ok:true});}
+    return null;
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext("loadEvent('cup-sync')",sandbox);
+  vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin';adminTab='events';page='admin';render()",sandbox);
+  assert.match(getElementById('app').innerHTML,/Actualiser depuis AssettoHosting/);
+  await vm.runInContext('scanCurrentEventAH()',sandbox);
+  assert.match(getElementById('ah-current-sync').innerHTML,/Autre source/);
+  getElementById('ah-current-choice').value='1';
+  await vm.runInContext('previewCurrentEventAH()',sandbox);
+  assert.match(getElementById('ah-current-preview').innerHTML,/date non renseignée/);
+  assert.match(getElementById('ah-current-preview').innerHTML,/Texte personnel/);
+  assert.ok(!calls.some(c=>c.url==='/api/events/cup-sync'&&c.method==='PUT'),'aucune écriture avant confirmation');
+  for(const key of ['link','format','entrants','calendar','points'])getElementById('ah-sync-'+key).checked=true;
+  await vm.runInContext('applyCurrentEventAH()',sandbox);
+  assert.equal(remote.name,'Cup locale');
+  assert.equal(remote.data.eventInfo.briefing,'Texte personnel');
+  assert.equal(remote.data.eventInfo.car,'Voiture choisie');
+  assert.equal(remote.data.eventInfo.formatText,'Course : 15 min');
+  assert.equal(remote.data.ahUuid,uuid);
+  assert.equal(remote.data.ahEntrants[0].name,'Pilote B');
+  assert.equal(remote.data.sessions.length,1);assert.equal(remote.data.penMap['0:0:a'].timeAdd,2);
+  assert.equal(remote.data.customCalendar['2026-12-01'].track,'monza');
+  assert.ok(remote.data.customCalendar['2026-12-10']);assert.equal(Object.keys(remote.data.customCalendar).length,2);
+  assert.deepEqual(remote.points_config.pointsScale,[13,11]);assert.equal(remote.points_config.globalCoef,0.75);
+  assert.equal(remote.data.posterImage,'data:image/png;base64,AAAA');
+  vm.runInContext("page='event';render()",sandbox);
+  assert.match(getElementById('app').innerHTML,/Pilote B/);
+  await vm.runInContext('saveRemote()',sandbox);
+  assert.equal(remote.data.ahEntrants[0].name,'Pilote B','une sauvegarde ultérieure conserve les inscrits');
+});
+
+test('Actualiser événement AH : refuse un aperçu périmé ou une source différente',async()=>{
+  const server='https://fr2.assettohosting.com:50648',uuid='11111111-1111-1111-1111-111111111111';
+  let remote={slug:'cup-conflict',name:'Cup',kind:'cup',updated_at:'v1',points_config:{},data:{sessions:[],penMap:{},eventInfo:{briefing:'Origine'}}};
+  const summary={server,uuid,name:'Cup AH',briefing:'Nouveau',car:'',formatText:'',registrationUrl:'',entrants:[],rounds:[],points:null,note:''};
+  const alerts=[];
+  const {sandbox,getElementById,calls}=makeBrowser([remote],(url,opts)=>{
+    if(url.startsWith('/api/ah-championships?'))return response({items:[{server,uuid,name:'Cup AH',progress:0}],errors:[]});
+    if(url.startsWith('/api/admin/ah-championship-preview?'))return response(summary);
+    if(url==='/api/events/cup-conflict'&&(!opts.method||opts.method==='GET'))return response(JSON.parse(JSON.stringify(remote)));
+    return null;
+  },{alert:msg=>alerts.push(msg)});
+  await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext("loadEvent('cup-conflict')",sandbox);
+  vm.runInContext("adminAuth=true;adminToken='tok'",sandbox);
+  await vm.runInContext('scanCurrentEventAH()',sandbox);
+  getElementById('ah-current-choice').value='0';
+  await vm.runInContext('previewCurrentEventAH()',sandbox);
+  getElementById('ah-sync-briefing').checked=true;
+  getElementById('ah-current-choice').value='1';
+  await vm.runInContext('applyCurrentEventAH()',sandbox);
+  assert.match(alerts.pop(),/source a changé/);
+  getElementById('ah-current-choice').value='0';
+  remote={...remote,updated_at:'v2',data:{...remote.data,eventInfo:{briefing:'Modification concurrente'}}};
+  await vm.runInContext('applyCurrentEventAH()',sandbox);
+  assert.match(alerts.pop(),/a changé depuis la comparaison/);
+  assert.ok(!calls.some(c=>c.url==='/api/events/cup-conflict'&&c.method==='PUT'));
+});
+
+test('Livrées AH : engagés sans résultats, fiches pilote et voiture, conservation sans confusion',async()=>{
+  const server='https://fr2.assettohosting.com:50648';
+  let remote={slug:'skin-cup',name:'Cup',kind:'cup',points_config:{},data:{sessions:[],penMap:{},ahEntrantsServer:server,ahEntrants:[{name:'Alice',team:'GDSP',car:'alfa',skin:'blue'}]}};
+  const {sandbox,getElementById}=makeBrowser([remote],(url,opts)=>{
+    if(url==='/api/events/skin-cup'&&(!opts.method||opts.method==='GET'))return response(JSON.parse(JSON.stringify(remote)));
+    if(url==='/api/events/skin-cup/data'&&opts.method==='POST'){remote={...remote,data:JSON.parse(opts.body)};return response({ok:true});}
+    return null;
+  });
+  await new Promise(resolve=>setImmediate(resolve));await vm.runInContext("loadEvent('skin-cup')",sandbox);
+  vm.runInContext("page='pilotes';render()",sandbox);
+  let html=getElementById('app').innerHTML;
+  assert.match(html,/Alice/);assert.match(html,/api\/ah-skin-preview\?/);assert.match(html,/model=alfa/);assert.match(html,/skin=blue/);
+  vm.runInContext("driverId=eventDrivers()[0].id;render()",sandbox);
+  html=getElementById('app').innerHTML;assert.match(html,/Aperçu de la voiture de Alice/);assert.match(html,/skin=blue/);
+  vm.runInContext("page='voiture';render()",sandbox);
+  html=getElementById('app').innerHTML;assert.match(html,/gdsp-liveries/);assert.match(html,/skin=blue/);
+  vm.runInContext("adminToken='token'",sandbox);await vm.runInContext('saveRemote()',sandbox);
+  assert.equal(remote.data.ahEntrantsServer,server);assert.equal(remote.data.ahEntrants[0].skin,'blue');
+  assert.equal(vm.runInContext("driverSkin({name:'Alice'})",sandbox).includes('skin=blue'),true);
+  vm.runInContext("eventContext.data.ahEntrants.push({name:'Alice',car:'autre',skin:'rouge'})",sandbox);
+  assert.equal(vm.runInContext("driverSkin({name:'Alice'})",sandbox),'','homonymes : aucune livrée attribuée arbitrairement');
+});
+
 test('validation des liens : refuse les URL externes sans protocole', () => {
   const source = siteSource.match(/function isSafeHttpUrl\(u\)\{[\s\S]*?\n\}/)[0];
   const validate = vm.runInNewContext('(' + source + ')');

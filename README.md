@@ -21,6 +21,38 @@ Voir [LOT1-FIABILITE-SECURITE.md](LOT1-FIABILITE-SECURITE.md) pour l'installatio
 - Lancer les tests de calcul ciblés avec `npm test`.
 - Le cœur du site est dans `site.js` ; `patches-v71.js` contient les règles de calcul/pénalités conservées pour compatibilité. Les anciennes versions de patches non chargées ont été retirées.
 
+## Actualiser un événement depuis AssettoHosting
+
+Dans **Administration → Événements**, sélectionner l'événement GDSP à modifier,
+puis cliquer sur **Actualiser depuis AssettoHosting**. Choisir le championnat
+sur GDSP #1 et cliquer sur **Comparer les informations**. L'aperçu présente les
+valeurs existantes et celles disponibles ; cocher uniquement les données à
+appliquer, puis confirmer. La liaison à la source est proposée séparément.
+
+La comparaison peut proposer le nom, le briefing, les identifiants de voitures,
+le format commun aux manches, le lien d'inscription, les engagés, les dates de
+manches renseignées et le barème d'une classe unique. Les données absentes ne
+remplacent pas les champs actuels ; une date non renseignée n'est pas inventée.
+Les manches datées sont ajoutées au calendrier sans supprimer les dates déjà
+présentes. Les engagés affichés sont distincts des pilotes classés : leurs GUID
+ne sont pas enregistrés dans cette liste. Les noms de skins sont conservés :
+les aperçus `preview.jpg` sont chargés depuis AssettoHosting dans les fiches
+pilotes et voiture lorsqu'ils sont disponibles. Les pilotes inscrits apparaissent
+avant les résultats sans être ajoutés au classement. Les photos manuelles restent
+prioritaires et les homonymes ne sont pas associés automatiquement. Pour une
+livrée locale, les aperçus des mods doivent avoir été importés sur le PC serveur.
+L'affiche, les pénalités et les résultats ne sont pas modifiés. Pour récupérer ou actualiser les résultats,
+utiliser ensuite **Importer les résultats** après avoir lié la source.
+
+L'actualisation du barème est optionnelle et peut modifier les classements.
+Le site conserve les coefficients et les règles GDSP non fournis par AH.
+Enregistrer d'abord les modifications du formulaire en cours : l'actualisation
+recharge l'éditeur après confirmation. Si l'événement a changé depuis l'aperçu,
+il faut comparer à nouveau. La vérification des modifications concurrentes n'est
+pas atomique : éviter que deux administrateurs enregistrent le même événement
+simultanément. Le serveur de production doit pouvoir accéder à AH ;
+les essais automatisés ne remplacent pas une vérification sur le site déployé.
+
 ## Import AssettoHosting : origines autorisées
 
 Les routes d'import AssettoHosting n'acceptent que les origines explicitement

@@ -176,6 +176,31 @@ __GDSP_TELEMETRY__ = { url = ".../api/telemetry/push", token = "...", campaign =
 ```
 
 Le jeton n'est donc pas dans le dépôt : il vient de l'environnement du site.
+**Attention : il est inclus dans le script téléchargeable publiquement et ne
+prouve donc pas l'identité d'un pilote.** Ne pas le réutiliser pour d'autres
+services et considérer les mesures comme déclaratives. Une rotation seule ne
+résout pas ce problème : le nouveau jeton serait lui aussi distribué.
+
+L'API limite les envois à 256 Kio et, par défaut, à 1 200 requêtes par minute
+et par adresse IP (pings et essais refusés compris). Un dépassement répond 429
+avec `Retry-After` ; une charge trop grande répond 413. Ce quota est partagé par
+les pilotes derrière une même IP, stocké en mémoire et remis à zéro au
+redémarrage : ce n'est ni une authentification ni une protection distribuée.
+`TELEMETRY_RATE_LIMIT_PER_MINUTE` permet d'ajuster le plafond entre 1 et 10 000 ;
+une valeur invalide rétablit 1 200. Vérifier `TRUST_PROXY` et la configuration
+Caddy pour que `req.ip` corresponde à l'adresse client, sans faire confiance aux
+headers transmis directement par Internet. Tester avec les pilotes avant de
+modifier le quota. Les champs d'identification et le nombre de tours sont bornés,
+mais ces contrôles ne garantissent pas la véracité des chiffres ni n'examinent
+rétroactivement les données existantes.
+
+Pour rester compatible avec certaines versions CSP, le mode « nu » continue de
+transmettre le jeton dans l'URL : s'assurer que les journaux du proxy et des
+intermédiaires ne stockent pas les paramètres de cette route et limiter l'accès
+aux anciens journaux. Ne pas publier ces journaux ni les valeurs de `.env`.
+Le ping n'inscrit plus l'identifiant du pilote dans les logs applicatifs. Aucun
+réglage de Caddy déjà installé n'est modifié automatiquement par ce dépôt.
+
 Si le script n'est pas servi par le site (copie locale, gist), il retombe sur
 `ac.configValues` : les mêmes quatre paramètres peuvent alors être passés dans
 le bloc `[SCRIPT_2]`.
@@ -200,7 +225,7 @@ seul tour**, le script envoie un paquet `kind: "ping"`. Le site l'accepte sans
 rien stocker (ce n'est pas une mesure) et l'inscrit dans ses logs Render :
 
 ```
-télémétrie: ping reçu — circuit=ks_monza66-junior voiture=… pilote=7656119…
+télémétrie: ping reçu
 ```
 
 En jeu, le message dit `Connexion au site établie (200)`. C'est le seul contrôle
@@ -476,6 +501,7 @@ HTML. Le rapport produit est reproduit ci-dessous (extrait) :
 | --- | --- | --- |
 | `TELEMETRY_TOKEN` | *(vide)* | jeton attendu dans `X-Telemetry-Token`. Vide = les envois sont **refusés** (503), sauf `TELEMETRY_ALLOW_OPEN=1` |
 | `TELEMETRY_ALLOW_OPEN` | `0` | `1` accepte les envois sans jeton — réservé aux essais, jamais en prod |
+| `TELEMETRY_RATE_LIMIT_PER_MINUTE` | `1200` | plafond de requêtes par IP et par minute ; voir les limites du quota ci-dessus |
 | `TELEMETRY_ENABLED` | `1` | `0` coupe la télémétrie : les routes répondent 503, le reste du site continue |
 | `TELEMETRY_CAMPAIGN` | `campagne` | nom de campagne injecté dans le script, pour séparer les périodes |
 | `TELEMETRY_INTERVAL_SEC` | `5` | intervalle minimum entre deux envois (2 s plancher) |
