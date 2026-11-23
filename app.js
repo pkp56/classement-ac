@@ -33,7 +33,7 @@ require('./tools/lib/admin-session').mountAdminSession(app,{source:()=>eventsSou
 app.use((req, res, next) => {
   let publicPath;
   try{publicPath=decodeURIComponent(req.path).replace(/\\/g,'/')}catch(e){return res.status(400).json({error:'URL invalide.'});}
-  if (FORBIDDEN.test(publicPath)||/(^|\/)\.|^\/tools(?:\/|$)|^\/data\/(?:global-exclusions|telemetry-store|live-history)(?:\.|\/)|\.(?:bak|log|sql|sqlite|db|pem|key|pfx)$/i.test(publicPath)) return res.sendStatus(404);
+  if (FORBIDDEN.test(publicPath)||/(^|\/)\.|^\/tools(?:\/|$)|^\/data\/(?:global-exclusions|telemetry-store|live-history|mobile-updates)(?:\.|\/|$)|\.(?:bak|log|sql|sqlite|db|pem|key|pfx)$/i.test(publicPath)) return res.sendStatus(404);
   next();
 });
 
@@ -557,6 +557,40 @@ async function telemetryAdmin(req,res){
   });
   return false;
 }
+// Mise à jour Windows opt-in : uniquement session navigateur locale validée et
+// protégée CSRF, sans commande ni chemin choisis par le client.
+const mobileUpdateLib=require('./tools/lib/mobile-update');
+const mobileUpdate=mobileUpdateLib.createMobileUpdate({
+  root:ROOT,enabled:()=>process.platform==='win32'&&eventsSource()==='local'&&process.env.GDSP_MOBILE_UPDATE_ENABLED==='1'&&/^[0-9a-f]{64}$/.test(process.env.GDSP_MOBILE_UPDATE_KEY_HASH||'')
+});
+const mobileUpdateAttempts=new Map();
+async function mobileUpdateAuth(req,res){
+  if(!req.adminCookie||!(await verifyAdmin(req))){res.status(401).json({error:'Connexion administrateur sécurisée requise.'});return false;}
+  res.set('Cache-Control','no-store');return true;
+}
+app.get('/api/admin/mobile-update',async(req,res)=>{
+  if(!await mobileUpdateAuth(req,res))return;
+  try{res.json(await mobileUpdate.status());}catch(_){res.status(503).json({error:'État indisponible.'});}
+});
+app.post('/api/admin/mobile-update/check',async(req,res)=>{
+  if(!await mobileUpdateAuth(req,res))return;
+  try{res.json(await mobileUpdate.check());}catch(e){res.status(e.status||503).json({error:e.status?e.message:'Vérification indisponible.'});}
+});
+app.post('/api/admin/mobile-update/apply',async(req,res)=>{
+  if(!await mobileUpdateAuth(req,res))return;
+  const body=req.body;
+  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length!==2||typeof body.target!=='string'||typeof body.key!=='string')return res.status(400).json({error:'Demande invalide.'});
+  const now=Date.now();for(const [ip,entry] of mobileUpdateAttempts)if(entry.until<=now)mobileUpdateAttempts.delete(ip);
+  const ip=req.ip,entry=mobileUpdateAttempts.get(ip);
+  if(entry&&entry.count>=5)return res.set('Retry-After',String(Math.ceil((entry.until-now)/1000))).status(429).json({error:'Trop de tentatives. Réessaie plus tard.'});
+  if(!mobileUpdateLib.verifyUpdateKey(body.key,process.env.GDSP_MOBILE_UPDATE_KEY_HASH||'')){
+    if(!entry&&mobileUpdateAttempts.size>=1000)return res.status(429).json({error:'Trop de tentatives. Réessaie plus tard.'});
+    if(entry)entry.count++;else mobileUpdateAttempts.set(ip,{count:1,until:now+15*60*1000});
+    return res.status(403).json({error:'Clé de mise à jour incorrecte ou fonction désactivée.'});
+  }
+  mobileUpdateAttempts.delete(ip);
+  try{res.status(202).json(await mobileUpdate.request(body.target));}catch(e){res.status(e.status||503).json({error:e.status?e.message:'Demande indisponible.'});}
+});
 // Projection minimale : jamais exposer l'export AH complet (mots de passe,
 // options du serveur et identifiants pilotes) à travers ce nouvel aperçu.
 // Aperçus publics uniquement : origine AH autorisée et chemin figé, jamais une URL arbitraire.

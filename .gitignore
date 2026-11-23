@@ -204,3 +204,6 @@ data/global-exclusions.json.*
 GDSP-Backups/
 
 /assets/mod-previews/
+
+# Demandes et état privés de la tâche de mise à jour depuis le mobile
+/data/mobile-updates/

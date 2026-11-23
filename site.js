@@ -1484,16 +1484,28 @@ function getEventInfo(evCtx){
     discordUrl:isSafeHttpUrl(raw.discordUrl)?raw.discordUrl.trim():'https://discord.gg/kDZXwRgRS'
   };
 }
+// Windows n'affiche pas toujours les emojis de drapeaux : images locales
+// Twemoji seulement pour les codes présents, sans modifier les données enregistrées.
+const eventFlagCodes=new Set('AC AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CP CQ CR CU CV CW CX CY CZ DE DG DJ DK DM DO DZ EA EC EE EG EH ER ES ET EU FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU IC ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TA TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM UN US UY UZ VA VC VE VG VI VN VU WF WS XK YE YT ZA ZM ZW'.split(' '));
+function renderEventFlags(escaped){
+  return escaped.replace(/[\u{1f1e6}-\u{1f1ff}]{2}/gu,flag=>{
+    const code=Array.from(flag,c=>String.fromCharCode(c.codePointAt(0)-0x1f1e6+65)).join('');
+    if(!eventFlagCodes.has(code))return flag;
+    let country=code;
+    try{country=new Intl.DisplayNames(['fr'],{type:'region'}).of(code)||code;}catch(_){}
+    return `<img class="event-country-flag" src="/assets/flags/${code.toLowerCase()}.svg" alt="${esc('Drapeau : '+country)}">`;
+  });
+}
 function renderEventRichText(value){
   const input=String(value??'').replace(/\r\n?/g,'\n');
   const pattern=/\[([^\]\n]{1,120})\]\(([^)\s]+)\)|(https?:\/\/[^\s<>"']+)/gi;
-  const addText=text=>esc(text).replace(/\n/g,'<br>');
+  const addText=text=>renderEventFlags(esc(text)).replace(/\n/g,'<br>');
   let html='',offset=0,match;
   while((match=pattern.exec(input))){
     html+=addText(input.slice(offset,match.index));
     if(match[1]!==undefined){
       const href=String(match[2]||'').replace(/[.,!?;:]+$/,'');
-      if(isSafeHttpUrl(href))html+=`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(match[1])}</a>`;
+      if(isSafeHttpUrl(href))html+=`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${addText(match[1])}</a>`;
       else html+=addText(match[0]);
     }else{
       const raw=match[3],href=raw.replace(/[.,!?;:]+$/,''),tail=raw.slice(href.length);

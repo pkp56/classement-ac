@@ -1,0 +1,38 @@
+'use strict';
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const {validSlug,calendar,eventCard,eventDetail}=require('../mobile/mobile');
+const root=path.resolve(__dirname,'..');
+
+test('application mobile : manifeste local, portée limitée et icônes installables',()=>{
+  const manifest=JSON.parse(fs.readFileSync(path.join(root,'mobile/manifest.webmanifest'),'utf8'));
+  assert.equal(manifest.start_url,'/mobile/');assert.equal(manifest.scope,'/mobile/');assert.equal(manifest.display,'standalone');
+  for(const icon of manifest.icons){
+    assert.match(icon.src,/^\/mobile\/icons\//);const bytes=fs.readFileSync(path.join(root,icon.src));
+    assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+    const [w,h]=icon.sizes.split('x').map(Number);assert.equal(bytes.readUInt32BE(16),w);assert.equal(bytes.readUInt32BE(20),h);
+  }
+  const sw=fs.readFileSync(path.join(root,'mobile/sw.js'),'utf8');
+  assert.match(sw,/req\.method!==\x27GET\x27/);assert.match(sw,/SHELL\.includes/);assert.doesNotMatch(sw,/['"]\/api\//);
+});
+
+test('événements mobiles : échappement, liens locaux, pas de classement inventé',()=>{
+  assert.ok(validSlug('open-2026'));for(const x of ['','../x','a/b','HTTPS://a','a b'])assert.equal(validSlug(x),false);
+  assert.equal(eventCard({slug:'../x',name:'Mauvais'}),'');
+  const card=eventCard({slug:'cup',name:'<img src=x>',kind:'cup'});
+  assert.match(card,/&lt;img src=x&gt;/);assert.doesNotMatch(card,/<img/);
+  const html=eventDetail({slug:'cup',name:'Cup',kind:'cup',data:{eventInfo:{briefing:'<script>alert(1)</script> [Lien](https://example.com) [Piège](javascript:alert(1))'},ahEntrants:[{name:'A & B',team:'<b>x</b>',car:'alfa_spider'}]}});
+  assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>/);assert.match(html,/A &amp; B/);
+  assert.match(html,/href="https:\/\/example\.com"/);assert.doesNotMatch(html,/href="javascript:/);
+  assert.match(html,/Liste distincte des résultats et du classement/);assert.match(html,/href="\/evenements\/cup"/);
+  assert.doesNotMatch(html,/\bpoints\b|<table/i);
+});
+
+test('calendrier mobile : plusieurs circuits par date et aucune date vide inventée',()=>{
+  const rows=calendar({sessions:[{date:'2026-12-10T21:00:00Z',track:'spa'}],customCalendar:{'2026-12-10':{tracks:[{trackId:'spa',trackName:'Spa'}, {trackId:'monza',trackName:'Monza'}]},'2026-12-17':'vallelunga','':{track:'x'}}});
+  assert.deepEqual(rows.map(x=>[x.day,x.label,x.done]),[['2026-12-10','Monza',false],['2026-12-10','Spa',true],['2026-12-17','vallelunga',false]]);
+  const variants=calendar({customCalendar:{'2026-12-10':{tracks:[{trackId:'monza',layoutId:'junior'},{trackId:'monza',layoutId:'full'}]}}});
+  assert.deepEqual(variants.map(x=>x.label),['monza · full','monza · junior']);
+});
