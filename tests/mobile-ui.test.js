@@ -6,9 +6,9 @@ const fs=require('node:fs');
 const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../mobile/mobile.js'),'utf8');
 function browser(fetch){
-  const listeners={},content={innerHTML:'',addEventListener(name,fn){listeners['content:'+name]=fn;}},output={innerHTML:'',textContent:''};
+  const listeners={},content={innerHTML:'',querySelector(){return null;},addEventListener(name,fn){listeners['content:'+name]=fn;}},output={innerHTML:'',textContent:''};
   const nav=['home','events','live','more'].map(value=>({dataset:{nav:value},attrs:{},setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]}}));
-  const sandbox={document:{getElementById:id=>id==='content'?content:output,querySelectorAll:()=>nav},location:{hash:'#home',origin:'https://gdsp.example'},window:{addEventListener:(k,fn)=>{listeners[k]=fn},confirm:()=>true},navigator:{onLine:true,serviceWorker:{register:()=>Promise.resolve()}},fetch,URL,URLSearchParams,Date,Intl,Promise,Set,Map};
+  const sandbox={document:{getElementById:id=>id==='content'?content:id==='update-output'?output:null,querySelectorAll:()=>nav},location:{hash:'#home',origin:'https://gdsp.example'},window:{addEventListener:(k,fn)=>{listeners[k]=fn},confirm:()=>true},navigator:{onLine:true,serviceWorker:{register:()=>Promise.resolve()}},fetch,URL,URLSearchParams,Date,Intl,Promise,Set,Map};
   vm.createContext(sandbox);vm.runInContext(source,sandbox);
   return {sandbox,content,output,listeners,nav};
 }
@@ -27,6 +27,27 @@ test('mobile : accueil, choix événement, données distinctes et live',async()=
   b.sandbox.location.hash='#event=cup';await b.listeners.hashchange();assert.match(b.content.innerHTML,/Bienvenue/);assert.match(b.content.innerHTML,/Alice/);assert.equal(b.nav[1].attrs['aria-current'],'page');
   b.sandbox.location.hash='#live';await b.listeners.hashchange();assert.match(b.content.innerHTML,/Direct indisponible/);
   assert.deepEqual(calls,['/api/events','/api/events/cup','/api/live/status']);
+});
+test('mobile : archives visibles et vues complètes restent dans la coque mobile',async()=>{
+  const b=browser(async url=>url==='/api/events'?reply({events:[
+    {slug:'cup',name:'Cup',kind:'cup'},
+    {slug:'lola-t290-2026',name:'Ancienne Lola',kind:'championship'},
+    {slug:'lola-t290-gdsp-championnat-2026',name:'Lola archivée',kind:'archive'},
+    {slug:'deleted',name:'Effacé',points_config:{_deleted:true}}
+  ]}):reply({enabled:false,status:{status:'offline'}}));
+  await tick();assert.doesNotMatch(b.content.innerHTML,/Lola archivée|Ancienne Lola|Effacé/);
+  b.sandbox.location.hash='#events';await b.listeners.hashchange();
+  assert.match(b.content.innerHTML,/Archives/);assert.match(b.content.innerHTML,/Lola archivée/);
+  assert.doesNotMatch(b.content.innerHTML,/Ancienne Lola|Effacé/);
+  b.sandbox.location.hash='#detail=cup';await b.listeners.hashchange();
+  assert.match(b.content.innerHTML,/<iframe[^>]+src="\/evenements\/cup"/);
+  assert.equal(b.nav[1].attrs['aria-current'],'page');
+  b.sandbox.location.hash='#service=admin';await b.listeners.hashchange();
+  assert.match(b.content.innerHTML,/<iframe[^>]+src="\/admin"/);
+  assert.equal(b.nav[3].attrs['aria-current'],'page');
+  b.sandbox.location.hash='#service=live';await b.listeners.hashchange();
+  assert.match(b.content.innerHTML,/<iframe[^>]+src="\/live-timing"/);
+  assert.equal(b.nav[2].attrs['aria-current'],'page');
 });
 test('mobile : erreur de réseau visible, aucune donnée ancienne présentée',async()=>{
   const b=browser(async()=>{throw Error('offline')});b.sandbox.navigator.onLine=false;await tick();

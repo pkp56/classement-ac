@@ -3,7 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const {validSlug,calendar,eventCard,eventDetail}=require('../mobile/mobile');
+const {validSlug,calendar,eventCard,eventDetail,embeddedView,filterEventsList}=require('../mobile/mobile');
 const root=path.resolve(__dirname,'..');
 
 test('application mobile : manifeste local, portée limitée et icônes installables',()=>{
@@ -16,6 +16,9 @@ test('application mobile : manifeste local, portée limitée et icônes installa
   }
   const sw=fs.readFileSync(path.join(root,'mobile/sw.js'),'utf8');
   assert.match(sw,/req\.method!==\x27GET\x27/);assert.match(sw,/SHELL\.includes/);assert.doesNotMatch(sw,/['"]\/api\//);
+  assert.match(sw,/gdsp-mobile-shell-v2/);assert.match(sw,/self\.skipWaiting\(\)/);assert.match(sw,/self\.clients\.claim\(\)/);
+  const html=fs.readFileSync(path.join(root,'mobile/index.html'),'utf8');
+  assert.match(html,/mobile\.js\?v=2/);assert.match(html,/mobile\.css\?v=2/);assert.match(html,/app-update-banner/);
 });
 
 test('événements mobiles : échappement, liens locaux, pas de classement inventé',()=>{
@@ -26,8 +29,32 @@ test('événements mobiles : échappement, liens locaux, pas de classement inven
   const html=eventDetail({slug:'cup',name:'Cup',kind:'cup',data:{eventInfo:{briefing:'<script>alert(1)</script> [Lien](https://example.com) [Piège](javascript:alert(1))'},ahEntrants:[{name:'A & B',team:'<b>x</b>',car:'alfa_spider'}]}});
   assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>/);assert.match(html,/A &amp; B/);
   assert.match(html,/href="https:\/\/example\.com"/);assert.doesNotMatch(html,/href="javascript:/);
-  assert.match(html,/Liste distincte des résultats et du classement/);assert.match(html,/href="\/evenements\/cup"/);
+  assert.match(html,/Liste distincte des résultats et du classement/);assert.match(html,/href="#detail=cup"/);
+  assert.match(html,/href="#car=cup"/);assert.match(html,/href="#circuit=cup"/);
   assert.doesNotMatch(html,/\bpoints\b|<table/i);
+});
+
+test('catalogue mobile : mêmes tombstones et doublon historique que le PC, archives conservées',()=>{
+  const input=[
+    {slug:'lola-t290-2026',name:'Ancienne Lola',kind:'championship'},
+    {slug:'lola-t290-gdsp-championnat-2026',name:'Lola',kind:'archive'},
+    {slug:'supprime',name:'[DELETED]'},
+    {slug:'supprime-2',name:'Supprimé',points_config:{_deleted:true}},
+    {slug:'supprime-3',name:'Supprimé localement'},
+    {slug:'actif',name:'Cup',kind:'cup'}
+  ];
+  const shown=filterEventsList(input,{'supprime-3':true});
+  assert.deepEqual(shown.map(e=>[e.slug,e.kind]),[['lola-t290-gdsp-championnat-2026','archive'],['actif','cup']]);
+  assert.equal(filterEventsList([{slug:'lola-t290-2026',name:'Seule Lola'}]).length,1);
+});
+test('vues intégrées : routes locales fixes et identifiants validés',()=>{
+  assert.match(embeddedView('admin'),/src="\/admin"/);
+  assert.match(embeddedView('live'),/src="\/live-timing"/);
+  assert.match(embeddedView('telemetry'),/src="\/telemetry"/);
+  assert.match(embeddedView('detail','cup'),/src="\/evenements\/cup"/);
+  assert.match(embeddedView('car','cup'),/src="\/evenements\/cup\/voiture"/);
+  assert.match(embeddedView('circuit','cup'),/src="\/evenements\/cup\/circuit"/);
+  assert.equal(embeddedView('detail','../admin'),'');assert.equal(embeddedView('https://example.com'),'');
 });
 
 test('calendrier mobile : plusieurs circuits par date et aucune date vide inventée',()=>{

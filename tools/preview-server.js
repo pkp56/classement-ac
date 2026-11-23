@@ -228,15 +228,16 @@ const server = http.createServer((req, res) => {
   else if (urlPath === '/mobile/' || urlPath === '/mobile') filePath = path.join(ROOT, 'mobile', 'index.html');
   // Même URL que le site en production pour la page de suivi en direct.
   else if (urlPath === '/live-timing' || urlPath === '/live-timing/') filePath = path.join(ROOT, 'live-timing.html');
+  else if (urlPath === '/telemetry' || urlPath === '/telemetry/') filePath = path.join(ROOT, 'telemetry.html');
   // Fiches et onglets du site (routes virtuelles gérées par le JS) : on renvoie
   // l'index comme le fait app.js, pour éviter un 404 en aperçu.
-  else if (/^\/(evenements\/[^/]+(\/circuit)?|classement|manches|pilotes|admin)\/?$/.test(urlPath)) filePath = path.join(ROOT, 'index.html');
+  else if (/^\/(evenements\/[^/]+(\/(?:circuit|voiture))?|classement|manches|pilotes|admin)\/?$/.test(urlPath)) filePath = path.join(ROOT, 'index.html');
   else filePath = path.join(ROOT, path.normalize(urlPath).replace(/^(\.\.(\/|\\|$))+/, ''));
 
   fs.readFile(filePath, (err, buf) => {
     if (err || !filePath.startsWith(ROOT)) {
       // Routes SPA : /evenements/<slug> et /evenements/<slug>/circuit
-      if (/^\/evenements\/[^/]+(\/circuit)?\/?$/.test(urlPath)) {
+      if (/^\/evenements\/[^/]+(\/(?:circuit|voiture))?\/?$/.test(urlPath)) {
         return fs.readFile(path.join(ROOT, 'index.html'), (e2, html) => {
           if (e2) { res.writeHead(404).end('Not found'); return; }
           res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-cache' });
