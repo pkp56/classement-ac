@@ -50,7 +50,7 @@ async function importLiveries(roots,id,destination=cache){
       let ui;
       try{ui=parseLenientJson((await boundedRead(car,path.join(dir,'ui_skin.json'),65536)).toString('utf8'));}catch{}
       const isPlaceholderNumber=String(ui?.number??'')==='0'&&!safeTrackText(ui?.skinname,120)&&!safeTrackText(ui?.team,120)&&!safeTrackText(ui?.drivername,120);
-      liveries.push({image,name:safeTrackText(ui?.skinname||entry.name,120),number:isPlaceholderNumber?'':safeTrackText(ui?.number,16),team:safeTrackText(ui?.team,120)});
+      liveries.push({id:entry.name,image,name:safeTrackText(ui?.skinname||entry.name,120),number:isPlaceholderNumber?'':safeTrackText(ui?.number,16),team:safeTrackText(ui?.team,120)});
     }
     return liveries;
   }

@@ -23,6 +23,11 @@ const ROOT = __dirname;
 
 // Fichiers interdits au public
 const FORBIDDEN = /(^|\/)(?:\.env|node_modules|\.git|\.github|package\.json|package-lock\.json|README\.md|render\.yaml|\.gitignore|\.gitattributes|app\.js|seo\.js|tests?\/|backups?\/)/i;
+// Avant tout parseur global : même une requête JSON invalide ou sans jeton
+// consomme le quota et ne peut pas allouer le plafond général de 10 Mio.
+const telemetryGuard = require('./tools/telemetry/ingress-guard');
+app.use('/api/telemetry/push', telemetryGuard.createRateLimiter({limit:telemetryGuard.rateLimitFromEnv(process.env.TELEMETRY_RATE_LIMIT_PER_MINUTE)}));
+app.use('/api/telemetry/push', express.json({ limit: telemetryGuard.BODY_LIMIT }));
 app.use(express.json({ limit: '10mb' }));
 require('./tools/lib/admin-session').mountAdminSession(app,{source:()=>eventsSource()});
 app.use((req, res, next) => {
@@ -119,6 +124,7 @@ const AH_SERVERS = [...new Set((process.env.AH_SERVERS || ahSecurity.DEFAULT_SER
   catch(_){console.warn('AssettoHosting : origine AH_SERVERS invalide ignorée.');return []}
 }))];
 const ahClient = ahSecurity.createAssettoHostingFetcher(AH_SERVERS);
+const ahImageClient = ahSecurity.createAssettoHostingFetcher(AH_SERVERS,{maxBody:3*1024*1024});
 const ahFetch = (url, timeoutMs=15000) => ahClient.fetch(url, timeoutMs);
 
 function parisLocalToUtcDate(year, month, day, hour, minute){
@@ -213,14 +219,17 @@ async function ahFetchChampionship(serverUrl,uuid,opts){
 
 // Liste tous les championnats sur les serveurs, avec méta + barème + sessions connues
 app.get('/api/ah-championships', async(req,res)=>{
+  const selected=String(req.query.server||'').replace(/\/+$/,'');
+  if(selected){try{ahClient.authorize(selected,true)}catch(_){return res.status(400).json({error:'Serveur non autorisé.'})}}
+  const requestedServers=selected?[selected]:AH_SERVERS;
   try{
     const out=[];
-    for(const srv of AH_SERVERS){
+    for(const srv of requestedServers){
       try{
         const uuids=await ahListChampionships(srv);
         for(const uuid of uuids){
           try{
-            const j=await ahFetchChampionship(srv,uuid);
+            const j=await ahFetchChampionship(srv,uuid,{refresh:req.query.refresh==='1'});
             const name=(j.Name||'').trim();
             const lname=name.toLowerCase();
             // Filtres: test/duplicate/practice servers
@@ -272,11 +281,11 @@ app.get('/api/ah-championships', async(req,res)=>{
               // Suggested slug
               slug:suggestSlug(name,j.Created)
             });
-          }catch(e){}
+          }catch(e){out.push({server:srv,error:'Un championnat n’a pas pu être chargé.'})}
         }
       }catch(e){out.push({server:srv,error:e.message})}
     }
-    res.json({servers:AH_SERVERS,items:out.filter(x=>!x.error),errors:out.filter(x=>x.error)});
+    res.json({servers:requestedServers,items:out.filter(x=>!x.error),errors:out.filter(x=>x.error)});
   }catch(e){res.status(502).json({error:e.message})}
 });
 
@@ -585,6 +594,36 @@ async function telemetryAdmin(req,res){
   });
   return false;
 }
+// Projection minimale : jamais exposer l'export AH complet (mots de passe,
+// options du serveur et identifiants pilotes) à travers ce nouvel aperçu.
+// Aperçus publics uniquement : origine AH autorisée et chemin figé, jamais une URL arbitraire.
+app.get('/api/ah-skin-preview',async(req,res)=>{
+  const server=String(req.query.server||'').replace(/\/+$/,'');
+  const model=req.query.model,skin=req.query.skin;
+  try{ahImageClient.authorize(server,true)}catch(_){return res.status(400).end();}
+  const safe=require('./tools/lib/local-circuits').safeSegment;
+  if(!safe(model)||!safe(skin))return res.status(400).end();
+  try{
+    const url=server+'/content/cars/'+encodeURIComponent(model)+'/skins/'+encodeURIComponent(skin)+'/preview.jpg';
+    const image=await ahImageClient.fetch(url,10000);
+    if(image.status!==200||image.body.length<3||!image.body.subarray(0,3).equals(Buffer.from([255,216,255])))return res.status(404).end();
+    res.set({'Cache-Control':'public, max-age=3600','X-Content-Type-Options':'nosniff','Content-Type':'image/jpeg'});
+    return res.send(image.body);
+  }catch(_){return res.status(502).end();}
+});
+app.get('/api/admin/ah-championship-preview',async(req,res)=>{
+  const verdict=await verifyAdminDetail(req);
+  if(verdict!=='ok')return res.status(verdict==='denied'?401:503).json({error:verdict==='denied'?'Connexion administrateur requise.':'Vérification administrateur indisponible.'});
+  const server=String(req.query.server||'').replace(/\/+$/,'');
+  const uuid=String(req.query.uuid||'');
+  try{ahClient.authorize(server,true)}catch(_){return res.status(400).json({error:'Serveur non autorisé.'})}
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid))return res.status(400).json({error:'Identifiant de championnat invalide.'});
+  try{
+    const raw=await ahFetchChampionship(server,uuid,{refresh:true});
+    res.set('Cache-Control','no-store');
+    res.json(require('./tools/lib/assettohosting-preview').summarizeChampionship(raw,server,uuid));
+  }catch(e){console.error('AssettoHosting : aperçu indisponible —',e.message);res.status(502).json({error:'Impossible de récupérer le championnat AssettoHosting. Réessaie.'})}
+});
 app.put('/api/global-exclusions', async (req,res)=>{
   if(!(await verifyAdmin(req))) return res.status(401).json({error:'Connexion administrateur requise.'});
   const body=req.body||{};
@@ -1051,7 +1090,7 @@ app.get('/csp/telemetry.lua',(req,res)=>{
     res.send(head+src+`\n__GDSP_TELEMETRY__ = ${luaTable(injected)}\n`);
   });
 });
-app.post('/api/telemetry/push', express.text({type:()=>true,limit:'10mb'}), async(req,res)=>{
+app.post('/api/telemetry/push', express.text({type:()=>true,limit:telemetryGuard.BODY_LIMIT}), async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!telemetryEnabled())return res.status(503).json({error:'Télémétrie désactivée sur ce site.'});
   const expected=telemetryToken();
@@ -1073,11 +1112,13 @@ app.post('/api/telemetry/push', express.text({type:()=>true,limit:'10mb'}), asyn
     if(!raw)return res.status(400).json({error:'corps absent'});
     try{payload=JSON.parse(raw)}catch(e){return res.status(400).json({error:'corps JSON illisible'})}
   }
+  const envelopeError=telemetryGuard.validateEnvelope(payload);
+  if(envelopeError)return res.status(400).json({error:envelopeError,code:'telemetry-invalid-payload'});
   try{
     const service=await getTelemetry();
-    // Canal de retour CSP : le client envoie un battement authentifié toutes
-    // les quelques secondes. Le serveur peut ainsi remettre une commande à
-    // UNE session de jeu précise, sans exposer le jeton admin au script.
+    // Canal de retour CSP : le client envoie un battement toutes les quelques
+    // secondes. Une capacité de session distincte protège les échanges après
+    // enregistrement, mais le jeton global public ne prouve pas l'identité.
     if(payload && payload.kind==='measurement-poll'){
       const command=await service.pollPitMeasurement(payload);
       return res.type('text/plain; charset=utf-8').send(command);

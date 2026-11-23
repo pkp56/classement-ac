@@ -411,7 +411,7 @@ class TelemetryService {
       // Rien n'est écrit : un ping n'est pas une mesure. On le journalise pour
       // qu'il apparaisse dans les logs Render — c'est le point de repère qui
       // dit « le script tourne et le réseau passe ».
-      console.log(`télémétrie: ping reçu — circuit=${info.track || '?'} voiture=${info.car || '?'} pilote=${info.driverGuid || '?'}`);
+      console.log('télémétrie: ping reçu');
       return { ok: true, ping: true, added: 0, duplicates: 0, sessionId: null };
     }
     const session = await this.ensureSession(info);
