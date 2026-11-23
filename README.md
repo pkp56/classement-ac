@@ -116,7 +116,7 @@ Le navigateur restaure l'événement à l'ouverture directe et gère Retour/Suiv
 Les classements, résultats détaillés et profils restent interactifs : leur rendu
 serveur et leurs URL dédiées ne font pas encore partie de cette première étape.
 
-L’origine publique par défaut est **`https://classement-ac-1.onrender.com`** :
+L’origine publique par défaut est **`https://gdsp.duckdns.org`** :
 les URL canoniques et `/sitemap.xml` sont activés sans variable supplémentaire.
 En cas de changement de domaine, définir **`PUBLIC_SITE_URL=https://votre-domaine.fr`**
 sur le serveur de production (sans chemin). Ne pas utiliser

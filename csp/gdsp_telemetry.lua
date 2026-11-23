@@ -36,14 +36,10 @@ local WHEELS = 4
 local COMMAND_POLL_SEC = 5
 local FUEL_CHANGE_EPSILON_L = 0.002
 local MAX_BUFFER = 120      -- tours en attente avant de jeter les plus anciens
--- Sans indicateur pit-lane CSP fiable, on reconnaît le plateau du limiteur
--- 80 km/h, puis sa libération. Un bref passage à cette vitesse sur piste ne
--- suffit pas : il faut un plateau continu, une sortie au-dessus de 84 km/h,
--- et au moins 4 s de roulage mesuré.
-local PIT_LIMIT_MIN_KMH = 78
-local PIT_LIMIT_MAX_KMH = 82
+-- Détection expérimentale : indicateur CSP de pit-lane et plateau 80/120.
+-- Si l'indicateur est indisponible, aucune mesure automatique n'est produite.
+local PIT_LIMIT_TOLERANCE_KMH = 2
 local PIT_LIMIT_CONFIRM_MS = 2500
-local PIT_EXIT_KMH = 84
 local PIT_EXIT_CONFIRM_MS = 400
 local PIT_MIN_LANE_MS = 4000
 local PIT_STOP_KMH = 5
@@ -65,6 +61,7 @@ local state = {
   splineWraps = 0,
   currentLapSpeedMax = 0,
   pitCandidateMs = 0,
+  pitCandidateLimit = nil,
   pitLaneActive = false,
   pitLaneMs = 0,
   pitExitMs = 0,
@@ -319,8 +316,11 @@ local function readTyreWear()
         if not c or not c.wheels then return nil end
         local w = c.wheels[base + i]
         if not w then return nil end
-        local wear = w.tyreWear
-        if wear == nil then wear = w.wear end
+        local okWear, wear = pcall(function() return w.tyreWear end)
+        if not okWear or wear == nil then
+          okWear, wear = pcall(function() return w.wear end)
+        end
+        if not okWear then return nil end
         return wear
       end)
       if ok and type(v) == 'number' and v >= 0 and v <= 1.5 then
@@ -791,13 +791,10 @@ local function wearDeltaPct(startWear, endWear)
   return out
 end
 
---- Mesure le temps roulé entre le plateau du limiteur à 80 km/h et sa sortie.
---- Le CSP ne fournit pas d'indicateur pit-lane exploitable ici : c'est donc une
---- détection heuristique et non une position exacte sur la voie. Les arrêts au
---- stand ne sont pas comptés (le ravitaillement/changement de pneus est saisi
---- séparément dans le profil de circuit).
+--- Mesure estimée, temps d'arrêt exclu. L'indicateur CSP doit être disponible.
 local function resetPitLaneDetection()
   state.pitCandidateMs = 0
+  state.pitCandidateLimit = nil
   state.pitLaneActive = false
   state.pitLaneMs = 0
   state.pitExitMs = 0
@@ -867,7 +864,7 @@ local function measurementLapCompleted()
     if m.preLaps >= 1 then
       m.phase = 'wait_pit_entry'
       resetPitLaneDetection()
-      measurementMessage('tour avant validé — entrez dans la pit-lane au limiteur de 80 km/h.')
+      measurementMessage('tour avant validé — entrez dans la pit-lane au limiteur de 80 ou 120 km/h.')
     end
   elseif m.phase == 'after_lap' then
     m.postLaps = (m.postLaps or 0) + 1
@@ -974,7 +971,7 @@ local function pitMeasurementEntry()
   local m = state.measurement
   if m and m.phase == 'wait_pit_entry' then
     m.phase = 'pit_lane'
-    measurementMessage('entrée pit-lane confirmée par le plateau 80 km/h — rejoignez le box.')
+    measurementMessage('entrée pit-lane estimée par position CSP et plateau — rejoignez le box.')
   end
 end
 
@@ -1002,10 +999,18 @@ end
 
 local function updatePitLane(speedKmh, dt)
   local frameMs = math.max(0, tonumber(dt) or 0) * 1000
-  if not speedKmh or frameMs <= 0 then return end
-
+  local inLane = readField(car, 'isInPitlane')
+  if not speedKmh or frameMs <= 0 or type(inLane) ~= 'boolean' then
+    if state.pitLaneActive then failPitMeasurement('Position pit-lane CSP indisponible.') end
+    resetPitLaneDetection()
+    return
+  end
   if not state.pitLaneActive then
-    if speedKmh >= PIT_LIMIT_MIN_KMH and speedKmh <= PIT_LIMIT_MAX_KMH then
+    local limit = math.abs(speedKmh - 80) <= PIT_LIMIT_TOLERANCE_KMH and 80
+      or (math.abs(speedKmh - 120) <= PIT_LIMIT_TOLERANCE_KMH and 120 or nil)
+    if inLane and limit then
+      if state.pitCandidateLimit ~= limit then state.pitCandidateMs = 0 end
+      state.pitCandidateLimit = limit
       state.pitCandidateMs = state.pitCandidateMs + frameMs
       if state.pitCandidateMs >= PIT_LIMIT_CONFIRM_MS then
         state.pitLaneActive = true
@@ -1015,42 +1020,31 @@ local function updatePitLane(speedKmh, dt)
       end
     else
       state.pitCandidateMs = 0
+      state.pitCandidateLimit = nil
     end
     return
   end
-
-  -- La durée d'arrêt/service est suivie à part : elle ne s'ajoute jamais au
-  -- roulage entre le plateau 80 et la sortie de la pit-lane.
-  if speedKmh <= PIT_STOP_KMH then
-    state.pitExitMs = 0
-    if not state.pitStopAt then
-      state.pitStopAt = state.now
-      startMeasuredService()
-    end
-    observeMeasuredService()
-    return
-  end
-
-  if state.pitStopAt then
-    finishMeasuredService()
-    state.pitStopAt = nil
-  end
-
-  if speedKmh > PIT_EXIT_KMH then
+  if not inLane then
     state.pitExitMs = state.pitExitMs + frameMs
     if state.pitExitMs >= PIT_EXIT_CONFIRM_MS then
+      if state.pitStopAt then finishMeasuredService(); state.pitStopAt = nil end
       if state.pitLaneMs >= PIT_MIN_LANE_MS then
         local measuredMs = math.floor(state.pitLaneMs + 0.5)
         state.pendingPitLaneMs[#state.pendingPitLaneMs + 1] = measuredMs
-        log(string.format('passage pit-lane détecté au limiteur 80 : %.1f s', measuredMs / 1000))
+        log(string.format('passage pit-lane estimé : %.1f s', measuredMs / 1000))
       end
       pitMeasurementExit()
       resetPitLaneDetection()
     end
     return
   end
-
   state.pitExitMs = 0
+  if speedKmh <= PIT_STOP_KMH then
+    if not state.pitStopAt then state.pitStopAt = state.now; startMeasuredService() end
+    observeMeasuredService()
+    return
+  end
+  if state.pitStopAt then finishMeasuredService(); state.pitStopAt = nil end
   state.pitLaneMs = state.pitLaneMs + frameMs
 end
 
@@ -1116,7 +1110,14 @@ local function completeLap(lapNumber)
   end
 
   local delta = wearDeltaPct(state.lapStartWear, wearNow)
-  if delta then lap.tyreWearPct = delta end
+  if delta then
+    lap.tyreWearPct = delta
+    state.lastWearDiagnostic = 'variation positive mesurée'
+  elseif not wearNow or not state.lapStartWear then
+    state.lastWearDiagnostic = 'comparaison indisponible'
+  else
+    state.lastWearDiagnostic = 'aucune diminution exploitable'
+  end
 
   state.lapStartFuel = fuelNow
   state.lapStartWear = wearNow
@@ -1431,6 +1432,8 @@ function script.drawUI()
         or 'ABSENT (API)') ..
       ' tours=' .. tostring(state.sentLaps) ..
       ((state.lapsWithoutGuid or 0) > 0 and (' sansguid=' .. state.lapsWithoutGuid) or ''),
+    'pneus: ' .. (readTyreWear() and 'LUS (4 roues)' or 'NON LUS') ..
+      ' · dernier tour: ' .. (state.lastWearDiagnostic or 'pas encore mesuré'),
     'essais=' .. tostring(state.pingAttempts) ..
       (state.inflight and (' · en vol ' .. string.format('%.0f', state.now - state.inflightSince) .. 's') or ''),
     -- Compteur BRUT de la voiture : s'il ne monte pas en franchissant la
@@ -1438,9 +1441,10 @@ function script.drawUI()
     -- chose à vérifier quand « tours= » reste à 0.
     'compteur: ' .. tostring(readLapCount() or '—') ..
       ' · spline: ' .. tostring(readSpline() and string.format('%.2f', readSpline()) or '—'),
+    'pit-lane CSP: ' .. (type(readField(car, 'isInPitlane')) == 'boolean' and tostring(readField(car, 'isInPitlane')) or 'INDISPONIBLE'),
     'pit-lane: ' .. (state.pitLaneActive
-      and string.format('plateau 80 confirmé · %.1f s', state.pitLaneMs / 1000)
-      or (#state.pendingPitLaneMs > 0 and 'mesure prête pour le prochain tour' or 'en attente du plateau 80')),
+      and string.format('pit-lane estimée · %.1f s', state.pitLaneMs / 1000)
+      or (#state.pendingPitLaneMs > 0 and 'mesure prête pour le prochain tour' or 'en attente position CSP et plateau 80/120')),
     'mode: ' .. (state.mode ~= '' and state.mode or '—') ..
       (state.transportLocked and ' (fixé)' or ' (alternance)'),
     -- La ligne qui compte : ce que le transport a RÉPONDU, mot pour mot.
@@ -1450,7 +1454,7 @@ function script.drawUI()
   }
   if m then
     local phases = {
-      before_lap = 'tour avant', wait_pit_entry = 'attente limiteur 80',
+      before_lap = 'tour avant', wait_pit_entry = 'attente limiteur 80/120',
       pit_lane = 'entrée stands', service = 'service au box',
       wait_pit_exit = 'sortie des stands', after_lap = 'tour après',
       complete = 'terminée', failed = 'interrompue'

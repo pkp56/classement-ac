@@ -1208,6 +1208,17 @@ test('Direction de course : espaces distincts, imports conservés et miniatures 
   run("adminAuth=true;adminToken='ok';adminTab='desk';page='admin'");
   assert.match(run('admin()'),/Événement sélectionné[\s\S]+Administration générale[\s\S]+Télémétrie/);
   assert.match(run('admin()'),/Pilotes[\s\S]+Équipes/);
+  assert.match(run('admin()'),/Télémétrie[\s\S]+Serveurs CM/);
+  assert.doesNotMatch(run('admin()'),/adminTabs\('race-control'\)/);
+  const savedEvent=run("eventContext");
+  run("adminTab='race-control';eventContext=null");
+  assert.match(run('admin()'),/Ouvrir le configurateur Race Control/);
+  assert.match(run('admin()'),/href="\/race-control.html"/);
+  assert.doesNotMatch(run('admin()'),/Sélectionne un championnat ou un open/);
+  run("adminTab='servers'");
+  assert.match(run('admin()'),/Serveurs CM[\s\S]+brouillon/);
+  assert.match(run('admin()'),/Serveur CM 1[\s\S]+Serveur CM 2/);
+  sandbox.savedEvent=savedEvent;run("eventContext=savedEvent");
   run("adminTab='import'");assert.match(run('admin()'),/ahImport\(\)[\s\S]+bulkImport\(event\)/);
   const id=run('allDrivers()[0].id');sandbox.id=id;
   const src='data:image/jpeg;base64,dGVzdA==';sandbox.file={files:[{type:'image/jpeg',size:10,dataUrl:src}]};
@@ -1556,9 +1567,17 @@ test('Import automatique AH : actualise collisions et meilleurs temps sur des se
   await new Promise(resolve=>setImmediate(resolve));
   await vm.runInContext("loadEvent('ah-refresh-cup')",sandbox);
   vm.runInContext("adminAuth=true;adminToken='tok';adminUser='Admin';adminTab='import';page='admin';render()",sandbox);
+  // Comme dans le vrai DOM, render remplace le panneau et son élément de résultat.
+  let visibleResult=getElementById('ah-result');
+  const originalGet=sandbox.document.getElementById;
+  sandbox.document.getElementById=id=>id==='ah-result'?visibleResult:originalGet(id);
+  sandbox.replaceImportResult=()=>{visibleResult={id:'ah-result',innerHTML:'',style:{}};};
+  vm.runInContext('const originalRenderForImportTest=render; render=function(){originalRenderForImportTest();replaceImportResult()}',sandbox);
 
   await vm.runInContext('ahImport()',sandbox);
   await new Promise(resolve=>setImmediate(resolve));
+  assert.match(visibleResult.innerHTML,/Import terminé/);
+  assert.match(visibleResult.innerHTML,/Sauvegarde serveur confirmée/);
 
   const sessFetch=calls.find(c=>c.url.startsWith('/api/ah-championship-session-json'));
   assert.ok(sessFetch,'la session déjà importée est bien re-téléchargée');
@@ -1571,7 +1590,7 @@ test('Import automatique AH : actualise collisions et meilleurs temps sur des se
   assert.equal(updated.results[1].best,91800);
   assert.deepEqual(updated.laps[0].sectors,[28000,32000,30500]);
   assert.deepEqual(remote.data.penMap['0:0:p1'],{timeAdd:5000,note:'Avantage'});
-  assert.match(getElementById('ah-result').innerHTML,/0 nouvelle\(s\), 1 actualisée\(s\)/);
+  assert.match(visibleResult.innerHTML,/0 nouvelle\(s\), 1 actualisée\(s\)/);
 
   // Vérifier que l'onglet Circuit expose bien le meilleur tour calculé et la collision géolocalisée
   vm.runInContext('circuitsCache=null',sandbox);
@@ -1832,4 +1851,277 @@ test('Livrées AH : engagés sans résultats, fiches pilote et voiture, conserva
   assert.equal(vm.runInContext("driverSkin({name:'Alice'})",sandbox).includes('skin=blue'),true);
   vm.runInContext("eventContext.data.ahEntrants.push({name:'Alice',car:'autre',skin:'rouge'})",sandbox);
   assert.equal(vm.runInContext("driverSkin({name:'Alice'})",sandbox),'','homonymes : aucune livrée attribuée arbitrairement');
+});
+
+test('validation des liens : refuse les URL externes sans protocole', () => {
+  const source = siteSource.match(/function isSafeHttpUrl\(u\)\{[\s\S]*?\n\}/)[0];
+  const validate = vm.runInNewContext('(' + source + ')');
+  for (const value of ['//example.com/path', '///example.com', 'javascript:alert(1)', '/\\example.com']) assert.equal(validate(value), false, value);
+  for (const value of ['/docs/reglement.pdf', '/live-timing?source=test', 'https://example.com/path', 'http://example.com']) assert.equal(validate(value), true, value);
+});
+
+test('Circuit : quatre courses le même jour restent une manche et distinguent les variantes', async () => {
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const fiches=['', 'prague_short', 'prague_rev', 'prague_short_rev'].map((layout,i)=>({
+    id:'local:undated:prague/'+layout,round:i+1,label:'M'+(i+1),name:'Prague '+(layout||'normal'),
+    trackId:'prague',driverFolder:'prague',layoutId:layout,localLayoutId:layout,status:'upcoming',date:null
+  }));
+  const races=fiches.map((f,i)=>({date:`2026-04-22T${20+i}:00:00Z`,track:'prague',trackConfig:f.layoutId,type:'RACE',results:[{id:'p',name:'Pilote',laps:1,time:100000}]}));
+  vm.runInContext(`eventContext={slug:'prague',name:'Prague',kind:'archive',data:{circuitRounds:${JSON.stringify(fiches)}}};sessions.splice(0,sessions.length,...${JSON.stringify(races)});circuitsCache=null;circuitsError=''`,sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  const data=vm.runInContext('circuitsCache',sandbox);
+  assert.equal(vm.runInContext('rounds().length',sandbox),1);
+  assert.equal(vm.runInContext('rounds()[0].sessions.length',sandbox),4);
+  assert.equal(data.totalCount,1);
+  assert.equal(data.completedCount,1);
+  assert.deepEqual(Array.from(data.rounds,r=>[r.round,r.label,r.date,r.status]),fiches.map(()=>[1,'M1','2026-04-22','done']));
+  for(let i=0;i<4;i++){
+    vm.runInContext(`openCircuitRoundResult(${i})`,sandbox);
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(vm.runInContext('sessionIndex',sandbox),i);
+  }
+});
+
+test('Circuit : variante et jour ambigus ne sont jamais attribués au hasard', async () => {
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const fiches=[{name:'Prague',trackId:'prague',layoutId:'',round:1,status:'upcoming'},
+    {name:'Prague Short',trackId:'prague',layoutId:'prague_short',round:2,status:'upcoming'}];
+  const race={date:'2026-04-22T20:00:00Z',track:'prague',type:'RACE',results:[{id:'p'}]};
+  vm.runInContext(`eventContext={slug:'prague',name:'Prague',kind:'archive',data:{circuitRounds:${JSON.stringify(fiches)}}};sessions.splice(0,sessions.length,${JSON.stringify(race)});circuitsCache=null;circuitsError=''`,sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  assert.ok(vm.runInContext("circuitsCache.rounds.every(r=>r.status==='unconfirmed'&&r.date==='2026-04-22'&&r.round===1&&!r.resultsImported)",sandbox));
+  assert.match(vm.runInContext('circuitStatusLabel(circuitsCache.rounds[0])',sandbox),/À vérifier/);
+  vm.runInContext("eventContext.data.circuitRounds=[eventContext.data.circuitRounds[0]];sessions.push({...sessions[0],date:'2026-05-01T20:00:00Z'});circuitsCache=null",sandbox);
+  await vm.runInContext('circuitsData()',sandbox);
+  assert.notEqual(vm.runInContext('circuitsCache.rounds[0].status',sandbox),'done');
+  assert.ok(!vm.runInContext('circuitsCache.rounds[0].date',sandbox));
+});
+
+test('Commission : incidents réciproques et décor sont conservés sans modifier les sanctions',async()=>{
+  const {sandbox,calls}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const raw={Type:'RACE',Date:'2026-11-04T22:42:00+01:00',TrackName:'mexico',
+    Cars:[{CarId:0,Driver:{Guid:'alice',Name:'Alice'}},{CarId:1,Driver:{Guid:'bob',Name:'Bob'}}],
+    Result:[{CarId:0,TotalTime:100000,NumLaps:1,BestLap:100000},{CarId:1,TotalTime:101000,NumLaps:1,BestLap:101000}],Laps:[],
+    Events:[
+      {Type:'COLLISION_WITH_CAR',CarId:0,OtherCarId:1,Timestamp:1793826722,ImpactSpeed:12,WorldPosition:{X:1,Z:2}},
+      {Type:'COLLISION_WITH_CAR',CarId:1,OtherCarId:0,Timestamp:1793826723,ImpactSpeed:10,WorldPosition:{X:2,Z:3}},
+      {Type:'COLLISION_WITH_ENV',CarId:0,Timestamp:1793826730,AfterSessionEnd:true,WorldPosition:{X:4,Z:5}}
+    ]};
+  vm.runInContext(`sessions=[];penMap={'0:0:alice':{timeAdd:5,note:'Commission'}};currentSlug='test';eventContext={slug:'test',name:'Test',data:{}};adminAuth=true;adminToken='token';adminTab='adjust';page='admin'`,sandbox);
+  assert.equal(vm.runInContext(`importSessionJson(${JSON.stringify(JSON.stringify(raw))},'course.json',{silent:true})`,sandbox),true);
+  assert.equal(vm.runInContext('sessions[0].events.length',sandbox),2,'les calculs sportifs gardent seulement les contacts entre voitures');
+  assert.equal(vm.runInContext('sessions[0].incidentEvents.length',sandbox),3);
+  const html=vm.runInContext('admin()',sandbox);
+  assert.match(html,/Journal des incidents/);assert.match(html,/Décor/);assert.match(html,/Correspondance possible : #2/);
+  assert.match(html,/après session/);assert.match(html,/Vitesse indisponible/);
+  assert.equal(vm.runInContext("penMap['0:0:alice'].timeAdd",sandbox),5);
+  vm.runInContext("commissionIncidentPilot=sessions[0].incidentEvents[0].aid",sandbox);
+  assert.match(vm.runInContext('admin()',sandbox),/3 signalement\(s\) affiché/);
+  await vm.runInContext('saveRemote()',sandbox);
+  const saved=calls.filter(c=>c.url==='/api/events/test/data'&&c.method==='POST').at(-1).body;
+  assert.equal(saved.sessions[0].incidentEvents.length,3);
+  assert.equal(saved.sessions[0].incidentEvents[2].afterSessionEnd,true);
+  assert.equal(saved.sessions[0].events.length,2);
+  const partial={...raw,Events:null};
+  vm.runInContext(`importSessionJson(${JSON.stringify(JSON.stringify(partial))},'course.json',{silent:true})`,sandbox);
+  assert.equal(vm.runInContext('sessions[0].incidentEvents.length',sandbox),3,'une actualisation incomplète ne détruit pas le journal');
+});
+
+test('Commission : rapprochements prudents et anciens imports partiels',async()=>{
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext(`adminAuth=true;eventContext={slug:'x',name:'X',data:{}};sessions=[{type:'RACE',date:'2026-11-04T20:00:00Z',track:'x',results:[],events:[
+    {type:'COLLISION_WITH_CAR',aid:'a',bid:'b',a:'<Alice>',b:'Bob',timestamp:100,WorldPosition:{X:0,Z:0}},
+    {type:'COLLISION_WITH_CAR',aid:'b',bid:'a',a:'Bob',b:'<Alice>',timestamp:101,WorldPosition:{X:100,Z:0}},
+    {type:'COLLISION_WITH_CAR',aid:'b',bid:'a',a:'Bob',b:'<Alice>',timestamp:null,WorldPosition:{X:0,Z:0}}
+  ]}];commissionIncidentSession='';commissionIncidentPilot=''`,sandbox);
+  const html=vm.runInContext('renderCommissionIncidents(rounds())',sandbox);
+  assert.match(html,/Archive partielle/);assert.match(html,/&lt;Alice&gt;/);assert.doesNotMatch(html,/<Alice>/);
+  assert.doesNotMatch(html,/Correspondance possible : #/);
+  assert.match(html,/Heure indisponible/);
+  vm.runInContext("commissionIncidentPilot='b'",sandbox);
+  assert.match(vm.runInContext('renderCommissionIncidents(rounds())',sandbox),/3 signalement\(s\) affiché/);
+});
+
+test('Commission : filtrage par session et pilote, suggestions non destructives',async()=>{
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const row=(a,b,t,x)=>({type:'COLLISION_WITH_CAR',aid:a,bid:b,a,b,timestamp:t,WorldPosition:{X:x,Z:0},speed:5});
+  const group=[row('Alice','Bob',1793826722,0),row('Bob','Alice',1793826723,1),row('Bob','Alice',1793826724,2),row('Charlie','David',1793826750,1)];
+  vm.runInContext(`adminAuth=true;eventContext={slug:'x',name:'X',data:{}};sessions=[{type:'RACE',date:'2026-11-04T20:00:00Z',track:'x',results:[],incidentEvents:${JSON.stringify(group)}},{type:'RACE',date:'2026-11-04T21:00:00Z',track:'y',results:[],incidentEvents:[{type:'COLLISION_WITH_ENV',aid:'c',a:'Charlie',timestamp:1793826723}]}];commissionIncidentSession='0:0';commissionIncidentPilot='Alice'`,sandbox);
+  const html=vm.runInContext('renderCommissionIncidents(rounds())',sandbox);
+  assert.match(html,/3 signalement\(s\) affiché\(s\) sur 4/);
+  assert.match(html,/Correspondance possible : #2, #3/);
+  assert.equal(vm.runInContext('sessions[0].incidentEvents.length',sandbox),4);
+  vm.runInContext("commissionIncidentSession='0:1';commissionIncidentPilot=''",sandbox);
+  const other=vm.runInContext('renderCommissionIncidents(rounds())',sandbox);
+  assert.match(other,/1 signalement\(s\) affiché\(s\) sur 1/);assert.match(other,/Décor/);
+  vm.runInContext('adminAuth=false',sandbox);
+  assert.equal(vm.runInContext('renderCommissionIncidents(rounds())',sandbox),'');
+});
+
+test('Analyse après-course : tours ordonnés, secteurs et régularité sans toucher aux résultats', async()=>{
+  const {sandbox}=makeBrowser();await new Promise(resolve=>setImmediate(resolve));
+  const race={type:'RACE',date:'2026-11-04T21:00:00Z',track:'mexico',results:[
+    {id:'a',name:'Alice',laps:5,time:500000,best:90000},{id:'b',name:'Bob',laps:2,time:200000,best:95000}
+  ],laps:[
+    {id:'a',time:91000,cuts:0,sectors:[30000,null,61000],timestamp:103},
+    {id:'a',time:110000,cuts:0,sectors:[40000,40000,30000],timestamp:100},
+    {id:'a',time:90000,cuts:0,sectors:[29000,31000,30000],timestamp:102},
+    {id:'a',time:85000,cuts:1,sectors:[10000,30000,45000],timestamp:101},
+    {id:'a',time:125000,cuts:0,sectors:[45000,45000,35000],timestamp:104},
+    {id:'b',time:95000,cuts:0,timestamp:100}
+  ]};
+  vm.runInContext(`eventContext={slug:'test',name:'Test',kind:'open',data:{}};backendMulti=true;sessions=${JSON.stringify([race])};round=0;sessionIndex=0;eventtab='analyse';analysisDriverId='a';penMap={}`,sandbox);
+  const before=vm.runInContext('JSON.stringify(sessions)',sandbox);
+  const html=vm.runInContext('manche()',sandbox);
+  assert.match(html,/Analyse après-course/);assert.match(html,/5 tour\(s\) enregistré\(s\) sur 5/);
+  assert.match(html,/\+1\.000 s \(2 tours retenus\)/);assert.match(html,/S1 : 0:29\.000/);assert.doesNotMatch(html,/S1 : 0:10\.000/);
+  assert.match(html,/S1 0:30\.000 · S2 — · S3 1:01\.000/);assert.match(html,/Coupé \(1\)/);
+  assert.match(html,/Graphiques de positions et d’écarts non disponibles/);
+  assert.equal(vm.runInContext('JSON.stringify(sessions)',sandbox),before);
+  const bob=vm.runInContext("raceAnalysisDriver(sessions[0],sessions[0].results[1])",sandbox);
+  assert.equal(bob.consistency,null);assert.equal(bob.complete,false);
+  vm.runInContext("analysisDriverId='b'",sandbox);
+  assert.match(vm.runInContext('manche()',sandbox),/Historique incomplet ou ordre non vérifiable/);
+});
+
+test('Analyse après-course : ordre ambigu et secteurs absents ne sont pas inventés', async()=>{
+  const {sandbox}=makeBrowser();await new Promise(resolve=>setImmediate(resolve));
+  const race={type:'RACE',date:'2026-11-04T21:00:00Z',track:'x',results:[{id:'a',name:'<Alice>',laps:3,time:300000}],laps:[
+    {id:'a',time:90000,cuts:0,sectors:[30000,null,30000],timestamp:100},
+    {id:'a',time:91000,cuts:0,sectors:[30000,31000,30000],timestamp:100},
+    {id:'a',time:92000,cuts:0}
+  ]};
+  vm.runInContext(`sessions=${JSON.stringify([race])};analysisDriverId='a'`,sandbox);
+  const before=vm.runInContext('JSON.stringify(sessions)',sandbox);
+  const html=vm.runInContext('renderRaceAnalysis(sessions[0])',sandbox);
+  assert.match(html,/Historique incomplet ou ordre non vérifiable/);assert.match(html,/Indisponible/);
+  assert.match(html,/&lt;Alice&gt;/);assert.doesNotMatch(html,/<Alice>/);
+  assert.match(html,/S1 0:30\.000 · S2 — · S3 0:30\.000/);
+  assert.equal(vm.runInContext('JSON.stringify(sessions)',sandbox),before);
+});
+
+test('Import et sauvegarde : un secteur absent ne décale pas les suivants',async()=>{
+  const {sandbox,calls}=makeBrowser();await new Promise(resolve=>setImmediate(resolve));
+  const raw={Type:'RACE',Date:'2026-11-04T20:00:00Z',TrackName:'x',Cars:[{CarId:0,Driver:{Guid:'a',Name:'Alice'}}],Result:[{CarId:0,TotalTime:90000,NumLaps:1,BestLap:90000}],Laps:[{CarId:0,LapTime:90000,Cuts:0,Timestamp:100,Sectors:[30000,0,30000]}]};
+  vm.runInContext("sessions=[];currentSlug='test';eventContext={slug:'test',name:'Test',data:{}};adminAuth=true;adminToken='token'",sandbox);
+  assert.equal(vm.runInContext(`importSessionJson(${JSON.stringify(JSON.stringify(raw))},'course.json',{silent:true})`,sandbox),true);
+  assert.deepEqual(Array.from(vm.runInContext('sessions[0].laps[0].sectors',sandbox)),[30000,null,30000]);
+  await vm.runInContext('saveRemote()',sandbox);
+  const saved=calls.filter(c=>c.url==='/api/events/test/data'&&c.method==='POST').at(-1).body;
+  assert.deepEqual(saved.sessions[0].laps[0].sectors,[30000,null,30000]);
+});
+
+test('Import automatique : aucun scan global ni sauvegarde pour un événement non lié', async () => {
+  const {sandbox,getElementById,calls}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext("currentSlug='open-sugo';ahConfig=null;adminToken='tok';",sandbox);
+  const before=vm.runInContext('JSON.stringify({sessions,penMap})',sandbox);
+  const start=calls.length;
+  await vm.runInContext('ahImport()',sandbox);
+  assert.match(getElementById('ah-result').innerHTML,/Import automatique indisponible/);
+  assert.match(getElementById('ah-result').innerHTML,/fichiers JSON manuellement/);
+  assert.deepEqual(calls.slice(start),[]);
+  assert.equal(vm.runInContext('JSON.stringify({sessions,penMap})',sandbox),before);
+  // La protection couvre également le mode historique et les liens incomplets.
+  for(const setup of ["currentSlug='';ahConfig=null", "currentSlug='open-sugo';ahConfig={server:'https://example.org'}"]){
+    vm.runInContext(setup,sandbox);
+    const count=calls.length;
+    await vm.runInContext('ahImport()',sandbox);
+    assert.equal(calls.length,count);
+  }
+});
+
+test('Liaison AH manuelle : confirmation, conservation des sessions et décisions, puis import lié', async () => {
+  const champ={server:'https://fr2.assettohosting.com:50648',uuid:'11111111-1111-1111-1111-111111111111',name:'Open #5 Charade'};
+  let remote={slug:'open-charade',name:'Open #5 Charade',kind:'open',points_config:{},data:{sessions:[{date:'2026-09-02',type:'RACE',track:'charade',results:[],laps:[],events:[]}],penMap:{'0:0:p':{timeAdd:5}},extra:'conservé'}};
+  const {sandbox,getElementById,calls}=makeBrowser([remote],(url,opts)=>{
+    if(url==='/api/events/open-charade')return response(remote);
+    if(url==='/api/ah-championships')return response({items:[champ],errors:[]});
+    if(url==='/api/events/open-charade/ah-link') {remote={...remote,data:{...remote.data,ahServer:champ.server,ahUuid:champ.uuid}};return response({status:'ok'});}
+    if(url.startsWith('/api/ah-championship-sessions'))return response({championship:champ.name,items:[],events:1});
+    return null;
+  });
+  await new Promise(r=>setImmediate(r));
+  await vm.runInContext("loadEvent('open-charade')",sandbox);
+  vm.runInContext("adminAuth=true;adminToken='tok';adminTab='import';page='admin';render()",sandbox);
+  const before=JSON.stringify(remote.data);
+  await vm.runInContext('ahLinkScan()',sandbox);
+  assert.match(getElementById('ah-link-result').innerHTML,/Open #5 Charade/);
+  getElementById('ah-link-choice').value='0';
+  sandbox.confirm=()=>false;
+  await vm.runInContext('ahLinkSave()',sandbox);
+  assert.equal(JSON.stringify(remote.data),before);
+  assert.equal(calls.filter(c=>c.url.endsWith('/ah-link')).length,0);
+  sandbox.confirm=()=>true;
+  await vm.runInContext('ahLinkSave()',sandbox);
+  assert.equal(remote.data.sessions.length,1);
+  assert.equal(remote.data.penMap['0:0:p'].timeAdd,5);
+  assert.equal(remote.data.extra,'conservé');
+  assert.equal(vm.runInContext('ahConfig.uuid',sandbox),champ.uuid);
+  assert.equal(calls.filter(c=>c.url.startsWith('/api/ah-championship-sessions')).length,0,'la liaison ne lance aucun import');
+  await vm.runInContext('ahImport()',sandbox);
+  assert.ok(calls.some(c=>c.url.includes('/api/ah-championship-sessions?')&&c.url.includes(champ.uuid)));
+  assert.match(getElementById('ah-result').innerHTML,/aucune session récupérable/);
+  await vm.runInContext("loadEvent('open-charade')",sandbox);
+  assert.equal(vm.runInContext('ahConfig.uuid',sandbox),champ.uuid,'la liaison persiste au rechargement');
+});
+
+test('Miniatures Lola manquantes : visuels du classement, alias Christophe et priorité aux images personnalisées', async()=>{
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext("eventContext={slug:ACTIVE_LOLA_SLUG,name:'Lola',data:{driverPhotos:{custom:'data:image/jpeg;base64,dGVzdA=='}}}",sandbox);
+  for(const [name,file] of [['Kami_Kaze31','kami'],['Tx3Rony68z','rony'],['Pikoupok','pikoupok'],['thibjedi','thibjedi'],['[APR] Christophe','holden'],['Christophe [APR]','holden']]){
+    sandbox.testName=name;
+    assert.match(vm.runInContext("car(testName,'id')",sandbox),new RegExp('/assets/'+file+'\\.jpg'));
+    assert.ok(fs.existsSync(path.join(root,'assets',file+'.jpg')));
+  }
+  sandbox.testName='Pikoupok';
+  assert.equal(vm.runInContext('number(testName)',sandbox),'—','ne pas inventer de numéro');
+  assert.match(vm.runInContext("car(testName,'custom')",sandbox),/data:image\/jpeg;base64/);
+  vm.runInContext("eventContext={slug:'autre-event',name:'Autre',data:{}}",sandbox);
+  assert.doesNotMatch(vm.runInContext("car(testName,'id')",sandbox),/pikoupok\.jpg/);
+});
+
+test('Essai sans plugin CM exige une seconde confirmation explicite',async()=>{
+ let attempts=0,confirmations=[];
+ const {sandbox,getElementById,calls}=makeBrowser([],async(url)=>{
+  if(url==='/api/server-manager/presets/local1/start'){
+   attempts++;return attempts===1?response({code:'CM_PLUGIN_TEST_CONFIRM'},409):response({message:'Lancement demandé sans le plugin CM.'});
+  }
+  return null;
+ });
+ await new Promise(resolve=>setImmediate(resolve));getElementById('cm-server-select').value='local1';
+ sandbox.confirm=text=>{confirmations.push(text);return true;};
+ await vm.runInContext("cmControl('start')",sandbox);
+ const requests=calls.filter(c=>c.url==='/api/server-manager/presets/local1/start');
+ assert.equal(requests.length,2);assert.equal(requests[0].body.withoutCmPlugin,undefined);assert.equal(requests[1].body.withoutCmPlugin,true);
+ assert.equal(confirmations.length,2);assert.match(confirmations[1],/plugin interne Content Manager NE sera PAS lancé/);
+});
+
+test('Refuser la seconde confirmation ne lance pas le serveur',async()=>{
+ let count=0;
+ const {sandbox,getElementById,calls}=makeBrowser([],async url=>url==='/api/server-manager/presets/local1/start'?response({code:'CM_PLUGIN_TEST_CONFIRM'},409):null);
+ await new Promise(resolve=>setImmediate(resolve));getElementById('cm-server-select').value='local1';sandbox.confirm=()=>++count===1;
+ await vm.runInContext("cmControl('start')",sandbox);
+ assert.equal(calls.filter(c=>c.url==='/api/server-manager/presets/local1/start').length,1);
+ assert.equal(getElementById('cm-server-status').textContent,'Lancement annulé.');
+});
+
+test('Événement clôturé : nombre de pilotes sans lien d’inscription, même sans résultat',async()=>{
+  const {sandbox}=makeBrowser();await new Promise(r=>setImmediate(r));
+  const run=src=>vm.runInContext(src,sandbox);
+  run("eventContext={slug:'test',name:'Test',kind:'archive',data:{eventInfo:{registrationUrl:'https://example.org/inscription'}}}; rounds=()=>[]; allDrivers=()=>[{id:'a'},{id:'b'}]");
+  const card=()=>run('eventHome()').match(/<div class="ev-kpi gold">[\s\S]*?<\/div>/)[0];
+  assert.match(card(),/Pilotes engagés<\/span><strong>2<\/strong>/);
+  assert.doesNotMatch(card(),/ev-register|Inscriptions|<svg/);
+  run('allDrivers=()=>[]');
+  assert.match(card(),/<strong>0<\/strong>/);assert.doesNotMatch(card(),/ev-register|Inscriptions|<svg/);
+  run("eventContext.kind='championship'");
+  assert.match(card(),/ev-register/);
+  run("allDrivers=()=>[{id:'a'}]");assert.match(card(),/<strong>1<\/strong>[\s\S]*ev-register/);
 });

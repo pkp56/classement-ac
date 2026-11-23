@@ -389,7 +389,7 @@ test('les passages détectés donnent une médiane pit-lane par circuit/layout',
   assert.equal(automatic.pit_lane_loss_ms, 18600);
   assert.equal(automatic.automatic_pit_lane_loss_ms, 18600);
   assert.equal(automatic.pit_lane_samples, 2);
-  assert.match(automatic.source, /automatique.*80 km\/h/);
+  assert.match(automatic.source, /automatique.*anciennes mesures/);
   assert.equal(await service.pitProfile(track, 'other-layout'), null,
     'une configuration ne récupère pas les temps pit d’une autre');
 
@@ -503,7 +503,7 @@ test('le temps pit-lane est commun à toutes les voitures du même circuit/layou
   for (const car of summary.cars) {
     assert.equal(car.pitLaneLossMs, 20000, 'la médiane des deux voitures est partagée');
     assert.equal(car.pitLaneSamples, 2, 'le compteur compte les passages, pas les tours de cette voiture');
-    assert.equal(car.pitLaneSource, 'mesure automatique (limiteur 80 km/h)');
+    assert.equal(car.pitLaneSource, 'estimation automatique (anciennes mesures comprises)');
   }
   const filtered = await service.summary({ car: 'car_alpha', track, trackConfig });
   assert.equal(filtered.cars[0].pitLaneLossMs, 20000, 'le filtre voiture ne ramène pas le temps à son seul passage');
@@ -734,13 +734,13 @@ test('le limiteur 80 km/h mesure le roulage pit-lane, sans compter l’arrêt au
   const run = simulate({
     steps: [
       0.016,
-      (L) => setCar(L, 'speedKmh', 80),
+      (L) => { setCar(L, 'isInPitlane', true); setCar(L, 'speedKmh', 80); },
       ...Array.from({ length: 12 }, () => 0.5), // 6 s au plateau du limiteur
       (L) => setCar(L, 'speedKmh', 50),
       ...Array.from({ length: 4 }, () => 0.5),  // 2 s supplémentaires dans la voie
       (L) => setCar(L, 'speedKmh', 0),
       ...Array.from({ length: 10 }, () => 0.5), // service au box : exclu
-      (L) => setCar(L, 'speedKmh', 90),
+      (L) => { setCar(L, 'isInPitlane', false); setCar(L, 'speedKmh', 90); },
       0.25, 0.25,                               // sortie confirmée au-dessus de 84
       ...unTour()
     ]
@@ -773,7 +773,7 @@ test('la procédure CSP impose un tour avant, confirme les pneus neufs et attend
     ]),
     ...Array.from({ length: 11 }, () => 0.5), // le poll armé après le ping délivre START
     (L) => setCar(L, 'lapCount', 2), 0.1,      // un tour complet avant les stands
-    (L) => setCar(L, 'speedKmh', 80),
+    (L) => { setCar(L, 'isInPitlane', true); setCar(L, 'speedKmh', 80); },
     ...Array.from({ length: 7 }, () => 0.5),  // plateau 80 confirmé
     (L) => setCar(L, 'speedKmh', 50),
     ...Array.from({ length: 4 }, () => 0.5),  // roulage dans la voie des stands
@@ -783,7 +783,7 @@ test('la procédure CSP impose un tour avant, confirme les pneus neufs et attend
       { tyreWear: 1 }, { tyreWear: 1 }, { tyreWear: 1 }, { tyreWear: 1 }
     ]),
     0.5, 0.5,                                 // retour à neuf observé pendant l'arrêt
-    (L) => setCar(L, 'speedKmh', 90),
+    (L) => { setCar(L, 'isInPitlane', false); setCar(L, 'speedKmh', 90); },
     0.25, 0.25,                               // sortie confirmée > 84 km/h
     (L) => setCar(L, 'lapCount', 3), 0.1,      // le tour après est terminé
     0.5                                       // poll de confirmation du protocole complet
@@ -820,7 +820,7 @@ test('la procédure de ravitaillement calcule un débit à partir du carburant e
   const steps = [
     ...Array.from({ length: 11 }, () => 0.5), // START après le ping
     (L) => setCar(L, 'lapCount', 2), 0.1,
-    (L) => setCar(L, 'speedKmh', 80),
+    (L) => { setCar(L, 'isInPitlane', true); setCar(L, 'speedKmh', 80); },
     ...Array.from({ length: 7 }, () => 0.5),
     (L) => setCar(L, 'speedKmh', 50),
     ...Array.from({ length: 4 }, () => 0.5),
@@ -830,7 +830,7 @@ test('la procédure de ravitaillement calcule un débit à partir du carburant e
     (L) => setCar(L, 'fuel', 36.5), 0.5,
     (L) => setCar(L, 'fuel', 40.5), 0.5,       // 10 L effectivement ajoutés
     0.5, 0.5,                                  // stabilisation avant de repartir
-    (L) => setCar(L, 'speedKmh', 90),
+    (L) => { setCar(L, 'isInPitlane', false); setCar(L, 'speedKmh', 90); },
     0.25, 0.25,
     (L) => setCar(L, 'lapCount', 3), 0.1,
     0.5
@@ -1063,7 +1063,7 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Telemetry-Token': 'jeton-tel' },
     body: JSON.stringify({
-      ...pushPayload(),
+      ...pushPayload(), serverName: 'GDSP Test Race Control', sessionKey: 'live-sector-http',
       laps: [{ lapNumber: 1, lapMs: 75576 }, { lapNumber: 10 }]
     })
   });
@@ -1094,6 +1094,14 @@ test('HTTP : jeton exigé à l\'envoi, admin exigé à la lecture, rapport servi
 
   // 4. lecture avec admin → les tours sont là
   const auth = { Authorization: 'Bearer ' + loginBody.token };
+  const serverCatalog=await (await fetch(`${base}/api/telemetry/catalog`,{headers:auth})).json();
+  assert.ok(serverCatalog.servers.includes('GDSP Test Race Control'));
+  const filteredSummary=await (await fetch(`${base}/api/telemetry/summary?serverName=${encodeURIComponent('GDSP Test Race Control')}`,{headers:auth})).json();
+  assert.equal(filteredSummary.rows,3);
+  const otherSummary=await (await fetch(`${base}/api/telemetry/summary?serverName=Different`,{headers:auth})).json();
+  assert.equal(otherSummary.rows,0);
+  const otherSessions=await (await fetch(`${base}/api/telemetry/sessions?serverName=Different`,{headers:auth})).json();
+  assert.equal(otherSessions.sessions.length,0);
   const clients = await (await fetch(`${base}/api/telemetry/measurement-clients`, { headers: auth })).json();
   assert.equal(clients.clients.length, 1);
   assert.equal(clients.clients[0].car, 'alfa_giulietta_spider');
@@ -2240,4 +2248,68 @@ test('la ligne circuit dit SA source : jeu (ac.getTrackID) ou config', () => {
   });
   assert.equal(config.error, null);
   assert.ok(config.ui.some(l => /circuit: oesterreichring1979 \(config\)/.test(l)), config.ui.join(' | '));
+});
+
+test('Filtre serveur : deux serveurs sur le même circuit restent séparés, sans inventer les noms absents', async () => {
+  const service = new TelemetryService(tempStore());
+  await service.ingest(pushPayload({serverName:'CM 1',sessionKey:'separate-cm-1'}));
+  await service.ingest(pushPayload({serverName:'CM 2',sessionKey:'separate-cm-2',laps:[{lapNumber:1,lapMs:88000}]}));
+  await service.ingest(pushPayload({serverName:'',sessionKey:'no-server-name',laps:[{lapNumber:1,lapMs:77000}]}));
+  const catalog=await service.catalog();
+  assert.deepEqual(catalog.servers,['CM 1','CM 2']);
+  const first=await service.rows({serverName:'CM 1'});
+  const second=await service.rows({serverName:'CM 2'});
+  assert.equal(first.length,3);
+  assert.equal(second.length,1);
+  assert.ok(first.every(r=>r.server_name==='CM 1'));
+  assert.equal(second[0].lap_ms,88000);
+  assert.equal((await service.rows()).length,5);
+  assert.equal((await service.summary({serverName:'CM 1'})).rows,3);
+  assert.equal((await service.summary({serverName:'CM 2'})).rows,1);
+});
+
+test('Anciennes télémétries sans clé : ne pas réunir deux serveurs sur un même circuit', async () => {
+  const service=new TelemetryService(tempStore());
+  await service.ingest(pushPayload({serverName:'CM 1'}));
+  await service.ingest(pushPayload({serverName:'CM 2'}));
+  assert.equal((await service.listSessions()).length,2);
+  assert.equal((await service.rows({serverName:'CM 1'})).length,3);
+  assert.equal((await service.rows({serverName:'CM 2'})).length,3);
+});
+test('Le diagnostic visible indique si les quatre pneus sont lus et la variation au tour',()=>{
+ const good=simulate({callInit:true,steps:unTour()});assert.equal(good.error,null);
+ assert.ok(good.ui.some(s=>/pneus: LUS \(4 roues\)/.test(s)),good.ui.join(' | '));
+ assert.ok(good.ui.some(s=>/dernier tour: variation positive mesurée/.test(s)),good.ui.join(' | '));
+ const bad=simulate({callInit:true,car:{wheels:undefined},steps:[0.016]});assert.equal(bad.error,null);
+ assert.ok(bad.ui.some(s=>/pneus: NON LUS/.test(s)),bad.ui.join(' | '));
+});
+test('La lecture essaie wear même si accéder à tyreWear lève une erreur CSP',()=>{
+ const beforeSteps=`for i=1,4 do local w=car.wheels[i];w.tyreWear=nil;w.wear=1;setmetatable(w,{__index=function(_,k) if k=='tyreWear' then error('champ indisponible') end end}) end`;
+ const result=simulate({callInit:true,beforeSteps,steps:[0.016]});assert.equal(result.error,null);
+ assert.ok(result.ui.some(s=>/pneus: LUS \(4 roues\)/.test(s)),result.ui.join(' | '));
+});
+test('Une lecture des pneus sans diminution ne prétend pas mesurer une usure',()=>{
+ const result=simulate({callInit:true,steps:[0.016,L=>setCar(L,'lapCount',2),0.016,...Array.from({length:60},()=>0.1)]});
+ assert.equal(result.error,null);assert.ok(result.ui.some(s=>/pneus: LUS \(4 roues\).*aucune diminution exploitable/.test(s)),result.ui.join(' | '));
+ const lap=JSON.parse(result.sent[0]).laps[0];assert.equal(lap.tyreWearPct,undefined);
+});
+
+test('pit-lane CSP : plateau 120 en zone seulement ; arrêt sur piste ignoré', () => {
+  for(const inLane of [false,true]) {
+    const run=simulate({steps:[0.016,
+      (L)=>{setCar(L,'isInPitlane',inLane);setCar(L,'speedKmh',120);},
+      ...Array.from({length:12},()=>0.5),
+      (L)=>setCar(L,'speedKmh',0),...Array.from({length:10},()=>0.5),
+      (L)=>{setCar(L,'isInPitlane',false);setCar(L,'speedKmh',130);},0.25,0.25,...unTour()]});
+    assert.equal(run.error,null);
+    const lap=run.sent.map(JSON.parse).find(p=>p.laps?.length)?.laps[0];
+    assert.ok(lap);
+    assert.equal(lap.pitLaneMs,inLane?6000:undefined);
+  }
+});
+test('pit-lane CSP : position absente ne crée pas de mesure même avec plateau 80',()=>{
+  const run=simulate({steps:[0.016,(L)=>setCar(L,'speedKmh',80),...Array.from({length:12},()=>0.5),
+    (L)=>setCar(L,'speedKmh',0),...Array.from({length:10},()=>0.5),...unTour()]});
+  assert.equal(run.error,null);
+  assert.equal(run.sent.map(JSON.parse).find(p=>p.laps?.length)?.laps[0].pitLaneMs,undefined);
 });

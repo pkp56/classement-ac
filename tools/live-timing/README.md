@@ -153,16 +153,37 @@ Notes pratiques :
 ## 1 quater. Historique persistant
 
 Le direct ne survit pas à un redémarrage du site — et une fois la séance
-finie, il ne restait rien. **Chaque séance vue par le site est maintenant
-conservée** (agent push, UDP local ou source HTTP) :
+finie, il ne restait rien. **Une séance est archivée après observation d’un pilote connecté identifiable
+et d’un temps enregistré dans cette séance** (agent push, UDP local ou source
+HTTP). Une connexion seule ne suffit pas ; les temps hérités des séances
+précédentes ne suffisent pas pour les collecteurs ACSP récents. Les données
+non reçues ne peuvent pas être archivées :
 
 * identité (serveur, circuit, type, début/fin), nombre de pilotes ;
-* **classement final complet** (positions, tours, écarts, meilleur tour) ;
-* meilleurs tours et fil d'événements (150 derniers).
+* pour les anciennes archives : dernière photo reçue et fil d’événements disponible ;
+* pour les nouvelles archives ACSP : tableau des temps observés, y compris les pilotes encore connectés à la dernière observation ; ce n’est pas un classement officiel.
 
 Sur la page `/live-timing`, le panneau **« Historique des séances »** liste
-les séances les plus récentes ; « Ouvrir » rejoue le classement conservé
+les séances les plus récentes ; « Ouvrir » montre les temps conservés
 (bandeau « Archives »), « Retour au direct » revient au flux temps réel.
+La moyenne des temps conservés porte sur les tours effectivement reçus, y compris
+les tours avec coupures, par pilote et voiture depuis le démarrage du collecteur.
+Les anciennes archives sans moyenne affichent « — ». Dans le classement direct,
+le menu de colonnes permet de choisir les colonnes visibles. Faire glisser un
+en-tête pour le déplacer ou son bord droit pour le redimensionner ; les flèches
+et champs du menu permettent aussi ces réglages au clavier. Visibilité, ordre et
+largeur sont enregistrés dans le navigateur.
+
+Le panneau historique propose « Nettoyer les archives sans tour » aux
+administrateurs connectés (la connexion peut se faire depuis la Télémétrie).
+L’aperçu montre au maximum 500 archives closes à la fois ; la confirmation ne
+supprime que les entrées listées et inchangées. Les séances encore ouvertes,
+à fin inconnue ou de format ambigu restent intactes. Une sauvegarde JSON des
+archives supprimées est obligatoire dans `GDSP_AC_BACKUP_ROOT` : dossier privé
+existant, hors du site, dont les ACL doivent être restreintes par l’administrateur.
+La suppression échoue si la sauvegarde ne peut pas être écrite. Le stockage
+fichier suppose une seule instance GDSP, sans programme externe écrivant le même
+historique. Les archives non détectées nécessitent une vérification manuelle.
 
 Stockage : PostgreSQL (`LIVE_DATABASE_URL`, sinon `DATABASE_URL`, table
 `gdsp_live_sessions`) ou fichier `data/live-history.json` en local. Une
@@ -298,3 +319,25 @@ Ouvre `/live-timing` : le classement se remplit en quelques secondes.
 | « Instantané périmé » en mode push | l'agent s'est arrêté, le PC a perdu le réseau, ou acServer ne tourne plus |
 | `401 Jeton invalide` dans l'agent | `PUSH_TOKEN` de l'agent ≠ `LIVE_PUSH_TOKEN` du site |
 | `503 mode push non activé` dans l'agent | ajoute `LIVE_PUSH_TOKEN` sur le site puis redéploie |
+
+### Archives des deux serveurs et boucles de séance
+
+Les collecteurs locaux CM1 et CM2 enregistrent séparément les séances où un pilote identifiable a été observé connecté. Les séances sans pilote observé ne créent plus d’archive ; les anciennes archives ne sont pas effacées. Lorsqu'une séance change ou redémarre avec le même index, la dernière photo observée est conservée avant la réinitialisation ; une nouvelle archive est créée pour la nouvelle séance. La page propose un menu avec date, serveur, circuit, variante et voitures identifiées. Les séances sont proposées par pages, les anciennes ne sont pas supprimées. Les archives déjà existantes restent consultables.
+
+Une archive contient les données observées, pas une reconstruction complète ni un classement officiel : les écarts restent estimés, les secteurs CSP du direct ne sont pas archivés, et le fil est limité aux événements disponibles dans les instantanés (150 maximum). Une coupure de réception ou un arrêt brutal de GDSP peut faire perdre les données depuis la dernière écriture (au maximum normalement dix secondes), et la fin d'une séance peut rester inconnue. Après redémarrage de GDSP, une nouvelle archive peut être créée pour la même séance encore en cours. Aucune archive ne peut restituer des données non reçues avant cette évolution. Vérifier les droits et sauvegardes du fichier ou de la base de données configurée.
+
+### Temps des pilotes déconnectés et carte
+
+Le premier tableau affiche seulement les voitures déclarées connectées. Le second conserve les pilotes dont au moins un tour a été observé puis qui sont déconnectés, par identité ACSP et voiture ; une identité absente n'est jamais fusionnée par nom. Les tours et arrêts sont ceux observés depuis le démarrage du collecteur, la vitesse maximale est échantillonnée, et les valeurs non reçues restent « — ». Les données restent visibles lors des boucles de séance sur le même circuit. Les nouvelles archives sauvegardent ce tableau de temps, en y incluant aussi les pilotes encore connectés lors de la dernière observation ; elles ne sauvegardent pas le tableau direct. Les anciennes archives restent inchangées.
+
+Le contenu du second tableau est en mémoire pendant le direct : après redémarrage de GDSP, il repart de zéro, mais les photos déjà archivées restent accessibles. Une interruption réseau ne permet pas de prouver qu'acServer a été arrêté : le collecteur ne supprime pas automatiquement les temps sur ce seul signal. Les données non observées, notamment avant démarrage de GDSP, ne peuvent pas être récupérées.
+
+La carte ne s'affiche que pour un collecteur local ACSP et une géométrie `fast_lane.ai` lisible et non ambiguë pour le circuit et la variante dans les racines configurées. Les coordonnées x/z reçues récemment sont projetées sur la ligne AI ; ce n'est pas une carte détaillée des limites de piste. En cas d'absence ou de plusieurs copies possibles, elle est indiquée indisponible au lieu d'estimer une position. Tester sur le PC réel, et vérifier que chaque copie de circuit correspond à celle utilisée par le serveur.
+
+### Détection des stands expérimentale
+
+Le collecteur local utilise les fichiers `fast_lane.ai` et `pit_lane.ai` de la variante exacte, dans les racines de contenu configurées (`GDSP_AC_CONTENT_ROOT` ou `GDSP_AC_SERVER_ROOT`, et éventuellement `GDSP_AC_EXTRA_CONTENT_ROOT`). Si les fichiers manquent, sont invalides ou existent en plusieurs exemplaires, aucun PIT n'est déduit. Un plateau continu à 80 ± 2 ou 120 ± 2 km/h pendant 2,5 s dans une zone estimée proche de la ligne pit et distincte de la ligne rapide indique un passage probable ; un arrêt inférieur à 3 km/h pendant 4 s indique un arrêt probable. La zone (20 m de la ligne pit, à plus de 8 m de la ligne rapide et 3 m plus proche de la ligne pit) est une heuristique, pas une limite de voie ou de box : elle peut manquer des passages ou avoir des faux positifs. Un signal perdu ou une position ambiguë annule la détection. Le compteur n'est pas un nombre officiel et peut manquer des arrêts. La télémétrie CSP utilise à la place l'indicateur `car.isInPitlane`, dont la disponibilité et le comportement en ligne doivent être vérifiés en jeu ; sans indicateur, aucune mesure automatique n'est créée. Les anciennes mesures de télémétrie ne sont pas supprimées et peuvent avoir été produites par l'ancien détecteur fondé uniquement sur la vitesse.
+
+### Archives répétées
+
+Dans l'historique, le nettoyage des « doublons probables » propose uniquement des archives closes de moins de 30 secondes, contiguës (1 seconde de tolérance), avec même source CM1/CM2, serveur, circuit, variante, type et données de résultats et métadonnées non volatiles identiques. Il conserve la première archive du groupe ; il ne fusionne pas les durées et ne déduit jamais un doublon de l'heure affichée seule. Les événements ou collisions, les sources inconnues, les formats incomplets, les séances en cours et les contenus différents sont exclus. Vérifier l'aperçu : plusieurs séances brèves réelles peuvent malgré tout avoir un contenu identique. La suppression exige la session administrateur, un jeton CSRF, une confirmation, une revalidation sous verrou et une sauvegarde JSON privée des archives conservées et supprimées. Aucun nettoyage automatique. Les sauvegardes nécessitent `GDSP_AC_BACKUP_ROOT` hors du site.

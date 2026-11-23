@@ -282,6 +282,14 @@ class EventStore {
     );
     return rows[0] || null;
   }
+  async linkAssettoHosting(slug, server, uuid, user) {
+    const { rows } = await this.pool.query(
+      `UPDATE gdsp_events SET data = COALESCE(data, '{}'::jsonb) || $2::jsonb,
+        updated_at = NOW(), updated_by = $3 WHERE slug = $1 RETURNING updated_at`,
+      [slug, JSON.stringify({ahServer:server, ahUuid:uuid}), user]
+    );
+    return rows[0] || null;
+  }
   async remove(slug) {
     const { rowCount } = await this.pool.query('DELETE FROM gdsp_events WHERE slug = $1', [slug]);
     return rowCount > 0;
@@ -497,6 +505,30 @@ function mountEventRoutes(app, deps) {
     } catch (e) {
       console.error('DELETE event:', e.message);
       return res.status(500).json({ error: "Impossible de supprimer l'événement." });
+    }
+  });
+
+  // Mise à jour atomique des seuls champs de liaison : ne remplace jamais les
+  // sessions, les décisions de commission, ni les autres données de l'événement.
+  app.post('/api/events/:slug/ah-link', async (req, res, next) => {
+    const user = admin(req, res);
+    if (!user) return undefined;
+    if (!validSlug(req.params.slug)) return res.status(400).json({error:'Slug invalide.'});
+    const {server, uuid} = req.body || {};
+    if (typeof server !== 'string' || typeof uuid !== 'string' ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid))
+      return res.status(400).json({error:'Liaison AssettoHosting invalide.'});
+    try { if (!deps.authorizeAhServer) throw new Error(); deps.authorizeAhServer(server); }
+    catch (_) { return res.status(400).json({error:'Serveur AssettoHosting non autorisé.'}); }
+    try {
+      const store = await storeOrDelegate(next,res);
+      if (!store) return undefined;
+      const saved = await store.linkAssettoHosting(req.params.slug, server, uuid, user);
+      if (!saved) return res.status(404).json({error:'Événement introuvable.'});
+      return res.json({status:'ok',updatedAt:saved.updated_at});
+    } catch (e) {
+      console.error('AH link:', e.message);
+      return res.status(500).json({error:'Impossible de sauvegarder la liaison.'});
     }
   });
 

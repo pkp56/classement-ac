@@ -170,3 +170,103 @@ test('autoStart démarre la collecte sans appel explicite (agent distant)', asyn
   assert.equal(collector.socket, null);
   assert.ok(collector instanceof EventEmitter);
 });
+
+
+test('La sonde ACSP interroge aussi un serveur silencieux encore considéré en ligne', () => {
+  const collector = new LiveTimingCollector({ autoStart: false });
+  let requests = 0;
+  collector.requestSessionInfo = () => { requests++; };
+  collector.lastPacketAt = Date.now() - 5000;
+  assert.equal(collector.statusSnapshot().status, 'live');
+  collector.heartbeat();
+  assert.equal(requests, 1);
+  collector.lastPacketAt = Date.now() - 9000;
+  collector.heartbeat();
+  assert.equal(requests, 2);
+  assert.equal(collector.statusSnapshot().status, 'waiting');
+});
+
+test('Les informations périodiques ne remettent pas les tours à zéro, mais une nouvelle session oui',()=>{
+ const collector=new LiveTimingCollector({autoStart:false});collector.socket={send(){return true;}};
+ const feed=buf=>collector.handleDatagram(buf,{address:'127.0.0.1'});
+ const info=(elapsed,index=0)=>{const packet=sessionPacket(elapsed);packet[0]=EVENT.SESSION_INFO;packet[2]=index;return packet;};
+ feed(connection(0,'Pilote',''));feed(sessionPacket(5000));
+ feed(lapCompleted(0,80000,0,[{id:0,lapMs:80000,laps:1}]));
+ feed(info(10000));feed(info(15000));
+ let snap=collector.snapshot();assert.equal(snap.cars[0].laps,1);assert.equal(snap.cars[0].bestLapMs,80000);assert.equal(snap.events.filter(e=>e.kind==='session').length,1);
+ feed(info(1000));snap=collector.snapshot();assert.equal(snap.cars[0].laps,0);assert.equal(snap.cars[0].bestLapMs,null);assert.equal(snap.events.filter(e=>e.kind==='session').length,2);
+ feed(lapCompleted(0,81000,0,[{id:0,lapMs:81000,laps:1}]));feed(info(3000,1));snap=collector.snapshot();assert.equal(snap.cars[0].laps,0);assert.equal(snap.cars[0].bestLapMs,null);
+});
+test('Le collecteur capture la dernière photo avant de remettre les données à zéro',()=>{
+ const c=new LiveTimingCollector({autoStart:false});c.socket={send(){}};const snapshots=[];
+ c.on('beforeSessionChange',snap=>snapshots.push(snap));
+ c.handleDatagram(connection(0,'Pilote',''),{});c.handleDatagram(sessionPacket(50000),{});
+ c.handleDatagram(lapCompleted(0,80000,0,[{id:0,lapMs:80000,laps:1}]),{});
+ const next=sessionPacket(1000);next[0]=EVENT.SESSION_INFO;c.handleDatagram(next,{});
+ assert.equal(snapshots.length,1);assert.equal(snapshots[0].cars[0].laps,1);assert.equal(snapshots[0].cars[0].bestLapMs,80000);assert.equal(c.snapshot().cars[0].laps,0);
+});
+
+test('Archives des deux collecteurs : sources isolées et boucle conservée',async t=>{
+ const dgram=require('node:dgram'),http=require('node:http'),{once}=require('node:events'),{spawn}=require('node:child_process'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+ async function freeUdp(){const s=dgram.createSocket('udp4');s.bind(0,'127.0.0.1');await once(s,'listening');const port=s.address().port;await new Promise(r=>s.close(r));return port;}
+ const p1=await freeUdp();let p2=await freeUdp();while(p2===p1)p2=await freeUdp();
+ const reservation=http.createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');const port=reservation.address().port;await new Promise(r=>reservation.close(r));
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'gdsp-two-history-'));const child=spawn(process.execPath,['app.js'],{cwd:path.resolve(__dirname,'..'),env:{...process.env,PORT:String(port),LIVE_TIMING_ENABLED:'1',LIVE_HISTORY_FILE:path.join(dir,'history.json'),DATABASE_URL:'',LIVE_MIRROR_FILE:'off',AC_LISTEN_PORT:String(p1),AC_PLUGIN_PORT:'1',AC_SECOND_LISTEN_PORT:String(p2),AC_SECOND_PLUGIN_PORT:'2',AC_SECOND_HTTP_URL:''}});
+ t.after(()=>{child.kill();fs.rmSync(dir,{recursive:true,force:true});});
+ await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Démarrage trop long')),15000);child.stdout.on('data',v=>{if(String(v).includes('démarré')){clearTimeout(timeout);resolve();}});child.once('exit',()=>{clearTimeout(timeout);reject(Error('Serveur arrêté'));});});
+ const udp=dgram.createSocket('udp4');t.after(()=>udp.close());const send=(buf,port)=>new Promise((resolve,reject)=>udp.send(buf,port,'127.0.0.1',e=>e?reject(e):resolve()));
+ await send(sessionPacket(50000),p1);await send(sessionPacket(50000),p2);await send(connection(1,'Pilote CM2',''),p2);
+ await send(connection(0,'Pilote',''),p1);await send(lapCompleted(0,80000,0,[{id:0,lapMs:80000,laps:1}]),p1);
+ const next=sessionPacket(1000);next[0]=EVENT.SESSION_INFO;await send(next,p1);
+ // Ni CM2 sans tour, ni la boucle suivante qui ne possède que des temps
+ // hérités ne doivent encore ouvrir une archive.
+ let before=[];const waitFirst=Date.now()+3000;while(Date.now()<waitFirst){before=(await (await fetch(`http://127.0.0.1:${port}/api/live/sessions?limit=50`)).json()).sessions;if(before.some(r=>r.ended_at))break;await new Promise(r=>setTimeout(r,50));}
+ assert.equal(before.length,1);assert.ok(before[0].ended_at);
+ await send(lapCompleted(0,81000,0,[{id:0,lapMs:81000,laps:1}]),p1);await send(lapCompleted(1,90000,0,[{id:1,lapMs:90000,laps:1}]),p2);
+ let rows=[];const deadline=Date.now()+5000;
+ while(Date.now()<deadline){rows=(await (await fetch(`http://127.0.0.1:${port}/api/live/sessions?limit=50`)).json()).sessions;if(rows.length>=3)break;await new Promise(r=>setTimeout(r,50));}
+ assert.equal(rows.filter(r=>r.snapshot?.archiveSource==='local1').length,2);assert.equal(rows.filter(r=>r.snapshot?.archiveSource==='local2').length,1);
+ const previous=rows.find(r=>r.snapshot?.archiveSource==='local1'&&r.ended_at);assert.ok(previous);assert.equal(previous.classification[0].laps,1);
+});
+
+test('Les temps restent distincts après déconnexion, réutilisation de place et boucle de séance',()=>{
+ const c=new LiveTimingCollector({autoStart:false});c.socket={send(){}};const feed=buf=>c.handleDatagram(buf,{});
+ const conn=(type,id,name,guid,model)=>Buffer.concat([u8(type),wstr(name),wstr(guid),u8(id),str(model),str('skin')]);
+ feed(sessionPacket(50000));feed(conn(EVENT.NEW_CONNECTION,0,'Alice','111111','lola'));feed(carUpdate(0,0.5,50));
+ const lap=lapCompleted(0,90000,0,[{id:0,lapMs:90000,laps:1}]);feed(lap);feed(lap);
+ feed(conn(EVENT.CLOSED_CONNECTION,0,'Alice','111111','lola'));
+ let rows=c.snapshot().storedTimes;assert.equal(rows.length,1);assert.equal(rows[0].name,'Alice');assert.equal(rows[0].laps,1);assert.equal(rows[0].connected,false);assert.equal(rows[0].topSpeedKmh,180);
+ feed(conn(EVENT.NEW_CONNECTION,0,'Bob','222222','lola'));feed(lapCompleted(0,88000,0,[{id:0,lapMs:88000,laps:1}]));
+ rows=c.snapshot().storedTimes;assert.equal(rows.length,2);assert.equal(rows.find(r=>r.name==='Alice').bestLapMs,90000);assert.equal(rows.find(r=>r.name==='Bob').connected,true);assert.equal(c.snapshot().cars[0].name,'Bob');
+ const again=sessionPacket(1000);again[0]=EVENT.SESSION_INFO;feed(again);feed(lapCompleted(0,87000,0,[{id:0,lapMs:87000,laps:1}]));
+ rows=c.snapshot().storedTimes;assert.equal(c.snapshot().sessionObservedLaps,1);assert.equal(rows.find(r=>r.name==='Bob').laps,2);assert.equal(rows.find(r=>r.name==='Bob').averageLapMs,87500);assert.equal(rows.find(r=>r.name==='Bob').bestLapMs,87000);assert.doesNotMatch(JSON.stringify(c.snapshot()),/111111|222222/);
+});
+test('Sans GUID, des noms identiques ne sont pas fusionnés lors de la réutilisation de place',()=>{
+ const c=new LiveTimingCollector({autoStart:false});c.socket={send(){}};const feed=buf=>c.handleDatagram(buf,{});
+ const conn=type=>Buffer.concat([u8(type),wstr('Pilote'),wstr(''),u8(0),str('lola'),str('')]);
+ feed(sessionPacket());feed(conn(EVENT.NEW_CONNECTION));feed(lapCompleted(0,90000,0,[{id:0,lapMs:90000,laps:1}]));feed(conn(EVENT.CLOSED_CONNECTION));feed(conn(EVENT.NEW_CONNECTION));feed(lapCompleted(0,91000,0,[{id:0,lapMs:91000,laps:1}]));
+ const rows=c.snapshot().storedTimes;assert.equal(rows.length,2);assert.ok(rows.every(r=>r.identityUncertain));assert.equal(rows.filter(r=>!r.connected).length,1);
+});
+test('Un pilote identifiable qui revient dans une autre place conserve ses temps',()=>{
+ const c=new LiveTimingCollector({autoStart:false});c.socket={send(){}};const feed=buf=>c.handleDatagram(buf,{});
+ const conn=(type,id)=>Buffer.concat([u8(type),wstr('Alice'),wstr('123456'),u8(id),str('lola'),str('')]);
+ feed(sessionPacket());feed(conn(EVENT.NEW_CONNECTION,0));feed(lapCompleted(0,90000,0,[{id:0,lapMs:90000,laps:1}]));feed(conn(EVENT.CLOSED_CONNECTION,0));
+ feed(conn(EVENT.NEW_CONNECTION,1));feed(lapCompleted(1,88000,0,[{id:1,lapMs:88000,laps:1}]));
+ const rows=c.snapshot().storedTimes;assert.equal(rows.length,1);assert.equal(rows[0].laps,2);assert.equal(rows[0].bestLapMs,88000);assert.equal(rows[0].connected,true);
+});
+
+test('La moyenne comprend les tours avec coupures sans recompter les doublons',()=>{
+ const c=new LiveTimingCollector({autoStart:false});c.socket={send(){}};const feed=buf=>c.handleDatagram(buf,{});
+ feed(sessionPacket());feed(connection(0,'Alice',''));feed(lapCompleted(0,90000,0,[{id:0,lapMs:90000,laps:1}]));
+ const lap=lapCompleted(0,100000,1,[{id:0,lapMs:100000,laps:2}]);feed(lap);feed(lap);
+ const row=c.snapshot().storedTimes[0];assert.equal(row.laps,2);assert.equal(row.averageLapMs,95000);assert.equal(row.bestLapMs,90000);
+});
+
+test('Un elapsed ACSP constant dans les informations périodiques ne fait pas reculer le temps de séance',()=>{
+ const c=new LiveTimingCollector({autoStart:false});c.socket={send(){}};
+ const real=Date.now;let now=100000;Date.now=()=>now;
+ try{
+  c.handleDatagram(sessionPacket(0),{});assert.equal(c.snapshot().session.elapsedMs,0);
+  for(let i=1;i<=4;i++){now+=10000;const info=sessionPacket(0);info[0]=EVENT.SESSION_INFO;c.handleDatagram(info,{});assert.equal(c.snapshot().session.elapsedMs,i*10000);}
+ }finally{Date.now=real;}
+});

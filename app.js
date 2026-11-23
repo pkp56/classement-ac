@@ -234,7 +234,6 @@ app.get('/api/ah-championships', async(req,res)=>{
             const lname=name.toLowerCase();
             // Filtres: test/duplicate/practice servers
             if(/\btest\b|ser.?test|duplicate/i.test(name))continue;
-            if(j.IsInactive)continue;
             const pts=((j.Classes||[])[0]||{}).Points||{};
             const scale=(pts.Places||[]).map(x=>+x||0).filter(x=>x>0);
             const events=(j.Events||{});
@@ -264,7 +263,7 @@ app.get('/api/ah-championships', async(req,res)=>{
               }
             });
             out.push({
-              server:srv,uuid,name,
+              server:srv,uuid,name,inactive:!!j.IsInactive,
               progress:j.Stats?.Progress||0,
               numEvents:j.Stats?.NumEvents||0,
               numEntrants:j.Stats?.NumEntrants||0,
@@ -317,7 +316,6 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
     const diagnostics={ignored:[],missing:[]};
     const events=champ.Events||[];
     const evList=Array.isArray(events)?events:Object.values(events);
-    const DATE_WINDOW_MS=45*60*1000; // fenêtre de correspondance portée à 45 minutes
     // Type → sessionType
     function toSessionType(rawType,sess){
       const name=((sess&&sess.SessionConfig&&sess.SessionConfig.name)||rawType||'').toUpperCase();
@@ -393,42 +391,7 @@ app.get('/api/ah-championship-sessions', async(req,res)=>{
         });
       }
     });
-    // Complète les 'url' avec /results pour les sessions en cours non encore dans l'export
-    const needUrl=items.filter(x=>x.source==='url'&&x.date);
-    if(needUrl.length){
-      try{
-        const allResults=await ahListResults(server);
-        // Filtre "test" moins agressif : ignorer seulement si le nom entier est "test" ou commence par "test "
-        const pool=allResults.filter(x=>{
-          if(x.type==='PRACTICE')return false;
-          const full=((x.sessionName||'')+' '+(x.filename||'')).trim().toLowerCase();
-          const base=full.replace(/^.*[\\/]/,'');
-          if(/^test(\b|[-_])/i.test(base))return false;
-          if(/\bduplicate\b/i.test(full))return false;
-          return true;
-        });
-        for(const it of needUrl){
-          const needType=it.sessionType;
-          const baseTs=new Date(it.date).getTime();
-          if(!isFinite(baseTs)){diagnostics.missing.push(it);continue;}
-          const base=baseTs;
-          let best=null,bestDt=Infinity;
-          for(const r of pool){
-            // type AC brut peut être 'RACE','QUALIFY','PRACTICE', parfois 'RACE2' etc.
-            const rt=(r.type||'').toUpperCase();
-            const matchType=(needType==='QUALIFY')? rt.startsWith('QUALIF')||rt==='QUALIFY'
-                           : rt.startsWith('RACE');
-            if(!matchType)continue;
-            const t=new Date(r.date).getTime();
-            const dt=Math.abs(t-base);
-            if(dt<bestDt && dt<=DATE_WINDOW_MS){best=r;bestDt=dt}
-          }
-          if(best){it.url=best.url;it.filename=best.filename}
-          else{it.source='missing';diagnostics.missing.push(it);}
-        }
-      }catch(e){}
-    }
-    const final=items.filter(x=>x.source!=='missing');
+    const final=require('./tools/lib/ah-session-safety').retainVerifiedSessions(items,diagnostics);
     res.json({server,uuid,championship:champ.Name,events:evList.length,items:final,diagnostics});
   }catch(e){res.status(502).json({error:e.message})}
 });
@@ -701,6 +664,7 @@ app.post('/api/admin/circuits/import', async (req, res) => {
 //    aucun port entrant à ouvrir sur le PC).
 // Doc : tools/live-timing/README.md. Réglage : LIVE_PUSH_TOKEN.
 let liveTiming = null;
+let liveTimingSecond = null;
 let livePush = null;
 let liveHttpSources = null;
 const liveClients = new Set();
@@ -799,50 +763,79 @@ function getLiveTiming(){
   if(!liveTiming){
     const {LiveTimingCollector}=require('./tools/live-timing/collector');
     liveTiming=new LiveTimingCollector();
-    liveTiming.on('event',entry=>broadcastLive('log',entry));
+    liveTiming.on('event',entry=>broadcastLive('log',entry,'local1'));
+    liveTiming.on('beforeSessionChange',snap=>recordLiveHistory(snap,'local1'));
+    liveTiming.on('packet',packet=>{if(['lap_completed','new_session','session_info','new_connection','car_info','closed_connection'].includes(packet.typeName))recordLiveHistory(liveTiming.snapshot(),'local1',packet.typeName==='lap_completed'||packet.typeName==='closed_connection')});
     liveTiming.start();
   }
   return liveTiming;
 }
-function broadcastLive(event,payload){
+function secondLiveConfig(){
+  const listen=Number(process.env.AC_SECOND_LISTEN_PORT), plugin=Number(process.env.AC_SECOND_PLUGIN_PORT);
+  if(!Number.isInteger(listen)||!Number.isInteger(plugin)||listen<1||listen>65535||plugin<1||plugin>65535||listen===plugin)return null;
+  const used=[Number(process.env.AC_LISTEN_PORT||12000),Number(process.env.AC_PLUGIN_PORT||12001)];
+  if(used.includes(listen)||used.includes(plugin))return null;
+  return {listenPort:listen,pluginPort:plugin,host:'127.0.0.1',label:process.env.AC_SECOND_LABEL||'Serveur CM 2',httpUrl:process.env.AC_SECOND_HTTP_URL||''};
+}
+function getSecondLiveTiming(){
+  const cfg=secondLiveConfig();if(!cfg)return null;
+  if(!liveTimingSecond){
+    const {LiveTimingCollector}=require('./tools/live-timing/collector');
+    liveTimingSecond=new LiveTimingCollector(cfg);
+    liveTimingSecond.on('event',entry=>broadcastLive('log',entry,'local2'));
+    liveTimingSecond.on('beforeSessionChange',snap=>recordLiveHistory(snap,'local2'));
+    liveTimingSecond.on('packet',packet=>{if(['lap_completed','new_session','session_info','new_connection','car_info','closed_connection'].includes(packet.typeName))recordLiveHistory(liveTimingSecond.snapshot(),'local2',packet.typeName==='lap_completed'||packet.typeName==='closed_connection')});
+  }
+  return liveTimingSecond;
+}
+function broadcastLive(event,payload,source){
   const frame='event: '+event+'\ndata: '+JSON.stringify(payload)+'\n\n';
-  for(const res of liveClients){try{res.write(frame);if(typeof res.flush==='function')res.flush()}catch(e){/* client parti */}}
+  for(const client of liveClients){
+    // Le flux d'une source ne reçoit jamais les messages d'une autre.
+    const defaultIsLocal=!getLivePush().current()&&!getLiveMirror()&&!liveSourceUrls().length;
+    if(source==='local1' ? !(client.source==='local1'||(client.source===''&&defaultIsLocal)) :
+       source==='local2' ? client.source!=='local2' : client.source!=='')continue;
+    try{client.res.write(frame);if(typeof client.res.flush==='function')client.res.flush()}catch(e){/* client parti */}
+  }
 }
 // Historique persistant : chaque séance vue (agent push, UDP, source HTTP)
 // est conservée en base — le direct ne survit pas à un redémarrage, l'historique
 // oui. Le miroir (capture rejouée) n'est jamais enregistré.
-let liveHistory=null,liveRecorder=null;
-async function getLiveHistory(){
-  if(!liveHistory){
-    try{
-      const {openLiveHistory}=require('./tools/live-timing/history');
-      liveHistory=await openLiveHistory();
-    }catch(e){
-      console.error('live-history: indisponible —',e.message);
-      liveHistory=false;
-    }
-  }
-  return liveHistory||null;
+let liveHistoryPromise=null;
+const liveRecorders=new Map();
+let liveHistoryQueue=Promise.resolve();
+function queueLiveHistory(job){
+  const next=liveHistoryQueue.then(job);
+  liveHistoryQueue=next.catch(e=>console.error('live-history:',e.message));
+  return next;
 }
-async function getLiveRecorder(){
-  if(!liveRecorder){
+async function getLiveHistory(){
+  if(!liveHistoryPromise)liveHistoryPromise=require('./tools/live-timing/history').openLiveHistory().catch(e=>{console.error('live-history: indisponible —',e.message);return null;});
+  return liveHistoryPromise;
+}
+async function getLiveRecorder(source){
+  if(!liveRecorders.has(source)){
     const store=await getLiveHistory();
     if(!store)return null;
     const {LiveHistoryRecorder}=require('./tools/live-timing/history');
-    liveRecorder=new LiveHistoryRecorder(store,{writeIntervalMs:10000});
+    if(!liveRecorders.has(source))liveRecorders.set(source,new LiveHistoryRecorder(store,{writeIntervalMs:10000,source}));
   }
-  return liveRecorder;
+  return liveRecorders.get(source);
 }
-async function recordLiveHistory(snap){
-  try{
-    const recorder=await getLiveRecorder();
-    if(recorder)await recorder.record(snap);
-  }catch(e){/* l'historique ne casse jamais le direct */}
+function recordLiveHistory(snap,source='auto',force=false){
+  // Les données locales en repli HTTP peuvent contenir une ancienne photo ACSP.
+  if((source==='local1'||source==='local2')&&snap?.status?.mode!=='acsp')return;
+  // Une copie fige la photo avant que le collecteur ne réinitialise sa session.
+  const frozen=JSON.parse(JSON.stringify(snap));
+  queueLiveHistory(async()=>{const recorder=await getLiveRecorder(source);if(recorder)await recorder.record(frozen,Date.now(),force);}).catch(()=>{});
 }
 if(liveTimingEnabled()){
   setInterval(()=>{
-    if(!liveTimingEnabled())return;
-    try{recordLiveHistory(liveSnapshot())}catch(e){/* silence */}
+    try{
+      recordLiveHistory(liveSnapshot('local1'),'local1');
+      if(secondLiveConfig())recordLiveHistory(liveSnapshot('local2'),'local2');
+      if(getLivePush().current()||getLiveMirror()||liveSourceUrls().length)recordLiveHistory(liveSnapshot(),'auto');
+    }catch(e){console.error('live-history:',e.message)}
   },10000).unref();
 }
 // Priorité : source HTTP demandée > agent qui pousse > écoute UDP locale.
@@ -862,9 +855,12 @@ function resolveLiveSource(param){
 // source HTTP configurée > écoute UDP locale. L'agent a la priorité sur les
 // sources HTTP : c'est lui qui voit le serveur quand l'hébergeur est filtré.
 function liveSnapshot(sourceIndex){
+  if(sourceIndex==='local1')return getLiveTiming().snapshot();
+  if(sourceIndex==='local2'){const second=getSecondLiveTiming();return second?second.snapshot():{status:{status:'offline',mode:'error',error:'Deuxième serveur non configuré.'},server:{},session:{},cars:[],events:[]};}
   if(sourceIndex!=null&&sourceIndex!==''){
     const remote=resolveLiveSource(sourceIndex);
     if(remote)return remote.snapshot();
+    return {status:{status:'offline',mode:'error',error:'Source inconnue.'},server:{},session:{},cars:[],events:[]};
   }
   const pushed=getLivePush().current();
   if(pushed)return pushed;
@@ -877,7 +873,7 @@ function liveSnapshot(sourceIndex){
   }
 }
 if(liveTimingEnabled()){
-  try{getLiveTiming()}catch(e){console.error('live-timing: démarrage impossible —',e.message)}
+  try{getLiveTiming();getSecondLiveTiming()}catch(e){console.error('live-timing: démarrage impossible —',e.message)}
 }
 function safeEqual(a,b){
   const A=Buffer.from(String(a||'')),B=Buffer.from(String(b||''));
@@ -891,6 +887,7 @@ app.get('/api/live/config',(req,res)=>{
     enabled:liveTimingEnabled(),
     push:{enabled:!!livePushToken(),endpoint:'/api/live/push'},
     udp:{listenPort:Number(process.env.AC_LISTEN_PORT||12000),serverPort:Number(process.env.AC_PLUGIN_PORT||12001)},
+    localSources:[{id:'local1',name:process.env.AC_SERVER_LABEL||'Serveur CM 1'},...(secondLiveConfig()?[{id:'local2',name:secondLiveConfig().label}]:[])],
     httpSources:liveSourceUrls().map((url,i)=>({index:i,url,name:'Serveur '+(i+1)})),
     mirror:liveMirrorConfig()
   });
@@ -900,6 +897,16 @@ app.get(['/api/live/status','/api/live/state'],(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!liveTimingEnabled())return res.json({enabled:false,status:{status:'offline',mode:'disabled'},server:{},session:{},cars:[]});
   res.json({enabled:true,...liveSnapshot(req.query.source)});
+});
+app.get('/api/live/map',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  try{
+    const snap=liveSnapshot(req.query.source),root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+    if(snap.status?.mode!=='acsp'||!path.isAbsolute(root))return res.json({available:false,reason:'Carte disponible uniquement pour un collecteur local actif.'});
+    const content=String(process.env.GDSP_AC_CONTENT_ROOT||path.join(root,'..','content')).trim(),extra=String(process.env.GDSP_AC_EXTRA_CONTENT_ROOT||'').trim();
+    const map=await require('./tools/live-timing/track-map').trackMap([content,extra],snap.server?.track,snap.server?.trackConfig);
+    res.json({available:true,...map,sourceTrack:snap.server.track,sourceLayout:snap.server.trackConfig||''});
+  }catch(e){res.json({available:false,reason:'Géométrie de circuit indisponible ou ambiguë.'});}
 });
 app.get('/api/live/snapshot',(req,res)=>{
   res.set('Cache-Control','no-store');
@@ -932,8 +939,30 @@ app.get('/api/live/sessions', async(req,res)=>{
       if(!row)return res.status(404).json({error:'séance inconnue'});
       return res.json({session:row});
     }
-    res.json({sessions:await store.list(Number(req.query.limit)||50),history:true});
+    res.json({sessions:await store.list(Number(req.query.limit)||50,Number(req.query.offset)||0),history:true});
   }catch(e){res.status(503).json({error:e.message})}
+});
+// Nettoyage proposé puis confirmé, jamais sur la seule heure affichée.
+app.get('/api/live/duplicate-archives',async(req,res)=>{
+  res.set('Cache-Control','no-store');if(!(await telemetryAdmin(req,res)))return;
+  try{const result=await queueLiveHistory(async()=>{const store=await getLiveHistory();if(!store)throw new Error('Historique indisponible.');return require('./tools/live-timing/history-duplicates').preview(store);});res.json(result);}
+  catch(e){res.status(503).json({error:e.message});}
+});
+app.post('/api/live/duplicate-archives',async(req,res)=>{
+  res.set('Cache-Control','no-store');if(!(await telemetryAdmin(req,res)))return;
+  try{const result=await queueLiveHistory(async()=>{const store=await getLiveHistory();if(!store)throw new Error('Historique indisponible.');return require('./tools/live-timing/history-duplicates').remove(store,req.body?.groups,process.env.GDSP_AC_BACKUP_ROOT,ROOT);});res.json(result);}
+  catch(e){res.status(400).json({error:e.message});}
+});
+// Nettoyage explicite des seules séances closes identifiées sans tour.
+app.get('/api/live/empty-archives',async(req,res)=>{
+  res.set('Cache-Control','no-store');if(!(await telemetryAdmin(req,res)))return;
+  try{const result=await queueLiveHistory(async()=>{const store=await getLiveHistory();if(!store)throw new Error('Historique indisponible.');return require('./tools/live-timing/history-cleanup').preview(store);});res.json(result);}
+  catch(e){res.status(503).json({error:e.message});}
+});
+app.post('/api/live/empty-archives',async(req,res)=>{
+  res.set('Cache-Control','no-store');if(!(await telemetryAdmin(req,res)))return;
+  try{const result=await queueLiveHistory(async()=>{const store=await getLiveHistory();if(!store)throw new Error('Historique indisponible.');return require('./tools/live-timing/history-cleanup').remove(store,req.body?.items,process.env.GDSP_AC_BACKUP_ROOT,ROOT);});res.json(result);}
+  catch(e){res.status(400).json({error:e.message});}
 });
 app.get('/api/live/stream',(req,res)=>{
   if(!liveTimingEnabled())return res.status(503).end();
@@ -947,8 +976,9 @@ app.get('/api/live/stream',(req,res)=>{
   const push=()=>{try{res.write('event: snapshot\ndata: '+JSON.stringify(liveSnapshot(req.query.source))+'\n\n');if(typeof res.flush==='function')res.flush()}catch(e){/* client parti */}};
   push();
   const timer=setInterval(push,1000);
-  liveClients.add(res);
-  req.on('close',()=>{clearInterval(timer);liveClients.delete(res)});
+  const client={res,source:String(req.query.source||'')};
+  liveClients.add(client);
+  req.on('close',()=>{clearInterval(timer);liveClients.delete(client)});
 });
 // Commandes admin (chat, kick, changement de session) : mêmes règles d'auth que le reste.
 // En mode push elles sont impossibles : le PC n'est pas joignable depuis le site.
@@ -956,18 +986,150 @@ app.post('/api/live/command',async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!liveTimingEnabled())return res.status(503).json({error:'Live timing désactivé.'});
   if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
-  if(resolveLiveSource(req.query.source||req.body&&req.body.source))return res.status(409).json({error:'Serveur public consulté en lecture seule : aucune commande possible.'});
-  if(getLivePush().current())return res.status(409).json({error:'Serveur distant : les commandes doivent être envoyées depuis le PC qui héberge acServer.'});
+  const source=String(req.query.source||req.body&&req.body.source||'');
+  if(source&&source!=='local1'&&source!=='local2')return res.status(409).json({error:'Source distante ou inconnue : aucune commande possible.'});
+  if(!source&&getLivePush().current())return res.status(409).json({error:'Serveur distant : les commandes doivent être envoyées depuis le PC qui héberge acServer.'});
+  if(!source&&(getLiveMirror()||liveSourceUrls().length))return res.status(409).json({error:'Source automatique distante ou capture : aucune commande possible.'});
   const {action,message,carId}=req.body||{};
   const allowed=['chat','kick','next-session','restart-session'];
   if(!allowed.includes(action))return res.status(400).json({error:'Action inconnue.'});
   try{
-    const ok=getLiveTiming().command(action,{message,carId});
+    const collector=source==='local2'?getSecondLiveTiming():getLiveTiming();
+    if(!collector)return res.status(409).json({error:'Serveur sélectionné indisponible.'});
+    const ok=collector.command(action,{message,carId});
     res.json({ok});
   }catch(e){res.status(502).json({error:e.message})}
 });
 app.get('/live-timing',(req,res)=>res.sendFile(path.join(ROOT,'live-timing.html')));
-app.get('/live-timing.html',(req,res)=>res.sendFile(path.join(ROOT,'live-timing.html')));
+app.get('/live-timing.html',(req,res)=>res.redirect(301,'/live-timing'+(req.originalUrl.includes('?')?req.originalUrl.slice(req.originalUrl.indexOf('?')):'')));
+
+// Gestion des serveurs : consultation expérimentale en lecture seule. L'accès
+// nécessite un chemin configuré sur le PC et une session administrateur.
+// Aucune route d'écriture ou de pilotage n'est exposée ici.
+// Aperçu côté serveur uniquement : aucune écriture de préréglage ni sauvegarde.
+app.get('/api/server-manager/presets/:id/csp',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  const id=req.params.id;if(!['local1','local2'].includes(id))return res.status(404).json({error:'Serveur inconnu.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+  if(!path.isAbsolute(root))return res.status(503).json({error:'Lecture des serveurs non configurée.'});
+  try{
+    const files=await require('./tools/server-manager/presets').readFiles(root,id);
+    const welcome=await require('./tools/server-manager/welcome-store').readWelcome(root,id,files.config);
+    res.json({available:true,config:welcome.decoded.config||'',revision:welcome.revision});
+  }catch(e){res.json({available:false,reason:'Message CSP non disponible ou chemins non pris en charge. Vérifie les options dans Content Manager.'});}
+});
+app.post('/api/server-manager/presets/:id/preview',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  if(!['local1','local2'].includes(req.params.id))return res.status(404).json({error:'Serveur inconnu.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+  const content=String(process.env.GDSP_AC_CONTENT_ROOT||(root&&path.join(root,'..','content'))||'').trim();
+  if(!path.isAbsolute(root)||!path.isAbsolute(content))return res.status(503).json({error:'Lecture des serveurs non configurée.'});
+  try{
+    const files=await require('./tools/server-manager/presets').readFiles(root,req.params.id);
+    const inventory=await require('./tools/server-manager/inventory').inventory(content,String(process.env.GDSP_AC_EXTRA_CONTENT_ROOT||'').trim());
+    const body=req.body||{},hasCsp=body.cspConfig!==undefined;
+    const welcome=hasCsp?await require('./tools/server-manager/welcome-store').readWelcome(root,req.params.id,files.config):null;
+    const next=hasCsp?require('./tools/server-manager/welcome-store').prepareWelcome(welcome,body.welcomeRevision,body.cspConfig):null;
+    const result=require('./tools/server-manager/plan').prepare({...files,inventory,configRevision:body.configRevision,entryRevision:body.entryRevision,configChanges:body.configChanges,entryChanges:body.entryChanges,weatherChanges:body.weatherChanges,raceMode:body.raceMode,hasCsp});
+    result.cspChanged=hasCsp&&next!==welcome.local;
+    res.json(result);
+  }catch(e){
+    const safe=/^(Les fichiers ont changé : recharge avant de modifier\.|La configuration a changé : recharge avant de modifier\.|Aucune modification à préparer|Inventaire du contenu indisponible|Circuit introuvable dans le contenu installé|Configuration de circuit introuvable|Voiture introuvable dans le contenu installé|Skin introuvable pour cette voiture|Une voiture des places ne figure pas dans la liste serveur|Le nombre de places est insuffisant|Liste des voitures du serveur indisponible|Voiture autorisée introuvable dans le contenu installé|Circuit avec configuration CSP : modification non prise en charge|Nom géré par Content Manager : modification non prise en charge|Paramètre non autorisé|Valeur invalide|Valeur booléenne invalide|État de session invalide|Identifiant invalide|Liste de voitures invalide|Valeur numérique invalide|Place absente ou dupliquée|Identifiant de voiture ou skin invalide)$/;
+    res.status(400).json({error:safe.test(e.message)?e.message:'Aperçu impossible : paramètres invalides ou fichiers indisponibles. Aucun fichier modifié.'});
+  }
+});
+let cmOperationBusy=false,cmController=null;
+async function cmExclusive(fn){
+  if(cmOperationBusy)throw Error('Une opération serveur est déjà en cours.');
+  cmOperationBusy=true;try{return await fn();}finally{cmOperationBusy=false;}
+}
+function getCmController(root,backupRoot){
+  if(!cmController)cmController=new (require('./tools/server-manager/controller').ServerController)(root,require('./tools/server-manager/windows-adapter').createWindowsAdapter(),require('./tools/server-manager/pending-store').store(backupRoot));
+  return cmController;
+}
+app.post('/api/server-manager/presets/:id/:action(start|stop)',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  const {id,action}=req.params;
+  if(!['local1','local2'].includes(id))return res.status(404).json({error:'Serveur inconnu.'});
+  if(process.env.GDSP_CM_CONTROL_ENABLED!=='1'||process.platform!=='win32')return res.status(503).json({error:'Contrôle désactivé : essais Windows requis.'});
+  if(req.body?.confirmation!==id)return res.status(400).json({error:'Confirmation du serveur nécessaire.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim(),backupRoot=String(process.env.GDSP_AC_BACKUP_ROOT||'').trim();
+  if(!path.isAbsolute(root)||!path.isAbsolute(backupRoot))return res.status(503).json({error:'Configuration du contrôle incomplète.'});
+  try{
+    const result=await cmExclusive(async()=>{
+      const controller=getCmController(root,backupRoot);
+      if(action==='start'){
+        if(req.body?.directLaunch!==true)throw Error('Confirme le lancement direct.');
+        if(!(await require('./tools/server-manager/windows-safety').canEdit(root,id)))throw Error('Ferme Content Manager et arrête le serveur avant tout lancement.');
+        await require('./tools/server-manager/presets').readPreset(root,id);
+        const collector=liveTimingEnabled()?liveTiming:null;
+        const mode=await require('./tools/server-manager/direct-launch').assertDirectLaunchSafe(root,id,{allowWithoutCmPlugin:req.body?.withoutCmPlugin===true,collector});
+        const result=await controller.start(id,id);
+        if(mode.withoutCmPlugin)result.message='Lancement demandé sans le plugin CM : vérifier l’état, le live et le lobby. Les fonctions CM ne sont pas garanties.';
+        return result;
+      }
+      return controller[action](id,id);
+    });
+    res.json(result);
+  }catch(e){
+    if(e.code==='CM_PLUGIN_TEST_CONFIRM')return res.status(409).json({error:'Le plugin CM ne sera pas lance. Confirmation supplementaire requise.',code:e.code});
+    const safe=/^(Une opération serveur est déjà en cours\.|Ce serveur est déjà en marche\.|Un lancement précédent n’a pas encore été vérifié\.|Lancement en attente : arrêt impossible à identifier\.|Ce serveur ne tourne pas ou son identité est incertaine\.|Identification ambiguë : aucune action autorisée\.|Une sauvegarde nécessite une restauration manuelle\.|Ferme Content Manager et arrête le serveur avant tout lancement\.|Confirme le lancement direct\.|Le plugin CM est actif ou ambigu : lancement depuis Content Manager nécessaire\.|Configuration wrapper CM détectée : lancement depuis Content Manager nécessaire\.)$/;
+    res.status(409).json({error:safe.test(e.message)?e.message:'Commande non confirmée. Vérifie l’état du serveur avant toute autre action.'});
+  }
+});
+// Écriture désactivée par défaut. À n'activer qu'après configuration du dossier
+// privé et essais Windows ; CM doit rester fermé pendant toute l'opération.
+app.post('/api/server-manager/presets/:id/save',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  const id=req.params.id;if(!['local1','local2'].includes(id))return res.status(404).json({error:'Serveur inconnu.'});
+  if(process.env.GDSP_CM_WRITES_ENABLED!=='1'||process.platform!=='win32')return res.status(503).json({error:'Enregistrement désactivé : configuration et essais Windows requis.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+  const contentRoot=String(process.env.GDSP_AC_CONTENT_ROOT||(root&&path.join(root,'..','content'))||'').trim();
+  const backupRoot=String(process.env.GDSP_AC_BACKUP_ROOT||'').trim();
+  const body=req.body||{};
+  if(body.confirmation!==id||body.cmClosed!==true)return res.status(400).json({error:'Confirme le serveur et la fermeture de Content Manager.'});
+  try{
+    const result=await cmExclusive(()=>require('./tools/server-manager/save').save({root,contentRoot,extraContentRoot:String(process.env.GDSP_AC_EXTRA_CONTENT_ROOT||'').trim(),backupRoot,publicRoot:ROOT,id,confirmation:body.confirmation,configRevision:body.configRevision,entryRevision:body.entryRevision,configChanges:body.configChanges,entryChanges:body.entryChanges,weatherChanges:body.weatherChanges,raceMode:body.raceMode,cspConfig:body.cspConfig,welcomeRevision:body.welcomeRevision},{checkState:serverId=>require('./tools/server-manager/windows-safety').canEdit(root,serverId)}));
+    res.json(result);
+  }catch(e){
+    if(e.code==='RECOVERY_REQUIRED')return res.status(500).json({error:'Écriture non confirmée : restauration manuelle nécessaire avant toute nouvelle modification.',code:e.code});
+    const safe=/^(Confirmation du serveur nécessaire\.|Ferme Content Manager et arrête le serveur avant toute modification\.|Les fichiers ont changé : recharge avant de modifier\.|Une opération est en cours ou nécessite une restauration manuelle\.|Aucune modification effective\.)$/;
+    res.status(400).json({error:safe.test(e.message)?e.message:'Enregistrement refusé : vérifie la configuration et le brouillon. Aucun fichier modifié.'});
+  }
+});
+app.get('/api/server-manager/inventory',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+  if(!root||!path.isAbsolute(root))return res.status(503).json({error:'Lecture des serveurs non configurée sur le PC serveur.'});
+  const content=String(process.env.GDSP_AC_CONTENT_ROOT||path.join(root,'..','content')).trim();
+  if(!path.isAbsolute(content))return res.status(503).json({error:'Contenu Assetto Corsa non configuré.'});
+  try{res.json(await require('./tools/server-manager/inventory').inventory(content,String(process.env.GDSP_AC_EXTRA_CONTENT_ROOT||'').trim()));}
+  catch(e){res.status(503).json({error:'Inventaire des voitures et circuits indisponible.'});}
+});
+app.get('/api/server-manager/state',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+  if(!root||!path.isAbsolute(root))return res.status(503).json({error:'Lecture des serveurs non configurée sur le PC serveur.'});
+  const state=await require('./tools/server-manager/process-state').readProcessState(root);
+  res.json(state);
+});
+app.get('/api/server-manager/presets/:id',async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!(await verifyAdmin(req)))return res.status(401).json({error:'Connexion administrateur requise.'});
+  if(!['local1','local2'].includes(req.params.id))return res.status(404).json({error:'Serveur inconnu.'});
+  const root=String(process.env.GDSP_AC_SERVER_ROOT||'').trim();
+  if(!root||!path.isAbsolute(root))return res.status(503).json({error:'Lecture des préréglages non configurée sur le PC serveur.'});
+  try{
+    const result=await require('./tools/server-manager/presets').readPreset(root,req.params.id);
+    res.json(result);
+  }catch(e){res.status(503).json({error:'Préréglage indisponible ou illisible. Aucun fichier modifié.'});}
+});
 
 // --- TÉLÉMÉTRIE & BoP (application séparée, schéma `telemetry`) --------------
 // Rien de ce qui suit ne lit ni n'écrit dans le championnat : ni les événements,
@@ -1012,6 +1174,7 @@ function telemetryFilters(q){
     trackConfig: q.trackConfig ? String(q.trackConfig) : undefined,
     driver: q.driver ? String(q.driver) : undefined,
     campaign: q.campaign ? String(q.campaign) : undefined,
+    serverName: q.serverName ? String(q.serverName) : undefined,
     byDriver: q.byDriver === '1' || q.byDriver === 'true'
   };
 }
@@ -1155,7 +1318,8 @@ app.get('/api/telemetry/summary', async(req,res)=>{
     const detectedSession=recentSessions.find(session=>
       (!filters.track||session.track===filters.track)
       && (!configSpecified||(session.trackConfig||null)===(filters.trackConfig||null))
-      && (!filters.campaign||session.campaign===filters.campaign))||null;
+      && (!filters.campaign||session.campaign===filters.campaign)
+      && (!filters.serverName||session.serverName===filters.serverName))||null;
     const fallbackCar=summary.cars.find(car=>
       (!filters.track||car.track===filters.track)
       && (!configSpecified||(car.trackConfig||null)===(filters.trackConfig||null)))||null;
@@ -1206,7 +1370,9 @@ app.get('/api/telemetry/sessions', async(req,res)=>{
   if(!(await telemetryAdmin(req,res)))return undefined;
   try{
     const service=await getTelemetry();
-    res.json({sessions:await service.listSessions()});
+    const all=await service.listSessions();
+    const server=String(req.query.serverName||'');
+    res.json({sessions:server?all.filter(s=>s.serverName===server):all});
   }catch(e){res.status(503).json({error:e.message})}
 });
 app.patch('/api/telemetry/sessions/:id', async(req,res)=>{
@@ -1269,7 +1435,7 @@ app.get('/api/telemetry/measurements/:id', async(req,res)=>{
   }catch(e){res.status(503).json({error:e.message})}
 });
 app.get('/telemetry',(req,res)=>res.sendFile(path.join(ROOT,'telemetry.html')));
-app.get('/telemetry.html',(req,res)=>res.sendFile(path.join(ROOT,'telemetry.html')));
+app.get('/telemetry.html',(req,res)=>res.redirect(301,'/telemetry'+(req.originalUrl.includes('?')?req.originalUrl.slice(req.originalUrl.indexOf('?')):'')));
 
 // --- ÉVÉNEMENTS : servis ici (EVENTS_SOURCE=local, le défaut) ---------------
 // Ces routes sont déclarées AVANT le proxy : elles gagnent. Avec
@@ -1277,7 +1443,7 @@ app.get('/telemetry.html',(req,res)=>res.sendFile(path.join(ROOT,'telemetry.html
 // c'est le retour en arrière en une variable d'environnement, sans redéploiement
 // de code.
 if(eventsSource()==='local'){
-  eventsApi.mountEventRoutes(app,{getStore:getEventsStore});
+  eventsApi.mountEventRoutes(app,{getStore:getEventsStore,authorizeAhServer:server=>ahClient.authorize(server,true)});
 }
 
 // Catalogue et import des mods du PC hébergeant Node : lecture seule, administrateurs.
@@ -1456,6 +1622,8 @@ app.get(['/healthz','/health'], (_req, res) => {
   res.set('Cache-Control','no-store');
   res.status(200).json({ ok:true, service:'gdsp-frontend' });
 });
+// Script CSP public : version suivie dans le dépôt, sans configuration ni secret.
+app.get('/csp/rolling_start.lua',(_req,res)=>{res.set('Cache-Control','no-cache');res.type('text/plain').sendFile(path.join(ROOT,'csp','rolling_start.lua'));});
 // Entrée historique conservée, non destinée à l'indexation.
 app.get('/admin',(_req,res)=>{res.set('X-Robots-Tag','noindex, follow');res.set('Cache-Control','no-store');res.type('html').send(getIndex());});
 app.use(express.static(ROOT,{dotfiles:'deny',etag:true,maxAge:'1h',setHeaders(res,filePath){

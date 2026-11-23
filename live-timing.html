@@ -37,18 +37,19 @@
   .kpi .label{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--grey);font-weight:bold}
   .kpi strong{display:block;font-family:Impact,sans-serif;font-size:24px;font-weight:normal;letter-spacing:.5px;margin-top:3px;line-height:1.15}
   .kpi small{color:var(--grey);font-size:11px}
-  .grid{display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start}
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
   .panel{background:var(--paper);border:1px solid var(--line)}
   .panel h3{font-family:Impact,sans-serif;font-size:16px;letter-spacing:1.2px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line);text-transform:uppercase;font-weight:normal;display:flex;justify-content:space-between;align-items:center}
   .panel h3 .tag{font-size:9px;letter-spacing:1.4px;background:#d6c6a4;padding:4px 7px}
+  #standings,#storedStandings{overflow-x:auto}
   table{width:100%;border-collapse:collapse;font-size:13px}
   thead th{background:var(--ink);color:var(--cream);font-size:10px;letter-spacing:1.1px;text-transform:uppercase;padding:8px 8px;text-align:right;font-weight:bold;white-space:nowrap;position:sticky;top:0}
   thead th:nth-child(1),thead th:nth-child(2){text-align:left}
   tbody td{padding:7px 8px;border-bottom:1px solid #e0d6bf;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   tbody td:nth-child(1),tbody td:nth-child(2){text-align:left}
   tbody tr:nth-child(even){background:#f2ead8}
-  tbody tr.best td:nth-child(7){color:#2f6b39;font-weight:bold}
-  tbody tr.pit td:nth-child(2)::after{content:' PIT';font-size:9px;background:#9c3021;color:#fff;padding:1px 4px;margin-left:6px;letter-spacing:1px;vertical-align:middle}
+  tbody tr.best td.best-cell{color:#2f6b39;font-weight:bold}
+  tbody tr.pit td.driver-cell::after{content:' PIT estimé';font-size:9px;background:#9c3021;color:#fff;padding:1px 4px;margin-left:6px;letter-spacing:1px;vertical-align:middle}
   tbody tr.off td{opacity:.45}
   .pos{font-family:Impact,sans-serif;font-size:16px}
   .drv{display:flex;flex-direction:column;line-height:1.25}
@@ -71,7 +72,7 @@
   .best-racer{display:flex;flex-direction:column;gap:3px;min-width:0}
   .best-racer small{font-size:9px;color:var(--grey);white-space:normal;line-height:1.35}
   .timing-hint{padding:8px 14px;font-size:11px;line-height:1.45;color:#59625d;border-bottom:1px solid #e0d6bf}
-  td.lap-cell,td.potential-cell{min-width:145px}
+  #storedStandings td.lap-cell,#storedStandings td.potential-cell{min-width:145px}
   .time-main{display:block;font-weight:bold;font-variant-numeric:tabular-nums}
   .sector-chips{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end;margin-top:3px;white-space:normal}
   .sector-chip{display:inline-flex;gap:3px;align-items:center;padding:2px 4px;background:#eee4d0;color:#805b35;font-size:9px;line-height:1.15;border-radius:2px;font-variant-numeric:tabular-nums}
@@ -82,7 +83,13 @@
   .diag b{color:var(--ink)}
   .empty{padding:26px;text-align:center;color:var(--grey);font-size:13px}
   @media(max-width:960px){.grid{grid-template-columns:1fr}}
-  @media(max-width:620px){thead th:nth-child(4),thead th:nth-child(5),thead th:nth-child(6),tbody td:nth-child(4),tbody td:nth-child(5),tbody td:nth-child(6){display:none}.page{padding:14px}}
+  @media(max-width:620px){.page{padding:14px}}
+  .column-menu{padding:8px 14px;border-bottom:1px solid var(--line);font-size:12px}.column-menu summary{cursor:pointer;font-weight:bold}.column-row{display:flex;align-items:center;gap:6px;padding:4px 0}.column-row label{min-width:150px}.column-row input[type=number]{width:65px}.column-row button{cursor:pointer}.column-row span{color:var(--grey)}
+  #standings table{table-layout:fixed;width:max-content} #standings th,#standings td{overflow:hidden;text-overflow:ellipsis}
+  #standings th{position:sticky;cursor:grab;touch-action:none;user-select:none;padding-right:16px}
+  #standings th.drag-source{opacity:.55} #standings th.drop-before{box-shadow:inset 4px 0 #e9b34d} #standings th.drop-after{box-shadow:inset -4px 0 #e9b34d}
+  #standings .column-resize{position:absolute;right:0;top:0;bottom:0;width:12px;cursor:col-resize;touch-action:none;border-right:2px solid #b5ab94}
+  #standings .column-resize:hover{border-color:#e9b34d}
 </style>
 </head>
 <body>
@@ -108,7 +115,7 @@
     </div>
   </div>
 
-  <div class="kpis">
+  <div class="kpis" id="liveKpis">
     <div class="kpi"><div class="label">Serveur</div><strong id="kServer">—</strong><small id="kTrack">circuit inconnu</small></div>
     <div class="kpi"><div class="label">Session</div><strong id="kSession">—</strong><small id="kSessionSub">en attente</small></div>
     <div class="kpi"><div class="label">Pilotes en piste</div><strong id="kDrivers">0</strong><small id="kDriversSub">—</small></div>
@@ -116,13 +123,23 @@
     <div class="kpi"><div class="label">Météo</div><strong id="kWeather">—</strong><small id="kTemp">—</small></div>
   </div>
 
-  <div class="grid">
-    <div class="panel">
+  <div class="grid" id="liveGrid">
+    <div>
+    <div class="panel" id="liveStandingsPanel">
       <h3>Classement en direct <span class="tag" id="rowCount">0 voiture</span></h3>
+      <div class="timing-hint" id="pitHint">Stands : détection expérimentale, en attente des données.</div>
       <div class="timing-hint">Le potentiel = somme des meilleurs secteurs personnels (données CSP). Secteurs visibles après un tour bouclé et l'envoi du script de télémétrie.</div>
+      <details class="column-menu"><summary>Personnaliser les colonnes</summary><p>Choisis les colonnes à afficher. Dans le tableau, fais glisser leur nom pour les déplacer ou tire leur bord droit pour les redimensionner. Les flèches et largeurs ci-dessous restent utilisables au clavier. Réglages conservés dans ce navigateur.</p><div id="columnSettings"></div><button type="button" id="resetColumns">Réinitialiser</button></details>
       <div id="standings"><div class="empty">En attente des données du serveur…</div></div>
     </div>
-    <div>
+    <div class="panel" style="margin-top:18px">
+      <h3>Temps conservés <span class="tag" id="storedCount">0 pilote</span></h3>
+      <div class="timing-hint">Pilotes déconnectés ayant bouclé un tour observé. La moyenne inclut les tours reçus, même avec coupures, depuis le démarrage du collecteur ; les données absentes ne sont pas inventées.</div>
+      <div id="storedStandings"><div class="empty">Aucun temps conservé pour le moment.</div></div>
+    </div>
+    </div>
+    <div id="liveSidebar">
+      <div class="panel" style="margin-bottom:18px"><h3>Carte en direct</h3><div id="trackMap" class="empty">Recherche du tracé…</div></div>
       <div class="panel" style="margin-bottom:18px">
         <h3>Meilleurs tours</h3>
         <div class="bestlap" id="bestLaps"><div class="empty">—</div></div>
@@ -141,13 +158,23 @@
   <div class="panel" style="margin-top:18px" id="historyPanel">
     <h3>Historique des séances <span class="tag">persistant</span></h3>
     <div style="padding:10px 16px">
-      <p class="note" style="margin:0 0 10px">Chaque séance vue par le site est conservée (agent, UDP ou source HTTP) :
-      le direct ne survit pas à un redémarrage, l'historique oui. Clique pour revoir le classement d'une séance passée.</p>
+      <p class="note" style="margin:0 0 10px">Choisis une séance observée : seules les données de temps conservés sont archivées, y compris celles des pilotes encore connectés à la fin. Ce ne sont pas des résultats officiels.</p>
       <div id="history"><div class="empty">Chargement…</div></div>
       <div id="historyBanner" style="display:none;margin-top:12px"></div>
+      <details style="margin-top:14px"><summary>Nettoyer les doublons probables (administrateur)</summary>
+        <p class="note">Aperçu obligatoire : seules les archives closes très courtes, contiguës, de même source et avec les mêmes temps sont proposées. La plus ancienne est conservée. Une sauvegarde privée contient toutes les archives concernées, y compris celle conservée. Les autres cas restent intacts.</p>
+        <button type="button" id="previewDuplicateArchives">Rechercher les doublons probables</button>
+        <div id="duplicateArchivesResult" aria-live="polite"></div>
+      </details>
+      <details style="margin-top:14px"><summary>Nettoyer les archives sans tour (administrateur)</summary>
+        <p class="note">Aperçu avant suppression. Les séances en cours, sans fin connue ou ambiguës sont conservées. Les archives supprimées sont sauvegardées dans le dossier privé du serveur.</p>
+        <button type="button" id="previewEmptyArchives">Rechercher les archives sans tour</button>
+        <div id="emptyArchivesResult" aria-live="polite"></div>
+      </details>
     </div>
   </div>
 </div>
+<script src="/assets/admin-session.js?v=1"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -193,11 +220,13 @@
       : mirror ? 'Capture enregistrée'
       : stale ? (remote ? 'Serveur injoignable' : 'Instantané périmé')
       : http ? 'Serveur joignable (résumé)' : 'Hors ligne';
+    if (viewingHistory) $('stateText').textContent = 'Archive · dernière photo observée';
     $('clock').textContent = new Date(d.updatedAt).toLocaleTimeString('fr-FR');
 
     $('kServer').textContent = (d.server && d.server.name) || '—';
     var track = d.server && d.server.track ? d.server.track + (d.server.trackConfig ? ' · ' + d.server.trackConfig : '') : 'circuit inconnu';
     $('kTrack').textContent = track;
+    $('pitHint').textContent = d.server && d.server.pitGeometryAvailable === true ? 'Stands : estimation par lignes AI et plateau 80/120 ; passages ou arrêts peuvent être manqués.' : 'Stands : géométrie indisponible ou non confirmée ; PIT ne peut pas être estimé.';
     $('kSession').textContent = sessionLabel(d.session);
     $('kSessionSub').textContent = d.session.remaining ? 'reste ' + d.session.remaining : d.session.elapsed ? 'écoulé ' + d.session.elapsed : 'en attente';
     $('kDrivers').textContent = String((d.cars || []).filter(function (c) { return c.connected; }).length);
@@ -209,7 +238,13 @@
     $('kWeather').textContent = d.server && d.server.weather ? d.server.weather : (d.server && d.server.ambientTemp != null ? d.server.ambientTemp + '°C' : '—');
     $('kTemp').textContent = d.server && d.server.roadTemp != null ? 'air ' + d.server.ambientTemp + '° / piste ' + d.server.roadTemp + '°' : '—';
 
+    $('liveGrid').style.gridTemplateColumns = viewingHistory ? 'minmax(0,1fr)' : '';
+    $('liveStandingsPanel').style.display = viewingHistory ? 'none' : '';
+    $('liveSidebar').style.display = viewingHistory ? 'none' : '';
+    $('liveKpis').style.display = viewingHistory ? 'none' : '';
     renderStandings(d);
+    renderStored(d);
+    renderTrackMap(d);
     renderBest(d);
     maybeLoadSectorTimes(d);
     renderFeed(d);
@@ -251,8 +286,8 @@
       return;
     }
     $('copyCmd').style.display = '';
-    var pushOn = cfg.push && cfg.push.enabled;
-    var udp = (cfg.udp) || st.udp || {};
+    var pushOn = !activeSource && cfg.push && cfg.push.enabled;
+    var udp = st.udp || cfg.udp || {};
     $('bannerTitle').textContent = st.error ? 'La liaison avec le serveur est en erreur' : "Le site n'arrive pas encore à lire le serveur";
     var html = '';
     if (pushOn) {
@@ -357,6 +392,7 @@
         sectorRows = Array.isArray(j.drivers) ? j.drivers : [];
         if (last && !viewingHistory) {
           renderStandings(last);
+          renderStored(last);
           renderBest(last);
         }
       })
@@ -364,44 +400,168 @@
       .finally(function () { sectorRequestInFlight = false; });
   }
 
-  function renderStandings(d) {
-    var cars = Array.isArray(d.cars) ? d.cars : [];
-    $('rowCount').textContent = cars.length + (cars.length > 1 ? ' voitures' : ' voiture');
-    if (!cars.length) {
-      $('standings').innerHTML = '<div class="empty">Aucune voiture connectée pour le moment.</div>';
+  var columnDefs = [
+    ['position','#',70],['driver','Pilote',180],['tyres','Pneus',90],['current','Tour en cours',130],['delta','Delta',90],['laps','Tours',75],['gap','Écart',90],['interval','Interv.',90],['last','Dernier',150],['best','Meilleur tour',150],['potential','Potentiel',150],['pits','Arrêts estimés',135],['speed','Vit.',80],['topSpeed','Vitesse max.',120],['ping','Ping',80]
+  ];
+  var columnKey = 'gdsp-live-columns-v1';
+  function defaultColumns(){return columnDefs.map(function(d){return {id:d[0],visible:true,width:d[2]};});}
+  function loadColumns(){
+    try {
+      var saved=JSON.parse(localStorage.getItem(columnKey)), defaults=defaultColumns();
+      if(!Array.isArray(saved))return defaults;
+      var seen={}, result=[];
+      saved.forEach(function(c){var def=defaults.find(function(d){return d.id===c.id;});if(!def||seen[c.id])return;seen[c.id]=true;result.push({id:def.id,visible:typeof c.visible==='boolean'?c.visible:true,width:Number.isFinite(c.width)?Math.max(60,Math.min(500,Math.round(c.width))):def.width});});
+      defaults.forEach(function(c){if(!seen[c.id])result.push(c);});return result;
+    } catch(e){return defaultColumns();}
+  }
+  var columns=loadColumns();
+  function columnLabel(id){return columnDefs.find(function(d){return d[0]===id;})[1];}
+  function drawColumnSettings(){
+    $('columnSettings').innerHTML=columns.map(function(c,i){return '<div class="column-row"><label><input type="checkbox" data-action="visible" data-id="'+c.id+'" '+(c.visible?'checked':'')+'> '+esc(columnLabel(c.id))+'</label><button type="button" data-action="up" data-id="'+c.id+'" aria-label="Monter '+esc(columnLabel(c.id))+'" '+(i===0?'disabled':'')+'>↑</button><button type="button" data-action="down" data-id="'+c.id+'" aria-label="Descendre '+esc(columnLabel(c.id))+'" '+(i===columns.length-1?'disabled':'')+'>↓</button><input type="number" min="60" max="500" step="10" value="'+c.width+'" data-action="width" data-id="'+c.id+'" aria-label="Largeur '+esc(columnLabel(c.id))+' en pixels"><span>px</span></div>';}).join('');
+  }
+  function saveColumns(){try{localStorage.setItem(columnKey,JSON.stringify(columns));}catch(e){} if(last&&!viewingHistory)renderStandings(last);}
+  $('columnSettings').addEventListener('change',function(e){
+    var t=e.target, c=columns.find(function(c){return c.id===t.dataset.id;});if(!c)return;
+    if(t.dataset.action==='visible')c.visible=t.checked;
+    if(t.dataset.action==='width'){var n=Number(t.value);if(Number.isFinite(n)&&t.value!=='')c.width=Math.max(60,Math.min(500,Math.round(n)));}
+    drawColumnSettings();saveColumns();
+  });
+  $('columnSettings').addEventListener('click',function(e){
+    var t=e.target, i=columns.findIndex(function(c){return c.id===t.dataset.id;});if(i<0)return;
+    var j=t.dataset.action==='up'?i-1:t.dataset.action==='down'?i+1:i;
+    if(j<0||j>=columns.length||i===j)return;var tmp=columns[i];columns[i]=columns[j];columns[j]=tmp;drawColumnSettings();saveColumns();
+  });
+  $('resetColumns').addEventListener('click',function(){columns=defaultColumns();drawColumnSettings();saveColumns();});
+  drawColumnSettings();
+
+  // Le conteneur reste en place pendant les rafraîchissements du direct :
+  // capturer le pointeur ici et différer le rendu du tableau pendant le geste.
+  var columnGesture = null;
+  var standingsElement = $('standings');
+  function headerAt(x,y){
+    var el=document.elementFromPoint(x,y);
+    var header=el && el.closest('th[data-column]');
+    return header && standingsElement.contains(header) ? header : null;
+  }
+  function clearDropMarker(){
+    if(columnGesture && columnGesture.marker){columnGesture.marker.classList.remove('drop-before','drop-after');columnGesture.marker=null;}
+  }
+  standingsElement.addEventListener('pointerdown',function(e){
+    if(columnGesture || !e.isPrimary || (e.pointerType==='mouse' && e.button!==0))return;
+    var header=e.target.closest('th[data-column]');
+    if(!header || !standingsElement.contains(header))return;
+    var col=columns.find(function(c){return c.id===header.dataset.column;});if(!col)return;
+    var resizing=!!e.target.closest('.column-resize');
+    columnGesture={pointerId:e.pointerId,id:col.id,mode:resizing?'resize':'move',startX:e.clientX,startY:e.clientY,width:col.width,previewWidth:col.width,header:header,marker:null,target:null,after:false,moved:false};
+    standingsElement.setPointerCapture(e.pointerId);e.preventDefault();
+  });
+  standingsElement.addEventListener('pointermove',function(e){
+    var g=columnGesture;if(!g || g.pointerId!==e.pointerId)return;
+    if(g.mode==='resize'){
+      g.previewWidth=Math.max(60,Math.min(500,Math.round(g.width+e.clientX-g.startX)));
+      var visible=columns.filter(function(c){return c.visible;}), index=visible.findIndex(function(c){return c.id===g.id;});
+      var table=standingsElement.querySelector('table'), cols=standingsElement.querySelectorAll('col');
+      if(table && cols[index]){cols[index].style.width=g.previewWidth+'px';table.style.width=(visible.reduce(function(n,c){return n+c.width;},0)-g.width+g.previewWidth)+'px';}
       return;
     }
-    var fastestLapMs = cars.reduce(function (fastest, c) {
-      var ms = bestLapTimeFor(c, sectorRecordFor(c.name, c.model));
-      return ms != null && ms < fastest ? ms : fastest;
-    }, Infinity);
-    var html = '<table><thead><tr><th>#</th><th>Pilote</th><th>Tours</th><th>Écart</th><th>Interv.</th><th>Dernier</th><th>Meilleur tour</th><th>Potentiel</th><th>Vit.</th></tr></thead><tbody>';
-    cars.forEach(function (c) {
-      var timing = sectorRecordFor(c.name, c.model);
-      var bestSectors = timing && timing.bestSectorsMs;
-      var currentBestLapMs = bestLapTimeFor(c, timing);
-      var cls = [c.inPit ? 'pit' : '', c.connected ? '' : 'off', currentBestLapMs === fastestLapMs ? 'best' : ''].join(' ').trim();
-      var bestLap = bestLapLabel(c, timing);
-      var lastLap = c.lastLap || (timing && timing.lastLapMs ? formatTimingMs(timing.lastLapMs) : '—');
-      var potentialMs = timing && timing.potentialLapMs != null ? timing.potentialLapMs : sumSectorTimes(bestSectors);
-      var potential = potentialMs != null ? formatTimingMs(potentialMs) : '—';
-      html += '<tr class="' + cls + '">' +
-        '<td class="pos">' + (c.position == null ? '—' : c.position) + '</td>' +
-        '<td><span class="drv"><b>' + esc(c.name) + '</b><span>' + esc(c.team || c.model || '') + '</span></span></td>' +
-        '<td>' + (c.laps || 0) + '</td>' +
-        '<td>' + esc(c.gap === 'leader' ? '—' : c.gap) + '</td>' +
-        '<td class="muted">' + esc(c.position === 1 ? '' : c.interval || '') + '</td>' +
-        '<td class="lap-cell"><span class="time-main">' + esc(lastLap) + (c.lastLapCuts ? ' c' : '') + '</span>' +
-          renderSectorChips(timing && timing.lastSectorsMs, bestSectors) + '</td>' +
-        '<td class="lap-cell"><span class="time-main">' + esc(bestLap) + '</span>' +
-          renderSectorChips(timing && timing.bestLapSectorsMs, bestSectors) + '</td>' +
-        '<td class="potential-cell"><span class="time-main">' + esc(potential) + '</span>' +
-          renderSectorChips(bestSectors, bestSectors) + '</td>' +
-        '<td>' + (c.speedKmh != null ? c.speedKmh : '—') + '</td>' +
-        '</tr>';
+    if(!g.moved && Math.hypot(e.clientX-g.startX,e.clientY-g.startY)<5)return;
+    g.moved=true;g.header.classList.add('drag-source');clearDropMarker();g.target=null;
+    var target=headerAt(e.clientX,e.clientY);
+    if(target && target.dataset.column!==g.id){
+      g.target=target.dataset.column;g.after=e.clientX>=target.getBoundingClientRect().left+target.getBoundingClientRect().width/2;
+      g.marker=target;target.classList.add(g.after?'drop-after':'drop-before');
+    }
+  });
+  function finishColumnGesture(e,cancelled){
+    var g=columnGesture;if(!g || g.pointerId!==e.pointerId)return;
+    clearDropMarker();g.header.classList.remove('drag-source');
+    if(!cancelled && g.mode==='resize'){
+      var col=columns.find(function(c){return c.id===g.id;});if(col)col.width=g.previewWidth;
+    } else if(!cancelled && g.mode==='move' && g.moved && g.target){
+      var from=columns.findIndex(function(c){return c.id===g.id;});
+      if(from>=0){var moved=columns.splice(from,1)[0],to=columns.findIndex(function(c){return c.id===g.target;});columns.splice(to+(g.after?1:0),0,moved);}
+    }
+    columnGesture=null;
+    if(standingsElement.hasPointerCapture(e.pointerId))standingsElement.releasePointerCapture(e.pointerId);
+    drawColumnSettings();
+    if(cancelled){if(last&&!viewingHistory)renderStandings(last);}else saveColumns();
+  }
+  standingsElement.addEventListener('pointerup',function(e){finishColumnGesture(e,false);});
+  standingsElement.addEventListener('pointercancel',function(e){finishColumnGesture(e,true);});
+  standingsElement.addEventListener('lostpointercapture',function(e){finishColumnGesture(e,true);});
+
+  function renderStandings(d) {
+    if(columnGesture)return;
+    var cars = Array.isArray(d.cars) ? d.cars.filter(function(c){return c.connected === true;}) : [];
+    $('rowCount').textContent = cars.length + (cars.length > 1 ? ' voitures' : ' voiture');
+    if (!cars.length) { $('standings').innerHTML = '<div class="empty">Aucune voiture connectée pour le moment.</div>'; return; }
+    var visible=columns.filter(function(c){return c.visible;});
+    if(!visible.length){$('standings').innerHTML='<div class="empty">Sélectionnez au moins une colonne.</div>';return;}
+    var fastestLapMs=cars.reduce(function(f,c){var ms=bestLapTimeFor(c,sectorRecordFor(c.name,c.model));return ms!=null&&ms<f?ms:f;},Infinity);
+    var html='<table style="width:'+visible.reduce(function(n,c){return n+c.width;},0)+'px"><colgroup>'+visible.map(function(c){return '<col style="width:'+c.width+'px">';}).join('')+'</colgroup><thead><tr>'+visible.map(function(c){return '<th data-column="'+c.id+'" title="Faire glisser pour déplacer">'+esc(columnLabel(c.id))+'<span class="column-resize" title="Tirer pour redimensionner" aria-hidden="true"></span></th>';}).join('')+'</tr></thead><tbody>';
+    cars.forEach(function(c){
+      var timing=sectorRecordFor(c.name,c.model), bestSectors=timing&&timing.bestSectorsMs;
+      var currentBestLapMs=bestLapTimeFor(c,timing);
+      var cls=[c.inPit?'pit':'',currentBestLapMs!=null&&currentBestLapMs===fastestLapMs?'best':''].join(' ').trim();
+      var lastLap=c.lastLap||(timing&&timing.lastLapMs?formatTimingMs(timing.lastLapMs):'—');
+      var potentialMs=timing&&timing.potentialLapMs!=null?timing.potentialLapMs:sumSectorTimes(bestSectors);
+      var cells={
+        position:'<td class="pos">'+(c.position==null?'—':esc(c.position))+'</td>',
+        driver:'<td class="driver-cell"><span class="drv"><b>'+esc(c.name)+'</b><span>'+esc(c.team||c.model||'')+'</span></span>'+(c.pitState==='stopped'?'<small> · arrêt estimé</small>':c.pitState==='lane'?'<small> · voie estimée</small>':'')+'</td>',
+        tyres:'<td>—</td>',current:'<td>'+(c.currentLapMs!=null?esc(formatTimingMs(c.currentLapMs)):'—')+'</td>',delta:'<td>—</td>',
+        laps:'<td>'+esc(c.laps||0)+'</td>',gap:'<td>'+esc(c.gap==='leader'?'—':c.gap)+'</td>',interval:'<td class="muted">'+esc(c.position===1?'':c.interval||'')+'</td>',
+        last:'<td class="lap-cell"><span class="time-main">'+esc(lastLap)+(c.lastLapCuts?' c':'')+'</span>'+renderSectorChips(timing&&timing.lastSectorsMs,bestSectors)+'</td>',
+        best:'<td class="lap-cell best-cell"><span class="time-main">'+esc(bestLapLabel(c,timing))+'</span>'+renderSectorChips(timing&&timing.bestLapSectorsMs,bestSectors)+'</td>',
+        potential:'<td class="potential-cell"><span class="time-main">'+(potentialMs!=null?esc(formatTimingMs(potentialMs)):'—')+'</span>'+renderSectorChips(bestSectors,bestSectors)+'</td>',
+        pits:'<td>'+(c.pitStops!=null?esc(c.pitStops):'—')+'</td>',speed:'<td>'+(c.speedKmh!=null?esc(c.speedKmh):'—')+'</td>',topSpeed:'<td>'+(c.topSpeedKmh!=null?esc(c.topSpeedKmh):'—')+'</td>',ping:'<td>—</td>'
+      };
+      html+='<tr class="'+cls+'">'+visible.map(function(col){return cells[col.id];}).join('')+'</tr>';
     });
-    html += '</tbody></table>';
-    $('standings').innerHTML = html;
+    $('standings').innerHTML=html+'</tbody></table>';
+  }
+
+  var mapContext = '', mapData = null, mapLoading = false;
+  function renderTrackMap(d) {
+    if (viewingHistory) return;
+    var server=d.server||{}, status=d.status||{};
+    if (status.mode !== 'acsp' || !server.track) { $('trackMap').textContent='Carte indisponible : positions locales non reçues.'; return; }
+    var context=activeSource+'|'+server.track+'|'+(server.trackConfig||'');
+    if(context!==mapContext){
+      mapContext=context;mapData=null;mapLoading=true;
+      fetch('/api/live/map'+(activeSource?'?source='+encodeURIComponent(activeSource):''),{cache:'no-store'})
+        .then(function(r){return r.json();}).then(function(result){if(mapContext!==context)return;if(result.available && (result.sourceTrack!==server.track || result.sourceLayout!==(server.trackConfig||'')))result={available:false};mapData=result;mapLoading=false;if(last&&!viewingHistory)renderTrackMap(last);})
+        .catch(function(){if(mapContext===context){mapData={available:false};mapLoading=false;if(last&&!viewingHistory)renderTrackMap(last);}});
+    }
+    if(mapLoading){$('trackMap').textContent='Chargement du tracé…';return;}
+    if(!mapData || !mapData.available){$('trackMap').textContent='Carte indisponible : géométrie de cette variante introuvable ou ambiguë.';return;}
+    var p=mapData.projection;
+    if(!p || ![p.scale,p.originX,p.originY].every(Number.isFinite)){$('trackMap').textContent='Projection du circuit indisponible.';return;}
+    var html='<svg role="img" aria-label="Carte du circuit et positions en direct" viewBox="0 0 1000 560" style="width:100%;display:block;background:#f6f1e5">'+
+      '<path d="'+esc(mapData.path)+'" fill="none" stroke="#8b8f89" stroke-width="13" stroke-linejoin="round"/><path d="'+esc(mapData.path)+'" fill="none" stroke="#fff" stroke-width="6" stroke-linejoin="round"/>';
+    (d.cars||[]).forEach(function(car){
+      var pos=car.worldPosition;if(!car.connected || !pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.z))return;
+      var x=pos.x*p.scale+p.originX,y=pos.z*p.scale+p.originY;
+      if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||x>1000||y<0||y>560)return;
+      html+='<g><circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="8" fill="#ac372e" stroke="#fff" stroke-width="3"/><text x="'+(x+10).toFixed(1)+'" y="'+(y-10).toFixed(1)+'" font-size="17" fill="#152a2d" paint-order="stroke" stroke="#fff" stroke-width="4">'+esc(car.name||'Pilote')+'</text></g>';
+    });
+    $('trackMap').innerHTML=html+'</svg><div class="timing-hint">Position ACSP récente sur la ligne AI locale. Les positions non reçues ne sont pas affichées.</div>';
+  }
+
+  function renderStored(d) {
+    var rows = Array.isArray(d.storedTimes) ? d.storedTimes : (Array.isArray(d.cars) ? d.cars.filter(function(c){return c.laps > 0 || c.bestLapMs;}) : []);
+    if (!viewingHistory) rows = rows.filter(function(c){return c.connected === false;});
+    $('storedCount').textContent = rows.length + (rows.length > 1 ? ' pilotes' : ' pilote');
+    if (!rows.length) { $('storedStandings').innerHTML = '<div class="empty">Aucun temps conservé pour le moment.</div>'; return; }
+    rows = rows.slice().sort(function(a,b){return (a.bestLapMs||Infinity)-(b.bestLapMs||Infinity);});
+    var html = '<table><thead><tr><th>Pilote</th><th>Voiture</th><th>Pneus</th><th>Moyenne des tours reçus</th><th>Meilleur tour</th><th>Potentiel</th><th>Tours observés</th><th>Arrêts observés</th><th>Vitesse max.</th><th>Ping</th></tr></thead><tbody>';
+    rows.forEach(function(c){
+      // Aucun secteur CSP n'est archivé : ne pas attribuer ceux d'un autre pilote.
+      var potential = '—';
+      html += '<tr><td><b>' + esc(c.name || 'Pilote inconnu') + '</b>' + (c.identityUncertain ? ' <small>(identité non confirmée)</small>' : '') + '</td>' +
+        '<td>' + esc(c.model || '—') + '</td><td>—</td><td>' + (Number.isFinite(c.averageLapMs) && c.averageLapMs > 0 ? esc(formatTimingMs(c.averageLapMs)) : '—') + '</td><td>' + esc(c.bestLap || '—') + '</td><td>' + esc(potential) + '</td>' +
+        '<td>' + (c.laps != null && Number.isFinite(Number(c.laps)) ? Number(c.laps) : '—') + '</td><td>' + (c.pitStops != null ? esc(c.pitStops) : '—') + '</td><td>' + (c.topSpeedKmh != null ? esc(c.topSpeedKmh) + ' km/h' : '—') + '</td><td>—</td></tr>';
+    });
+    $('storedStandings').innerHTML = html + '</tbody></table>';
   }
 
   function renderBest(d) {
@@ -477,13 +637,12 @@
     return '/api/live/status' + (activeSource ? '?source=' + encodeURIComponent(activeSource) : '');
   }
   function renderSources(cfg) {
-    var list = (cfg && cfg.httpSources) || [];
+    var local = (cfg && cfg.localSources) || [];
+    var remote = (cfg && cfg.httpSources) || [];
     var sel = $('sourceSelect');
-    if (list.length < 2) { sel.style.display = 'none'; return; }
-    sel.innerHTML = list.map(function (s, i) {
-      var current = activeSource === '' ? i === 0 : String(i) === activeSource || s.url === activeSource;
-      return '<option value="' + s.index + '"' + (current ? ' selected' : '') + '>' + esc(s.url.replace(/^https?:\/\//, '')) + '</option>';
-    }).join('');
+    if (local.length < 2 && !remote.length) { sel.style.display = 'none'; return; }
+    var rows = [{id:'',name:'Source automatique'}].concat(local).concat(remote.map(function(s){return {id:String(s.index),name:s.name+' · '+s.url.replace(/^https?:\/\//,'')};}));
+    sel.innerHTML=rows.map(function(s){return '<option value="'+esc(s.id)+'"'+(s.id===activeSource?' selected':'')+'>'+esc(s.name)+'</option>';}).join('');
     sel.style.display = '';
   }
   // --- historique persistant -------------------------------------------------
@@ -492,38 +651,76 @@
     if (!iso) return '—';
     return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
   }
+  var historyOffset = 0, historyPageSize = 100, historyRequest = 0;
   function loadHistory() {
-    fetch('/api/live/sessions?limit=30', { cache: 'no-store' })
+    var request = ++historyRequest;
+    fetch('/api/live/sessions?limit=' + historyPageSize + '&offset=' + historyOffset, { cache: 'no-store' })
       .then(function (r) { return r.json(); })
-      .then(function (j) { renderHistory(j); })
-      .catch(function () { $('history').innerHTML = '<div class="empty">Historique indisponible.</div>'; });
+      .then(function (j) { if (request === historyRequest) renderHistory(j); })
+      .catch(function () { if (request !== historyRequest) return; $('history').innerHTML = '<div class="empty">Historique indisponible.</div>'; });
   }
   function renderHistory(j) {
     if (!j || !j.history) { $('history').innerHTML = '<div class="empty">Historique non actif sur ce site.</div>'; return; }
     var list = j.sessions || [];
-    if (!list.length) { $('history').innerHTML = '<div class="empty">Aucune séance conservée pour l\'instant — la première qui passe sera gardée.</div>'; return; }
-    var html = '<table style="width:100%;font-size:13px"><thead><tr><th>Début</th><th>Serveur</th><th>Circuit</th>' +
-      '<th>Type</th><th>Pilotes</th><th>Dernière vue</th><th></th></tr></thead><tbody>';
+    if (!list.length) { $('history').innerHTML = '<div class="empty">Aucune séance sur cette page.</div>' + (historyOffset ? '<button type="button" class="hprev">← Plus récentes</button>' : ''); return; }
+    var html = '<label for="historySelect">Séance archivée ou en cours</label> <select id="historySelect" style="max-width:100%;padding:8px"><option value="">— Choisir une séance —</option>';
     list.forEach(function (row) {
-      html += '<tr>' +
-        '<td>' + esc(fmtWhen(row.started_at)) + '</td>' +
-        '<td>' + esc(row.server_name || '—') + '</td>' +
-        '<td><b>' + esc(row.track || '—') + '</b>' + (row.track_config ? ' <span style="opacity:.6">· ' + esc(row.track_config) + '</span>' : '') + '</td>' +
-        '<td>' + esc(row.session_type || '—') + '</td>' +
-        '<td>' + (row.drivers == null ? '—' : row.drivers) + '</td>' +
-        '<td>' + esc(fmtWhen(row.last_seen_at)) + (row.ended_at ? ' <span style="opacity:.6">(finie)</span>' : '') + '</td>' +
-        '<td><button class="hopen" data-id="' + row.id + '" style="font:inherit;padding:3px 10px;cursor:pointer">Ouvrir</button></td>' +
-        '</tr>';
+      var models = row.archive_models || (row.snapshot && row.snapshot.archiveModels) || (row.classification || []).map(function(c){return c.model;}).filter(Boolean);
+      models = Array.from(new Set(models));
+      var source = row.archive_source || (row.snapshot && row.snapshot.archiveSource);
+      var sourceLabel = source === 'local1' ? 'CM1 · ' : source === 'local2' ? 'CM2 · ' : '';
+      var label = fmtWhen(row.started_at) + ' · ' + sourceLabel + (row.server_name || 'Serveur inconnu') + ' · ' + (row.track || 'Circuit inconnu') + (row.track_config ? ' / ' + row.track_config : '') + ' · ' + (row.session_type || 'séance inconnue') + ' · ' + (models.length ? models.join(', ') : 'voitures non identifiées');
+      html += '<option value="' + esc(row.id) + '">' + esc(label) + '</option>';
     });
-    html += '</tbody></table>';
+    html += '</select> <button type="button" class="hopen" style="font:inherit;padding:8px;cursor:pointer">Ouvrir</button> <button type="button" class="hrefresh" style="font:inherit;padding:8px;cursor:pointer">Actualiser la liste</button><button type="button" class="hprev" ' + (historyOffset ? '' : 'disabled') + '>← Plus récentes</button> <button type="button" class="hnext" ' + (list.length < historyPageSize ? 'disabled' : '') + '>Plus anciennes →</button><p class="note">Une interruption peut laisser la fin d’une séance inconnue.</p>';
     $('history').innerHTML = html;
   }
+  var duplicateCandidates=[];
+  $('previewDuplicateArchives').addEventListener('click',function(){
+    duplicateCandidates=[];var result=$('duplicateArchivesResult');result.textContent='Recherche…';
+    window.gdspAuth.fetch('/api/live/duplicate-archives',{cache:'no-store'})
+      .then(function(r){return r.json().then(function(j){if(!r.ok)throw Error(j.error||'Recherche impossible');return j;});})
+      .then(function(j){duplicateCandidates=j.groups||[];var html='<p>'+Number(j.count||0)+' archive(s) proposée(s) à la suppression.</p>';
+        if(duplicateCandidates.length){html+='<ul>'+duplicateCandidates.map(function(g){return '<li>'+esc(fmtWhen(g.started_at))+' · '+esc(g.source)+' · '+esc(g.server_name)+' · '+esc(g.track)+' / '+esc(g.track_config||'')+' · '+esc(g.session_type)+' : conserver ID '+esc(g.keep.id)+', supprimer ID '+g.remove.map(function(r){return esc(r.id);}).join(', ')+'</li>';}).join('')+'</ul><button type="button" id="deleteDuplicateArchives">Confirmer la suppression des doublons listés</button>';}
+        result.innerHTML=html;
+      }).catch(function(e){result.textContent=e.message;});
+  });
+  $('duplicateArchivesResult').addEventListener('click',function(e){
+    if(!e.target.closest('#deleteDuplicateArchives') || !duplicateCandidates.length)return;
+    if(!window.confirm('Sauvegarder les archives listées puis supprimer les doublons proposés ?'))return;
+    var result=$('duplicateArchivesResult');result.textContent='Sauvegarde et suppression…';
+    window.gdspAuth.fetch('/api/live/duplicate-archives',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({groups:duplicateCandidates})})
+      .then(function(r){return r.json().then(function(j){if(!r.ok)throw Error(j.error||'Suppression impossible');return j;});})
+      .then(function(j){duplicateCandidates=[];result.textContent=j.deleted+' archive(s) supprimée(s). Sauvegarde privée : '+j.backup;historyOffset=0;loadHistory();})
+      .catch(function(e){duplicateCandidates=[];result.textContent=e.message+' Relance la recherche avant de réessayer.';});
+  });
+  var emptyCandidates=[];
+  $('previewEmptyArchives').addEventListener('click',function(){
+    emptyCandidates=[];var result=$('emptyArchivesResult');result.textContent='Recherche…';
+    window.gdspAuth.fetch('/api/live/empty-archives',{cache:'no-store'})
+      .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Recherche impossible');return j;});})
+      .then(function(j){
+        emptyCandidates=j.items||[];
+        var html='<p>'+j.count+' archive(s) sans tour détectée(s)'+(j.count>emptyCandidates.length?' ; les 500 premières sont proposées':'')+'.</p>';
+        if(emptyCandidates.length){html+='<ul>'+emptyCandidates.map(function(row){return '<li>'+esc(fmtWhen(row.started_at))+' · '+esc(row.source||'source inconnue')+' · '+esc(row.server_name||'serveur inconnu')+' · '+esc(row.track||'circuit inconnu')+' · '+esc(row.session_type||'séance inconnue')+' (ID '+esc(row.id)+')</li>';}).join('')+'</ul><button type="button" id="deleteEmptyArchives">Confirmer la suppression des '+emptyCandidates.length+' archives listées</button>';}
+        result.innerHTML=html;
+      }).catch(function(e){result.textContent=e.message+' Connecte-toi comme administrateur sur la page Télémétrie, puis réessaie.';});
+  });
+  $('emptyArchivesResult').addEventListener('click',function(e){
+    if(!e.target.closest('#deleteEmptyArchives') || !emptyCandidates.length)return;
+    var btn=e.target;btn.disabled=true;
+    window.gdspAuth.fetch('/api/live/empty-archives',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({items:emptyCandidates})})
+      .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Suppression impossible');return j;});})
+      .then(function(j){emptyCandidates=[];$('emptyArchivesResult').textContent=j.deleted+' archive(s) supprimée(s). Sauvegarde privée : '+j.backup;historyOffset=0;loadHistory();})
+      .catch(function(e){emptyCandidates=[];$('emptyArchivesResult').textContent=e.message+' Relance la recherche avant de réessayer.';});
+  });
   function openHistory(id) {
     fetch('/api/live/sessions?id=' + encodeURIComponent(id), { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
         if (!j || !j.session) throw new Error('séance inconnue');
         viewingHistory = true;
+        sectorRows = []; sectorContext = '';
         var row = j.session;
         render(row.snapshot || {});
         $('historyBanner').style.display = '';
@@ -547,7 +744,10 @@
   }
   $('history').addEventListener('click', function (e) {
     var btn = e.target.closest('button.hopen');
-    if (btn) openHistory(btn.getAttribute('data-id'));
+    if (btn) { var id = $('historySelect') && $('historySelect').value; if (id) openHistory(id); }
+    if (e.target.closest('button.hrefresh')) loadHistory();
+    if (e.target.closest('button.hprev') && historyOffset>0) { historyOffset=Math.max(0,historyOffset-historyPageSize); loadHistory(); }
+    if (e.target.closest('button.hnext')) { historyOffset+=historyPageSize; loadHistory(); }
   });
 
   function showLiveError() {
@@ -570,14 +770,16 @@
     var es = new EventSource(streamUrl());
     socket = es;
     es.addEventListener('snapshot', function (ev) {
+      if(socket!==es)return;
       lastSnapshotAt = Date.now();
       if (viewingHistory) return;   // les archives restent affichées tant qu'on les regarde
       try { render(JSON.parse(ev.data)); } catch (e) { console.error(e); }
     });
     es.addEventListener('log', function (ev) {
+      if(socket!==es)return;
       // Les événements arrivent aussi par le flux : on les ajoute tout de suite
       // au fil pour un retour immédiat, sans attendre la photo suivante.
-      if (!last) return;
+      if (!last || viewingHistory) return;
       try {
         var entry = JSON.parse(ev.data);
         last.events = [entry].concat(last.events || []).slice(0, 60);
@@ -585,6 +787,7 @@
       } catch (e) {}
     });
     es.addEventListener('error', function () {
+      if(socket!==es)return;
       // Si le flux est coupé (proxy, onglet en veille), on basculera sur le
       // rafraîchissement périodique ci-dessous.
       if (!lastSnapshotAt) $('stateText').textContent = 'Connexion au flux…';
@@ -602,6 +805,7 @@
   }, 3000);
 
   $('reload').addEventListener('click', function () {
+    if (viewingHistory) { loadHistory(); return; }
     fetchLiveJson(statusUrl()).then(render).catch(showLiveError);
     connect();
   });
@@ -625,7 +829,10 @@
     var url = new URL(location.href);
     url.searchParams.set('source', activeSource);
     history.replaceState({}, '', url);
-    lastSnapshotAt = 0;
+    lastSnapshotAt = 0; last = null; sectorContext = ''; sectorRows = []; viewingHistory = false;
+    render({status:{status:'offline'},server:{},session:{},cars:[],events:[],updatedAt:new Date().toISOString()});
+    var requested=activeSource;
+    fetchLiveJson(statusUrl()).then(function(data){if(activeSource===requested)render(data);}).catch(function(){if(activeSource===requested)showLiveError();});
     connect();
   });
 })();

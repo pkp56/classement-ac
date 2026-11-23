@@ -67,6 +67,10 @@ for(const configuredOrigin of ['https://gdsp.example',''])test('HTTP SEO : route
   assert.ok((await res.text()).includes('rel="canonical" href="'+origin+'/evenements/test-cup"'));
   res=await get('/evenements/missing/circuit');assert.equal(res.status,404);
   res=await get('/admin');assert.equal(res.status,200);assert.equal(res.headers.get('x-robots-tag'),'noindex, follow');
+  for(const [oldPath,newPath] of [['/live-timing.html','/live-timing'],['/telemetry.html','/telemetry']]){
+    res=await fetch(`http://127.0.0.1:${port}${oldPath}?source=test`,{redirect:'manual'});
+    assert.equal(res.status,301);assert.equal(res.headers.get('location'),newPath+'?source=test');
+  }
   for(const existing of ['/live-timing','/telemetry','/assets/logo.png','/maquette-circuit/assets/tracks/tremblant/preview.png','/maquette-circuit/preview-chicane.png']){
     res=await get(existing);assert.equal(res.status,200,existing);
   }
@@ -97,4 +101,15 @@ test('balises de partage : échappement HTML, image absolue et absence sur pages
   assert.match(html,/<script src=/);
   const error=seo.renderPage(template,{title:'Introuvable',description:'Erreur',content:'<h1>404</h1>',noindex:true,interactive:false});
   assert.match(error,/noindex,follow/);assert.doesNotMatch(error,/og:url|rel="canonical"|<script/);
+});
+
+test('calendrier public : plusieurs circuits par jour et sessions répétées',()=>{
+  const html=seo.eventContent({name:'Cup',data:{
+    sessions:[{date:'2027-01-15T20:00',track:'Spa'},{date:'2027-01-15T21:00',track:'Spa'},{date:'2027-01-15T22:00',track:'Monza'}],
+    customCalendar:{'2027-01-15':{tracks:[{trackId:'Spa',trackName:'Spa Francorchamps'},{trackId:'Silverstone',trackName:'Silverstone'}]}}
+  }});
+  assert.equal((html.match(/<li>/g)||[]).length,3);
+  assert.match(html,/Spa Francorchamps · Résultats importés/);
+  assert.match(html,/Monza · Résultats importés/);
+  assert.match(html,/Silverstone · À venir/);
 });
