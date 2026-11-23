@@ -8,7 +8,9 @@ const source=fs.readFileSync(path.join(__dirname,'../mobile/mobile.js'),'utf8');
 function browser(fetch){
   const listeners={},content={innerHTML:'',querySelector(){return null;},addEventListener(name,fn){listeners['content:'+name]=fn;}},output={innerHTML:'',textContent:''};
   const nav=['home','events','live','more'].map(value=>({dataset:{nav:value},attrs:{},setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]}}));
-  const sandbox={document:{getElementById:id=>id==='content'?content:id==='update-output'?output:null,querySelectorAll:()=>nav},location:{hash:'#home',origin:'https://gdsp.example'},window:{addEventListener:(k,fn)=>{listeners[k]=fn},confirm:()=>true},navigator:{onLine:true,serviceWorker:{register:()=>Promise.resolve()}},fetch,URL,URLSearchParams,Date,Intl,Promise,Set,Map};
+  const sandbox={document:{getElementById:id=>id==='content'?content:id==='update-output'?output:null,querySelectorAll:()=>nav},location:{hash:'#home',origin:'https://gdsp.example'},window:{addEventListener:(k,fn)=>{listeners[k]=fn},confirm:()=>true},navigator:{onLine:true,serviceWorker:{register:()=>Promise.resolve()}},fetch,URL,URLSearchParams,Date,Intl,Promise,Set,Map,setTimeout:()=>1,clearTimeout:()=>{}};
+  sandbox.window.gdspMobileEventViews=require('../mobile/event-views');
+  sandbox.window.gdspMobileResults={calculate:()=>({standings:[],rounds:[]})};
   vm.createContext(sandbox);vm.runInContext(source,sandbox);
   return {sandbox,content,output,listeners,nav};
 }
@@ -28,26 +30,37 @@ test('mobile : accueil, choix événement, données distinctes et live',async()=
   b.sandbox.location.hash='#live';await b.listeners.hashchange();assert.match(b.content.innerHTML,/Direct indisponible/);
   assert.deepEqual(calls,['/api/events','/api/events/cup','/api/live/status']);
 });
-test('mobile : archives visibles et vues complètes restent dans la coque mobile',async()=>{
+test('mobile : archives visibles et vues événement sans cadre intégré',async()=>{
   const b=browser(async url=>url==='/api/events'?reply({events:[
     {slug:'cup',name:'Cup',kind:'cup'},
     {slug:'lola-t290-2026',name:'Ancienne Lola',kind:'championship'},
     {slug:'lola-t290-gdsp-championnat-2026',name:'Lola archivée',kind:'archive'},
     {slug:'deleted',name:'Effacé',points_config:{_deleted:true}}
-  ]}):reply({enabled:false,status:{status:'offline'}}));
+  ]}):url==='/api/events/cup'?reply({slug:'cup',name:'Cup',data:{eventInfo:{car:'Alfa'}}}):reply({enabled:false,status:{status:'offline'}}));
   await tick();assert.doesNotMatch(b.content.innerHTML,/Lola archivée|Ancienne Lola|Effacé/);
   b.sandbox.location.hash='#events';await b.listeners.hashchange();
   assert.match(b.content.innerHTML,/Archives/);assert.match(b.content.innerHTML,/Lola archivée/);
   assert.doesNotMatch(b.content.innerHTML,/Ancienne Lola|Effacé/);
   b.sandbox.location.hash='#detail=cup';await b.listeners.hashchange();
-  assert.match(b.content.innerHTML,/<iframe[^>]+src="\/evenements\/cup"/);
+  assert.match(b.content.innerHTML,/Résultats & classement/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
   assert.equal(b.nav[1].attrs['aria-current'],'page');
+  b.sandbox.location.hash='#car=cup';await b.listeners.hashchange();
+  assert.match(b.content.innerHTML,/Fiche voiture/);assert.match(b.content.innerHTML,/Alfa/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
+  b.sandbox.location.hash='#circuit=cup';await b.listeners.hashchange();
+  assert.match(b.content.innerHTML,/Fiches circuit/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
   b.sandbox.location.hash='#service=admin';await b.listeners.hashchange();
-  assert.match(b.content.innerHTML,/<iframe[^>]+src="\/admin"/);
+  assert.match(b.content.innerHTML,/href="\/admin" target="_blank"/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
   assert.equal(b.nav[3].attrs['aria-current'],'page');
   b.sandbox.location.hash='#service=live';await b.listeners.hashchange();
-  assert.match(b.content.innerHTML,/<iframe[^>]+src="\/live-timing"/);
+  assert.match(b.content.innerHTML,/Live timing/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
   assert.equal(b.nav[2].attrs['aria-current'],'page');
+});
+test('télémétrie mobile : session obligatoire et synthèse protégée sans cadre',async()=>{
+  const b=browser(async()=>reply({events:[]}));await tick();let authenticated=false,reads=0;
+  b.sandbox.window.gdspAuth={session:async()=>({authenticated}),fetch:async url=>{assert.equal(url,'/api/telemetry/summary');reads++;return reply({rows:3,cars:[{car:'Alfa <GT>',track:'Spa',laps:3,bestLapMs:93200,fuelPerLap:2.3}]});}};
+  b.sandbox.location.hash='#service=telemetry';await b.listeners.hashchange();
+  assert.match(b.content.innerHTML,/Connecte-toi/);assert.equal(reads,0);
+  authenticated=true;await b.listeners.hashchange();assert.equal(reads,1);assert.match(b.content.innerHTML,/Alfa &lt;GT&gt;/);assert.match(b.content.innerHTML,/1:33.200/);assert.match(b.content.innerHTML,/2.3 L/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
 });
 test('mobile : erreur de réseau visible, aucune donnée ancienne présentée',async()=>{
   const b=browser(async()=>{throw Error('offline')});b.sandbox.navigator.onLine=false;await tick();

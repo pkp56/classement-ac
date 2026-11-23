@@ -3,7 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const {validSlug,calendar,eventCard,eventDetail,embeddedView,filterEventsList}=require('../mobile/mobile');
+const {validSlug,calendar,eventCard,eventDetail,liveView,filterEventsList}=require('../mobile/mobile');
 const root=path.resolve(__dirname,'..');
 
 test('application mobile : manifeste local, portée limitée et icônes installables',()=>{
@@ -16,9 +16,10 @@ test('application mobile : manifeste local, portée limitée et icônes installa
   }
   const sw=fs.readFileSync(path.join(root,'mobile/sw.js'),'utf8');
   assert.match(sw,/req\.method!==\x27GET\x27/);assert.match(sw,/SHELL\.includes/);assert.doesNotMatch(sw,/['"]\/api\//);
-  assert.match(sw,/gdsp-mobile-shell-v2/);assert.match(sw,/self\.skipWaiting\(\)/);assert.match(sw,/self\.clients\.claim\(\)/);
+  assert.match(sw,/gdsp-mobile-shell-v3/);assert.match(sw,/self\.skipWaiting\(\)/);assert.match(sw,/self\.clients\.claim\(\)/);
   const html=fs.readFileSync(path.join(root,'mobile/index.html'),'utf8');
-  assert.match(html,/mobile\.js\?v=2/);assert.match(html,/mobile\.css\?v=2/);assert.match(html,/app-update-banner/);
+  assert.match(html,/mobile\.js\?v=3/);assert.match(html,/mobile\.css\?v=3/);assert.match(html,/app-update-banner/);
+  assert.match(html,/results-engine\.js\?v=3/);assert.match(html,/event-views\.js\?v=3/);assert.match(html,/patches-v71\.js/);
 });
 
 test('événements mobiles : échappement, liens locaux, pas de classement inventé',()=>{
@@ -47,14 +48,9 @@ test('catalogue mobile : mêmes tombstones et doublon historique que le PC, arch
   assert.deepEqual(shown.map(e=>[e.slug,e.kind]),[['lola-t290-gdsp-championnat-2026','archive'],['actif','cup']]);
   assert.equal(filterEventsList([{slug:'lola-t290-2026',name:'Seule Lola'}]).length,1);
 });
-test('vues intégrées : routes locales fixes et identifiants validés',()=>{
-  assert.match(embeddedView('admin'),/src="\/admin"/);
-  assert.match(embeddedView('live'),/src="\/live-timing"/);
-  assert.match(embeddedView('telemetry'),/src="\/telemetry"/);
-  assert.match(embeddedView('detail','cup'),/src="\/evenements\/cup"/);
-  assert.match(embeddedView('car','cup'),/src="\/evenements\/cup\/voiture"/);
-  assert.match(embeddedView('circuit','cup'),/src="\/evenements\/cup\/circuit"/);
-  assert.equal(embeddedView('detail','../admin'),'');assert.equal(embeddedView('https://example.com'),'');
+test('direct mobile : instantané échappé sans cadre PC',()=>{
+  const html=liveView({status:{status:'online'},server:{name:'GDSP',track:'Spa'},cars:[{connected:true,position:1,name:'<Pilote>',laps:4,bestLap:'1:42.500',gap:'leader'},{connected:false,name:'Absent'}]});
+  assert.match(html,/&lt;Pilote&gt;/);assert.match(html,/1:42.500/);assert.match(html,/Leader/);assert.doesNotMatch(html,/<iframe|Absent/);
 });
 
 test('calendrier mobile : plusieurs circuits par date et aucune date vide inventée',()=>{

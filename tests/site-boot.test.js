@@ -77,6 +77,40 @@ function makeBrowser(extraEvents = [], extraFetch = null, browserOptions = {}) {
   return { sandbox, getElementById, calls, storage };
 }
 
+test('moteur mobile : mêmes classements et points par session que le site PC', async () => {
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setTimeout(resolve,0));await new Promise(resolve=>setImmediate(resolve));
+  const event=JSON.parse(vm.runInContext('JSON.stringify({slug:eventContext.slug,points_config:eventContext.pointsConfig,data:eventContext.data})',sandbox));
+  const expected=JSON.parse(vm.runInContext(`JSON.stringify((()=>{const rows=calculate().sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name));return {standings:rows.map(({id,total,joker,meritTotal})=>({id,total,joker,meritTotal})),points:rounds().map(r=>r.sessions.filter(s=>s.type==='QUALIFY'||s.type==='RACE').map(s=>Array.from(sessionPoints(s).entries())))};})())`,sandbox));
+  const mobile={console,Map,Set,Date,Math,Promise};mobile.window=mobile;vm.createContext(mobile);
+  vm.runInContext(fs.readFileSync(path.join(root,'mobile/results-engine.js'),'utf8'),mobile);
+  vm.runInContext(patchSource,mobile);
+  const result=mobile.gdspMobileResults.calculate(event);
+  const actual=JSON.parse(JSON.stringify({standings:result.standings.map(({id,total,joker,meritTotal})=>({id,total,joker,meritTotal})),points:result.rounds.map(r=>r.sessions.map(s=>s.results.map(p=>[p.id,p.points])))}));
+  assert.deepEqual(actual.standings,expected.standings);
+  for(let i=0;i<actual.points.length;i++)for(let j=0;j<actual.points[i].length;j++){
+    assert.deepEqual(Object.fromEntries(actual.points[i][j]),Object.fromEntries(expected.points[i][j]));
+  }
+});
+
+test('moteur mobile : sanctions, changements de pilote et barème personnalisé restent identiques au PC', async () => {
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setTimeout(resolve,0));await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext(`eventContext.slug='test-cup'; eventContext.pointsConfig={pointsScale:[30,20,10],polePoints:2,doubleLongRaces:false,jokerCount:1};
+    const firstRace=rounds()[1].sessions.findIndex(s=>s.type==='RACE');
+    const ids=rounds()[1].sessions[firstRace].results.map(r=>r.id);
+    penMap={['1:'+firstRace+':'+ids[0]]:{timeAdd:30},['1:'+firstRace+':'+ids[1]]:{dq:true},['1:'+firstRace+':'+ids[2]]:{dnf:true},['1:'+firstRace+':'+ids[3]]:{dns:true},['points:'+ids[0]]:{pointsAdd:-3}};
+    sessions.forEach(s=>s.results.forEach(r=>{if(r.id===ids[0]){r.name='Nouveau Nom';r.team='Nouvelle équipe';}}));`,sandbox);
+  const event=JSON.parse(vm.runInContext('JSON.stringify({slug:eventContext.slug,points_config:eventContext.pointsConfig,data:{sessions,penMap}})',sandbox));
+  const before=JSON.stringify(event);
+  const expected=JSON.parse(vm.runInContext(`JSON.stringify((()=>{const ds=calculate().sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name));return {standings:ds.map(({id,name,team,total,joker,meritTotal})=>({id,name,team,total,joker,meritTotal})),sessions:rounds().map(r=>r.sessions.filter(s=>s.type==='QUALIFY'||s.type==='RACE').map(s=>s.results.map(p=>({id:p.id,comDQ:p.comDQ,comDNF:p.comDNF,comDNS:p.comDNS,finalTime:p.finalTime}))))};})())`,sandbox));
+  const mobile={console,Map,Set,Date,Math,Promise};mobile.window=mobile;vm.createContext(mobile);
+  vm.runInContext(fs.readFileSync(path.join(root,'mobile/results-engine.js'),'utf8'),mobile);vm.runInContext(patchSource,mobile);
+  const out=mobile.gdspMobileResults.calculate(event);
+  const actual=JSON.parse(JSON.stringify({standings:out.standings.map(({id,name,team,total,joker,meritTotal})=>({id,name,team,total,joker,meritTotal})),sessions:out.rounds.map(r=>r.sessions.map(s=>s.results.map(p=>({id:p.id,comDQ:p.comDQ,comDNF:p.comDNF,comDNS:p.comDNS,finalTime:p.finalTime}))))}));
+  assert.deepEqual(actual,expected);assert.equal(JSON.stringify(event),before);
+});
+
 test('un lien événement reste prioritaire malgré une session administrateur', async () => {
   const slug=fixture.event.slug;
   const {sandbox}=makeBrowser([],url=>url==='/api/admin/verify'?response({ok:true,user:'Admin'}):null,{location:{pathname:'/evenements/'+slug+'/voiture'},authenticatedSession:true});

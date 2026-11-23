@@ -62,28 +62,29 @@
     const data=ev.data&&typeof ev.data==='object'?ev.data:{},info=data.eventInfo&&typeof data.eventInfo==='object'?data.eventInfo:{};
     const entries=Array.isArray(data.ahEntrants)?data.ahEntrants.filter(x=>x&&text(x.name)).slice(0,500):[];
     const rounds=calendar(data),slug=encodeURIComponent(ev.slug);
+    const defaultBriefing=['lola-t290-2026','lola-t290-gdsp-championnat-2026'].includes(ev.slug)
+      ?"Six manches historiques, l’esprit Gentleman Driver et tout le suivi du championnat réunis au même endroit : calendrier, classements, résultats et fiches pilotes."
+      :"Retrouvez ici les informations pratiques, le calendrier, les classements et les résultats de l’événement.";
     return `<a class="back" href="#events">← Tous les événements</a><div class="eyebrow">${esc(kindLabel(ev.kind))} · Assetto Corsa</div><h1 class="page-title">${esc(ev.name)}</h1><div class="actions"><a class="btn" href="#detail=${slug}">Résultats et classement →</a><a class="btn secondary" href="#car=${slug}">Fiche voiture →</a></div>`
-      +`<section class="panel"><div class="eyebrow">L'événement</div><h2>Briefing & informations</h2><p>${rich(text(info.briefing)||'Les informations de cet événement ne sont pas encore renseignées.')}</p>${text(info.car)?`<p><b>Voiture :</b> ${esc(info.car)}</p>`:''}${text(info.schedule)?`<p><b>Rendez-vous :</b> ${rich(info.schedule)}</p>`:''}${text(info.formatText)?`<p><b>Format :</b> ${rich(info.formatText)}</p>`:''}</section>`
-      +`<section class="panel"><div class="eyebrow">Sur la piste</div><h2>Calendrier</h2>${rounds.length?rounds.map(r=>`<div class="row"><div><b>${esc(r.label)}</b><small>${esc(dateLabel(r.day))}</small></div><span class="pill">${r.done?'Résultats importés':'À venir'}</span></div>`).join(''):'<p>Le calendrier n’est pas encore renseigné.</p>'}</section>`
+      +`<section class="panel"><div class="eyebrow">L'événement</div><h2>Briefing & informations</h2><p>${rich(text(info.briefing)||defaultBriefing)}</p>${text(info.car)?`<p><b>Voiture :</b> ${esc(info.car)}</p>`:''}${text(info.schedule)?`<p><b>Rendez-vous :</b> ${rich(info.schedule)}</p>`:''}${text(info.formatText)?`<p><b>Format :</b> ${rich(info.formatText)}</p>`:''}</section>`
+      +`<section class="panel"><div class="eyebrow">Sur la piste</div><h2>Calendrier</h2>${rounds.length?rounds.map(r=>`<div class="row"><div><b>${esc(r.label)}</b><small>${esc(dateLabel(r.day))}</small></div>${r.done?`<a class="pill" href="#detail=${slug}">Voir les résultats →</a>`:'<span class="pill">À venir</span>'}</div>`).join(''):'<p>Le calendrier n’est pas encore renseigné.</p>'}</section>`
       +(entries.length?`<section class="panel"><div class="eyebrow">Inscriptions AssettoHosting</div><h2>${entries.length} pilote${entries.length>1?'s':''} engagé${entries.length>1?'s':''}</h2><p class="muted">Liste distincte des résultats et du classement.</p>${entries.map(d=>`<div class="row"><div><b>${esc(d.name)}</b><small>${esc(text(d.team)||'Équipe non renseignée')}</small></div><span class="muted">${esc(readable(d.car))}</span></div>`).join('')}</section>`:'')
-      +`<section class="panel"><div class="eyebrow">En détail</div><h2>Plus d’informations</h2><a class="more-link" href="#detail=${slug}">Classements, résultats & fiches pilotes →</a><a class="more-link" href="#circuit=${slug}">Fiche circuit →</a></section>`;
+      +`<section class="panel"><div class="eyebrow">En détail</div><h2>Plus d’informations</h2><a class="more-link" href="#detail=${slug}">Classements & résultats →</a><a class="more-link" href="#circuit=${slug}">Fiche circuit →</a></section>`;
   }
-  // Les vues complètes existantes sont provisoirement intégrées, sans quitter
-  // l'application. Seules ces routes locales fixes sont autorisées : aucune URL
-  // saisie par un visiteur n'est chargée dans le cadre.
-  function embeddedView(type,slug){
-    const routes={admin:['Administration','/admin','#more'],live:['Live timing','/live-timing','#live'],telemetry:['Télémétrie','/telemetry','#more']};
-    let view=Object.prototype.hasOwnProperty.call(routes,type)?routes[type]:null;
-    if(['detail','car','circuit'].includes(type)&&validSlug(slug)){
-      const title={detail:'Résultats et classement',car:'Fiche voiture',circuit:'Fiche circuit'}[type];
-      view=[title,'/evenements/'+encodeURIComponent(slug)+(type==='detail'?'':'/'+(type==='car'?'voiture':'circuit')),'#event='+encodeURIComponent(slug)];
-    }
-    if(!view)return '';
-    return `<a class="back" href="${esc(view[2])}">← Retour dans GDSP mobile</a><h1 class="page-title">${esc(view[0])}</h1><p class="muted embedded-note">Vue complète du site intégrée dans l’application.</p><iframe class="embedded-page" title="${esc(view[0])}" src="${esc(view[1])}"></iframe>`;
+  function liveView(data){
+    const status=data?.status||{},server=data?.server||{};
+    const cars=(Array.isArray(data?.cars)?data.cars:[]).filter(c=>c&&c.connected===true);
+    const rows=cars.map(c=>`<div class="result-row"><span class="position">${esc(c.position??'—')}</span><div class="result-person"><b>${esc(c.name||'Pilote')}</b><small>${esc(c.team||c.model||'')} · ${esc(c.laps??0)} tours${c.inPit?' · stands':''}</small><small>Dernier : ${esc(c.lastLap||'—')} · Meilleur : ${esc(c.bestLap||'—')}</small></div><div class="score"><small>${esc(c.gap==='leader'?'Leader':c.gap||'—')}</small></div></div>`).join('');
+    return `<a class="back" href="#live">← Retour au direct</a><div class="eyebrow">En piste</div><h1 class="page-title">Live timing</h1><section class="panel"><span class="pill">${esc(status.status||'État indisponible')}</span><h2>${esc(server.name||'Serveur GDSP')}</h2><p class="muted">${esc(server.track||'Circuit non communiqué')} · Actualisation toutes les 10 secondes</p>${rows||'<p>Aucune voiture connectée pour le moment.</p>'}<button class="btn secondary" type="button" data-retry>Actualiser</button></section><p class="muted">Cette vue présente l’instantané principal. Les cartes, archives et outils avancés restent sur le site complet.</p><a class="more-link" href="/live-timing" target="_blank" rel="noopener noreferrer">Ouvrir le live complet ↗</a>`;
   }
-  if(typeof module!=='undefined'&&module.exports)module.exports={esc,validSlug,calendar,eventCard,eventDetail,embeddedView,isDeletedEvent,filterEventsList,dateLabel};
+  function telemetryView(summary){
+    const cars=Array.isArray(summary?.cars)?summary.cars:[];
+    const cards=cars.map(c=>`<section class="panel"><h2>${esc(c.car||'Voiture')}</h2><p class="muted">${esc([c.track,c.trackConfig,c.driverName].filter(Boolean).join(' · '))}</p><dl class="spec-list">${[['Tours',c.laps],['Meilleur tour',window.gdspMobileEventViews.formatTime(c.bestLapMs)],['Tour médian',window.gdspMobileEventViews.formatTime(c.medianLapMs)],['Carburant par tour',c.fuelPerLap==null?'—':c.fuelPerLap+' L'],['Usure par tour',c.tyreWearPerLap==null?'—':c.tyreWearPerLap+' %'],['Vitesse maximale',c.speedMaxKmh==null?'—':c.speedMaxKmh+' km/h']].map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v??'—')}</dd></div>`).join('')}</dl></section>`).join('');
+    return `<a class="back" href="#more">← Retour à Plus</a><div class="eyebrow">Administration sécurisée</div><h1 class="page-title">Télémétrie</h1><p>${esc(summary?.rows??0)} tours mesurés · synthèse globale</p>${cards||'<section class="panel"><p>Aucun tour enregistré.</p></section>'}<p class="muted">Filtres, export et modification des séances restent sur le site complet.</p><a class="more-link" href="/telemetry" target="_blank" rel="noopener noreferrer">Ouvrir la télémétrie complète ↗</a>`;
+  }
+  if(typeof module!=='undefined'&&module.exports)module.exports={esc,validSlug,calendar,eventCard,eventDetail,liveView,isDeletedEvent,filterEventsList,dateLabel};
   if(typeof document==='undefined')return;
-  const content=document.getElementById('content');let serial=0,installPrompt=null,candidate=null;
+  const content=document.getElementById('content');let serial=0,installPrompt=null,candidate=null,liveTimer=null;
   const request=async path=>{const r=await fetch(path,{cache:'no-store',credentials:'same-origin'});if(!r.ok)throw new Error('Service indisponible (HTTP '+r.status+').');return r.json();};
   async function adminRequest(path,body){
     const options=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)};
@@ -100,42 +101,39 @@
     const current=state.state?`<p class="muted">État : ${esc(({queued:'en attente',running:'en cours',completed:'terminée',failed:'interrompue'})[state.state]||'indisponible')}${state.message?' · '+esc(state.message):''}</p>`:'';
     return `<p>Seule une version publiée sur la branche principale GDSP peut être installée. Le PC vérifie le dépôt et crée une sauvegarde avant de redémarrer.</p>${current}<button class="btn secondary" type="button" data-update-check ${state.pending?'disabled':''}>Vérifier les mises à jour</button>${state.pending?'<p class="muted">Une demande est déjà en attente. Recharge cette page pour suivre son état.</p>':''}<div id="update-output" role="status"></div>`;
   }
-  function bindEmbeddedPage(){
-    const frame=content.querySelector('.embedded-page');
-    if(!frame)return;
-    frame.addEventListener('load',()=>{
-      // Même origine seulement. Le logo GDSP du live et de la télémétrie
-      // retourne à l'accueil mobile plutôt qu'à la page PC dans le cadre.
-      try{
-        const doc=frame.contentDocument,pathname=frame.contentWindow.location.pathname;
-        if(frame.contentWindow.location.origin!==location.origin||!doc)return;
-        if(['/live-timing','/telemetry'].includes(pathname)){
-          const logo=doc.querySelector('a.brand');
-          if(logo){logo.setAttribute('href','/mobile/#home');logo.setAttribute('target','_top');}
-        }
-        // Les outils GDSP ouverts dans un nouvel onglet par la page complète
-        // restent ici dans l'application. Les liens externes et PDF gardent leur
-        // comportement d'origine ; on ne charge jamais une URL arbitraire.
-        doc.addEventListener('click',event=>{
-          const link=event.target?.closest?.('a[target="_blank"][href]');
-          if(!link||event.defaultPrevented||event.button!==0||link.hasAttribute('download'))return;
-          let url;try{url=new URL(link.href,location.origin);}catch(_){return;}
-          if(url.origin!==location.origin||url.search||url.hash)return;
-          const target={'/telemetry':'telemetry','/live-timing':'live','/admin':'admin'}[url.pathname];
-          if(target){event.preventDefault();location.hash='#service='+target;}
-        });
-      }catch(_){/* Une page externe éventuelle n'est jamais inspectée. */}
-    });
-  }
   const fail=message=>`<div class="error"><b>Impossible de charger les données.</b><p>${esc(message||'Vérifie ta connexion puis réessaie.')}</p><button class="btn secondary" type="button" data-retry>Réessayer</button></div>`;
-  async function show(){
+  async function show(background=false){
+    if(liveTimer)clearTimeout(liveTimer);liveTimer=null;
     const version=++serial,hash=location.hash.slice(1)||'home',match=hash.match(/^event=([a-z0-9-]+)$/),view=hash.match(/^(detail|car|circuit)=([a-z0-9-]+)$/)||hash.match(/^service=(admin|live|telemetry)$/),tab=match||view&&['detail','car','circuit'].includes(view[1])?'events':view&&view[1]==='live'?'live':view?'more':['events','live','more'].includes(hash)?hash:'home';
     document.querySelectorAll('[data-nav]').forEach(el=>{if(el.dataset.nav===tab)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
-    content.innerHTML='<div class="loading">Chargement…</div>';
+    if(background!==true)content.innerHTML='<div class="loading">Chargement…</div>';
     try{
       let html='';
-      if(view){
-        html=embeddedView(view[1],view[2]);if(!html)throw new Error('Page indisponible.');
+      if(view&&['detail','car','circuit'].includes(view[1])){
+        const slug=view[2];if(!validSlug(slug))throw new Error('Événement invalide.');
+        const ev=await request('/api/events/'+encodeURIComponent(slug));
+        if(!ev||ev.slug!==slug||!text(ev.name)||isDeletedEvent(ev,readDeletedEvents()))throw new Error('Événement indisponible.');
+        const views=window.gdspMobileEventViews;
+        if(!views)throw new Error('Vues mobiles indisponibles. Recharge l’application.');
+        if(view[1]==='detail'){
+          if(!window.gdspMobileResults)throw new Error('Moteur de résultats indisponible. Recharge l’application.');
+          html=views.resultView(ev,window.gdspMobileResults.calculate(ev));
+        }else if(view[1]==='car')html=views.carView(ev);
+        else{
+          let base=null,unavailable=false;
+          if(['lola-t290-2026','lola-t290-gdsp-championnat-2026'].includes(slug)){
+            try{base=await request('/data/circuits.json');}catch(_){unavailable=true;}
+          }
+          html=views.circuitView(ev,base)+(unavailable?'<p class="error">Fiches historiques indisponibles : réessaie avec une connexion.</p>':'');
+        }
+      }else if(view&&view[1]==='live'){
+        html=liveView(await request('/api/live/snapshot'));
+      }else if(view&&view[1]==='telemetry'){
+        const session=await window.gdspAuth.session();
+        if(!session.authenticated)html='<a class="back" href="#more">← Retour à Plus</a><h1 class="page-title">Télémétrie</h1><section class="panel"><p>Connecte-toi avec ton compte administrateur dans Plus pour consulter la télémétrie.</p><a class="btn" href="#more">Se connecter →</a></section>';
+        else html=telemetryView(await adminRequest('/api/telemetry/summary'));
+      }else if(view){
+        html='<a class="back" href="#more">← Retour à Plus</a><h1 class="page-title">Administration</h1><section class="panel"><p>Les outils complets d’administration ne sont pas encore adaptés au mobile. Ils s’ouvrent séparément, sans cadre intégré.</p><a class="btn" href="/admin" target="_blank" rel="noopener noreferrer">Ouvrir l’administration complète ↗</a></section>';
       }else if(match){
         const slug=match[1];if(!validSlug(slug))throw new Error('Événement invalide.');
         const ev=await request('/api/events/'+encodeURIComponent(slug));
@@ -156,12 +154,14 @@
         const update=await updatePanel();
         html=`<div class="eyebrow">Votre espace GDSP</div><h1 class="page-title">Plus</h1><section class="panel"><h2>Accès rapides</h2><a class="more-link" href="/">Site complet ↗</a><a class="more-link" href="#service=admin">Administration →</a><a class="more-link" href="#service=telemetry">Télémétrie →</a></section><section class="panel"><div class="eyebrow">Administration sécurisée</div><h2>Mise à jour du PC serveur</h2>${update}</section><section class="panel"><h2>Installer l’application</h2><p>Sur Android, utilise « Installer l’application » dans le menu du navigateur. Sur iPhone, touche Partager puis « Sur l’écran d’accueil ».</p>${installPrompt?'<button class="btn" type="button" data-install>Installer GDSP</button>':''}<p class="muted">Une connexion est nécessaire pour les données et le direct ; aucun résultat n’est conservé hors ligne.</p></section>`;
       }
-      if(version===serial){content.innerHTML=html;bindEmbeddedPage();}
+      if(version===serial)content.innerHTML=html;
     }catch(e){if(version===serial)content.innerHTML=fail(navigator.onLine===false?'Tu es hors ligne. Les données de course nécessitent une connexion.':e.message);}
+    finally{if(version===serial&&view&&view[1]==='live')liveTimer=setTimeout(()=>show(true),10000);}
   }
   window.addEventListener('hashchange',show);
   window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;if(location.hash==='#more')show();});
   content.addEventListener('click',async event=>{
+    if(event.target.closest('[data-scroll-results]')){const target=document.getElementById('mobile-round-results');if(target){target.scrollIntoView();target.focus({preventScroll:true});}}
     if(event.target.closest('[data-retry]'))show();
     if(event.target.closest('[data-install]')&&installPrompt){const prompt=installPrompt;installPrompt=null;await prompt.prompt();show();}
     const button=event.target.closest('[data-update-check]');
@@ -176,6 +176,15 @@
       }catch(e){output.textContent=e.message;}
       finally{button.disabled=false;}
     }
+  });
+  content.addEventListener('error',event=>{
+    const image=event.target;if(!image.matches?.('[data-livery-image]'))return;
+    image.hidden=true;const note=image.parentElement?.querySelector('[data-image-missing]');if(note)note.hidden=false;
+  },true);
+  content.addEventListener('change',event=>{
+    const select=event.target.closest('[data-livery-select]');if(!select)return;
+    const container=select.closest('.livery'),image=container?.querySelector('[data-livery-image]'),note=container?.querySelector('[data-image-missing]');
+    if(image){image.hidden=false;if(note)note.hidden=true;image.src=select.value;image.alt=select.selectedOptions[0]?.textContent||'Livrée';}
   });
   content.addEventListener('submit',async event=>{
     const form=event.target;if(form.id!=='mobile-login'&&form.id!=='mobile-update-form')return;
