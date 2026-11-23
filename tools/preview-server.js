@@ -32,6 +32,7 @@ const MIME = {
   '.js': 'application/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -193,6 +194,9 @@ function json(res, code, payload) {
 
 const server = http.createServer((req, res) => {
   const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
+  if (urlPath === '/' && process.env.PREVIEW_MOBILE === '1') {
+    res.writeHead(302, {location:'/mobile/'});return res.end();
+  }
 
   if (urlPath === '/api/events') return json(res, 200, { events: [{ slug: event.slug, name: event.name, kind: event.kind, points_config: pointsConfig, updated_at: event.updated_at }] });
   if (urlPath === '/api/events/' + encodeURIComponent(SLUG)) return json(res, 200, event);
@@ -221,6 +225,7 @@ const server = http.createServer((req, res) => {
 
   let filePath;
   if (urlPath === '/' || urlPath === '/index.html') filePath = path.join(ROOT, 'index.html');
+  else if (urlPath === '/mobile/' || urlPath === '/mobile') filePath = path.join(ROOT, 'mobile', 'index.html');
   // Même URL que le site en production pour la page de suivi en direct.
   else if (urlPath === '/live-timing' || urlPath === '/live-timing/') filePath = path.join(ROOT, 'live-timing.html');
   // Fiches et onglets du site (routes virtuelles gérées par le JS) : on renvoie

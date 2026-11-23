@@ -1,0 +1,15 @@
+{
+  "name": "GDSP · Gentleman Drivers Project",
+  "short_name": "GDSP",
+  "description": "Les événements et le direct de la communauté GDSP.",
+  "id": "/mobile/",
+  "start_url": "/mobile/",
+  "scope": "/mobile/",
+  "display": "standalone",
+  "background_color": "#eae3d2",
+  "theme_color": "#102a32",
+  "icons": [
+    {"src":"/mobile/icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/mobile/icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"}
+  ]
+}

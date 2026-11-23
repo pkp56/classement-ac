@@ -2164,3 +2164,16 @@ test('Accueil événement : identifiant de voiture lisible sans métadonnées, a
   assert.doesNotMatch(html,/alfa_romeo_giulietta_spider/);
   assert.doesNotMatch(vm.runInContext('eventContext.data.ahEntrants=[];eventHome()',sandbox),/id="ev-entrants-title"/);
 });
+
+test('Briefing : drapeaux Unicode lisibles sur Windows, sans remplacer IT dans le texte ni exposer du HTML',async()=>{
+  const {sandbox}=makeBrowser();await new Promise(resolve=>setImmediate(resolve));
+  const html=vm.runInContext("renderEventRichText('Monza 🇮🇹\\nSpa 🇧🇪 et IT. <img src=x> [France 🇫🇷](https://example.com) 🇿🇿')",sandbox);
+  assert.match(html,/<img class="event-country-flag" src="\/assets\/flags\/it\.svg" alt="Drapeau : Italie">/);
+  assert.match(html,/\/assets\/flags\/be\.svg/);
+  assert.match(html,/<a href="https:\/\/example\.com"[^>]*>France <img class="event-country-flag" src="\/assets\/flags\/fr\.svg"/);
+  assert.match(html,/ et IT\./);
+  assert.match(html,/🇿🇿/,'un code non pris en charge reste du texte');
+  assert.match(html,/&lt;img src=x&gt;/);
+  assert.doesNotMatch(html,/<img src=x>/);
+  for(const code of vm.runInContext('[...eventFlagCodes]',sandbox))assert.ok(fs.existsSync(path.join(root,'assets/flags',code.toLowerCase()+'.svg')),code);
+});

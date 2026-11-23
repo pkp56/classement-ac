@@ -63,6 +63,45 @@ test('proxy AssettoHosting : les trois routes rejettent les origines forgées sa
     r=await call(route+'?'+params);assert.equal(r.status,400,route);assert.match((await r.json()).error,/non autorisé/);
   }
 });
+test('mise à jour mobile : authentification navigateur et CSRF obligatoires, désactivée par défaut',async t=>{
+  const {call,login,url}=await server(t);
+  const token=await login();
+  assert.equal((await call('/api/admin/mobile-update',{headers:{authorization:'Bearer '+token}})).status,401);
+  assert.equal((await call('/api/admin/mobile-update/check',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:'{}'})).status,401);
+  const logged=await call('/api/admin/login',{method:'POST',headers:{'content-type':'application/json','x-gdsp-session':'cookie',origin:url},body:JSON.stringify({username:'staff',password:'test-password-only'})});
+  assert.equal(logged.status,200);const csrf=(await logged.json()).csrfToken,cookie=logged.headers.get('set-cookie').split(';')[0];
+  const status=await call('/api/admin/mobile-update',{headers:{cookie}});assert.equal(status.status,200);assert.deepEqual(await status.json(),{enabled:false});
+  const base={method:'POST',headers:{cookie,'content-type':'application/json'},body:'{}'};
+  assert.equal((await call('/api/admin/mobile-update/check',base)).status,403);
+  assert.equal((await call('/api/admin/mobile-update/check',{...base,headers:{...base.headers,'x-gdsp-csrf':csrf,origin:'https://attacker.example'}})).status,403);
+  assert.equal((await call('/api/admin/mobile-update/check',{...base,headers:{...base.headers,'x-gdsp-csrf':csrf,origin:url}})).status,503);
+  assert.equal((await call('/data/mobile-updates/request.json')).status,404);
+});
+test('mise à jour mobile : clé indépendante, essais limités même avec session administrateur',async t=>{
+  const crypto=require('node:crypto'),key=crypto.randomBytes(32).toString('base64url');
+  const hash=crypto.createHash('sha256').update(key).digest('hex');
+  const {call,url}=await server(t,{GDSP_MOBILE_UPDATE_ENABLED:'1',GDSP_MOBILE_UPDATE_KEY_HASH:hash});
+  const login=await call('/api/admin/login',{method:'POST',headers:{'content-type':'application/json','x-gdsp-session':'cookie',origin:url},body:JSON.stringify({username:'staff',password:'test-password-only'})});
+  const csrf=(await login.json()).csrfToken,cookie=login.headers.get('set-cookie').split(';')[0];
+  const headers={cookie,origin:url,'content-type':'application/json','x-gdsp-csrf':csrf};
+  const post=k=>call('/api/admin/mobile-update/apply',{method:'POST',headers,body:JSON.stringify({target:'a'.repeat(40),key:k})});
+  for(let i=0;i<5;i++)assert.equal((await post('x'.repeat(43))).status,403);
+  assert.equal((await post(key)).status,429);
+});
+test('application mobile : coque et manifeste publics, aucune redirection hors origine',async t=>{
+  const {call}=await server(t);
+  const page=await call('/mobile/');assert.equal(page.status,200);assert.match(await page.text(),/GDSP · Mobile/);
+  const manifest=await call('/mobile/manifest.webmanifest');assert.equal(manifest.status,200);assert.equal((await manifest.json()).start_url,'/mobile/');
+  const sw=await call('/mobile/sw.js');assert.equal(sw.status,200);assert.match(sw.headers.get('cache-control'),/no-cache/);
+});
+test('les drapeaux locaux sont servis en SVG aux visiteurs',async t=>{
+  const {call}=await server(t);
+  const response=await call('/assets/flags/it.svg');
+  assert.equal(response.status,200);
+  assert.match(response.headers.get('content-type'),/^image\/svg\+xml/);
+  assert.match(await response.text(),/<svg/);
+  assert.equal((await call('/assets/flags/zz.svg')).status,404);
+});
 test('aperçus de skin AH : rejettent les origines et chemins forgés',async t=>{
   const {call,url}=await server(t);
   const forged='http://fr2.assettohosting.com@127.0.0.1:'+new URL(url).port;
