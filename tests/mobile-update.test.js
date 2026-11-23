@@ -24,6 +24,12 @@ async function setup(t,overrides={}){
   const api=createMobileUpdate({root,enabled:()=>state.enabled!==false,run,now:()=>Date.parse('2026-11-20T10:00:00Z')});
   return {api,state,calls,root};
 }
+test('scripts Windows : UTF-8 avec BOM pour les messages de Windows PowerShell 5',async()=>{
+  for(const name of ['Run-GDSPMobileUpdate.ps1','Install-GDSPMobileUpdateTask.ps1']){
+    const bytes=await fs.readFile(path.join(__dirname,'../tools/windows',name));
+    assert.equal(bytes.subarray(0,3).toString('hex'),'efbbbf');
+  }
+});
 test('agent Windows : la fusion refuse aussi les collisions avec les fichiers ignorés',async()=>{
   const script=await fs.readFile(path.join(__dirname,'../tools/windows/Run-GDSPMobileUpdate.ps1'),'utf8');
   assert.match(script, /'merge','--ff-only','--no-overwrite-ignore',\$target/);
