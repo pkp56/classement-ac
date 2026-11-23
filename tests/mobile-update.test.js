@@ -27,6 +27,9 @@ async function setup(t,overrides={}){
 test('agent Windows : la fusion refuse aussi les collisions avec les fichiers ignorés',async()=>{
   const script=await fs.readFile(path.join(__dirname,'../tools/windows/Run-GDSPMobileUpdate.ps1'),'utf8');
   assert.match(script, /'merge','--ff-only','--no-overwrite-ignore',\$target/);
+  assert.match(script, /Git -arguments @\('branch','--show-current'\)/);
+  assert.doesNotMatch(script, /\bGit @\(/);
+  assert.match(script, /function Git \{[\s\S]*?\$ErrorActionPreference = 'Continue'[\s\S]*?\$LASTEXITCODE -ne 0/);
 });
 test('clé distincte : format aléatoire et vérification à temps constant',()=>{
   const key=crypto.randomBytes(32).toString('base64url');const hash=crypto.createHash('sha256').update(key).digest('hex');
