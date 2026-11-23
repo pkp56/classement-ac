@@ -2125,3 +2125,42 @@ test('Événement clôturé : nombre de pilotes sans lien d’inscription, même
   assert.match(card(),/ev-register/);
   run("allDrivers=()=>[{id:'a'}]");assert.match(card(),/<strong>1<\/strong>[\s\S]*ev-register/);
 });
+
+test('Accueil événement : tableau lisible des inscrits, sans changer les données ou le classement',async()=>{
+  const {sandbox}=makeBrowser();
+  await new Promise(resolve=>setImmediate(resolve));
+  const html=vm.runInContext(`
+    eventContext={slug:'test-table',name:'Cup',kind:'cup',data:{
+      ahEntrants:[
+        {name:'Alice <img src=x>',team:'Équipe & Co',car:'alfa_romeo_giulietta_spider',skin:'188_kant-1'},
+        {name:'Bob',team:'',car:'',skin:''}
+      ],
+      carSheets:[{id:'alfa_romeo_giulietta_spider',name:'Alfa Romeo Giulietta Spider Racer'}]
+    }};
+    rounds=()=>[];allDrivers=()=>[];
+    eventHome();
+  `,sandbox);
+  const panel=html.match(/<section class="panel ev-entrants"[\s\S]*?<\/section>/)[0];
+  assert.match(panel,/2 engagés/);
+  assert.match(panel,/<table aria-label="Pilotes engagés">/);
+  assert.match(panel,/<th scope="col">Pilote<\/th>/);
+  assert.match(panel,/<th scope="col">Équipe<\/th>/);
+  assert.match(panel,/<th scope="col">Voiture \/ livrée<\/th>/);
+  assert.match(panel,/<th scope="row">Alice &lt;img src=x&gt;<\/th>/);
+  assert.match(panel,/Équipe &amp; Co/);
+  assert.match(panel,/Alfa Romeo Giulietta Spider Racer/);
+  assert.match(panel,/Livrée · 188 kant 1/);
+  assert.equal((panel.match(/Non renseignée/g)||[]).length,2);
+  assert.doesNotMatch(panel,/<img src=x>/);
+  assert.match(panel,/tabindex="0" role="region"/);
+  assert.match(panel,/distincte des résultats et du classement/);
+  assert.equal(vm.runInContext('eventContext.data.ahEntrants[0].car',sandbox),'alfa_romeo_giulietta_spider');
+});
+
+test('Accueil événement : identifiant de voiture lisible sans métadonnées, aucun tableau si liste vide',async()=>{
+  const {sandbox}=makeBrowser();await new Promise(resolve=>setImmediate(resolve));
+  const html=vm.runInContext("eventContext={slug:'fallback',name:'Cup',kind:'cup',data:{ahEntrants:[{name:'Bob',car:'alfa_romeo_giulietta_spider'}]}};rounds=()=>[];allDrivers=()=>[];eventHome()",sandbox);
+  assert.match(html,/Alfa romeo giulietta spider/);
+  assert.doesNotMatch(html,/alfa_romeo_giulietta_spider/);
+  assert.doesNotMatch(vm.runInContext('eventContext.data.ahEntrants=[];eventHome()',sandbox),/id="ev-entrants-title"/);
+});
