@@ -8,11 +8,17 @@ archivés, leur briefing, leur calendrier et les engagés. Les règles de masqua
 des événements supprimés et du doublon Lola sont alignées sur le site PC ; le
 statut d'archive provient toujours des données et n'est pas modifié ici.
 
-Le direct complet, les classements, les fiches, la télémétrie et l'administration
-sont intégrés dans la coque mobile au lieu d'ouvrir le navigateur. **Ils utilisent
-encore les pages existantes** dans un cadre : ce ne sont pas des écrans mobiles
-natifs complets, et leur ergonomie reste à améliorer. Les liens externes et le
-lien explicite « Site complet » peuvent toujours ouvrir le navigateur.
+Les résultats, classements, fiches voiture et circuit sont présentés par des
+écrans adaptés au téléphone, sans page PC embarquée. Les calculs utilisent le
+même moteur de classement que le site PC sur une copie des données reçues.
+Le direct mobile montre un instantané actualisé toutes les dix secondes ; la
+synthèse télémétrique nécessite une session administrateur. Ces deux vues ne
+remplacent pas les fonctions avancées : cartes et archives du direct, filtres,
+exports et corrections télémétriques restent sur les pages complètes. Les
+fiches pilotes détaillées et l'administration complète ne sont pas encore
+adaptées au mobile : l'administration s'ouvre séparément, sans cadre intégré.
+Les liens externes et le lien explicite « Site complet » peuvent aussi ouvrir
+le navigateur.
 
 Les données, sessions et réponses API ne sont jamais mises en cache par le
 service worker : hors ligne, l'application affiche une erreur et non un faux
