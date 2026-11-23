@@ -77,6 +77,23 @@ function makeBrowser(extraEvents = [], extraFetch = null, browserOptions = {}) {
   return { sandbox, getElementById, calls, storage };
 }
 
+test('un lien événement reste prioritaire malgré une session administrateur', async () => {
+  const slug=fixture.event.slug;
+  const {sandbox}=makeBrowser([],url=>url==='/api/admin/verify'?response({ok:true,user:'Admin'}):null,{location:{pathname:'/evenements/'+slug+'/voiture'},authenticatedSession:true});
+  await new Promise(resolve=>setTimeout(resolve,0));await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(vm.runInContext('adminAuth',sandbox),true);
+  assert.equal(vm.runInContext('page',sandbox),'voiture');
+  assert.equal(vm.runInContext('currentSlug',sandbox),slug);
+});
+
+test('le lien direct /admin ouvre la connexion quand aucune session ne préexiste', async () => {
+  const {sandbox,getElementById}=makeBrowser([],null,{location:{pathname:'/admin'}});
+  await new Promise(resolve=>setTimeout(resolve,0));await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(vm.runInContext('page',sandbox),'admin');
+  assert.match(getElementById('app').innerHTML,/id="adminuser"/);
+  assert.match(getElementById('app').innerHTML,/id="adminpass"/);
+});
+
 test('site opens at the GDSP home, then Results renders the loaded championship and commission column', async () => {
   const { sandbox, getElementById } = makeBrowser();
   // Let the app's async bootstrap finish its list fetch and background event preload.

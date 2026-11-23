@@ -1628,7 +1628,7 @@ app.get('/', async (_req,res)=>{
     sendPublicPage(res,{title:'GDSP — Open et championnat Assetto Corsa historique & vintage',description:'GDSP : open et championnat Assetto Corsa, simracing historique et vintage. Retrouvez les calendriers, résultats et classements.',content:seo.homeContent(events),canonical:PUBLIC_SITE_URL?PUBLIC_SITE_URL+'/':null});
   }catch(error){publicFailure(res,error)}
 });
-app.get(['/evenements/:slug','/evenements/:slug/circuit'],async(req,res)=>{
+app.get(['/evenements/:slug','/evenements/:slug/circuit','/evenements/:slug/voiture'],async(req,res)=>{
   try {
     const ev=await publicJson('/api/events/'+encodeURIComponent(req.params.slug));
     if(!ev.slug||!ev.name)throw new Error('Invalid event data');

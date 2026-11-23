@@ -66,6 +66,9 @@ for(const configuredOrigin of ['https://gdsp.example',''])test('HTTP SEO : route
   res=await get('/evenements/test-cup/circuit');assert.equal(res.status,200);
   assert.ok((await res.text()).includes('rel="canonical" href="'+origin+'/evenements/test-cup"'));
   res=await get('/evenements/missing/circuit');assert.equal(res.status,404);
+  res=await get('/evenements/test-cup/voiture');assert.equal(res.status,200);
+  assert.ok((await res.text()).includes('rel="canonical" href="'+origin+'/evenements/test-cup"'));
+  res=await get('/evenements/missing/voiture');assert.equal(res.status,404);
   res=await get('/admin');assert.equal(res.status,200);assert.equal(res.headers.get('x-robots-tag'),'noindex, follow');
   for(const [oldPath,newPath] of [['/live-timing.html','/live-timing'],['/telemetry.html','/telemetry']]){
     res=await fetch(`http://127.0.0.1:${port}${oldPath}?source=test`,{redirect:'manual'});

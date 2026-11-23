@@ -3,10 +3,16 @@
 ## État
 
 Cette première version est une **application web installable**, séparée de la
-navigation PC : `/mobile/`. Elle affiche l'accueil, les événements actifs, leur
-briefing, leur calendrier et les engagés. Le direct, les classements détaillés,
-les fiches et l'administration complète ouvrent encore les pages existantes :
-ce n'est pas encore une application mobile native complète.
+navigation PC : `/mobile/`. Elle affiche l'accueil, les événements actifs et
+archivés, leur briefing, leur calendrier et les engagés. Les règles de masquage
+des événements supprimés et du doublon Lola sont alignées sur le site PC ; le
+statut d'archive provient toujours des données et n'est pas modifié ici.
+
+Le direct complet, les classements, les fiches, la télémétrie et l'administration
+sont intégrés dans la coque mobile au lieu d'ouvrir le navigateur. **Ils utilisent
+encore les pages existantes** dans un cadre : ce ne sont pas des écrans mobiles
+natifs complets, et leur ergonomie reste à améliorer. Les liens externes et le
+lien explicite « Site complet » peuvent toujours ouvrir le navigateur.
 
 Les données, sessions et réponses API ne sont jamais mises en cache par le
 service worker : hors ligne, l'application affiche une erreur et non un faux

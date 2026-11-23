@@ -5675,18 +5675,18 @@ function syncCircuitHistory(){syncEventSubTabHistory('circuit')}
         localStorage.removeItem('gdsp_admin_token');sessionStorage.removeItem('gdsp_admin_token');
       }
     }
-    if(adminAuth){
+    // Un lien direct vers un événement reste prioritaire, même si une session
+    // administrateur est ouverte (notamment depuis l'application mobile).
+    const path=window.location?window.location.pathname:'/';
+    const match=path.match(/^\/evenements\/([^/]+)(?:\/(circuit|voiture))?\/?$/);
+    if(match){
+      try{await loadEvent(decodeURIComponent(match[1]));page=match[2]||'event'}
+      catch(error){return} // Preserve the server's error page rather than showing another event.
+    }else if(adminAuth){
       if(target&&!eventContext)await loadEvent(target.slug);
     }else{
-      const path=window.location?window.location.pathname:'/';
-      const match=path.match(/^\/evenements\/([^/]+)(?:\/(circuit|voiture))?\/?$/);
-      if(match){
-        try{await loadEvent(decodeURIComponent(match[1]));page=match[2]||'event'}
-        catch(error){return} // Preserve the server's error page rather than showing another event.
-      }else{
-        page='hub';
-        if(target&&!eventContext)loadEvent(target.slug).catch(()=>{});
-      }
+      page='hub';
+      if(target&&!eventContext)loadEvent(target.slug).catch(()=>{});
     }
   }else{
     // Legacy mode: same behaviour as before
@@ -5713,6 +5713,9 @@ function syncCircuitHistory(){syncEventSubTabHistory('circuit')}
       if(adminToken){try{const r=await apiGet('/api/admin/verify');const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw new Error('bad token');adminAuth=true;adminUser=j.user||'Direction de course';page='admin'}catch(e){adminToken=null;adminAuth=false;localStorage.removeItem('gdsp_admin_token');sessionStorage.removeItem('gdsp_admin_token')}}
     }catch(e){app.innerHTML='Erreur de rendu : '+e.message}
   }
+  // Lien direct vers l'administration : afficher aussi le formulaire de
+  // connexion lorsque la session n'est pas encore authentifiée.
+  if(window.location&&window.location.pathname==='/admin')page='admin';
   render();
 })();
 
