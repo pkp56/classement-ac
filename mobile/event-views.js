@@ -28,8 +28,8 @@
   function resultView(ev,calculated){
     const standings=Array.isArray(calculated?.standings)?calculated.standings:[];
     const rounds=Array.isArray(calculated?.rounds)?calculated.rounds:[];
-    const ranking=standings.length?standings.map((d,i)=>`<div class="result-row"><span class="position">${i+1}</span><div class="result-person"><b>${esc(d.name||'Pilote')}</b><small>${esc(d.team||'Indépendant')}</small></div><div class="score"><b>${esc(d.total)}</b><small>points</small></div></div>`).join(''):'<p>Aucun classement disponible pour cet événement.</p>';
-    const scoreRows=(rows,field)=>rows.map((d,i)=>`<div class="result-row"><span class="position">${i+1}</span><div class="result-person"><b>${esc(d.name||'Pilote')}</b><small>${esc(d.team||'')}</small></div><div class="score"><b>${esc(d[field])}</b><small>points</small></div></div>`).join('');
+    const ranking=standings.length?standings.map((d,i)=>`<div class="result-row"><span class="position">${i+1}</span><div class="result-person">${d.id?`<a class="driver-link" href="#driver=${encodeURIComponent(ev.slug)}&amp;id=${encodeURIComponent(d.id)}">${esc(d.name||'Pilote')}</a>`:`<b>${esc(d.name||'Pilote')}</b>`}<small>${esc(d.team||'Indépendant')}</small></div><div class="score"><b>${esc(d.total)}</b><small>points</small></div></div>`).join(''):'<p>Aucun classement disponible pour cet événement.</p>';
+    const scoreRows=(rows,field)=>rows.map((d,i)=>`<div class="result-row"><span class="position">${i+1}</span><div class="result-person">${d.id?`<a class="driver-link" href="#driver=${encodeURIComponent(ev.slug)}&amp;id=${encodeURIComponent(d.id)}">${esc(d.name||'Pilote')}</a>`:`<b>${esc(d.name||'Pilote')}</b>`}<small>${esc(d.team||'')}</small></div><div class="score"><b>${esc(d[field])}</b><small>points</small></div></div>`).join('');
     const jokers=standings.slice().sort((a,b)=>b.joker-a.joker||String(a.name||'').localeCompare(String(b.name||'')));
     const merits=standings.slice().sort((a,b)=>b.meritTotal-a.meritTotal||String(a.name||'').localeCompare(String(b.name||'')));
     const teams=Array.isArray(calculated?.teamStandings)?calculated.teamStandings:[];
@@ -39,7 +39,7 @@
         const label=s.type==='QUALIFY'?'Qualifications':`Course ${(r.sessions||[]).filter((x,j)=>x.type==='RACE'&&j<=i).length}`;
         const rows=(s.results||[]).map((p,j)=>{
           const status=resultStatus(p),time=s.type==='QUALIFY'?p._adjustedBest:p.finalTime;
-          return `<div class="result-row"><span class="position">${j+1}</span><div class="result-person"><b>${esc(p.name||'Pilote')}</b><small>${esc(p.team||'Indépendant')} · ${esc(p.laps??0)} tour${p.laps===1?'':'s'}${status?' · '+esc(status):''}</small><small>${s.type==='QUALIFY'?'Meilleur tour':'Temps'} : ${esc(formatTime(time))}</small></div><div class="score"><b>${esc(p.points)}</b><small>pts</small></div></div>`;
+          return `<div class="result-row"><span class="position">${j+1}</span><div class="result-person">${p.id?`<a class="driver-link" href="#driver=${encodeURIComponent(ev.slug)}&amp;id=${encodeURIComponent(p.id)}">${esc(p.name||'Pilote')}</a>`:`<b>${esc(p.name||'Pilote')}</b>`}<small>${esc(p.team||'Indépendant')} · ${esc(p.laps??0)} tour${p.laps===1?'':'s'}${status?' · '+esc(status):''}</small><small>${s.type==='QUALIFY'?'Meilleur tour':'Temps'} : ${esc(formatTime(time))}</small></div><div class="score"><b>${esc(p.points)}</b><small>pts</small></div></div>`;
         }).join('')||'<p>Aucun résultat dans cette session.</p>';
         return `<details class="session-detail"><summary>${esc(label)} <span>${(s.results||[]).length} pilotes</span></summary><div class="session-rows">${rows}</div></details>`;
       }).join('');

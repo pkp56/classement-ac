@@ -65,7 +65,7 @@
     const defaultBriefing=['lola-t290-2026','lola-t290-gdsp-championnat-2026'].includes(ev.slug)
       ?"Six manches historiques, l’esprit Gentleman Driver et tout le suivi du championnat réunis au même endroit : calendrier, classements, résultats et fiches pilotes."
       :"Retrouvez ici les informations pratiques, le calendrier, les classements et les résultats de l’événement.";
-    return `<a class="back" href="#events">← Tous les événements</a><div class="eyebrow">${esc(kindLabel(ev.kind))} · Assetto Corsa</div><h1 class="page-title">${esc(ev.name)}</h1><div class="actions"><a class="btn" href="#detail=${slug}">Résultats et classement →</a><a class="btn secondary" href="#car=${slug}">Fiche voiture →</a></div>`
+    return `<a class="back" href="#events">← Tous les événements</a><div class="eyebrow">${esc(kindLabel(ev.kind))} · Assetto Corsa</div><h1 class="page-title">${esc(ev.name)}</h1><div class="actions"><a class="btn" href="#detail=${slug}">Résultats et classement →</a><a class="btn secondary" href="#car=${slug}">Fiche voiture →</a><a class="btn secondary" href="#pilots=${slug}">Fiches pilotes →</a></div>`
       +`<section class="panel"><div class="eyebrow">L'événement</div><h2>Briefing & informations</h2><p>${rich(text(info.briefing)||defaultBriefing)}</p>${text(info.car)?`<p><b>Voiture :</b> ${esc(info.car)}</p>`:''}${text(info.schedule)?`<p><b>Rendez-vous :</b> ${rich(info.schedule)}</p>`:''}${text(info.formatText)?`<p><b>Format :</b> ${rich(info.formatText)}</p>`:''}</section>`
       +`<section class="panel"><div class="eyebrow">Sur la piste</div><h2>Calendrier</h2>${rounds.length?rounds.map(r=>`<div class="row"><div><b>${esc(r.label)}</b><small>${esc(dateLabel(r.day))}</small></div>${r.done?`<a class="pill" href="#detail=${slug}">Voir les résultats →</a>`:'<span class="pill">À venir</span>'}</div>`).join(''):'<p>Le calendrier n’est pas encore renseigné.</p>'}</section>`
       +(entries.length?`<section class="panel"><div class="eyebrow">Inscriptions AssettoHosting</div><h2>${entries.length} pilote${entries.length>1?'s':''} engagé${entries.length>1?'s':''}</h2><p class="muted">Liste distincte des résultats et du classement.</p>${entries.map(d=>`<div class="row"><div><b>${esc(d.name)}</b><small>${esc(text(d.team)||'Équipe non renseignée')}</small></div><span class="muted">${esc(readable(d.car))}</span></div>`).join('')}</section>`:'')
@@ -86,6 +86,24 @@
   if(typeof document==='undefined')return;
   const content=document.getElementById('content');let serial=0,installPrompt=null,candidate=null,liveTimer=null;
   const request=async path=>{const r=await fetch(path,{cache:'no-store',credentials:'same-origin'});if(!r.ok)throw new Error('Service indisponible (HTTP '+r.status+').');return r.json();};
+  async function loadGlobalProfiles(){
+    if(!window.gdspMobileProfiles||!window.gdspMobileProfileViews)throw new Error('Moteur de profils indisponible. Recharge l’application.');
+    const [catalog,exclusions]=await Promise.all([request('/api/events'),request('/api/global-exclusions')]);
+    if(!Array.isArray(catalog?.events)||!exclusions?.ids||typeof exclusions.ids!=='object'||Array.isArray(exclusions.ids))throw new Error('Données du classement global indisponibles.');
+    const all=filterEventsList(catalog.events,readDeletedEvents());
+    // Tout charger avant de calculer : un résultat incomplet ne doit jamais
+    // être présenté comme classement global complet.
+    const events=await Promise.all(all.map(async item=>{
+      try{
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+        let response;try{response=await fetch('/api/events/'+encodeURIComponent(item.slug),{cache:'no-store',credentials:'same-origin',signal:controller.signal});}finally{clearTimeout(timer);}
+        if(!response.ok)throw new Error('HTTP '+response.status);
+        const ev=await response.json();if(!ev||ev.slug!==item.slug||isDeletedEvent(ev,readDeletedEvents())||!ev.data||typeof ev.data!=='object')throw new Error('réponse invalide');
+        return ev;
+      }catch(_){throw new Error('Classement global indisponible : tous les événements n’ont pas pu être chargés. Réessaie.');}
+    }));
+    return window.gdspMobileProfiles.global(events,exclusions.ids);
+  }
   async function adminRequest(path,body){
     const options=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)};
     const response=await window.gdspAuth.fetch(path,options),data=await response.json().catch(()=>({}));
@@ -104,12 +122,31 @@
   const fail=message=>`<div class="error"><b>Impossible de charger les données.</b><p>${esc(message||'Vérifie ta connexion puis réessaie.')}</p><button class="btn secondary" type="button" data-retry>Réessayer</button></div>`;
   async function show(background=false){
     if(liveTimer)clearTimeout(liveTimer);liveTimer=null;
-    const version=++serial,hash=location.hash.slice(1)||'home',match=hash.match(/^event=([a-z0-9-]+)$/),view=hash.match(/^(detail|car|circuit)=([a-z0-9-]+)$/)||hash.match(/^service=(admin|live|telemetry)$/),tab=match||view&&['detail','car','circuit'].includes(view[1])?'events':view&&view[1]==='live'?'live':view?'more':['events','live','more'].includes(hash)?hash:'home';
+    const version=++serial,hash=location.hash.slice(1)||'home',match=hash.match(/^event=([a-z0-9-]+)$/),view=hash.match(/^(detail|car|circuit|pilots)=([a-z0-9-]+)$/)||hash.match(/^service=(admin|live|telemetry)$/);
+    const params=new URLSearchParams(hash),driverSlug=params.get('driver'),driverId=params.get('id'),globalDriver=params.get('global-driver');
+    const driverRoute=driverSlug!==null,globalRoute=hash==='global'||globalDriver!==null;
+    const tab=driverRoute||match||view&&['detail','car','circuit','pilots'].includes(view[1])?'events':globalRoute?'global':view&&view[1]==='live'?'live':view?'more':['events','live','more'].includes(hash)?hash:'home';
     document.querySelectorAll('[data-nav]').forEach(el=>{if(el.dataset.nav===tab)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
     if(background!==true)content.innerHTML='<div class="loading">Chargement…</div>';
     try{
       let html='';
-      if(view&&['detail','car','circuit'].includes(view[1])){
+      if(globalRoute){
+        const computed=await loadGlobalProfiles(),views=window.gdspMobileProfileViews;
+        if(globalDriver!==null){
+          if(!globalDriver||globalDriver.length>500)throw new Error('Pilote invalide.');
+          const rating=computed.ratings.find(r=>r.id===globalDriver);if(!rating)throw new Error('Pilote introuvable ou pas assez de courses pour figurer au classement global.');
+          html=views.profile(rating,rating,computed.history(globalDriver),{global:true});
+        }else html=views.globalList(computed);
+      }else if(driverRoute||view&&view[1]==='pilots'){
+        const slug=driverRoute?driverSlug:view[2];if(!validSlug(slug)||driverRoute&&(!driverId||driverId.length>500))throw new Error('Pilote ou événement invalide.');
+        const ev=await request('/api/events/'+encodeURIComponent(slug));
+        if(!ev||ev.slug!==slug||!text(ev.name)||isDeletedEvent(ev,readDeletedEvents()))throw new Error('Événement indisponible.');
+        const engine=window.gdspMobileProfiles,views=window.gdspMobileProfileViews;if(!engine||!views)throw new Error('Moteur de profils indisponible. Recharge l’application.');
+        const computed=engine.event(ev);
+        if(driverRoute){const driver=computed.drivers.find(d=>d.id===driverId);if(!driver)throw new Error('Pilote introuvable dans cet événement.');
+          html=views.profile(driver,computed.ratings.find(r=>r.id===driverId),computed.history(driverId),{slug,eventName:ev.name,photo:views.driverImage(ev,driver,computed.drivers)});
+        }else html=views.eventList(ev,computed);
+      }else if(view&&['detail','car','circuit'].includes(view[1])){
         const slug=view[2];if(!validSlug(slug))throw new Error('Événement invalide.');
         const ev=await request('/api/events/'+encodeURIComponent(slug));
         if(!ev||ev.slug!==slug||!text(ev.name)||isDeletedEvent(ev,readDeletedEvents()))throw new Error('Événement indisponible.');
@@ -177,8 +214,14 @@
       finally{button.disabled=false;}
     }
   });
+  content.addEventListener('input',event=>{
+    if(!event.target.matches?.('[data-driver-search]'))return;
+    const q=String(event.target.value||'').trim().toLocaleLowerCase('fr');let visible=0;
+    content.querySelectorAll('[data-driver-item]').forEach(item=>{const match=String(item.dataset.search||'').includes(q);item.hidden=!match;if(match)visible++;});
+    const empty=content.querySelector('[data-search-empty]');if(empty)empty.hidden=visible>0;
+  });
   content.addEventListener('error',event=>{
-    const image=event.target;if(!image.matches?.('[data-livery-image]'))return;
+    const image=event.target;if(!image.matches?.('[data-livery-image], [data-profile-image]'))return;
     image.hidden=true;const note=image.parentElement?.querySelector('[data-image-missing]');if(note)note.hidden=false;
   },true);
   content.addEventListener('change',event=>{

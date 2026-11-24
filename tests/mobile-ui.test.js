@@ -9,6 +9,8 @@ function browser(fetch){
   const listeners={},content={innerHTML:'',querySelector(){return null;},addEventListener(name,fn){listeners['content:'+name]=fn;}},output={innerHTML:'',textContent:''};
   const nav=['home','events','live','more'].map(value=>({dataset:{nav:value},attrs:{},setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]}}));
   const sandbox={document:{getElementById:id=>id==='content'?content:id==='update-output'?output:null,querySelectorAll:()=>nav},location:{hash:'#home',origin:'https://gdsp.example'},window:{addEventListener:(k,fn)=>{listeners[k]=fn},confirm:()=>true},navigator:{onLine:true,serviceWorker:{register:()=>Promise.resolve()}},fetch,URL,URLSearchParams,Date,Intl,Promise,Set,Map,setTimeout:()=>1,clearTimeout:()=>{}};
+  sandbox.AbortController=AbortController;
+  sandbox.window.gdspMobileProfileViews=require('../mobile/profile-views');
   sandbox.window.gdspMobileEventViews=require('../mobile/event-views');
   sandbox.window.gdspMobileResults={calculate:()=>({standings:[],rounds:[]})};
   vm.createContext(sandbox);vm.runInContext(source,sandbox);
@@ -54,6 +56,25 @@ test('mobile : archives visibles et vues événement sans cadre intégré',async
   b.sandbox.location.hash='#service=live';await b.listeners.hashchange();
   assert.match(b.content.innerHTML,/Live timing/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
   assert.equal(b.nav[2].attrs['aria-current'],'page');
+});
+test('global mobile : chargement de tous les événements et refus d’un classement partiel',async()=>{
+  let fail=false;const events=[{slug:'one',name:'One',kind:'cup'},{slug:'two',name:'Two',kind:'archive'}];
+  const b=browser(async url=>{
+    if(url==='/api/events')return reply({events});if(url==='/api/global-exclusions')return reply({ids:{hidden:true}});
+    if(url==='/api/events/one')return reply({...events[0],data:{sessions:[]}});
+    if(url==='/api/events/two')return fail?reply({},503):reply({...events[1],data:{sessions:[]}});
+    throw Error(url);
+  });
+  let input;b.sandbox.window.gdspMobileProfiles={global:(ev,hidden)=>{input={ev,hidden};return {ratings:[],history:()=>[]};}};
+  await tick();b.sandbox.location.hash='#global';await b.listeners.hashchange();assert.match(b.content.innerHTML,/Classement global/);assert.equal(input.ev.length,2);assert.equal(input.hidden.hidden,true);
+  fail=true;b.sandbox.location.hash='#global-driver=un';await b.listeners.hashchange();assert.match(b.content.innerHTML,/tous les événements n’ont pas pu être chargés/);assert.doesNotMatch(b.content.innerHTML,/Pas encore assez de données/);
+});
+test('fiches pilotes : itinéraire événement et identifiant encodé',async()=>{
+  const b=browser(async url=>url==='/api/events'?reply({events:[]}):reply({slug:'cup',name:'Cup',data:{}}));
+  const driver={id:'a&b',name:'Alice',team:'Team'};
+  b.sandbox.window.gdspMobileProfiles={event:()=>({drivers:[driver],ratings:[],history:()=>[]})};
+  await tick();b.sandbox.location.hash='#pilots=cup';await b.listeners.hashchange();assert.match(b.content.innerHTML,/#driver=cup&amp;id=a%26b/);
+  b.sandbox.location.hash='#driver=cup&id=a%26b';await b.listeners.hashchange();assert.match(b.content.innerHTML,/Alice/);assert.match(b.content.innerHTML,/Aucune course enregistrée/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
 });
 test('télémétrie mobile : session obligatoire et synthèse protégée sans cadre',async()=>{
   const b=browser(async()=>reply({events:[]}));await tick();let authenticated=false,reads=0;
