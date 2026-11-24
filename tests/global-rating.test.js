@@ -57,7 +57,28 @@ test('données manquantes neutres et statuts visibles, pas de faux examen',()=>{
   const r=rate([record(1,{conduct:conduct({warning:true})})]);
   assert.equal(r.details.proprete,50);assert.equal(r.conductPending,1);assert.equal(r.conductReviewed,0);
   const unknown=rate(Array.from({length:10},(_,i)=>record(i,{conduct:conduct()})));
-  assert.equal(unknown.details.proprete,100);assert.equal(unknown.provisional,true);assert.equal(unknown.conductReviewed,0);
+  assert.equal(unknown.details.proprete,100);assert.equal(unknown.conductReviewed,0);
+  // Nouvelle règle : la détection auto évalue une course sans examen Commission,
+  // donc 10 courses évaluées ne sont plus « provisoires » pour absence d'examen.
+  const auto=rate(Array.from({length:10},(_,i)=>record(i,{conduct:conduct(undefined,{score:94,cuts:3,lossSec:0,incidents:0})})));
+  assert.equal(auto.details.proprete,94);assert.equal(auto.provisional,false);assert.equal(auto.conductAuto,10);assert.equal(auto.conductReviewed,0);
+});
+test('détection auto en secours de la Commission, jamais si décision à qualifier',()=>{
+  const {conduct:conductWithAuto,autoConduct}=require('../assets/global-rating');
+  // cut = 2 pts, choc arrière = secondes perdues ÷ 2 ; côte à côte et <1,5 s exclus en amont
+  assert.equal(autoConduct({cuts:3,lossSec:0,incidents:[]}).score,94);
+  assert.equal(autoConduct({cuts:0,lossSec:3.0,incidents:[{lossSec:3.0}]}).score,98.5);
+  assert.equal(autoConduct({cuts:2,lossSec:4.0,incidents:[{lossSec:4.0}]}).score,94);
+  assert.equal(autoConduct(undefined).score,100);
+  // Commission (examen validé) prime sur l'auto
+  const commission=conductWithAuto({conduct:{version:1,reviewed:true,incidents:[{severity:'major'}],reason:'Validé'}},{score:10,cuts:5,lossSec:10,incidents:[{lossSec:10}]});
+  assert.equal(commission.score,80);assert.equal(commission.reviewed,true);assert.equal(commission.auto,undefined);
+  // Décision à qualifier : ni examen ni auto ne comptent
+  const pending=conductWithAuto({warning:true},{score:10,cuts:5,lossSec:10,incidents:[{lossSec:10}]});
+  assert.equal(pending.score,null);assert.equal(pending.pending,true);
+  // Sinon, l'auto s'applique
+  const auto=conductWithAuto({},{score:88,cuts:2,lossSec:4,incidents:[{lossSec:4}]});
+  assert.equal(auto.score,88);assert.equal(auto.auto,true);assert.equal(auto.cuts,2);
 });
 test('DNS, non-partants, doublons, exclusions et minimum cinq',()=>{
   const records=Array.from({length:5},(_,i)=>record(i));

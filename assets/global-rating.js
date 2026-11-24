@@ -7,7 +7,18 @@
   'use strict';
   const AXES=['regularite','proprete','vitesse','resultats'];
   const SEVERITIES=Object.freeze({warning:5,minor:10,major:20,severe:35,dq:50});
-  function conduct(adjustment){
+  // Détection automatique GDSP (Global, en secours de la Commission) :
+  // chaque cut +2 ; choc arrière à fort delta de vitesse : secondes perdues par la
+  // victime ÷ 2 ; côte à côte et touchettes < 1,5 s : 0. La rentrée dangereuse de
+  // la voiture heurtée n'est pas détectable ici : seule la Commission tranche.
+  function autoConduct(detail){
+    const cuts=Math.max(0,Number(detail&&detail.cuts)||0);
+    const lossSec=Math.max(0,Number(detail&&detail.lossSec)||0);
+    const incidents=Array.isArray(detail&&detail.incidents)?detail.incidents.length:0;
+    const cutPoints=cuts*2,collisionPoints=lossSec/2;
+    return {score:Math.max(0,100-cutPoints-collisionPoints),auto:true,cuts,lossSec,cutPoints,collisionPoints,incidents,deduction:cutPoints+collisionPoints};
+  }
+  function conduct(adjustment,auto){
     const a=adjustment||{},review=a.conduct;
     if(review&&review.version===1&&review.reviewed===true&&Array.isArray(review.incidents)){
       let deduction=0,returned=0;
@@ -23,9 +34,12 @@
       return {score:Math.max(0,100-deduction),reviewed:true,pending:false,returned,reason:String(review.reason||'')};
     }
     // DNF/DNS, pénalités techniques et corrections de points ne prouvent pas
-    // une faute de conduite. Une décision non qualifiée n'est jamais convertie.
+    // une faute de conduite. Une décision non qualifiée n'est jamais convertie —
+    // même pas via la détection automatique.
     const pending=!!(a.warning||a.dq||Number(a.timeAdd)!==0&&Number.isFinite(Number(a.timeAdd)));
-    return {score:pending?null:100,reviewed:false,pending,returned:0};
+    if(pending)return {score:null,reviewed:false,pending:true,returned:0};
+    if(auto&&Number.isFinite(auto.score))return {score:auto.score,reviewed:false,pending:false,returned:0,auto:true,cuts:auto.cuts||0,lossSec:auto.lossSec||0,incidents:auto.incidents||0};
+    return {score:100,reviewed:false,pending:false,returned:0};
   }
   function reviewSignature(value){
     if(Array.isArray(value))return '['+value.map(reviewSignature).join(',')+']';
@@ -81,16 +95,18 @@
       const score=average(AXES.map(k=>details[k]));
       const pending=window.filter(r=>r.conduct.pending).length;
       const reviewed=window.filter(r=>r.conduct.reviewed).length;
+      const autoCount=window.filter(r=>r.conduct.auto).length;
+      const evaluated=reviewed+autoCount+window.filter(r=>Number.isFinite(r.axes.proprete)&&!r.conduct.reviewed&&!r.conduct.auto).length;
       const missing=window.some(r=>['regularite','vitesse'].some(k=>!Number.isFinite(r.axes[k])));
       output.push({id,name:all[0].name||'?',team:all[0].team||'',score,details:{...details,progression:50},
         count:all.length,windowCount:window.length,retainedCount:retained.length,
-        provisional:window.length<10||pending>0||reviewed<window.length||missing,
-        sportingProvisional:window.length<10,conductPending:pending,conductReviewed:reviewed,
+        provisional:window.length<10||pending>0||evaluated<window.length||missing,
+        sportingProvisional:window.length<10,conductPending:pending,conductReviewed:reviewed,conductAuto:autoCount,
         returned:window.reduce((s,r)=>s+(r.conduct.returned||0),0),trend:0,
         joker:worst?{key:worst.key,label:worst.label,date:worst.date}:null,
         window:window.map(r=>({key:r.key,label:r.label,date:r.date,axes:r.axes,conduct:r.conduct,joker:r===worst}))});
     }
     return output.sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name));
   }
-  return {SEVERITIES,conduct,percentile,aggregate,reviewSignature};
+  return {SEVERITIES,conduct,autoConduct,percentile,aggregate,reviewSignature};
 });

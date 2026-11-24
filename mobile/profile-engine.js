@@ -122,7 +122,18 @@ function sortSessionForPerf(sess,rIdx,sIdx,evPenMap,minPct=0.75){
 }
 
 // Option 3 : score de fautes sur une course (cuts + chocs arrière causant >= 1,5 s de perte à la victime).
-function raceFoulScores(race){
+// Analyse des incidents en course (règle GDSP) : détail par pilote.
+// - Cuts de piste : comptage brut depuis les tours (Cuts Assetto Corsa).
+//   Événement : +1 point par cut ; Global : +2 via GDSPGlobalRating.autoConduct.
+//   Le serveur pénalise à partir de 3 cuts en double course et 5 en format 1 h.
+// - Choc arrière avec fort delta de vitesse (|X| >= 0,4 m, |Z| < 1,0 m) :
+//   faute de la voiture arrière si la victime perd >= 1,5 s sur son rythme ;
+//   sinon l'incident n'est pas attribué. Une rentrée dangereuse de la voiture
+//   heurtée après une sortie n'est PAS détectable automatiquement : la Commission
+//   tranche via l'examen — la détection reste indicative dans tous les cas.
+// - Côte à côte / choc latéral (|Z| >= 1,0 m) : non comptabilisé.
+// - Touchette < 1,5 s de perte pour la victime : non comptabilisée.
+function foulBreakdown(race){
   const lapsById={};
   const byCarId={},byName={};
   (race.results||[]).forEach(r=>{
@@ -165,10 +176,10 @@ function raceFoulScores(race){
     if(!Number.isFinite(raw))return null;
     return raw>1e11?raw/1000:raw;
   }
-  const scores=new Map();
-  const add=(id,pts)=>{if(!id||!Number.isFinite(pts))return;scores.set(id,(scores.get(id)||0)+pts);};
+  const details=new Map();
+  const touch=id=>{if(!id)return null;if(!details.has(id))details.set(id,{cuts:0,lossSec:0,incidents:[]});return details.get(id);};
 
-  // 1) Cuts de piste (+1 pt / cut)
+  // 1) Cuts de piste
   (race.results||[]).forEach(r=>{
     if(!r||!r.id)return;
     let c=0;
@@ -176,7 +187,7 @@ function raceFoulScores(race){
       const v=Number.isFinite(l.cuts)?l.cuts:(Number.isFinite(l.Cuts)?l.Cuts:0);
       c+=Math.max(0,v);
     });
-    add(r.id,FAULT_CUT_WEIGHT*c);
+    const d=touch(r.id);if(d&&c>0)d.cuts+=c;
   });
 
   // 2) Collisions voiture-contre-voiture (Option 3)
@@ -209,7 +220,7 @@ function raceFoulScores(race){
     if(!rp||rp.X==null||rp.Z==null)continue;
     const rx=Number(rp.X),rz=Number(rp.Z);
     if(!Number.isFinite(rx)||!Number.isFinite(rz))continue;
-    if(Math.abs(rz)>=FAULT_SIDE_Z)continue; // côte à côte → 0-0
+    if(Math.abs(rz)>=FAULT_SIDE_Z)continue; // côte à côte → non comptabilisé
 
     let culpritId=null,victimId=null;
     if(rx>=FAULT_REAR_X){culpritId=refAid;victimId=refBid;}
@@ -232,8 +243,17 @@ function raceFoulScores(race){
     const lapSec=lapRaw>1000?lapRaw/1000:lapRaw;
     const paceSec=vPaceMs>1000?vPaceMs/1000:vPaceMs;
     const lossSec=lapSec-paceSec;
-    if(lossSec>=FAULT_LOSS_MIN)add(culpritId,lossSec/FAULT_DIVISOR);
+    if(lossSec>=FAULT_LOSS_MIN){const d=touch(culpritId);d.lossSec+=lossSec;d.incidents.push({lossSec});}
   }
+  return details;
+}
+
+// Option 3 : score de fautes sur une course (cuts +1 chacun ; pertes de la victime ÷ 2).
+function raceFoulScores(race){
+  const breakdown=foulBreakdown(race);
+  const scores=new Map();
+  (race.results||[]).forEach(r=>{if(r&&r.id)scores.set(r.id,0);});
+  for(const [id,d] of breakdown)scores.set(id,FAULT_CUT_WEIGHT*d.cuts+d.lossSec/FAULT_DIVISOR);
   return scores;
 }
 
@@ -276,13 +296,15 @@ function globalPerformanceRatings(){
         raceNumber++;
         const sorted=sortSessionForPerf(session,ri,si,pm,minPct);
         const participants=sorted.filter(r=>!r.comDNS&&((r.laps||0)>0||(session.laps||[]).some(l=>l.id===r.id)));
+        // Propreté Global : Commission d'abord ; sinon détection automatique GDSP.
+        const foulDetails=foulBreakdown({...session,results:sorted});
         const entries=participants.map(r=>({id:r.id,
           consistency:raceConsistencyMs((session.laps||[]).filter(l=>l.id===r.id)),
           best:best.get(r.id)?.best??null}));
         const consistency=GDSPGlobalRating.percentile(entries,'consistency');
         const speed=GDSPGlobalRating.percentile(entries,'best');
         participants.forEach((r,i)=>{
-          const review=GDSPGlobalRating.conduct(pm[`${ri}:${si}:${r.id}`]);
+          const review=GDSPGlobalRating.conduct(pm[`${ri}:${si}:${r.id}`],GDSPGlobalRating.autoConduct(foulDetails.get(r.id)));
           const label=`${ev.name||ev.slug} · M${ri+1} C${raceNumber}`;
           records.push({id:r.id,name:r.name,team:r.team,key:`${ev.slug}:${session.date}:${session.track}:${session.type}`,
             ts:Date.parse(session.date),date:session.date,label,weight,conduct:review,

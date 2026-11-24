@@ -1,5 +1,17 @@
 # Mise à jour du Global GDSP — Windows / Node
 
+> **Mise à jour — Propreté Global : détection automatique intégrée**
+>
+> Le critère Propreté du Global ne repose plus uniquement sur les examens Commission. Règle appliquée, par course, quand la Commission n'a pas tranché :
+>
+> - examen Commission validé : sa note prime toujours (retraits par incident : avertissement 5, légère 10, importante 20, grave 35, DQ de conduite 50 ; attente/place rendue validée : retrait ÷ 2, sauf faute grave, DQ de conduite ou acte volontaire ; plancher 0 ; joker sportif jamais appliqué à la propreté) ;
+> - décision non qualifiée (avertissement / DQ / pénalité de temps sans qualifier) : **donnée indisponible**, jamais convertie — l'auto ne s'applique pas non plus ;
+> - sinon, détection automatique GDSP : **chaque cut +2** (le serveur pénalise à partir de 3 cuts en double course / 5 en format 1 h) ; **choc arrière à fort delta de vitesse** avec ≥ 1,5 s perdue pour la victime : **retrait = secondes perdues ÷ 2** ; côte à côte / choc latéral non comptabilisé ; touchette < 1,5 s non comptabilisée.
+> - une **rentrée dangereuse** de la voiture heurtée après une sortie n'est PAS détectable automatiquement : seule la Commission tranche via l'examen.
+>
+> Les fiches d'événement gardent leur barème Option 3 inchangé (cuts +1, pertes ÷ 2). Provisoire : avant 10 courses, avec décision à qualifier, ou sans données Rythme/Vitesse. « Détection auto » est désormais affichée dans le statut et l'audit du profil Global PC et mobile.
+
+
 Cette version change le **Global inter-événements**, pas le barème des championnats, leurs points, leurs résultats, ni le calcul de performance propre aux fiches événement.
 
 ## Changements visibles

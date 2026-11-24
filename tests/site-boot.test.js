@@ -414,7 +414,7 @@ test('event driver profile and global driver profile render ? tooltip icons, Δ 
     'Collisions brutes',
     'Δ rythme',
     'Méthode iRacing',
-    'Choc arrière clair'
+    'fort delta de vitesse'
   ]) {
     assert.ok(
       eventProfileHtml.includes(label) && eventProfileHtml.includes('class="gdsp-i">?</i>'),
