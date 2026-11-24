@@ -117,8 +117,8 @@ function levelBadge(level,size){const badge=LVL_BADGES[level];return badge?`<pic
 const PROFILE_TIPS={
   regularite:`<b>Régularité (Race Consistency)</b><br>Écart moyen entre chaque tour et le <b>meilleur tour</b> du pilote sur la course (en secondes).<br>Le 1<sup>er</sup> tour et les tours aux stands / lents (&gt; 21 s plus lent que le meilleur tour) sont exclus.<br>Plus l'écart moyen est petit, plus le score est élevé.<br><i>Méthode iRacing — best minus average non-best.</i>`,
   regulariteGlobal:`<b>Rythme (Race Consistency)</b><br>Écart moyen entre chaque tour et le <b>meilleur tour</b> du pilote sur chaque course (1<sup>er</sup> tour et tours &gt; +21 s exclus), comparé au plateau de chaque course.<br>Moyenne sur les courses retenues parmi les 10 dernières participations, sans pondération temporelle.`,
-  propreteGlobal:`<b>Propreté GLOBAL · Commission</b><br>Base 100, retraits par incident validé : avertissement 5, légère 10, importante 20, grave 35, DQ de conduite 50.<br>Attente / place rendue validée : retrait réduit de moitié, sauf faute grave, DQ de conduite ou acte volontaire. Plancher 0.<br>Les 10 courses restent prises en compte, même le joker. Sans examen : aucun retrait connu, pas une certification. Décision non qualifiée : donnée indisponible ; axe entièrement absent = 50. Pas de déduction automatique depuis les contacts, cuts ou secondes de pénalité. Real Penalty non importé.`,
-  proprete:`<b>Propreté</b><br>Pénalités attribuées selon les contacts en course qui font <b>perdre du temps</b> à l'adversaire :<br>• Touchette sans conséquence (&lt; 1,5 s de perte pour l'autre) → 0<br>• Choc latéral / côte à côte (|Z| ≥ 1,0 m, bagarre) → 0 pour les deux<br>• Choc arrière clair (|X| ≥ 0,4 m, |Z| &lt; 1,0 m) → secondes perdues par la victime / 2, au pilote responsable<br>• Cuts de piste : +1 point par cut<br>100 = aucun contact responsable ni cut.`,
+  propreteGlobal:`<b>Propreté GLOBAL</b><br>Examen Commission en priorité : avertissement 5, légère 10, importante 20, grave 35, DQ de conduite 50 ; attente / place rendue validée : retrait ÷ 2, sauf faute grave, DQ de conduite ou acte volontaire.<br><b>Sinon, détection automatique GDSP</b> : chaque cut +2 (pénalité serveur à partir de 3 cuts en double course / 5 en format 1 h) ; choc arrière à fort delta de vitesse avec ≥ 1,5 s perdue pour la victime → retrait = secondes perdues ÷ 2 ; côte à côte → non comptabilisé ; touchette &lt; 1,5 s → 0.<br><b>Sauf si la voiture heurtée (A) revenait en piste dangereusement</b> — auquel cas la faute est à A : non détectable automatiquement, seule la Commission tranche à l’examen.<br>Les 10 courses restent prises en compte, même le joker. Une décision non qualifiée : donnée indisponible, jamais convertie. Axe entièrement absent = 50 (neutre). Real Penalty non importé.`,
+  proprete:`<b>Propreté</b><br>Détection automatique des incidents en course (Option 3) :<br>• <b>Choc arrière</b> : la voiture qui tape de l’arrière avec un fort delta de vitesse est fautive. Si la victime perd ≥ 1,5 s sur son rythme : retrait = (secondes perdues) ÷ 2 au pilote responsable.<br>• <b>Sauf si la voiture heurtée (A) revient en piste dangereusement</b> après une sortie : la faute est alors attribuée à la voiture A (rentrée dangereuse). Non détectable automatiquement — laissé à l’appréciation de la Commission, qui peut corriger l’examen.<br>• <b>Touchette</b> &lt; 1,5 s de perte pour l’adversaire → 0.<br>• <b>Côte à côte</b> / choc latéral (|Z| ≥ 1,0 m) → non comptabilisé pour les deux pilotes.<br>• <b>Choc arrière franc</b> : |X| ≥ 0,4 m et |Z| &lt; 1,0 m.<br>• <b>Cuts de piste</b> : +1 point par cut. Le serveur pénalise à partir de <b>3 cuts en double course</b> (2 × 25 min) et <b>5 cuts en format 1 h</b> ; les cuts comptent avant toute pénalité serveur.<br>100 = aucun incident responsable détecté. La propreté GLOBAL repose sur les décisions Commission (examen incident par incident), la détection sert d’indication.`,
   vitesse:`<b>Vitesse au tour</b><br>Basé sur le <b>meilleur tour du week-end</b> (meilleur temps entre <b>Q</b>ualification et toutes les courses <b>R</b> de la manche).<br>Le badge <b>Q</b> ou <b>R</b> dans l'encadré Analyse du rythme indique où ce meilleur temps a été réalisé.<br>100 = pilote le plus rapide du plateau sur le week-end.`,
   resultats:`<b>Résultats</b><br>Basé sur la position finale après pénalités Commission :<br>• 1 pilote → 50 · 2 pilotes : 55 / 45<br>• Entre 2 et 28 pilotes : l'écart entre le 1<sup>er</sup> et le dernier augmente linéairement de 10 à 100 pts (milieu = 50)<br>• 28+ pilotes : 100 au vainqueur, 0 au dernier (linéaire)<br>• DNF / DNS / DQ → <b>0</b>.<br>Arrondi à 1 décimale.`,
   progression:`<b>Progression</b><br>Pente de régression linéaire du classement par week-end en fonction du temps, toutes compétitions confondues.<br>100 = plus forte amélioration ; 0 = plus forte régression.<br>Moins de 3 week-ends → 50 (neutre).`,
@@ -810,7 +810,7 @@ function globalRankingSync(){
     4:'Pilotes récents ou en phase d\'apprentissage : la régularité et la propreté sont à construire, la marge de progression est importante.'
   };
   const now=Date.now();
-  function trendArrow(t){return `<span class="muted" style="font-size:10px">${t.conductReviewed}/${t.windowCount} examens propreté</span>`}
+  function trendArrow(t){return `<span class="muted" style="font-size:10px">${t.conductReviewed} examen(s) Commission · ${t.conductAuto||0} auto</span>`}
   // Blocs tiers (3 colonnes pour 1/2/3-4 ? Mieux 4 colonnes)
   const tierCards=[1,2,3,4].map(l=>{
     const list=tiers[l].slice(0,18).map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #dbd0ba;cursor:pointer" data-pid="${esc(d.id)}" onclick="globalDriverId=this.dataset.pid;go('gpilote')"><span><b>${esc(d.name)}</b></span><span class="muted" style="font-size:12px">${d.count}c · ${d.score.toFixed(0)}</span></div>`).join('');
@@ -839,7 +839,7 @@ function globalRankingSync(){
   });
   const detailHtml=detailRows.join('');
   return `${exclusionsStatus()}${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
-    <p class="note" style="margin-bottom:16px"><b>10 dernières courses disputées · 9 meilleures dès 10 participations.</b> Rythme, vitesse et résultats sur les courses retenues ; propreté Commission sur toute la fenêtre, joker compris. Pondéré selon le type d’événement (Championnat / Endurance ×1, Cup ×0.75, Open ×0.5 ; Fiesta / Trackday ×0 exclus), sans pondération temporelle. Minimum ${GLOBAL_MIN_RACES} courses pour apparaître. Avant 10 : provisoire. Données partielles si des décisions restent à qualifier ou des courses non examinées. Sans sanction connue ne signifie pas course certifiée propre. <b>Real Penalty : DT / Stop & Go non évalués sans journaux.</b></p>
+    <p class="note" style="margin-bottom:16px"><b>10 dernières courses disputées · 9 meilleures dès 10 participations.</b> Rythme, vitesse et résultats sur les courses retenues ; propreté sur toute la fenêtre (examen Commission prioritaire, sinon détection automatique : cuts +2, choc arrière = pertes ÷ 2, côte à côte non compté), joker compris. Pondéré selon le type d’événement (Championnat / Endurance ×1, Cup ×0.75, Open ×0.5 ; Fiesta / Trackday ×0 exclus), sans pondération temporelle. Minimum ${GLOBAL_MIN_RACES} courses pour apparaître. Avant 10 : provisoire. Données partielles si des décisions restent à qualifier ou des courses non examinées. Sans sanction connue ne signifie pas course certifiée propre. <b>Real Penalty : DT / Stop & Go non évalués sans journaux.</b></p>
     <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">${tierCards}</div>
     <div class="panel global-rank-wrap"><h2>Détail des pilotes classés</h2><p class="note">Trié par score global. Les 4 mini-barres représentent Rythme / Propreté / Vitesse / Résultats (0-100) — survolez une mini-barre ou l'icône ? pour le détail. Les séparateurs bleu foncé marquent les changements de niveau.</p>${table(['#','','Pilote','Courses','Score / 100',`4 critères (0-100) ${gdspTip(PROFILE_TIPS.quatreCriteres,'gdsp-tip-right')}`],detailRows)}</div>${trueSkillSectionHtml()}`;
 }
@@ -951,7 +951,18 @@ function sortSessionForPerf(sess,rIdx,sIdx,evPenMap,minPct=0.75){
 }
 
 // Option 3 : score de fautes sur une course (cuts + chocs arrière causant >= 1,5 s de perte à la victime).
-function raceFoulScores(race){
+// Analyse des incidents en course (règle GDSP) : détail par pilote.
+// - Cuts de piste : comptage brut depuis les tours (Cuts Assetto Corsa).
+//   Événement : +1 point par cut ; Global : +2 via GDSPGlobalRating.autoConduct.
+//   Le serveur pénalise à partir de 3 cuts en double course et 5 en format 1 h.
+// - Choc arrière avec fort delta de vitesse (|X| >= 0,4 m, |Z| < 1,0 m) :
+//   faute de la voiture arrière si la victime perd >= 1,5 s sur son rythme ;
+//   sinon l'incident n'est pas attribué. Une rentrée dangereuse de la voiture
+//   heurtée après une sortie n'est PAS détectable automatiquement : la Commission
+//   tranche via l'examen — la détection reste indicative dans tous les cas.
+// - Côte à côte / choc latéral (|Z| >= 1,0 m) : non comptabilisé.
+// - Touchette < 1,5 s de perte pour la victime : non comptabilisée.
+function foulBreakdown(race){
   const lapsById={};
   const byCarId={},byName={};
   (race.results||[]).forEach(r=>{
@@ -994,10 +1005,10 @@ function raceFoulScores(race){
     if(!Number.isFinite(raw))return null;
     return raw>1e11?raw/1000:raw;
   }
-  const scores=new Map();
-  const add=(id,pts)=>{if(!id||!Number.isFinite(pts))return;scores.set(id,(scores.get(id)||0)+pts);};
+  const details=new Map();
+  const touch=id=>{if(!id)return null;if(!details.has(id))details.set(id,{cuts:0,lossSec:0,incidents:[]});return details.get(id);};
 
-  // 1) Cuts de piste (+1 pt / cut)
+  // 1) Cuts de piste
   (race.results||[]).forEach(r=>{
     if(!r||!r.id)return;
     let c=0;
@@ -1005,7 +1016,7 @@ function raceFoulScores(race){
       const v=Number.isFinite(l.cuts)?l.cuts:(Number.isFinite(l.Cuts)?l.Cuts:0);
       c+=Math.max(0,v);
     });
-    add(r.id,FAULT_CUT_WEIGHT*c);
+    const d=touch(r.id);if(d&&c>0)d.cuts+=c;
   });
 
   // 2) Collisions voiture-contre-voiture (Option 3)
@@ -1038,7 +1049,7 @@ function raceFoulScores(race){
     if(!rp||rp.X==null||rp.Z==null)continue;
     const rx=Number(rp.X),rz=Number(rp.Z);
     if(!Number.isFinite(rx)||!Number.isFinite(rz))continue;
-    if(Math.abs(rz)>=FAULT_SIDE_Z)continue; // côte à côte → 0-0
+    if(Math.abs(rz)>=FAULT_SIDE_Z)continue; // côte à côte → non comptabilisé
 
     let culpritId=null,victimId=null;
     if(rx>=FAULT_REAR_X){culpritId=refAid;victimId=refBid;}
@@ -1061,8 +1072,17 @@ function raceFoulScores(race){
     const lapSec=lapRaw>1000?lapRaw/1000:lapRaw;
     const paceSec=vPaceMs>1000?vPaceMs/1000:vPaceMs;
     const lossSec=lapSec-paceSec;
-    if(lossSec>=FAULT_LOSS_MIN)add(culpritId,lossSec/FAULT_DIVISOR);
+    if(lossSec>=FAULT_LOSS_MIN){const d=touch(culpritId);d.lossSec+=lossSec;d.incidents.push({lossSec});}
   }
+  return details;
+}
+
+// Option 3 : score de fautes sur une course (cuts +1 chacun ; pertes de la victime ÷ 2).
+function raceFoulScores(race){
+  const breakdown=foulBreakdown(race);
+  const scores=new Map();
+  (race.results||[]).forEach(r=>{if(r&&r.id)scores.set(r.id,0);});
+  for(const [id,d] of breakdown)scores.set(id,FAULT_CUT_WEIGHT*d.cuts+d.lossSec/FAULT_DIVISOR);
   return scores;
 }
 
@@ -1164,12 +1184,24 @@ function trueSkillSkippedNote(result){
   const items=skipped.slice(0,8).map(x=>`<li>${esc(x.key||x.date||'course')} — ${esc(x.reason||'ignorée')}</li>`).join('');
   return `<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">${skipped.length} course(s) ignorée(s) — raisons</summary><ul class="note" style="margin-top:6px">${items}</ul></details>`;
 }
+// Infobulles TrueSkill (même mécanisme que PROFILE_TIPS).
+const TRUESKILL_TIPS={
+  mu:`<b>μ — compétence estimée</b><br>Moyenne de la distribution de niveau du pilote, recalculée après chaque course admissible, dans l’ordre chronologique.<br>Départ à 25. Gagner contre un plateau plus faible monte μ moins que gagner contre un plateau plus fort.`,
+  sigma:`<b>σ — incertitude</b><br>Largeur de la distribution de niveau. Elle diminue à chaque course rejouée et remonte légèrement si le pilote rate une course (dérive γ).<br>Petit σ = niveau bien établi.`,
+  indice:`<b>Indice = μ − 3σ</b><br>Estimation prudente : compétence moyenne moins trois fois l’incertitude.<br>Favorise les pilotes réguliers et établis sans écraser les progrès des rookies ; c’est la valeur affichée publiquement.`,
+  courses:`<b>Courses notées</b><br>Courses RACE réellement prises en compte : coefficient Global &gt; 0, résultats après corrections Commission, services / DNS / DNF non qualifiés exclus.<br>Minimum 5 courses pour apparaître ; provisoire avant 10.`,
+  confiance:`<b>Confiance</b><br>Élevée si σ ≤ 3 · moyenne si σ ≤ 5 · faible sinon.<br>Une confiance faible ne veut pas dire pilote faible : la dispersion des résultats est encore inconnue.`,
+  statut:`<b>Statut</b><br>Provisoire avant 10 courses (l’indice peut encore bouger fortement). Confirmé à partir de 10.`,
+  poids:`<b>Coefficient Global</b><br>Chaque course informe d’autant plus qu’elle est officielle : β course = β / √w.<br>Championnat / endurance (w = 1) informent pleinement ; Cup (0,75) et Open (0,5) réduisent la mise à jour ; Fiesta / Trackday (0) : ignorées.`,
+  beta:`<b>β — aléa de performance</b><br>Écart-type de la performance autour du niveau réel. β = 5,5 : valeur GDSP proposée (à valider par benchmark walk-forward).<br>Plus β est grand, plus une course peut donner une « performance hors niveau » sans conséquence.`
+};
+function trueSkillTip(key){return gdspTip(TRUESKILL_TIPS[key],'gdsp-tip-right')}
 function trueSkillSectionHtml(){
   const result=trueSkillExperiment();
   if(result.error)return `<div class="panel" style="margin-top:24px"><h2>Indice TrueSkill — expérimental</h2><p class="note">Indice indisponible : ${esc(result.error)}. Le classement officiel n’est pas affecté.</p></div>`;
   if(!result.ratings.length)return `<details class="panel" style="margin-top:24px"><summary><b>Indice TrueSkill — expérimental</b></summary><p class="note">Indice indisponible : pas assez de courses par pilote (minimum ${TRUESKILL_MIN_RACES}). ${result.diagnostics.coursesUsed} course(s) rejouée(s), ${result.diagnostics.coursesSkipped} ignorée(s).</p>${trueSkillSkippedNote(result)}</details>`;
   const rows=result.ratings.slice(0,20).map((r,i)=>`<tr><td class="pos">${i+1}</td><td><b>${esc(r.name)}</b><br><small class="muted">${esc(r.team||'')}</small></td><td><b>${r.conservative.toFixed(1)}</b></td><td>${r.sigma.toFixed(2)}</td><td>${r.races}</td><td>${esc(r.confidence)}</td><td>${r.provisional?'Provisoire':'Confirmé'}</td></tr>`).join('');
-  return `<details class="panel" style="margin-top:24px"><summary><b>Indice TrueSkill — expérimental</b> <span class="muted">(μ − 3σ)</span></summary><p class="note">Indicateur parallèle de niveau, calculé sur les ${result.diagnostics.coursesUsed} course(s) RACE admissibles et auditables, coefficient Global &gt; 0, résultats après corrections Commission. <b>Il ne remplace pas le classement officiel, ne sert à aucune sanction et ne modifie aucun score.</b> β = ${TRUESKILL_BETA} (à valider par benchmark). Minimum ${TRUESKILL_MIN_RACES} courses · provisoire avant 10.</p>${table(['#','Pilote','Indice','σ','Courses','Confiance','Statut'],rows)}${trueSkillSkippedNote(result)}</details>`;
+  return `<details class="panel" style="margin-top:24px"><summary><b>Indice TrueSkill — expérimental</b> <span class="muted">(μ − 3σ)</span></summary><p class="note">Indicateur parallèle de niveau, calculé sur les ${result.diagnostics.coursesUsed} course(s) RACE admissibles et auditables, coefficient Global &gt; 0, résultats après corrections Commission. <b>Il ne remplace pas le classement officiel, ne sert à aucune sanction et ne modifie aucun score.</b> β = ${TRUESKILL_BETA} ${trueSkillTip('beta')} · coefficient Global ${trueSkillTip('poids')} · Minimum ${TRUESKILL_MIN_RACES} courses · provisoire avant 10. Moteur TrueSkill (Herbrich, Minka, Graepel) : chaque course met à jour la distribution de compétence par un passage de messages bayésien chronologique.</p>${table(['#','Pilote',`Indice ${trueSkillTip('indice')}`,`σ ${trueSkillTip('sigma')}`,`Courses ${trueSkillTip('courses')}`,`Confiance ${trueSkillTip('confiance')}`,`Statut ${trueSkillTip('statut')}`],rows)}${trueSkillSkippedNote(result)}</details>`;
 }
 function trueSkillPilotHtml(id){
   const result=trueSkillExperiment();
@@ -1178,7 +1210,7 @@ function trueSkillPilotHtml(id){
   if(!r)return `<div class="panel" style="margin-top:16px"><h2>Indice TrueSkill — expérimental</h2><p class="note">Ce pilote n’a pas encore assez de courses admissibles pour un indice. Le classement officiel n’est pas affecté.</p></div>`;
   const last=r.history[r.history.length-1];
   const delta=last?(last.deltaMu>=0?'+':'')+last.deltaMu.toFixed(2):'—';
-  return `<div class="panel" style="margin-top:16px"><h2>Indice TrueSkill — expérimental</h2><p class="note">μ = ${r.mu.toFixed(2)} · σ = ${r.sigma.toFixed(2)} · indice conservateur μ − 3σ = <b>${r.conservative.toFixed(1)}</b> · ${r.races} course(s) admissible(s) · confiance ${esc(r.confidence)}${r.provisional?' · <b>provisoire</b> (&lt; 10 courses)':''}. Dernière course : Δμ ${esc(delta)}.</p><p class="note">Cet indice expérimental n’entre pas dans le classement officiel et ne sert à aucune sanction. DNF non qualifiés, DNS et services exclus ; décisions Commission sportives incluses (DQ classée en bas).</p></div>`;
+  return `<div class="panel" style="margin-top:16px"><h2>Indice TrueSkill — expérimental</h2><p class="note">μ = ${r.mu.toFixed(2)} ${trueSkillTip('mu')} · σ = ${r.sigma.toFixed(2)} ${trueSkillTip('sigma')} · indice conservateur μ − 3σ = <b>${r.conservative.toFixed(1)}</b> ${trueSkillTip('indice')} · ${r.races} course(s) admissible(s) ${trueSkillTip('courses')} · confiance ${esc(r.confidence)} ${trueSkillTip('confiance')}${r.provisional?` · <b>provisoire</b> (&lt; 10 courses) ${trueSkillTip('statut')}`:''}. Dernière course : Δμ ${esc(delta)} ${trueSkillTip('mu')}.</p><p class="note">Cet indice expérimental n’entre pas dans le classement officiel et ne sert à aucune sanction. DNF non qualifiés, DNS et services exclus ; décisions Commission sportives incluses (DQ classée en bas).</p></div>`;
 }
 
 // Global v2 : dix dernières courses effectivement disputées, joker sportif.
@@ -1202,13 +1234,15 @@ function globalPerformanceRatings(){
         raceNumber++;
         const sorted=sortSessionForPerf(session,ri,si,pm,minPct);
         const participants=sorted.filter(r=>!r.comDNS&&((r.laps||0)>0||(session.laps||[]).some(l=>l.id===r.id)));
+        // Propreté Global : Commission d'abord ; sinon détection automatique GDSP.
+        const foulDetails=foulBreakdown({...session,results:sorted});
         const entries=participants.map(r=>({id:r.id,
           consistency:raceConsistencyMs((session.laps||[]).filter(l=>l.id===r.id)),
           best:best.get(r.id)?.best??null}));
         const consistency=GDSPGlobalRating.percentile(entries,'consistency');
         const speed=GDSPGlobalRating.percentile(entries,'best');
         participants.forEach((r,i)=>{
-          const review=GDSPGlobalRating.conduct(pm[`${ri}:${si}:${r.id}`]);
+          const review=GDSPGlobalRating.conduct(pm[`${ri}:${si}:${r.id}`],GDSPGlobalRating.autoConduct(foulDetails.get(r.id)));
           const label=`${ev.name||ev.slug} · M${ri+1} C${raceNumber}`;
           records.push({id:r.id,name:r.name,team:r.team,key:`${ev.slug}:${session.date}:${session.track}:${session.type}`,
             ts:Date.parse(session.date),date:session.date,label,weight,conduct:review,
@@ -1223,10 +1257,10 @@ function globalPerformanceRatings(){
   return list;
 }
 function globalRatingStatus(r){
-  return `${r.sportingProvisional?'Provisoire':'10 courses atteintes'} · ${r.retainedCount}/${r.windowCount} retenues · propreté examinée ${r.conductReviewed}/${r.windowCount}${r.conductPending?' · '+r.conductPending+' décision(s) à qualifier':''}`;
+  return `${r.sportingProvisional?'Provisoire':'10 courses atteintes'} · ${r.retainedCount}/${r.windowCount} retenues · propreté Commission ${r.conductReviewed}/${r.windowCount} · détection auto ${r.conductAuto||0}/${r.windowCount}${r.conductPending?' · '+r.conductPending+' décision(s) à qualifier':''}`;
 }
 function globalRatingAudit(r){
-  return `<div class="panel" style="margin:16px 0"><h2>Calcul du Global · 10 courses + joker</h2><p class="note">${esc(globalRatingStatus(r))}. ${r.joker?'Joker sportif : '+esc(r.joker.label)+'. Sa propreté reste comptée.':'Aucun joker avant 10 courses.'} Sans examen, 100 signifie seulement aucun retrait connu ; une décision non qualifiée est indisponible, pas une faute nulle. Un axe sans données utilise 50 (neutre). Real Penalty : journaux non importés, DT / Stop & Go non évalués.</p><p class="note">${r.returned} restitution(s) / attente(s) validée(s) dans la fenêtre. Les qualificatifs de niveau restent indicatifs tant que les données sont partielles.</p>${table(['Course','Date','Retenue','Propreté / 100','Examen'],r.window.map(x=>`<tr><td>${esc(x.label)}</td><td>${date(x.date)}</td><td>${x.joker?'Joker sportif':'Oui'}</td><td>${Number.isFinite(x.axes.proprete)?x.axes.proprete.toFixed(1):'Indisponible'}</td><td>${x.conduct.pending?'Décision à qualifier':x.conduct.reviewed?'Examinée : '+esc(x.conduct.reason||''):'Non examinée'}</td></tr>`))}</div>`;
+  return `<div class="panel" style="margin:16px 0"><h2>Calcul du Global · 10 courses + joker</h2><p class="note">${esc(globalRatingStatus(r))}. ${r.joker?'Joker sportif : '+esc(r.joker.label)+'. Sa propreté reste comptée.':'Aucun joker avant 10 courses.'} Propreté : examen Commission en priorité ; sinon détection automatique GDSP — chaque cut +2 (pénalité serveur à partir de 3 cuts en double course / 5 en format 1 h), choc arrière à fort delta de vitesse avec ≥ 1,5 s perdue pour la victime : retrait = secondes perdues ÷ 2, côte à côte non comptabilisée. Une rentrée dangereuse de la voiture heurtée après une sortie n’est pas détectable automatiquement : la Commission tranche à l’examen. Une décision non qualifiée est indisponible, pas une faute nulle. Aucun incident détecté ni examen : 100, aucun retrait connu. Un axe sans données utilise 50 (neutre). Real Penalty : journaux non importés, DT / Stop & Go non évalués.</p><p class="note">${r.returned} restitution(s) / attente(s) validée(s) dans la fenêtre. Les qualificatifs de niveau restent indicatifs tant que les données sont partielles.</p>${table(['Course','Date','Retenue','Propreté / 100','Examen'],r.window.map(x=>`<tr><td>${esc(x.label)}</td><td>${date(x.date)}</td><td>${x.joker?'Joker sportif':'Oui'}</td><td>${Number.isFinite(x.axes.proprete)?x.axes.proprete.toFixed(1):'Indisponible'}</td><td>${x.conduct.pending?'Décision à qualifier':x.conduct.reviewed?'Examinée : '+esc(x.conduct.reason||''):x.conduct.auto?'Détection auto'+(x.conduct.cuts?' · '+x.conduct.cuts+' cut(s)':'')+(x.conduct.incidents?' · '+x.conduct.incidents+' choc(s)':'')+(!x.conduct.cuts&&!x.conduct.incidents?' · aucun incident':''):'Détection auto (100)'}</td></tr>`))}</div>`;
 }
 
 // Compute standings for an event without touching global sessions/penMap
