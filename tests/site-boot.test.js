@@ -161,6 +161,42 @@ test('inscriptions de service : séparées des pilotes sans toucher aux données
   assert.equal(ev.data.sessions[0].results.length,1,'un résultat déjà enregistré ne doit pas être modifié');
 });
 
+test('Administration / Pilotes : suppression explicite retire un pilote des inscriptions et des résultats', async () => {
+  const custom={slug:'delete-driver',name:'Coupe à supprimer',kind:'cup',updated_at:'2026-11-20T12:00:00Z',points_config:{pointsScale:[10,8]},data:{
+    sessions:[
+      {type:'QUALIFY',date:'2026-11-01T20:00:00Z',track:'spa',results:[{id:'alice',name:'Alice',team:'A',grid:1,laps:5,best:90000,time:500000},{id:'bob',name:'Bob',team:'B',grid:2,laps:5,best:91000,time:510000}],laps:[{id:'alice',time:90000},{id:'bob',time:91000}],events:[{type:'COLLISION_WITH_CAR',aid:'alice',a:'Alice',bid:'bob',b:'Bob',timestamp:123}]},
+      {type:'RACE',date:'2026-11-01T21:00:00Z',track:'spa',results:[{id:'alice',name:'Alice',team:'A',grid:1,laps:12,best:89000,time:1200000},{id:'bob',name:'Bob',team:'B',grid:2,laps:12,best:90000,time:1210000}],laps:[{id:'alice',time:89000},{id:'bob',time:90000}],events:[]}
+    ],
+    penMap:{'0:0:alice':{timeAdd:3},'0:0:bob':{timeAdd:6},'champ:alice:1':{driverId:'alice',driverName:'Alice',pointsDelta:-2,note:'sanction'},'champ:bob:1':{driverId:'bob',driverName:'Bob',pointsDelta:2,note:'bonus'}},
+    manualDrivers:{alice:{name:'Alice',team:'A modifiée'},bob:{name:'Bob',team:'B'}},
+    driverPhotos:{alice:'data:image/png;base64,AAAA',bob:'data:image/png;base64,BBBB'},
+    ahEntrants:[{name:'Alice',team:'A',car:'car_a'},{name:'Bob',team:'B',car:'car_b'},{name:'Charlie',team:'C',car:'car_c'}]
+  }};
+  let typed='Alice';
+  const {sandbox,getElementById,calls}=makeBrowser([custom],(url,opts={})=>{
+    if(url==='/api/events/delete-driver'&&(!opts.method||opts.method==='GET'))return response(JSON.parse(JSON.stringify(custom)));
+    if(url==='/api/events/delete-driver/data'&&opts.method==='POST'){custom.data=JSON.parse(opts.body);return response({ok:true});}
+    return null;
+  },{prompt:()=>typed,confirm:()=>true});
+  await new Promise(resolve=>setTimeout(resolve,0));await new Promise(resolve=>setImmediate(resolve));
+  await vm.runInContext("switchEvent('delete-driver')",sandbox);
+  vm.runInContext('adminAuth=true;adminToken=\'tok\';adminUser=\'Admin\';adminTab=\'drivers\';page=\'admin\';render()',sandbox);
+  assert.match(getElementById('app').innerHTML,/Supprimer/);assert.match(getElementById('app').innerHTML,/Inscrits sans résultat/);
+  vm.runInContext('globalThis.exportEventBackup=function(){window.__backupCalled=true}',sandbox);
+  await vm.runInContext("deleteDriverFromEvent('alice')",sandbox);
+  assert.equal(sandbox.__backupCalled,true,'une sauvegarde doit être déclenchée avant suppression');
+  let saved=calls.filter(c=>c.url==='/api/events/delete-driver/data'&&c.method==='POST').at(-1).body;
+  assert.ok(!saved.sessions.flatMap(s=>s.results).some(r=>r.id==='alice'),'Alice retirée des résultats');
+  assert.ok(!saved.sessions.flatMap(s=>s.laps).some(l=>l.id==='alice'),'Alice retirée des tours');
+  assert.ok(saved.sessions.flatMap(s=>s.events).some(e=>e.aid==='alice'&&e.bid==='bob'),'le journal brut est conservé');
+  assert.deepEqual(saved.ahEntrants.map(e=>e.name),['Bob','Charlie']);assert.ok(!saved.driverPhotos.alice);assert.equal(saved.driverPhotos.bob,'data:image/png;base64,BBBB');
+  assert.ok(!saved.manualDrivers.alice);assert.equal(saved.manualDrivers.bob.team,'B');assert.deepEqual(Object.keys(saved.penMap),['0:0:bob','champ:bob:1']);
+  typed='Charlie';
+  await vm.runInContext("deleteDriverFromEvent(entrantOnlyDeletionCandidates()[0].id)",sandbox);
+  saved=calls.filter(c=>c.url==='/api/events/delete-driver/data'&&c.method==='POST').at(-1).body;
+  assert.deepEqual(saved.ahEntrants.map(e=>e.name),['Bob'],'un inscrit sans résultat peut être retiré');assert.ok(!saved.sessions.flatMap(s=>s.results).some(r=>r.id==='alice'),'les résultats précédents restent nettoyés');
+});
+
 test('un lien événement reste prioritaire malgré une session administrateur', async () => {
   const slug=fixture.event.slug;
   const {sandbox}=makeBrowser([],url=>url==='/api/admin/verify'?response({ok:true,user:'Admin'}):null,{location:{pathname:'/evenements/'+slug+'/voiture'},authenticatedSession:true});
