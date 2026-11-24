@@ -390,10 +390,10 @@ function cloneSessions(data,manual){
  return (Array.isArray(data?.sessions)?data.sessions:[]).filter(s=>s&&typeof s==='object').map(s=>({...s,results:(Array.isArray(s.results)?s.results:[]).filter(Boolean).map(r=>{const edit=manual&&data.manualDrivers?.[r.id];return edit?{...r,name:edit.name,team:edit.team||''}:{...r};})}));
 }
 function eventDrivers(ev){
- const found=new Map();for(const s of sessions)for(const r of s.results)if(r.id&&!found.has(r.id))found.set(r.id,{id:r.id,name:r.name||'Pilote',team:r.team||'',model:r.model||'',skin:r.skin||''});
+ const found=new Map();for(const s of sessions)for(const r of s.results)if(r.id&&!found.has(r.id))found.set(r.id,{id:r.id,name:r.name||'Pilote',team:r.team||'',model:r.model||'',skin:r.skin||'',serviceInResults:GDSPEntrantRoles.serviceRole(r)});
  const names=new Set([...found.values()].map(d=>String(d.name).trim().toLocaleLowerCase('fr')));
  function shaShort(input){let h=2166136261;for(let i=0;i<input.length;i++){h^=input.charCodeAt(i);h=Math.imul(h,16777619)}return ('00000000'+(h>>>0).toString(16)).slice(-8)+input.slice(0,4)}
- for(const e of Array.isArray(ev.data?.ahEntrants)?ev.data.ahEntrants:[]){const name=String(e?.name||'').trim(),key=name.toLocaleLowerCase('fr');if(!name||names.has(key))continue;names.add(key);const id='ah-entrant-'+shaShort(key);found.set(id,{id,name,team:e.team||'',model:e.car||'',skin:e.skin||'',entrant:true});}
+ for(const e of GDSPEntrantRoles.drivers(ev.data?.ahEntrants)){const name=String(e?.name||'').trim(),key=name.toLocaleLowerCase('fr');if(!name||names.has(key))continue;names.add(key);const id='ah-entrant-'+shaShort(key);found.set(id,{id,name,team:e.team||'',model:e.car||'',skin:e.skin||'',entrant:true});}
  return [...found.values()].sort((a,b)=>a.name.localeCompare(b.name));
 }
 function historyFromGroups(groups,id,sortedSessions){

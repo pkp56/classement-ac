@@ -1549,7 +1549,8 @@ function eventHome(){
   const gallery=getEventGallery(ev);
   const rs=rounds();
   const ds=allDrivers();
-  const ahEntrants=Array.isArray(ev.data?.ahEntrants)?ev.data.ahEntrants.filter(e=>e&&typeof e.name==='string'&&e.name.trim()).slice(0,500):[];
+  const allAhEntrants=Array.isArray(ev.data?.ahEntrants)?ev.data.ahEntrants.filter(e=>e&&typeof e.name==='string'&&e.name.trim()).slice(0,500):[];
+  const ahEntrants=GDSPEntrantRoles.drivers(allAhEntrants),serviceEntrants=GDSPEntrantRoles.services(allAhEntrants);
   const cfg=pointsConfig();
   const posterBlock=renderEventPosterBlock();
   const adminPosterHint=(!posterBlock&&adminAuth&&currentSlug)
@@ -1641,7 +1642,8 @@ function eventHome(){
     const car=carNames.get(d.car)||readableId(d.car),skin=readableId(d.skin);
     return `<tr><th scope="row">${esc(d.name)}</th><td>${d.team?esc(d.team):'<span class="ev-entrants-empty">Non renseignée</span>'}</td><td>${car?esc(car):'<span class="ev-entrants-empty">Non renseignée</span>'}${skin?`<small class="ev-entrants-skin">Livrée · ${esc(skin)}</small>`:''}</td></tr>`;
   }).join('')}</tbody></table></div></section>`:'';
-  return `<div class="ev-home-wrap"><div class="ev-home-poster">${posterBlock}${adminPosterHint}</div>${kpisHtml}${infoGridHtml}${galleryHtml}<div class="ev-two-col">${calendarPanel}${podiumPanel}</div>${entrantsPanel}</div>`;
+  const servicesPanel=serviceEntrants.length?`<section class="panel"><h2>Véhicules de service</h2><p class="note">Ces inscriptions sont conservées mais ne sont pas comptées parmi les engagés : ${serviceEntrants.map(e=>esc(e.name)+' ('+esc(GDSPEntrantRoles.serviceRole(e))+')').join(', ')}. Les résultats et classements restent inchangés.</p></section>`:'';
+  return `<div class="ev-home-wrap"><div class="ev-home-poster">${posterBlock}${adminPosterHint}</div>${kpisHtml}${infoGridHtml}${galleryHtml}<div class="ev-two-col">${calendarPanel}${podiumPanel}</div>${entrantsPanel}${servicesPanel}</div>`;
 }
 function ahSkinImage(entrant,ctx=eventContext){
   const data=ctx?.data||{},server=data.ahEntrantsServer||data.ahServer;
@@ -1663,7 +1665,9 @@ function driverSkin(d){
 }
 function eventDrivers(){
   const ds=allDrivers(),names=new Set(ds.map(d=>String(d.name||'').trim().toLocaleLowerCase('fr')));
-  const entrants=eventContext?.data?.ahEntrants||[];
+  // Les résultats restent intacts ; seules les inscriptions de service
+  // reconnues avec certitude ne créent pas de fiche pilote supplémentaire.
+  const entrants=GDSPEntrantRoles.drivers(eventContext?.data?.ahEntrants);
   for(const e of entrants){
     const name=String(e?.name||'').trim(),key=name.toLocaleLowerCase('fr');
     if(!name||names.has(key))continue;
@@ -1672,12 +1676,12 @@ function eventDrivers(){
   return ds.sort((a,b)=>a.name.localeCompare(b.name));
 }
 function eventCarSheets(evCtx){
-  const ctx=evCtx||eventContext||{},data=ctx.data||{};
+  const ctx=evCtx||eventContext||{},data=ctx.data||{},driverEntrants=GDSPEntrantRoles.drivers(data.ahEntrants);
   const enrich=cars=>{
-    const models=[...new Set((data.ahEntrants||[]).map(e=>e.car).filter(Boolean))];
+    const models=[...new Set(driverEntrants.map(e=>e.car).filter(Boolean))];
     const extras=models.filter(id=>!cars.some(c=>c.id===id||c.name===id)).map(id=>localCarSnapshot({id,name:id}));
     return [...cars,...extras].slice(0,12).map(car=>{
-      const entries=(data.ahEntrants||[]).filter(e=>e.car===car.id||e.car===car.name);
+      const entries=driverEntrants.filter(e=>e.car===car.id||e.car===car.name);
       const remote=entries.map(e=>({image:ahSkinImage(e,ctx),name:e.name,team:e.team||'',number:''})).filter(e=>e.image);
       return {...car,liveries:[...remote,...(car.liveries||[])].slice(0,80)};
     });
@@ -1689,7 +1693,7 @@ function eventCarSheets(evCtx){
   if(manual)return enrich(manual.split(/\s*\/\s*/).filter(Boolean).slice(0,12).map((name,index)=>({
     id:'event-car-'+(index+1),name,brand:'',category:'',year:'',author:'',version:'',description:'',tags:[],specs:{},metadataAvailable:false
   })));
-  const models=[...new Set((data.ahEntrants||[]).map(e=>e.car).filter(Boolean))].slice(0,12);
+  const models=[...new Set(driverEntrants.map(e=>e.car).filter(Boolean))].slice(0,12);
   if(models.length)return enrich(models.map(id=>localCarSnapshot({id,name:id})));
   const isLola=!ctx.slug||ctx.slug===LEGACY_DEFAULT_SLUG||ctx.slug===ACTIVE_LOLA_SLUG;
   return isLola?[{id:'lola-t290',name:'Lola T290',brand:'Lola',category:'Prototypes historiques',year:'',author:'',version:'',description:'',tags:[],specs:{},metadataAvailable:false}]:[];
@@ -5152,7 +5156,12 @@ async function previewCurrentEventAH(){
     if(p.car)html+=itemRow('car','Voiture / catégorie (identifiant du mod)',info.car,p.car);
     if(p.formatText)html+=itemRow('format','Format sportif',info.formatText,p.formatText);
     if(p.registrationUrl)html+=itemRow('registration','Lien d’inscription',info.registrationUrl,p.registrationUrl);
-    if(p.entrantsAvailable)html+=itemRow('entrants','Liste des engagés et leurs skins (sans modifier les classements)',`${(ev.data?.ahEntrants||[]).length} pilote(s)`,p.entrants.length?p.entrants.map(x=>[x.name,x.team,x.car,x.skin].filter(Boolean).join(' · ')).join(' | '):'Aucun engagé');
+    if(p.entrantsAvailable){
+      const old=ev.data?.ahEntrants||[],drivers=GDSPEntrantRoles.drivers(p.entrants),services=GDSPEntrantRoles.services(p.entrants);
+      const details=p.entrants.length?p.entrants.map(x=>[x.name,x.team,x.car,x.skin,GDSPEntrantRoles.serviceRole(x)?'service · '+GDSPEntrantRoles.serviceRole(x):'pilote'].filter(Boolean).join(' · ')).join(' | '):'Aucun engagé';
+      html+=itemRow('entrants','Liste des engagés et leurs skins (sans modifier les classements)',`${GDSPEntrantRoles.drivers(old).length} pilote(s), ${GDSPEntrantRoles.services(old).length} service(s)`,`${drivers.length} pilote(s), ${services.length} service(s) · ${details}`);
+      if(services.length)html+='<p class="note">Les inscriptions de service sont conservées et affichées séparément, sans modifier les résultats. Vérifie les noms proposés avant de confirmer.</p>';
+    }
     if(dated.length)html+=itemRow('calendar','Ajouter les manches datées au calendrier',`${Object.keys(ev.data?.customCalendar||{}).length} date(s)`,dated.map(r=>`${r.date} : ${r.track}${r.layout?' / '+r.layout:''}`).join(' | '));
     if(p.points)html+=itemRow('points','Barème — peut modifier les classements',JSON.stringify(ev.points_config||{}),JSON.stringify(p.points));
     html+=`<p class="note"><b>Manches détectées :</b> ${esc(list||'aucune')}. Les manches sans date ne sont pas ajoutées automatiquement.${p.note?' '+esc(p.note):''}</p>`
