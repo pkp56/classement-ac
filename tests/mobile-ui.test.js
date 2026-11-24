@@ -10,6 +10,7 @@ function browser(fetch){
   const nav=['home','events','live','more'].map(value=>({dataset:{nav:value},attrs:{},setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]}}));
   const sandbox={document:{getElementById:id=>id==='content'?content:id==='update-output'?output:null,querySelectorAll:()=>nav},location:{hash:'#home',origin:'https://gdsp.example'},window:{addEventListener:(k,fn)=>{listeners[k]=fn},confirm:()=>true},navigator:{onLine:true,serviceWorker:{register:()=>Promise.resolve()}},fetch,URL,URLSearchParams,Date,Intl,Promise,Set,Map,setTimeout:()=>1,clearTimeout:()=>{}};
   sandbox.AbortController=AbortController;
+  sandbox.window.GDSPEntrantRoles=require('../assets/entrant-roles');
   sandbox.window.gdspMobileProfileViews=require('../mobile/profile-views');
   sandbox.window.gdspMobileEventViews=require('../mobile/event-views');
   sandbox.window.gdspMobileResults={calculate:()=>({standings:[],rounds:[]})};

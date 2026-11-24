@@ -14,7 +14,17 @@ L'onglet Global présente le classement inter-événements et ses fiches pilotes
 Les calculs reprennent les règles du site PC sur des copies des données reçues ;
 les fonctions de performance dupliquées sont contrôlées par un test de parité.
 Le Global n'est pas affiché si un événement ou les exclusions sont indisponibles,
-car un classement partiel serait trompeur.
+car un classement partiel serait trompeur. Les insignes Global utilisent les
+mêmes images que le site PC.
+
+Les inscriptions AssettoHosting dont le nom correspond clairement à Broadcast
+ou Pace Car / Safety Car sont affichées séparément comme véhicules de service,
+au lieu de créer des fiches pilotes. La liste importée complète reste enregistrée
+et l'aperçu administrateur distingue les deux groupes avant confirmation. La
+reconnaissance reste volontairement prudente : un nom différent ou ambigu n'est
+pas retiré automatiquement. Les résultats de sessions déjà enregistrés, leurs
+classements et les sanctions ne sont pas modifiés ; si un nom de service y
+figure aussi, la liste mobile le signale pour vérification.
 Le direct mobile montre un instantané actualisé toutes les dix secondes ; la
 synthèse télémétrique nécessite une session administrateur. Ces deux vues ne
 remplacent pas les fonctions avancées : cartes et archives du direct, filtres,

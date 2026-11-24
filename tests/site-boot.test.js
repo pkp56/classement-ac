@@ -72,6 +72,7 @@ function makeBrowser(extraEvents = [], extraFetch = null, browserOptions = {}) {
   sandbox.gdspAuth = {fetch:(...args)=>sandbox.fetch(...args),session:async()=>({authenticated:!!browserOptions.authenticatedSession})};
   vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(root,'assets/global-rating.js'),'utf8'), sandbox);
+  vm.runInContext(fs.readFileSync(path.join(root,'assets/entrant-roles.js'),'utf8'), sandbox);
   vm.runInContext(siteSource, sandbox);
   vm.runInContext(patchSource, sandbox);
   return { sandbox, getElementById, calls, storage };
@@ -132,7 +133,7 @@ test('profils mobiles : copies des fonctions PC contrôlées et classements iden
   vm.runInContext('events=testEvents;globalHidden=testHidden',sandbox);
   const expected=JSON.parse(vm.runInContext('JSON.stringify(globalPerformanceRatings())',sandbox));assert.ok(expected.length>0);
   const mobile={console,Map,Set,Date,Math,Promise};mobile.window=mobile;vm.createContext(mobile);
-  vm.runInContext(fs.readFileSync(path.join(root,'assets/global-rating.js'),'utf8'),mobile);vm.runInContext(mobileSource,mobile);
+  vm.runInContext(fs.readFileSync(path.join(root,'assets/global-rating.js'),'utf8'),mobile);vm.runInContext(fs.readFileSync(path.join(root,'assets/entrant-roles.js'),'utf8'),mobile);vm.runInContext(mobileSource,mobile);
   const computed=mobile.gdspMobileProfiles.global(all,{});
   assert.deepEqual(JSON.parse(JSON.stringify(computed.ratings)),expected);assert.equal(JSON.stringify(all),before);
   const hidden={[expected[0].id]:true};sandbox.testHidden=hidden;vm.runInContext('globalHidden=testHidden',sandbox);
@@ -142,6 +143,22 @@ test('profils mobiles : copies des fonctions PC contrôlées et classements iden
   const eventResult=mobile.gdspMobileProfiles.event(original);
   assert.deepEqual(JSON.parse(JSON.stringify(eventResult.ratings)),expectedEvent);
   assert.ok(eventResult.history(id).length>=6);assert.ok(computed.history(id).length>=6);
+});
+
+test('inscriptions de service : séparées des pilotes sans toucher aux données ou résultats', async () => {
+  const {sandbox}=makeBrowser();await new Promise(resolve=>setTimeout(resolve,0));await new Promise(resolve=>setImmediate(resolve));
+  vm.runInContext(`eventContext.data.ahEntrants=[{name:'Broadcast',car:'camera'},{name:'PaceCar',car:'safety'},{name:'Alice',team:'A',car:'lola'}];sessions=[];`,sandbox);
+  const before=vm.runInContext('JSON.stringify(eventContext.data)',sandbox);
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(eventDrivers().map(x=>x.name))',sandbox)),['Alice']);
+  const html=vm.runInContext('eventHome()',sandbox);assert.match(html,/Véhicules de service/);assert.match(html,/Broadcast/);assert.match(html,/PaceCar/);
+  assert.equal(vm.runInContext('JSON.stringify(eventContext.data)',sandbox),before);
+  const mobile={console,Map,Set,Date,Math,Promise};mobile.window=mobile;vm.createContext(mobile);
+  vm.runInContext(fs.readFileSync(path.join(root,'assets/entrant-roles.js'),'utf8'),mobile);vm.runInContext(fs.readFileSync(path.join(root,'assets/global-rating.js'),'utf8'),mobile);vm.runInContext(fs.readFileSync(path.join(root,'mobile/profile-engine.js'),'utf8'),mobile);
+  const ev=JSON.parse(vm.runInContext('JSON.stringify({slug:eventContext.slug,name:eventContext.name,points_config:eventContext.pointsConfig,data:eventContext.data})',sandbox));ev.data.sessions=[];
+  assert.deepEqual(JSON.parse(JSON.stringify(mobile.gdspMobileProfiles.event(ev).drivers.map(d=>d.name))),['Alice']);
+  ev.data.sessions=[{type:'RACE',date:'2026-01-01',results:[{id:'b1',name:'Broadcast',laps:1,time:10000}],laps:[],events:[]}];
+  const result=mobile.gdspMobileProfiles.event(ev);assert.equal(result.drivers.find(d=>d.name==='Broadcast').serviceInResults,'Broadcast');
+  assert.equal(ev.data.sessions[0].results.length,1,'un résultat déjà enregistré ne doit pas être modifié');
 });
 
 test('un lien événement reste prioritaire malgré une session administrateur', async () => {
@@ -1843,7 +1860,7 @@ test('Actualiser événement AH : choix, aperçu, application sélective et cons
     customCalendar:{'2026-12-10':{track:'spa'}}
   }};
   const summary={server,uuid,name:'Cup AH',briefing:'Texte AH',car:'modele_ah',formatText:'Course : 15 min',registrationUrl:server+'/championship/'+uuid,
-    entrantsAvailable:true,entrants:[{name:'Pilote B',team:'Bleu',car:'modele_ah'}],rounds:[{name:'Manche',date:'2026-12-01',track:'monza',layout:'junior',format:'Course : 15 min'},{name:'Sans date',date:'',track:'spa',layout:''}],points:{pointsScale:[13,11],polePoints:1},note:''};
+    entrantsAvailable:true,entrants:[{name:'Pilote B',team:'Bleu',car:'modele_ah'},{name:'Broadcast',car:'camera'},{name:'PaceCar',car:'safety'}],rounds:[{name:'Manche',date:'2026-12-01',track:'monza',layout:'junior',format:'Course : 15 min'},{name:'Sans date',date:'',track:'spa',layout:''}],points:{pointsScale:[13,11],polePoints:1},note:''};
   const listed=[{server,uuid:'22222222-2222-2222-2222-222222222222',name:'Autre source',progress:0},{server,uuid,name:'Cup AH',progress:0}];
   const {sandbox,getElementById,calls}=makeBrowser([remote],(url,opts)=>{
     if(url.startsWith('/api/ah-championships?'))return response({items:listed,errors:[]});
@@ -1866,6 +1883,7 @@ test('Actualiser événement AH : choix, aperçu, application sélective et cons
   await vm.runInContext('previewCurrentEventAH()',sandbox);
   assert.match(getElementById('ah-current-preview').innerHTML,/date non renseignée/);
   assert.match(getElementById('ah-current-preview').innerHTML,/Texte personnel/);
+  assert.match(getElementById('ah-current-preview').innerHTML,/1 pilote\(s\), 2 service\(s\)/);
   assert.ok(!calls.some(c=>c.url==='/api/events/cup-sync'&&c.method==='PUT'),'aucune écriture avant confirmation');
   for(const key of ['link','format','entrants','calendar','points'])getElementById('ah-sync-'+key).checked=true;
   await vm.runInContext('applyCurrentEventAH()',sandbox);
@@ -1875,6 +1893,7 @@ test('Actualiser événement AH : choix, aperçu, application sélective et cons
   assert.equal(remote.data.eventInfo.formatText,'Course : 15 min');
   assert.equal(remote.data.ahUuid,uuid);
   assert.equal(remote.data.ahEntrants[0].name,'Pilote B');
+  assert.deepEqual(remote.data.ahEntrants.map(x=>x.name),['Pilote B','Broadcast','PaceCar']);
   assert.equal(remote.data.sessions.length,1);assert.equal(remote.data.penMap['0:0:a'].timeAdd,2);
   assert.equal(remote.data.customCalendar['2026-12-01'].track,'monza');
   assert.ok(remote.data.customCalendar['2026-12-10']);assert.equal(Object.keys(remote.data.customCalendar).length,2);

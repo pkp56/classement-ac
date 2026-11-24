@@ -16,10 +16,10 @@ test('application mobile : manifeste local, portée limitée et icônes installa
   }
   const sw=fs.readFileSync(path.join(root,'mobile/sw.js'),'utf8');
   assert.match(sw,/req\.method!==\x27GET\x27/);assert.match(sw,/SHELL\.includes/);assert.doesNotMatch(sw,/['"]\/api\//);
-  assert.match(sw,/gdsp-mobile-shell-v4/);assert.match(sw,/self\.skipWaiting\(\)/);assert.match(sw,/self\.clients\.claim\(\)/);
+  assert.match(sw,/gdsp-mobile-shell-v5/);assert.match(sw,/self\.skipWaiting\(\)/);assert.match(sw,/self\.clients\.claim\(\)/);
   const html=fs.readFileSync(path.join(root,'mobile/index.html'),'utf8');
-  assert.match(html,/mobile\.js\?v=4/);assert.match(html,/mobile\.css\?v=4/);assert.match(html,/app-update-banner/);
-  assert.match(html,/results-engine\.js\?v=4/);assert.match(html,/event-views\.js\?v=4/);assert.match(html,/profile-engine\.js\?v=4/);assert.match(html,/profile-views\.js\?v=4/);assert.match(html,/global-rating\.js/);assert.match(html,/patches-v71\.js/);
+  assert.match(html,/mobile\.js\?v=5/);assert.match(html,/mobile\.css\?v=5/);assert.match(html,/app-update-banner/);
+  assert.match(html,/results-engine\.js\?v=5/);assert.match(html,/event-views\.js\?v=5/);assert.match(html,/profile-engine\.js\?v=5/);assert.match(html,/profile-views\.js\?v=5/);assert.match(html,/global-rating\.js/);assert.match(html,/patches-v71\.js/);
 });
 
 test('événements mobiles : échappement, liens locaux, pas de classement inventé',()=>{
@@ -53,6 +53,12 @@ test('direct mobile : instantané échappé sans cadre PC',()=>{
   assert.match(html,/&lt;Pilote&gt;/);assert.match(html,/1:42.500/);assert.match(html,/Leader/);assert.doesNotMatch(html,/<iframe|Absent/);
 });
 
+test('engagés mobiles : services séparés sans toucher aux données sauvegardées',()=>{
+  const ev={slug:'lola',name:'Lola',data:{ahEntrants:[{name:'Broadcast',car:'camera'},{name:'PaceCar',car:'safety'},{name:'Alice',car:'lola'}]}};
+  const before=JSON.stringify(ev),html=eventDetail(ev);
+  assert.match(html,/1 pilote engagé/);assert.match(html,/Véhicules de service/);assert.match(html,/Broadcast/);assert.match(html,/PaceCar/);assert.equal(JSON.stringify(ev),before);
+  const cars=require('../mobile/event-views').carsFor(ev);assert.deepEqual(cars.map(c=>c.id),['lola']);
+});
 test('calendrier mobile : plusieurs circuits par date et aucune date vide inventée',()=>{
   const rows=calendar({sessions:[{date:'2026-12-10T21:00:00Z',track:'spa'}],customCalendar:{'2026-12-10':{tracks:[{trackId:'spa',trackName:'Spa'}, {trackId:'monza',trackName:'Monza'}]},'2026-12-17':'vallelunga','':{track:'x'}}});
   assert.deepEqual(rows.map(x=>[x.day,x.label,x.done]),[['2026-12-10','Monza',false],['2026-12-10','Spa',true],['2026-12-17','vallelunga',false]]);

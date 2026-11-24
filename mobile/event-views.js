@@ -1,9 +1,10 @@
 'use strict';
 (function(root,factory){
-  const api=factory();
+  const roles=typeof module!=='undefined'&&module.exports?require('../assets/entrant-roles'):root.GDSPEntrantRoles;
+  const api=factory(roles);
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   if(root)root.gdspMobileEventViews=api;
-})(typeof window!=='undefined'?window:null,function(){
+})(typeof window!=='undefined'?window:null,function(roles){
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const text=value=>typeof value==='string'?value.trim():'';
   const readable=value=>String(value||'').replace(/[_-]+/g,' ').trim();
@@ -64,7 +65,7 @@
     const data=ev?.data||{},selected=Array.isArray(data.modSelection?.cars)?data.modSelection.cars:[];
     let cars=Array.isArray(data.carSheets)&&data.carSheets.length?data.carSheets:selected;
     if(!cars.length&&text(data.eventInfo?.car))cars=text(data.eventInfo.car).split(/\s*\/\s*/).filter(Boolean).map((name,index)=>({id:'event-car-'+(index+1),name}));
-    const entries=Array.isArray(data.ahEntrants)?data.ahEntrants:[];
+    const entries=roles.drivers(data.ahEntrants);
     if(!cars.length&&!entries.some(e=>text(e?.car))&&isLola(ev))cars=[{id:'lola-t290',name:'Lola T290',brand:'Lola',category:'Prototypes historiques'}];
     cars=cars.filter(c=>c&&typeof c==='object').map(c=>({...c}));
     for(const entry of entries){const id=text(entry?.car);if(id&&!cars.some(c=>c.id===id||c.name===id))cars.push({id,name:readable(id)});}

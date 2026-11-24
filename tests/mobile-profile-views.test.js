@@ -5,10 +5,10 @@ const views=require('../mobile/profile-views');
 const rating={id:'ID&1',name:'<Alice>',team:'Team',level:2,score:68.4,count:10,windowCount:10,retainedCount:9,conductReviewed:1,conductPending:1,provisional:true,sportingProvisional:false,details:{regularite:40,proprete:50,vitesse:80,resultats:90},joker:{label:'Course <A>'},window:[{label:'Course <A>',date:'2026-01-01',joker:true,axes:{proprete:null},conduct:{pending:true}}]};
 const history=[{date:'2026-01-01',track:'spa',eventName:'Coupe <A>',eventSlug:'cup',position:2,grid:4,delta:2,collisions:1,best:90000,weekendBest:88000,weekendSession:'Q',consistency:1500}];
 test('global : cartes accessibles, recherche, statut provisoire et sécurité',()=>{
- const html=views.globalList({ratings:[rating]});assert.match(html,/&lt;Alice&gt;/);assert.doesNotMatch(html,/<Alice>/);assert.match(html,/#global-driver=ID%261/);assert.match(html,/Provisoire \/ partiel/);assert.match(html,/data-driver-search/);assert.match(html,/5 courses/);assert.doesNotMatch(html,/<iframe/);
+ const html=views.globalList({ratings:[rating]});assert.match(html,/\/assets\/lvl2-confirme\.webp\?v=27/);assert.match(html,/alt="Niveau 2 · Confirmé"/);assert.match(html,/&lt;Alice&gt;/);assert.doesNotMatch(html,/<Alice>/);assert.match(html,/#global-driver=ID%261/);assert.match(html,/Provisoire \/ partiel/);assert.match(html,/data-driver-search/);assert.match(html,/5 courses/);assert.doesNotMatch(html,/<iframe/);
 });
 test('fiche globale : audit, joker, propreté non qualifiée et historique',()=>{
- const html=views.profile(rating,rating,history,{global:true});assert.match(html,/Course &lt;A&gt;/);assert.match(html,/Joker sportif/);assert.match(html,/Décision à qualifier/);assert.match(html,/indisponible/);assert.match(html,/1:28.000/);assert.match(html,/\+1.50 s/);assert.match(html,/href="#event=cup"/);assert.doesNotMatch(html,/<iframe/);
+ const html=views.profile(rating,rating,history,{global:true});assert.match(html,/\/assets\/lvl2-confirme\.png\?v=26/);assert.match(html,/Course &lt;A&gt;/);assert.match(html,/Joker sportif/);assert.match(html,/Décision à qualifier/);assert.match(html,/indisponible/);assert.match(html,/1:28.000/);assert.match(html,/\+1.50 s/);assert.match(html,/href="#event=cup"/);assert.doesNotMatch(html,/<iframe/);
 });
 test('visuel pilote : correspondance unique et chemins locaux contrôlés',()=>{
  const d={id:'id1',name:'Alice',team:'A',model:'alfa',skin:'racing'};

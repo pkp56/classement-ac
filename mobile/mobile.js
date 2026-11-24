@@ -2,6 +2,7 @@
 (function(){
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const text=value=>typeof value==='string'?value.trim():'';
+  const entrantRoles=typeof module!=='undefined'&&module.exports?require('../assets/entrant-roles'):window.GDSPEntrantRoles;
   const validSlug=value=>typeof value==='string'&&/^[a-z0-9][a-z0-9-]{1,60}$/.test(value);
   const readable=value=>text(value).replace(/[_-]+/g,' ').trim();
   const kindLabel=kind=>({championship:'Championnat',cup:'Cup',endurance:'Endurance',open:'Open',fiesta:'Fiesta',trackday:'Trackday',archive:'Archive'})[kind]||'Événement';
@@ -60,7 +61,8 @@
   }
   function eventDetail(ev){
     const data=ev.data&&typeof ev.data==='object'?ev.data:{},info=data.eventInfo&&typeof data.eventInfo==='object'?data.eventInfo:{};
-    const entries=Array.isArray(data.ahEntrants)?data.ahEntrants.filter(x=>x&&text(x.name)).slice(0,500):[];
+    const allEntries=Array.isArray(data.ahEntrants)?data.ahEntrants.filter(x=>x&&text(x.name)).slice(0,500):[];
+    const entries=entrantRoles.drivers(allEntries),services=entrantRoles.services(allEntries);
     const rounds=calendar(data),slug=encodeURIComponent(ev.slug);
     const defaultBriefing=['lola-t290-2026','lola-t290-gdsp-championnat-2026'].includes(ev.slug)
       ?"Six manches historiques, l’esprit Gentleman Driver et tout le suivi du championnat réunis au même endroit : calendrier, classements, résultats et fiches pilotes."
@@ -69,6 +71,7 @@
       +`<section class="panel"><div class="eyebrow">L'événement</div><h2>Briefing & informations</h2><p>${rich(text(info.briefing)||defaultBriefing)}</p>${text(info.car)?`<p><b>Voiture :</b> ${esc(info.car)}</p>`:''}${text(info.schedule)?`<p><b>Rendez-vous :</b> ${rich(info.schedule)}</p>`:''}${text(info.formatText)?`<p><b>Format :</b> ${rich(info.formatText)}</p>`:''}</section>`
       +`<section class="panel"><div class="eyebrow">Sur la piste</div><h2>Calendrier</h2>${rounds.length?rounds.map(r=>`<div class="row"><div><b>${esc(r.label)}</b><small>${esc(dateLabel(r.day))}</small></div>${r.done?`<a class="pill" href="#detail=${slug}">Voir les résultats →</a>`:'<span class="pill">À venir</span>'}</div>`).join(''):'<p>Le calendrier n’est pas encore renseigné.</p>'}</section>`
       +(entries.length?`<section class="panel"><div class="eyebrow">Inscriptions AssettoHosting</div><h2>${entries.length} pilote${entries.length>1?'s':''} engagé${entries.length>1?'s':''}</h2><p class="muted">Liste distincte des résultats et du classement.</p>${entries.map(d=>`<div class="row"><div><b>${esc(d.name)}</b><small>${esc(text(d.team)||'Équipe non renseignée')}</small></div><span class="muted">${esc(readable(d.car))}</span></div>`).join('')}</section>`:'')
+      +(services.length?`<section class="panel"><h2>Véhicules de service</h2><p class="muted">Ces inscriptions sont conservées mais ne sont pas comptées comme pilotes : ${services.map(e=>esc(e.name)+' ('+esc(entrantRoles.serviceRole(e))+')').join(', ')}. Les résultats et classements restent inchangés.</p></section>`:'')
       +`<section class="panel"><div class="eyebrow">En détail</div><h2>Plus d’informations</h2><a class="more-link" href="#detail=${slug}">Classements & résultats →</a><a class="more-link" href="#circuit=${slug}">Fiche circuit →</a></section>`;
   }
   function liveView(data){
