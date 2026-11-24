@@ -16,9 +16,9 @@ test('application mobile : manifeste local, portée limitée et icônes installa
   }
   const sw=fs.readFileSync(path.join(root,'mobile/sw.js'),'utf8');
   assert.match(sw,/req\.method!==\x27GET\x27/);assert.match(sw,/SHELL\.includes/);assert.doesNotMatch(sw,/['"]\/api\//);
-  assert.match(sw,/gdsp-mobile-shell-v11/);assert.match(sw,/self\.skipWaiting\(\)/);assert.match(sw,/self\.clients\.claim\(\)/);
+  assert.match(sw,/gdsp-mobile-shell-v12/);assert.match(sw,/self\.skipWaiting\(\)/);assert.match(sw,/self\.clients\.claim\(\)/);
   const html=fs.readFileSync(path.join(root,'mobile/index.html'),'utf8');
-  assert.match(html,/mobile\.js\?v=7/);assert.match(html,/mobile\.css\?v=6/);assert.match(html,/app-update-banner/);
+  assert.match(html,/mobile\.js\?v=8/);assert.match(html,/mobile\.css\?v=7/);assert.match(html,/app-update-banner/);
   assert.match(html,/results-engine\.js\?v=5/);assert.match(html,/event-views\.js\?v=5/);assert.match(html,/profile-engine\.js\?v=7/);assert.match(html,/profile-views\.js\?v=10/);assert.match(html,/global-rating\.js/);assert.match(html,/trueskill-rating\.js\?v=1/);assert.match(html,/trueskill-gdsp\.js\?v=1/);assert.match(html,/patches-v71\.js/);
 });
 
@@ -30,8 +30,12 @@ test('événements mobiles : échappement, liens locaux, pas de classement inven
   const html=eventDetail({slug:'cup',name:'Cup',kind:'cup',data:{eventInfo:{briefing:'<script>alert(1)</script> [Lien](https://example.com) [Piège](javascript:alert(1))'},ahEntrants:[{name:'A & B',team:'<b>x</b>',car:'alfa_spider'}]}});
   assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>/);assert.match(html,/A &amp; B/);
   assert.match(html,/href="https:\/\/example\.com"/);assert.doesNotMatch(html,/href="javascript:/);
-  assert.match(html,/Liste distincte des résultats et du classement/);assert.match(html,/href="#detail=cup"/);
-  assert.match(html,/href="#car=cup"/);assert.match(html,/href="#circuit=cup"/);
+  assert.match(html,/Liste distincte des résultats et du classement/);
+  // Les boutons d'accès aux sections vivent dans la barre .event-subnav (index.html), pas sous le titre
+  assert.doesNotMatch(html,/href="#detail=cup"|href="#car=cup"|href="#circuit=cup"|href="#pilots=cup"/);
+  assert.match(html,/alfa spider/); // repli sur le nom de voiture sans données de skin
+  const skins=eventDetail({slug:'cup',name:'Cup',kind:'cup',data:{ahEntrantsServer:'http://example',ahEntrants:[{name:'A & B',team:'T',car:'alfa_spider',skin:'Livery_1'}]}});
+  assert.match(skins,/ah-skin-preview\?/);assert.match(skins,/Livery_1/);
   assert.doesNotMatch(html,/\bpoints\b|<table/i);
 });
 
