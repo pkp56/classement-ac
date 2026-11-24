@@ -138,7 +138,7 @@
         if(globalDriver!==null){
           if(!globalDriver||globalDriver.length>500)throw new Error('Pilote invalide.');
           const rating=computed.ratings.find(r=>r.id===globalDriver);if(!rating)throw new Error('Pilote introuvable ou pas assez de courses pour figurer au classement global.');
-          html=views.profile(rating,rating,computed.history(globalDriver),{global:true});
+          html=views.profile(rating,rating,computed.history(globalDriver),{global:true,trueskill:computed.trueskill});
         }else html=views.globalList(computed);
       }else if(driverRoute||view&&view[1]==='pilots'){
         const slug=driverRoute?driverSlug:view[2];if(!validSlug(slug)||driverRoute&&(!driverId||driverId.length>500))throw new Error('Pilote ou événement invalide.');

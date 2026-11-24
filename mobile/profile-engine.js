@@ -409,7 +409,20 @@ function historyFromGroups(groups,id,sortedSessions){
   });
  });return history;
 }
+// Indice TrueSkill expérimental (voir GDSP-GLOBAL-TRUESKILL.md). Parallèle au Global v2.
+const TRUESKILL_BETA=5.5,TRUESKILL_MIN_RACES=GLOBAL_MIN_RACES;
+function trueSkillExperiment(){
+  if(typeof GDSPTrueSkill==='undefined'||typeof GDSPTrueSkillAdapter==='undefined')return null;
+  try{
+    const courses=GDSPTrueSkillAdapter.buildCourses(events,{groupSessionsByDate,sortSessionForPerf,eventGlobalWeight});
+    return GDSPTrueSkill.replay(courses,{beta:TRUESKILL_BETA,minRaces:TRUESKILL_MIN_RACES,hidden:globalHidden});
+  }catch(e){console.error('Indice TrueSkill expérimental :',e);return null;}
+}
+// Helpers internes réutilisés par l'application, les tests de parité et
+// tools/trueskill-benchmark.js. Ne pas diverger du PC.
+const internals={groupSessionsByDate,sortSessionForPerf,eventGlobalWeight,raceConsistencyMs,scoreResultsV45};
 root.gdspMobileProfiles={
+ internals,
  event(ev){
   sessions=cloneSessions(ev.data,true);penMap=ev.data?.penMap||{};eventConfig=ev.points_config||{};
   const drivers=eventDrivers(ev),ratings=performanceRatings(),groups=groupSessionsByDate(sessions).map((rd,i)=>({...rd,roundIndex:i,penMap,eventName:ev.name,eventSlug:ev.slug}));
@@ -420,7 +433,7 @@ root.gdspMobileProfiles={
   const ratings=globalPerformanceRatings();const groups=[];
   for(const ev of events){if(!(eventGlobalWeight(ev)>0))continue;groupSessionsByDate(ev.data.sessions).forEach((rd,i)=>groups.push({...rd,roundIndex:i,penMap:ev.data.penMap||{},eventName:ev.name,eventSlug:ev.slug}));}
   groups.sort((a,b)=>a.date.localeCompare(b.date));
-  return {ratings,history:id=>historyFromGroups(groups,id,false)};
+  return {ratings,history:id=>historyFromGroups(groups,id,false),trueskill:trueSkillExperiment()};
  }
 };
 })(typeof window!=='undefined'?window:globalThis);
