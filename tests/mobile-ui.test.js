@@ -8,14 +8,18 @@ const source=fs.readFileSync(path.join(__dirname,'../mobile/mobile.js'),'utf8');
 function browser(fetch){
   const listeners={},content={innerHTML:'',querySelector(){return null;},addEventListener(name,fn){listeners['content:'+name]=fn;}},output={innerHTML:'',textContent:''};
   const nav=['home','events','live','more'].map(value=>({dataset:{nav:value},attrs:{},setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]}}));
-  const sandbox={document:{getElementById:id=>id==='content'?content:id==='update-output'?output:null,querySelectorAll:()=>nav},location:{hash:'#home',origin:'https://gdsp.example'},window:{addEventListener:(k,fn)=>{listeners[k]=fn},confirm:()=>true},navigator:{onLine:true,serviceWorker:{register:()=>Promise.resolve()}},fetch,URL,URLSearchParams,Date,Intl,Promise,Set,Map,setTimeout:()=>1,clearTimeout:()=>{}};
+  const subnavAnchors=['detail','pilots','car','circuit'].map(s=>({dataset:{sub:s},href:'',attrs:{},setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]}}));
+  const bodyClasses=new Set();
+  const body={classList:{add(c){bodyClasses.add(c)},remove(c){bodyClasses.delete(c)},toggle(c,force){if(force)bodyClasses.add(c);else bodyClasses.delete(c)},contains(c){return bodyClasses.has(c)}}};
+  const subnav={hidden:true,querySelectorAll:sel=>sel==='a[data-sub]'?subnavAnchors:[]};
+  const sandbox={document:{getElementById:id=>id==='content'?content:id==='update-output'?output:id==='event-subnav'?subnav:null,body,querySelectorAll:()=>nav},location:{hash:'#home',origin:'https://gdsp.example'},window:{addEventListener:(k,fn)=>{listeners[k]=fn},confirm:()=>true},navigator:{onLine:true,serviceWorker:{register:()=>Promise.resolve()}},fetch,URL,URLSearchParams,Date,Intl,Promise,Set,Map,setTimeout:()=>1,clearTimeout:()=>{}};
   sandbox.AbortController=AbortController;
   sandbox.window.GDSPEntrantRoles=require('../assets/entrant-roles');
   sandbox.window.gdspMobileProfileViews=require('../mobile/profile-views');
   sandbox.window.gdspMobileEventViews=require('../mobile/event-views');
   sandbox.window.gdspMobileResults={calculate:()=>({standings:[],rounds:[]})};
   vm.createContext(sandbox);vm.runInContext(source,sandbox);
-  return {sandbox,content,output,listeners,nav};
+  return {sandbox,content,output,listeners,nav,subnav,subnavAnchors,body};
 }
 const reply=(value,status=200)=>({ok:status>=200&&status<300,status,json:async()=>value});
 const tick=()=>new Promise(r=>setImmediate(r));
@@ -51,9 +55,21 @@ test('mobile : archives visibles et vues événement sans cadre intégré',async
   assert.match(b.content.innerHTML,/Fiche voiture/);assert.match(b.content.innerHTML,/Alfa/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
   b.sandbox.location.hash='#circuit=cup';await b.listeners.hashchange();
   assert.match(b.content.innerHTML,/Fiches circuit/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
+  // Barre d'événement : visible avec le bon repère sur les pages d'événement
+  assert.equal(b.subnav.hidden,false);
+  assert.deepEqual(b.subnavAnchors.map(a=>a.href),['#detail=cup','#pilots=cup','#car=cup','#circuit=cup']);
+  assert.equal(b.subnavAnchors[3].attrs['aria-current'],'page');assert.equal(b.body.classList.contains('has-event-subnav'),true);
+  b.sandbox.location.hash='#detail=cup';await b.listeners.hashchange();
+  assert.equal(b.subnavAnchors[0].attrs['aria-current'],'page');assert.equal(b.subnavAnchors[3].attrs['aria-current'],undefined);
+  b.sandbox.location.hash='#circuit=cup';await b.listeners.hashchange();
   b.sandbox.location.hash='#service=admin';await b.listeners.hashchange();
+  assert.equal(b.subnav.hidden,true);assert.equal(b.body.classList.contains('has-event-subnav'),false);
   assert.match(b.content.innerHTML,/href="\/admin" target="_blank"/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
   assert.equal(b.nav[3].attrs['aria-current'],'page');
+// La mise à jour du PC est affichée dans Administration, pas dans Plus
+  assert.match(b.content.innerHTML,/Mise à jour du PC serveur/);
+  b.sandbox.location.hash='#more';await b.listeners.hashchange();
+  assert.doesNotMatch(b.content.innerHTML,/Mise à jour du PC serveur/);assert.match(b.content.innerHTML,/Administration →/);
   b.sandbox.location.hash='#service=live';await b.listeners.hashchange();
   assert.match(b.content.innerHTML,/Live timing/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
   assert.equal(b.nav[2].attrs['aria-current'],'page');
@@ -98,7 +114,7 @@ test('mobile : confirmation explicite, clé jamais conservée dans la page aprè
     if(url==='/api/admin/mobile-update/apply')return reply({queued:true});
     throw Error(url);
   }};
-  b.sandbox.location.hash='#more';await b.listeners.hashchange();assert.match(b.content.innerHTML,/Vérifier les mises à jour/);
+  b.sandbox.location.hash='#service=admin';await b.listeners.hashchange();assert.match(b.content.innerHTML,/Vérifier les mises à jour/);
   const button={disabled:false,closest(selector){return selector==='[data-update-check]'?this:null}};
   await b.listeners['content:click']({target:button});assert.match(b.output.innerHTML,/Installer cette version/);
   assert.doesNotMatch(b.output.innerHTML,new RegExp(key));

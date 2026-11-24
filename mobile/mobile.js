@@ -123,12 +123,32 @@
     return `<p>Seule une version publiée sur la branche principale GDSP peut être installée. Le PC vérifie le dépôt et crée une sauvegarde avant de redémarrer.</p>${current}<button class="btn secondary" type="button" data-update-check ${state.pending?'disabled':''}>Vérifier les mises à jour</button>${state.pending?'<p class="muted">Une demande est déjà en attente. Recharge cette page pour suivre son état.</p>':''}<div id="update-output" role="status"></div>`;
   }
   const fail=message=>`<div class="error"><b>Impossible de charger les données.</b><p>${esc(message||'Vérifie ta connexion puis réessaie.')}</p><button class="btn secondary" type="button" data-retry>Réessayer</button></div>`;
+  // Barre des sections d'un événement (mobile uniquement).
+  const subnav=document.getElementById&&document.getElementById('event-subnav');
+  const hasClassList=document.body&&document.body.classList;
+  function updateSubnav(hash){
+    if(!subnav)return;
+    const sec=hash.match(/^(detail|pilots|car|circuit)=([a-z0-9-]+)$/);
+    const hub=hash.match(/^event=([a-z0-9-]+)$/);
+    const driver=new URLSearchParams(hash);const driverSlug=driver.get('driver');
+    const slug=(sec&&sec[2])||(hub&&hub[1])||driverSlug;
+    const ok=slug&&validSlug(slug);
+    subnav.hidden=!ok;
+    if(hasClassList)document.body.classList.toggle('has-event-subnav',!!ok);
+    if(!ok)return;
+    const current=sec?sec[1]:driverSlug?'pilots':null;
+    subnav.querySelectorAll('a[data-sub]').forEach(a=>{
+      a.href='#'+a.dataset.sub+'='+slug;
+      if(a.dataset.sub===current)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');
+    });
+  }
   async function show(background=false){
     if(liveTimer)clearTimeout(liveTimer);liveTimer=null;
     const version=++serial,hash=location.hash.slice(1)||'home',match=hash.match(/^event=([a-z0-9-]+)$/),view=hash.match(/^(detail|car|circuit|pilots)=([a-z0-9-]+)$/)||hash.match(/^service=(admin|live|telemetry)$/);
     const params=new URLSearchParams(hash),driverSlug=params.get('driver'),driverId=params.get('id'),globalDriver=params.get('global-driver');
     const driverRoute=driverSlug!==null,globalRoute=hash==='global'||globalDriver!==null;
     const tab=driverRoute||match||view&&['detail','car','circuit','pilots'].includes(view[1])?'events':globalRoute?'global':view&&view[1]==='live'?'live':view?'more':['events','live','more'].includes(hash)?hash:'home';
+    updateSubnav(hash);
     document.querySelectorAll('[data-nav]').forEach(el=>{if(el.dataset.nav===tab)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
     if(background!==true)content.innerHTML='<div class="loading">Chargement…</div>';
     try{
@@ -166,6 +186,9 @@
           }
           html=views.circuitView(ev,base)+(unavailable?'<p class="error">Fiches historiques indisponibles : réessaie avec une connexion.</p>':'');
         }
+      }else if(view&&view[1]==='admin'){
+        const update=await updatePanel();
+        html=`<a class="back" href="#more">← Retour à Plus</a><div class="eyebrow">Administration sécurisée</div><h1 class="page-title">Administration</h1><section class="panel"><div class="eyebrow">Serveur</div><h2>Mise à jour du PC serveur</h2>${update}</section><section class="panel"><h2>Outils complets</h2><p>Les outils complets d’administration ne sont pas encore adaptés au mobile. Ils s’ouvrent séparément, sans cadre intégré.</p><a class="btn" href="/admin" target="_blank" rel="noopener noreferrer">Ouvrir l’administration complète ↗</a></section>`;
       }else if(view&&view[1]==='live'){
         html=liveView(await request('/api/live/snapshot'));
       }else if(view&&view[1]==='telemetry'){
@@ -173,7 +196,7 @@
         if(!session.authenticated)html='<a class="back" href="#more">← Retour à Plus</a><h1 class="page-title">Télémétrie</h1><section class="panel"><p>Connecte-toi avec ton compte administrateur dans Plus pour consulter la télémétrie.</p><a class="btn" href="#more">Se connecter →</a></section>';
         else html=telemetryView(await adminRequest('/api/telemetry/summary'));
       }else if(view){
-        html='<a class="back" href="#more">← Retour à Plus</a><h1 class="page-title">Administration</h1><section class="panel"><p>Les outils complets d’administration ne sont pas encore adaptés au mobile. Ils s’ouvrent séparément, sans cadre intégré.</p><a class="btn" href="/admin" target="_blank" rel="noopener noreferrer">Ouvrir l’administration complète ↗</a></section>';
+        html='<a class="back" href="#more">← Retour à Plus</a><h1 class="page-title">Administration</h1><section class="panel"><p>Outil indisponible.</p></section>';
       }else if(match){
         const slug=match[1];if(!validSlug(slug))throw new Error('Événement invalide.');
         const ev=await request('/api/events/'+encodeURIComponent(slug));
@@ -191,8 +214,7 @@
         const state=data?.status?.status||'indisponible',server=text(data?.server?.name)||'Serveur GDSP';
         html=`<div class="eyebrow">En piste</div><h1 class="page-title">Le direct</h1><section class="panel"><span class="pill">${esc(data.enabled?'État : '+state:'Direct indisponible')}</span><h2>${esc(server)}</h2><p>Retrouve les temps et les positions dans le direct complet.</p><a class="btn" href="#service=live">Ouvrir le live timing →</a></section>`;
       }else{
-        const update=await updatePanel();
-        html=`<div class="eyebrow">Votre espace GDSP</div><h1 class="page-title">Plus</h1><section class="panel"><h2>Accès rapides</h2><a class="more-link" href="/">Site complet ↗</a><a class="more-link" href="#service=admin">Administration →</a><a class="more-link" href="#service=telemetry">Télémétrie →</a></section><section class="panel"><div class="eyebrow">Administration sécurisée</div><h2>Mise à jour du PC serveur</h2>${update}</section><section class="panel"><h2>Installer l’application</h2><p>Sur Android, utilise « Installer l’application » dans le menu du navigateur. Sur iPhone, touche Partager puis « Sur l’écran d’accueil ».</p>${installPrompt?'<button class="btn" type="button" data-install>Installer GDSP</button>':''}<p class="muted">Une connexion est nécessaire pour les données et le direct ; aucun résultat n’est conservé hors ligne.</p></section>`;
+        html=`<div class="eyebrow">Votre espace GDSP</div><h1 class="page-title">Plus</h1><section class="panel"><h2>Accès rapides</h2><a class="more-link" href="/">Site complet ↗</a><a class="more-link" href="#service=admin">Administration →</a><a class="more-link" href="#service=telemetry">Télémétrie →</a></section><section class="panel"><h2>Installer l’application</h2><p>Sur Android, utilise « Installer l’application » dans le menu du navigateur. Sur iPhone, touche Partager puis « Sur l’écran d’accueil ».</p>${installPrompt?'<button class="btn" type="button" data-install>Installer GDSP</button>':''}<p class="muted">Une connexion est nécessaire pour les données et le direct ; aucun résultat n’est conservé hors ligne.</p></section>`;
       }
       if(version===serial)content.innerHTML=html;
     }catch(e){if(version===serial)content.innerHTML=fail(navigator.onLine===false?'Tu es hors ligne. Les données de course nécessitent une connexion.':e.message);}
