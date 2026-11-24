@@ -3375,6 +3375,69 @@ async function resetChampionship(){
 }
 function resetRound(n){if(!confirm(`Effacer la manche ${n+1} ?`))return;sessions=sessions.filter(s=>{const r=rounds().find(x=>x.sessions.includes(s));return !r||r.number!==n+1});saveState();render()}
 function exportData(){const blob=new Blob([JSON.stringify(sessions,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(currentSlug||'gdsp')+'_export.json';a.click()}
+const normalizePilotName=value=>String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr').replace(/[^a-z0-9]+/g,' ').trim();
+const entrantDeletionId=name=>'ah-entrant:'+encodeURIComponent(normalizePilotName(name));
+function findDeletionCandidate(id){
+  const sessionDriver=allDrivers().find(d=>d.id===id);if(sessionDriver)return sessionDriver;
+  if(!String(id||'').startsWith('ah-entrant:'))return null;
+  const entrant=(eventContext?.data?.ahEntrants||[]).find(e=>e&&String(e.name||'').trim()&&entrantDeletionId(e.name)===id);
+  return entrant?{id,name:String(entrant.name).trim(),team:String(entrant.team||'').trim(),model:String(entrant.car||'').trim(),skin:String(entrant.skin||'').trim(),entrantOnly:true}:null;
+}
+function entrantOnlyDeletionCandidates(){
+  const sessionNames=new Set(allDrivers().map(d=>normalizePilotName(d.name))),seen=new Set();
+  return (eventContext?.data?.ahEntrants||[]).reduce((out,e)=>{
+    const name=String(e?.name||'').trim(),key=normalizePilotName(name);
+    if(!key||sessionNames.has(key)||seen.has(key))return out;seen.add(key);
+    out.push({id:entrantDeletionId(name),name,team:String(e.team||'').trim(),model:String(e.car||'').trim(),skin:String(e.skin||'').trim(),entrantOnly:true});return out;
+  },[]);
+}
+function driverDeletionSummary(id){
+  const driver=findDeletionCandidate(id);if(!driver)return null;
+  const driverName=normalizePilotName(driver.name),data=eventContext?.data||{};
+  const resultRows=sessions.reduce((n,s)=>n+((s.results||[]).filter(r=>r&&r.id===id).length),0);
+  const lapRows=sessions.reduce((n,s)=>n+((s.laps||[]).filter(l=>l&&l.id===id).length),0);
+  const adjustmentRows=Object.entries(penMap||{}).filter(([key,value])=>key.endsWith(':'+id)||key.startsWith('champ:'+id+':')||value?.driverId===id).length;
+  const entrants=(Array.isArray(data.ahEntrants)?data.ahEntrants:[]).filter(e=>normalizePilotName(e?.name)===driverName).length;
+  const photo=data.driverPhotos&&Object.prototype.hasOwnProperty.call(data.driverPhotos,id)?1:0;
+  return {driver,resultRows,lapRows,adjustmentRows,entrants,photo};
+}
+async function deleteDriverFromEvent(id){
+  if(!adminAuth){alert('Connexion administrateur requise.');return}
+  const summary=driverDeletionSummary(id);if(!summary){alert('Pilote introuvable dans cet événement.');return}
+  const {driver}=summary,eventName=eventContext?.name||'cet événement';
+  const counts=`${summary.resultRows} ligne(s) de résultats, ${summary.lapRows} tour(s) chronométré(s), ${summary.adjustmentRows} pénalité(s) / ajustement(s), ${summary.entrants} inscription(s), ${summary.photo} miniature(s)`;
+  const typed=prompt(`Supprimer définitivement « ${driver.name} » de « ${eventName} » ?\n\nSeront retirés : ${counts}.\nLes journaux d'incidents bruts seront conservés comme éléments pour les autres pilotes.\n\nUne sauvegarde sera téléchargée avant la suppression. Tape le nom exact du pilote pour confirmer.`);
+  if(typed===null)return;
+  if(normalizePilotName(typed)!==normalizePilotName(driver.name)){alert('Nom différent : aucune suppression effectuée.');return}
+  if(!confirm('Dernière confirmation : cette action modifiera le classement de l’événement. Continuer ?'))return;
+  exportEventBackup();
+  const driverName=normalizePilotName(driver.name),data=eventContext?.data||{};
+  for(const session of sessions){
+    if(Array.isArray(session.results))session.results=session.results.filter(r=>!r||r.id!==id);
+    if(Array.isArray(session.laps))session.laps=session.laps.filter(l=>!l||l.id!==id);
+  }
+  for(const key of Object.keys(penMap||{}))if(key.endsWith(':'+id)||key.startsWith('champ:'+id+':')||penMap[key]?.driverId===id)delete penMap[key];
+  const nextManual={...(manualDrivers||{})};delete nextManual[id];manualDrivers=Object.keys(nextManual).length?nextManual:null;
+  if(eventContext){
+    const nextData={...data};
+    if(Array.isArray(nextData.ahEntrants))nextData.ahEntrants=nextData.ahEntrants.filter(e=>normalizePilotName(e?.name)!==driverName);
+    if(nextData.driverPhotos&&typeof nextData.driverPhotos==='object'){
+      const nextPhotos={...nextData.driverPhotos};delete nextPhotos[id];if(Object.keys(nextPhotos).length)nextData.driverPhotos=nextPhotos;else delete nextData.driverPhotos;
+    }
+    nextData.sessions=sessions;nextData.penMap=penMap;nextData.manualDrivers=manualDrivers;nextData.customCalendar=customCalendar;
+    eventContext={...eventContext,data:nextData};
+    const cached=events.find(e=>e.slug===currentSlug);if(cached)cached.data=Object.assign({},cached.data||{},nextData);
+  }
+  try{
+    saveState({remote:false});
+    if(manualDrivers)localStorage.setItem('gdsp_drivers',JSON.stringify(manualDrivers));else localStorage.removeItem('gdsp_drivers');
+    await saveRemote();
+    alert('Pilote supprimé de l’événement. La sauvegarde préalable a été téléchargée.');
+  }catch(err){
+    alert('Pilote supprimé localement, mais la sauvegarde serveur a échoué : '+(err?.message||err)+'. Réessaie « Enregistrer sur le serveur ».');
+  }
+  driverId='';compareA=compareA===id?'':compareA;compareB=compareB===id?'':compareB;render();
+}
 function editDriver(id){const d=allDrivers().find(x=>x.id===id);if(!d)return;const name=prompt('Nom du pilote :',d.name);if(name===null)return;const team=prompt('Équipe :',d.team||'');if(team===null)return;manualDrivers=manualDrivers||{};manualDrivers[id]={name,team:team||''};sessions.forEach(s=>s.results.forEach(r=>{if(r.id===id){r.name=name;r.team=team||''}}));saveState();render()}
 // Télémétrie & BoP : application séparée (schéma `telemetry`, aucune clé
 // étrangère vers le championnat). Cette page ne fait que renvoyer vers elle :
@@ -4929,12 +4992,13 @@ async function updateDriverPhoto(id,input){
 }
 function adminRoster(teams){
   const drivers=allDrivers().sort((a,b)=>a.name.localeCompare(b.name,'fr'));
-  const groups=[...new Set(drivers.map(d=>d.team).filter(Boolean))];
-  return `<h2>${teams?'Équipes':'Pilotes'}</h2><p class="note">${teams?'Choisis une équipe existante ou saisis un nouveau nom. Un champ vide correspond à un pilote indépendant.':'La miniature voiture est propre au pilote et à cet événement.'}</p><p id="event-poster-status" role="status"></p>`
-    +(drivers.length?'':'<p>Aucun pilote : importe d’abord une session.</p>')
+  const groups=[...new Set(drivers.map(d=>d.team).filter(Boolean))],entrantOnly=entrantOnlyDeletionCandidates();
+  return `<h2>${teams?'Équipes':'Pilotes'}</h2><p class="note">${teams?'Choisis une équipe existante ou saisis un nouveau nom. Un champ vide correspond à un pilote indépendant.':'La miniature voiture est propre au pilote et à cet événement. Supprimer retire le pilote des inscrits et des résultats de cet événement.'}</p><p id="event-poster-status" role="status"></p>`
+    +(drivers.length||(!teams&&entrantOnly.length)?'':'<p>Aucun pilote : importe d’abord une session.</p>')
     +(teams?`<datalist id="adm-team-options">${groups.map(t=>`<option value="${esc(t)}"></option>`).join('')}</datalist>`:'')
     +drivers.map(d=>`<div class="adm-driver" data-id="${esc(d.id)}"><b>${esc(d.name)}</b>`+(teams?`<input aria-label="Équipe de ${esc(d.name)}" class="admin-input" list="adm-team-options" maxlength="120" value="${esc(d.team)}"><button class="btn small" onclick="saveDriverTeam(this)">Enregistrer</button>`:
-    `${car(d.name,d.id)} <span>${esc(d.team||'Pilote indépendant')}</span><button class="btn secondary small" onclick="editDriver(this.parentElement.dataset.id)">Modifier</button>${currentSlug?`<label>Miniature <input type="file" accept="image/jpeg,image/png,image/webp" onchange="updateDriverPhoto(this.closest('[data-id]').dataset.id,this)"></label>${driverPhoto(d.id)?'<button class="btn secondary small" onclick="updateDriverPhoto(this.parentElement.dataset.id,null)">Rétablir</button>':''}`:''}`)+'</div>').join('');
+    `${car(d.name,d.id)} <span>${esc(d.team||'Pilote indépendant')}</span><button class="btn secondary small" onclick="editDriver(this.parentElement.dataset.id)">Modifier</button><button class="btn secondary small" style="border-color:var(--red);color:var(--red)" onclick="deleteDriverFromEvent(this.parentElement.dataset.id)">Supprimer</button>${currentSlug?`<label>Miniature <input type="file" accept="image/jpeg,image/png,image/webp" onchange="updateDriverPhoto(this.closest('[data-id]').dataset.id,this)"></label>${driverPhoto(d.id)?'<button class="btn secondary small" onclick="updateDriverPhoto(this.parentElement.dataset.id,null)">Rétablir</button>':''}`:''}`)+'</div>').join('')
+    +((!teams&&entrantOnly.length)?`<div class="adm-subpanel"><h3 style="margin-top:16px">Inscrits sans résultat</h3><p class="note">Ces inscriptions n’ont aucune ligne de résultat. La suppression retire l’inscription ; les éventuels résultats d’autres événements ne sont pas touchés.</p>${entrantOnly.map(d=>`<div class="adm-driver" data-id="${esc(d.id)}"><b>${esc(d.name)}</b><span class="muted">${esc(d.team||'Indépendant')} · ${esc(d.model||'voiture non renseignée')}</span><button class="btn secondary small" style="border-color:var(--red);color:var(--red)" onclick="deleteDriverFromEvent(this.parentElement.dataset.id)">Supprimer</button></div>`).join('')}</div>`:'');
 }
 async function saveDriverTeam(button){
   if(!adminAuth)return;
