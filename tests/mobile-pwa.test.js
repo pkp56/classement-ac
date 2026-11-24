@@ -16,10 +16,10 @@ test('application mobile : manifeste local, portée limitée et icônes installa
   }
   const sw=fs.readFileSync(path.join(root,'mobile/sw.js'),'utf8');
   assert.match(sw,/req\.method!==\x27GET\x27/);assert.match(sw,/SHELL\.includes/);assert.doesNotMatch(sw,/['"]\/api\//);
-  assert.match(sw,/gdsp-mobile-shell-v3/);assert.match(sw,/self\.skipWaiting\(\)/);assert.match(sw,/self\.clients\.claim\(\)/);
+  assert.match(sw,/gdsp-mobile-shell-v4/);assert.match(sw,/self\.skipWaiting\(\)/);assert.match(sw,/self\.clients\.claim\(\)/);
   const html=fs.readFileSync(path.join(root,'mobile/index.html'),'utf8');
-  assert.match(html,/mobile\.js\?v=3/);assert.match(html,/mobile\.css\?v=3/);assert.match(html,/app-update-banner/);
-  assert.match(html,/results-engine\.js\?v=3/);assert.match(html,/event-views\.js\?v=3/);assert.match(html,/patches-v71\.js/);
+  assert.match(html,/mobile\.js\?v=4/);assert.match(html,/mobile\.css\?v=4/);assert.match(html,/app-update-banner/);
+  assert.match(html,/results-engine\.js\?v=4/);assert.match(html,/event-views\.js\?v=4/);assert.match(html,/profile-engine\.js\?v=4/);assert.match(html,/profile-views\.js\?v=4/);assert.match(html,/global-rating\.js/);assert.match(html,/patches-v71\.js/);
 });
 
 test('événements mobiles : échappement, liens locaux, pas de classement inventé',()=>{

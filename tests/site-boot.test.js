@@ -111,6 +111,39 @@ test('moteur mobile : sanctions, changements de pilote et barème personnalisé 
   assert.deepEqual(actual,expected);assert.equal(JSON.stringify(event),before);
 });
 
+test('profils mobiles : copies des fonctions PC contrôlées et classements identiques', async () => {
+  const mobileSource=fs.readFileSync(path.join(root,'mobile/profile-engine.js'),'utf8');
+  for(const [start,end] of [['const FAULT_SIDE_Z=','// Encadré « Analyse du rythme'],['function globalLevelForScore(','function globalRatingStatus('],['function performanceRatings(){','function ratingCard('],['function eventGlobalWeight(','// ---------- Points config']]){
+    const part=siteSource.slice(siteSource.indexOf(start),siteSource.indexOf(end));
+    assert.ok(part.length>100&&mobileSource.includes(part),'La copie mobile doit suivre les règles PC : '+start);
+  }
+  const {sandbox}=makeBrowser();await new Promise(resolve=>setTimeout(resolve,0));await new Promise(resolve=>setImmediate(resolve));
+  const original=JSON.parse(vm.runInContext('JSON.stringify({slug:eventContext.slug,name:eventContext.name,kind:eventContext.kind,points_config:eventContext.pointsConfig,data:eventContext.data})',sandbox));
+  // Plusieurs week-ends construits à partir de vraies sessions de fixture :
+  // >= 5 courses, joker, poids, exclusion et sanctions Commission.
+  const prototype=original.data.sessions.filter(s=>s.type==='RACE'||s.type==='QUALIFY');
+  original.data.sessions=Array.from({length:6},(_,i)=>prototype.map(s=>({...s,date:`2026-${String(i+1).padStart(2,'0')}-10T${s.type==='RACE'?'21:00:00':'20:00:00'}Z`}))).flat();
+  const id=original.data.sessions.find(s=>s.results.length).results[0].id;
+  original.data.penMap={['0:1:'+id]:{timeAdd:3},['1:1:'+id]:{conduct:{version:1,reviewed:true,incidents:[{severity:'minor',returned:true}],reason:'Examen'}}};
+  const other=JSON.parse(JSON.stringify(original));other.slug='test-cup';other.name='Cup';other.kind='cup';other.points_config={globalCoef:0.75};
+  other.data.sessions=other.data.sessions.map(s=>({...s,date:s.date.replace('2026-','2025-')}));
+  const excluded=JSON.parse(JSON.stringify(other));excluded.slug='fiesta';excluded.kind='fiesta';excluded.points_config={globalCoef:0};
+  const all=[original,other,excluded],before=JSON.stringify(all);sandbox.testEvents=JSON.parse(before);sandbox.testHidden={};
+  vm.runInContext('events=testEvents;globalHidden=testHidden',sandbox);
+  const expected=JSON.parse(vm.runInContext('JSON.stringify(globalPerformanceRatings())',sandbox));assert.ok(expected.length>0);
+  const mobile={console,Map,Set,Date,Math,Promise};mobile.window=mobile;vm.createContext(mobile);
+  vm.runInContext(fs.readFileSync(path.join(root,'assets/global-rating.js'),'utf8'),mobile);vm.runInContext(mobileSource,mobile);
+  const computed=mobile.gdspMobileProfiles.global(all,{});
+  assert.deepEqual(JSON.parse(JSON.stringify(computed.ratings)),expected);assert.equal(JSON.stringify(all),before);
+  const hidden={[expected[0].id]:true};sandbox.testHidden=hidden;vm.runInContext('globalHidden=testHidden',sandbox);
+  assert.deepEqual(JSON.parse(JSON.stringify(mobile.gdspMobileProfiles.global(all,hidden).ratings)),JSON.parse(vm.runInContext('JSON.stringify(globalPerformanceRatings())',sandbox)));
+  sandbox.testEvent=JSON.parse(JSON.stringify(original));vm.runInContext('sessions=testEvent.data.sessions;penMap=testEvent.data.penMap;eventContext={slug:testEvent.slug,pointsConfig:testEvent.points_config}',sandbox);
+  const expectedEvent=JSON.parse(vm.runInContext('JSON.stringify(performanceRatings())',sandbox));
+  const eventResult=mobile.gdspMobileProfiles.event(original);
+  assert.deepEqual(JSON.parse(JSON.stringify(eventResult.ratings)),expectedEvent);
+  assert.ok(eventResult.history(id).length>=6);assert.ok(computed.history(id).length>=6);
+});
+
 test('un lien événement reste prioritaire malgré une session administrateur', async () => {
   const slug=fixture.event.slug;
   const {sandbox}=makeBrowser([],url=>url==='/api/admin/verify'?response({ok:true,user:'Admin'}):null,{location:{pathname:'/evenements/'+slug+'/voiture'},authenticatedSession:true});

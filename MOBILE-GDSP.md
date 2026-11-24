@@ -8,15 +8,19 @@ archivés, leur briefing, leur calendrier et les engagés. Les règles de masqua
 des événements supprimés et du doublon Lola sont alignées sur le site PC ; le
 statut d'archive provient toujours des données et n'est pas modifié ici.
 
-Les résultats, classements, fiches voiture et circuit sont présentés par des
-écrans adaptés au téléphone, sans page PC embarquée. Les calculs utilisent le
-même moteur de classement que le site PC sur une copie des données reçues.
+Les résultats, classements, fiches pilotes d'événement, fiches voiture et circuit
+sont présentés par des écrans adaptés au téléphone, sans page PC embarquée.
+L'onglet Global présente le classement inter-événements et ses fiches pilotes.
+Les calculs reprennent les règles du site PC sur des copies des données reçues ;
+les fonctions de performance dupliquées sont contrôlées par un test de parité.
+Le Global n'est pas affiché si un événement ou les exclusions sont indisponibles,
+car un classement partiel serait trompeur.
 Le direct mobile montre un instantané actualisé toutes les dix secondes ; la
 synthèse télémétrique nécessite une session administrateur. Ces deux vues ne
 remplacent pas les fonctions avancées : cartes et archives du direct, filtres,
 exports et corrections télémétriques restent sur les pages complètes. Les
-fiches pilotes détaillées et l'administration complète ne sont pas encore
-adaptées au mobile : l'administration s'ouvre séparément, sans cadre intégré.
+outils d'administration complets ne sont pas encore adaptés au mobile :
+l'administration s'ouvre séparément, sans cadre intégré.
 Les liens externes et le lien explicite « Site complet » peuvent aussi ouvrir
 le navigateur.
 
