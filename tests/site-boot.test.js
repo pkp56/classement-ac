@@ -73,6 +73,8 @@ function makeBrowser(extraEvents = [], extraFetch = null, browserOptions = {}) {
   vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(root,'assets/global-rating.js'),'utf8'), sandbox);
   vm.runInContext(fs.readFileSync(path.join(root,'assets/entrant-roles.js'),'utf8'), sandbox);
+  vm.runInContext(fs.readFileSync(path.join(root,'assets/trueskill-rating.js'),'utf8'), sandbox);
+  vm.runInContext(fs.readFileSync(path.join(root,'assets/trueskill-gdsp.js'),'utf8'), sandbox);
   vm.runInContext(siteSource, sandbox);
   vm.runInContext(patchSource, sandbox);
   return { sandbox, getElementById, calls, storage };
@@ -133,9 +135,14 @@ test('profils mobiles : copies des fonctions PC contrôlées et classements iden
   vm.runInContext('events=testEvents;globalHidden=testHidden',sandbox);
   const expected=JSON.parse(vm.runInContext('JSON.stringify(globalPerformanceRatings())',sandbox));assert.ok(expected.length>0);
   const mobile={console,Map,Set,Date,Math,Promise};mobile.window=mobile;vm.createContext(mobile);
-  vm.runInContext(fs.readFileSync(path.join(root,'assets/global-rating.js'),'utf8'),mobile);vm.runInContext(fs.readFileSync(path.join(root,'assets/entrant-roles.js'),'utf8'),mobile);vm.runInContext(mobileSource,mobile);
+  vm.runInContext(fs.readFileSync(path.join(root,'assets/global-rating.js'),'utf8'),mobile);vm.runInContext(fs.readFileSync(path.join(root,'assets/entrant-roles.js'),'utf8'),mobile);vm.runInContext(fs.readFileSync(path.join(root,'assets/trueskill-rating.js'),'utf8'),mobile);vm.runInContext(fs.readFileSync(path.join(root,'assets/trueskill-gdsp.js'),'utf8'),mobile);vm.runInContext(mobileSource,mobile);
   const computed=mobile.gdspMobileProfiles.global(all,{});
   assert.deepEqual(JSON.parse(JSON.stringify(computed.ratings)),expected);assert.equal(JSON.stringify(all),before);
+  assert.ok(computed.trueskill,'le mobile calcule aussi l’indice TrueSkill expérimental');
+  const pcTrueSkill=JSON.parse(vm.runInContext(`JSON.stringify((()=>{const courses=GDSPTrueSkillAdapter.buildCourses(events,{groupSessionsByDate,sortSessionForPerf,eventGlobalWeight});return GDSPTrueSkill.replay(courses,{beta:5.5,minRaces:5,hidden:globalHidden});})())`,sandbox));
+  assert.equal(JSON.stringify(JSON.parse(JSON.stringify(computed.trueskill.all))),JSON.stringify(pcTrueSkill.all),'parité PC/mobile de l’indice TrueSkill à l’identique');
+  const pcRatings=JSON.parse(vm.runInContext('JSON.stringify((()=>{const courses=GDSPTrueSkillAdapter.buildCourses(events,{groupSessionsByDate,sortSessionForPerf,eventGlobalWeight});return GDSPTrueSkill.replay(courses,{beta:5.5,minRaces:5,hidden:globalHidden}).ratings.map(r=>[r.id,r.races,r.conservative]);})())',sandbox));
+  assert.ok(pcRatings.length>0);
   const hidden={[expected[0].id]:true};sandbox.testHidden=hidden;vm.runInContext('globalHidden=testHidden',sandbox);
   assert.deepEqual(JSON.parse(JSON.stringify(mobile.gdspMobileProfiles.global(all,hidden).ratings)),JSON.parse(vm.runInContext('JSON.stringify(globalPerformanceRatings())',sandbox)));
   sandbox.testEvent=JSON.parse(JSON.stringify(original));vm.runInContext('sessions=testEvent.data.sessions;penMap=testEvent.data.penMap;eventContext={slug:testEvent.slug,pointsConfig:testEvent.points_config}',sandbox);
@@ -423,9 +430,12 @@ test('event driver profile and global driver profile render ? tooltip icons, Δ 
   const globalRankHtml = getElementById('app').innerHTML;
   assert.match(globalRankHtml, /4 critères \(0-100\) <span class="gdsp-tip/);
   assert.match(globalRankHtml, /class="gdsp-tip gdsp-bar"/);
+  assert.match(globalRankHtml, /Indice TrueSkill — expérimental/);
+  assert.match(globalRankHtml, /n’entre jamais|ne remplace pas le classement officiel/);
 
   await vm.runInContext("globalDriverId='d1';go('gpilote')", sandbox);
   const globalProfileHtml = getElementById('app').innerHTML;
+  assert.match(globalProfileHtml, /Indice TrueSkill — expérimental/);
   const globalRatings = vm.runInContext('globalPerformanceRatings()', sandbox);
   assert.ok(globalRatings.length > 0);
   for (const rating of globalRatings) {

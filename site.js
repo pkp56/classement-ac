@@ -841,7 +841,7 @@ function globalRankingSync(){
   return `${exclusionsStatus()}${head('global','Classement GLOBAL Discord','Niveau GDSP de 1 à 4, calculé en temps réel sur la base de tous les résultats de championnats et opens.')}
     <p class="note" style="margin-bottom:16px"><b>10 dernières courses disputées · 9 meilleures dès 10 participations.</b> Rythme, vitesse et résultats sur les courses retenues ; propreté Commission sur toute la fenêtre, joker compris. Pondéré selon le type d’événement (Championnat / Endurance ×1, Cup ×0.75, Open ×0.5 ; Fiesta / Trackday ×0 exclus), sans pondération temporelle. Minimum ${GLOBAL_MIN_RACES} courses pour apparaître. Avant 10 : provisoire. Données partielles si des décisions restent à qualifier ou des courses non examinées. Sans sanction connue ne signifie pas course certifiée propre. <b>Real Penalty : DT / Stop & Go non évalués sans journaux.</b></p>
     <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">${tierCards}</div>
-    <div class="panel global-rank-wrap"><h2>Détail des pilotes classés</h2><p class="note">Trié par score global. Les 4 mini-barres représentent Rythme / Propreté / Vitesse / Résultats (0-100) — survolez une mini-barre ou l'icône ? pour le détail. Les séparateurs bleu foncé marquent les changements de niveau.</p>${table(['#','','Pilote','Courses','Score / 100',`4 critères (0-100) ${gdspTip(PROFILE_TIPS.quatreCriteres,'gdsp-tip-right')}`],detailRows)}</div>`;
+    <div class="panel global-rank-wrap"><h2>Détail des pilotes classés</h2><p class="note">Trié par score global. Les 4 mini-barres représentent Rythme / Propreté / Vitesse / Résultats (0-100) — survolez une mini-barre ou l'icône ? pour le détail. Les séparateurs bleu foncé marquent les changements de niveau.</p>${table(['#','','Pilote','Courses','Score / 100',`4 critères (0-100) ${gdspTip(PROFILE_TIPS.quatreCriteres,'gdsp-tip-right')}`],detailRows)}</div>${trueSkillSectionHtml()}`;
 }
 
 // ---------- Méthodes de calcul de performance (Régularité iRacing, Vitesse Q+R, Propreté Option 3, Résultats v45) ----------
@@ -1142,6 +1142,43 @@ function buildRythmeCard(targetDriverId,roundsList,opts={}){
   return `<div class="panel rythme-wrap" style="margin-top:16px"><div class="eyebrow">Analyse du rythme</div><h2>Race consistency &amp; meilleur tour week-end</h2>`
     +`<p class="note">Meilleur tour du week-end (qualification <span style="${qStyle}">Q</span> ou course <span style="${rStyle}">R</span>). Δ rythme = écart moyen au meilleur tour en course (1<sup>er</sup> tour et tours aux stands &gt; +21 s exclus).</p>`
     +`<table class="rythme-table"><thead><tr><th>Manche</th><th>Meilleur WE ${gdspTip(PROFILE_TIPS.meilleurWE)}</th><th>Moy. course</th><th>Δ rythme ${gdspTip(PROFILE_TIPS.sigma)}</th><th>Tours</th><th>Pit/exclu ${gdspTip(PROFILE_TIPS.pitExclu,'gdsp-tip-right')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// Indice TrueSkill expérimental (voir GDSP-GLOBAL-TRUESKILL.md). Parallèle au Global v2 :
+// n’entre jamais dans le score officiel, les sanctions ou les championnats.
+const TRUESKILL_BETA=5.5; // à valider par benchmark walk-forward, pas un optimum publié
+const TRUESKILL_MIN_RACES=5;
+function trueSkillExperiment(){
+  if(typeof GDSPTrueSkill==='undefined'||typeof GDSPTrueSkillAdapter==='undefined')return {error:'moteur TrueSkill non chargé'};
+  try{
+    const courses=GDSPTrueSkillAdapter.buildCourses(events,{groupSessionsByDate,sortSessionForPerf,eventGlobalWeight});
+    return GDSPTrueSkill.replay(courses,{beta:TRUESKILL_BETA,minRaces:TRUESKILL_MIN_RACES,hidden:globalHidden});
+  }catch(e){
+    console.error('Indice TrueSkill expérimental :',e);
+    return {error:e.message||'calcul impossible'};
+  }
+}
+function trueSkillSkippedNote(result){
+  const skipped=(result.diagnostics&&result.diagnostics.skipped)||[];
+  if(!skipped.length)return '';
+  const items=skipped.slice(0,8).map(x=>`<li>${esc(x.key||x.date||'course')} — ${esc(x.reason||'ignorée')}</li>`).join('');
+  return `<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">${skipped.length} course(s) ignorée(s) — raisons</summary><ul class="note" style="margin-top:6px">${items}</ul></details>`;
+}
+function trueSkillSectionHtml(){
+  const result=trueSkillExperiment();
+  if(result.error)return `<div class="panel" style="margin-top:24px"><h2>Indice TrueSkill — expérimental</h2><p class="note">Indice indisponible : ${esc(result.error)}. Le classement officiel n’est pas affecté.</p></div>`;
+  if(!result.ratings.length)return `<details class="panel" style="margin-top:24px"><summary><b>Indice TrueSkill — expérimental</b></summary><p class="note">Indice indisponible : pas assez de courses par pilote (minimum ${TRUESKILL_MIN_RACES}). ${result.diagnostics.coursesUsed} course(s) rejouée(s), ${result.diagnostics.coursesSkipped} ignorée(s).</p>${trueSkillSkippedNote(result)}</details>`;
+  const rows=result.ratings.slice(0,20).map((r,i)=>`<tr><td class="pos">${i+1}</td><td><b>${esc(r.name)}</b><br><small class="muted">${esc(r.team||'')}</small></td><td><b>${r.conservative.toFixed(1)}</b></td><td>${r.sigma.toFixed(2)}</td><td>${r.races}</td><td>${esc(r.confidence)}</td><td>${r.provisional?'Provisoire':'Confirmé'}</td></tr>`).join('');
+  return `<details class="panel" style="margin-top:24px"><summary><b>Indice TrueSkill — expérimental</b> <span class="muted">(μ − 3σ)</span></summary><p class="note">Indicateur parallèle de niveau, calculé sur les ${result.diagnostics.coursesUsed} course(s) RACE admissibles et auditables, coefficient Global &gt; 0, résultats après corrections Commission. <b>Il ne remplace pas le classement officiel, ne sert à aucune sanction et ne modifie aucun score.</b> β = ${TRUESKILL_BETA} (à valider par benchmark). Minimum ${TRUESKILL_MIN_RACES} courses · provisoire avant 10.</p>${table(['#','Pilote','Indice','σ','Courses','Confiance','Statut'],rows)}${trueSkillSkippedNote(result)}</details>`;
+}
+function trueSkillPilotHtml(id){
+  const result=trueSkillExperiment();
+  if(result.error)return '';
+  const r=(result.all||[]).find(x=>x.id===id);
+  if(!r)return `<div class="panel" style="margin-top:16px"><h2>Indice TrueSkill — expérimental</h2><p class="note">Ce pilote n’a pas encore assez de courses admissibles pour un indice. Le classement officiel n’est pas affecté.</p></div>`;
+  const last=r.history[r.history.length-1];
+  const delta=last?(last.deltaMu>=0?'+':'')+last.deltaMu.toFixed(2):'—';
+  return `<div class="panel" style="margin-top:16px"><h2>Indice TrueSkill — expérimental</h2><p class="note">μ = ${r.mu.toFixed(2)} · σ = ${r.sigma.toFixed(2)} · indice conservateur μ − 3σ = <b>${r.conservative.toFixed(1)}</b> · ${r.races} course(s) admissible(s) · confiance ${esc(r.confidence)}${r.provisional?' · <b>provisoire</b> (&lt; 10 courses)':''}. Dernière course : Δμ ${esc(delta)}.</p><p class="note">Cet indice expérimental n’entre pas dans le classement officiel et ne sert à aucune sanction. DNF non qualifiés, DNS et services exclus ; décisions Commission sportives incluses (DQ classée en bas).</p></div>`;
 }
 
 // Global v2 : dix dernières courses effectivement disputées, joker sportif.
@@ -5599,7 +5636,7 @@ function globalDriverProfile(){
   const podiums=races.filter(x=>x.position<=3).length;
   const kpi=(label,value,sub,cls='')=>`<div class="drv-kpi ${cls}"><span class="label">${label}</span><strong>${value}</strong><span class="drv-kpi-sub">${sub}</span></div>`;
   const portrait=(items,positive)=>`<div class="panel drv-portrait-card ${positive?'drv-portrait-pos':'drv-portrait-axe'}"><div class="drv-portrait-head"><span class="drv-portrait-ico ${positive?'pos':'axe'}">${positive?'✓':'↗'}</span><div><div class="eyebrow">${positive?'Points forts':'Axes de progression'}</div><h3>${positive?'Ce qui fonctionne en piste':'Points de vigilance'}</h3></div></div><ul class="drv-portrait-list">${items.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul></div>`;
-  return `${globalRatingAudit(r)}<div class="drv-topbar"><button class="btn secondary" onclick="go('global')">← Retour au classement Global</button><div class="drv-quick-switch"><span class="label">Fiche pilote Global</span><select aria-label="Choisir un pilote Global" onchange="globalDriverId=this.value;render()">${ratings.map(x=>`<option value="${esc(x.id)}" ${x.id===id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div></div>
+  return `${globalRatingAudit(r)}${trueSkillPilotHtml(id)}<div class="drv-topbar"><button class="btn secondary" onclick="go('global')">← Retour au classement Global</button><div class="drv-quick-switch"><span class="label">Fiche pilote Global</span><select aria-label="Choisir un pilote Global" onchange="globalDriverId=this.value;render()">${ratings.map(x=>`<option value="${esc(x.id)}" ${x.id===id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div></div>
     <div class="drv-hero"><div class="drv-hero-id"><div class="drv-hero-eyebrow">GLOBAL GDSP · TOUS ÉVÉNEMENTS</div><div class="drv-id-main"><div class="drv-roundel drv-roundel-txt">${esc(initials)}</div><div><h1>${esc(r.name)}</h1><div class="drv-team-line">Profil inter-événements · Classement GLOBAL Discord</div></div></div><div class="drv-hero-stamps"><span class="tag">${races.length} courses enregistrées</span><span class="tag">${esc(levelLabels[r.level]||'')} · ${r.score.toFixed(0)} / 100</span></div></div>
     <div class="drv-hero-car drv-global-level"><div class="drv-car-head"><span class="label">Niveau GLOBAL ${gdspTip(PROFILE_TIPS.niveauGlobal,'gdsp-tip-left')}</span><span class="drv-car-num">${esc(levelLabels[r.level]||'')}</span></div><div class="drv-car-stage">${levelBadge(r.level,180)}</div><div class="drv-car-foot"><span>Score <b>${r.score.toFixed(0)} / 100</b></span><span>Arrivée moy. ${gdspTip(PROFILE_TIPS.avgPos,'gdsp-tip-right')} <b>P${avgPos.toFixed(1)}</b></span></div></div></div>
     <div class="drv-kpis">${kpi('Courses '+gdspTip(PROFILE_TIPS.courses,'gdsp-tip-left'),races.length,'Tous événements confondus')}${kpi('Meilleur '+gdspTip(PROFILE_TIPS.bestPos),'P'+bestPos,`${wins} victoire(s) · ${podiums} podium(s)`,'kpi-gold')}${kpi('Pos. moy. '+gdspTip(PROFILE_TIPS.avgPos),'P'+avgPos.toFixed(1),'Position moyenne en course')}${kpi('Δ départ '+gdspTip(PROFILE_TIPS.delta),signed(avgDelta!==null?avgDelta.toFixed(1):null),'Grille départ − position d’arrivée','kpi-green')}${kpi('Coll./course '+gdspTip(PROFILE_TIPS.collisions,'gdsp-tip-right'),avgColl.toFixed(1),'Contacts serveur enregistrés','kpi-red')}</div>
