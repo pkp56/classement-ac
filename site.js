@@ -134,7 +134,7 @@ const PROFILE_TIPS={
   pitExclu:`<b>Tours exclus (Pit / lents)</b><br>Nombre de tours écartés du calcul de régularité au-delà du 1<sup>er</sup> tour : passages aux stands ou grosses sorties (&gt; 21 s plus lent que le meilleur tour).`,
   quatreCriteres:`<b>4 critères (0–100)</b><br>De gauche à droite : <b>Rythme</b>, <b>Propreté</b>, <b>Vitesse</b> et <b>Résultats</b>.<br>Survole chaque mini-barre pour voir le détail du critère.`
 };
-function gdspTip(html,mod=''){return `<span class="gdsp-tip${mod?' '+mod:''}"><i class="gdsp-i">?</i><span class="gdsp-bubble">${html}</span></span>`}
+function gdspTip(html,mod=''){return `<span class="gdsp-tip${mod?' '+mod:''}" tabindex="0"><i class="gdsp-i">?</i><span class="gdsp-bubble">${html}</span></span>`}
 
 function isEventPage(p){return p==='event'||p==='classement'||p==='manches'||p==='pilotes'||p==='circuit'||p==='voiture'}
 function nav(){
