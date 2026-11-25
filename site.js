@@ -3523,8 +3523,114 @@ function renderTelemetryAdmin(){
     +`<code>[SCRIPT_2]</code><br><code>SCRIPT = ${esc(location.origin)}/csp/telemetry.lua</code><br><code>REQUIRED = 0</code></p>`
     +`<p class="note">Si l'écran affiche <b>« carburant NON LU »</b> après quelques tours, c'est le message du script qu'il faut transmettre : il indique exactement ce que la version de CSP n'expose pas.</p></div>`;
 }
+const CM_SERVER_SCRIPTS=[
+  {id:'rollingstart',section:'SCRIPT_1',file:'rollingstart.lua',title:'rollingstart.lua',label:'Départ lancé (rolling start)',desc:'Mise en mouvement progressive et synchronisée au signal de départ de la course (vitesse configurable, retour propre en cas de redémarrage).'},
+  {id:'telemetry',section:'SCRIPT_2',file:'telemetry.lua',title:'telemetry.lua',label:'Télémétrie & BoP',desc:'Collecte carburant, usure pneus et chronos tour par tour vers le module Télémétrie GDSP (sans interférer avec la course ni le classement global).'},
+  {id:'cleanliness',section:'SCRIPT_3',file:'cleanliness.lua',title:'cleanliness.lua',label:'Classement de propreté',desc:'Détection des collisions et attribution agresseur / agressé selon les règles FIA / FFSA (droit au virage, déport sous freinage, évitement, sortie forcée) — lecture seule.'}
+];
+let cmScriptsPanelOpen=false;
+let cmScriptsSelected={rollingstart:true,telemetry:true,cleanliness:true};
+function cmScriptsBaseOrigin(){
+  const loc=(typeof location!=='undefined'&&location&&location.origin)?String(location.origin):'';
+  if(loc&&!/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(loc)&&loc!=='null')return loc.replace(/\/+$/,'');
+  return 'https://gdsp.duckdns.org';
+}
+function buildCmServerScriptsIni(selectedMap,origin){
+  const base=(origin||cmScriptsBaseOrigin()).replace(/\/+$/,'');
+  const chosen=CM_SERVER_SCRIPTS.filter(s=>!selectedMap||selectedMap[s.id]!==false);
+  return chosen.map(s=>`[${s.section}]\nSCRIPT = '${base}/csp/${s.file}'\nREQUIRED = 0`).join('\n\n')+(chosen.length?'\n':'');
+}
+function renderCmScriptsCatalog(){
+  const origin=cmScriptsBaseOrigin();
+  const activeCount=CM_SERVER_SCRIPTS.filter(s=>cmScriptsSelected[s.id]!==false).length;
+  const ini=buildCmServerScriptsIni(cmScriptsSelected,origin);
+  const cards=CM_SERVER_SCRIPTS.map(s=>{
+    const active=cmScriptsSelected[s.id]!==false;
+    const url=`${origin}/csp/${s.file}`;
+    return `<div class="cm-script-item${active?' is-active':''}" data-cm-script-card="${esc(s.id)}">`
+      +`<div class="cm-script-head"><div><span class="cm-step">[${esc(s.section)}] · ${esc(s.label)}</span><h4><code>${esc(s.title)}</code></h4></div>`
+      +`<span class="cm-script-badge ${active?'active':'available'}">${active?'Actif dans le bloc':'Disponible'}</span></div>`
+      +`<p>${esc(s.desc)}</p>`
+      +`<p class="cm-script-url"><a href="/csp/${esc(s.file)}" target="_blank" rel="noopener"><code>${esc(url)}</code> ↗</a></p>`
+      +`<div class="cm-actions"><button type="button" class="btn ${active?'secondary':''} small" onclick="toggleCmServerScript('${esc(s.id)}')">${active?'Retirer du bloc':'Ajouter au serveur'}</button></div>`
+      +`</div>`;
+  }).join('');
+  return `<section class="cm-card cm-scripts-section" id="cm-scripts-section">`
+    +`<div class="cm-scripts-top"><div><span class="cm-step">03 / SCRIPTS CSP SERVEUR</span><h3>Scripts serveur Assetto Corsa (CSP)</h3>`
+    +`<p>Ajoute les scripts CSP hébergés sur le site (<code>rollingstart.lua</code>, <code>telemetry.lua</code>, <code>cleanliness.lua</code>) à la configuration <code>csp_extra_options.ini</code> du serveur.</p></div>`
+    +`<div class="cm-actions"><button type="button" class="btn" id="cm-open-scripts-btn" onclick="openCmServerScripts()">${cmScriptsPanelOpen?'Afficher / générer les 3 scripts':'Ajouter les scripts serveur'}</button></div></div>`
+    +`<div id="cm-scripts-body"${cmScriptsPanelOpen?'':' hidden'}>`
+    +`<div class="cm-scripts-grid">${cards}</div>`
+    +`<div class="cm-actions"><button type="button" class="btn" onclick="activateAllCmServerScripts()">Activer les 3 scripts et générer le bloc</button>`
+    +`<button type="button" class="btn secondary" onclick="copyCmServerScriptsIni()">Copier le bloc INI</button>`
+    +`<button type="button" class="btn secondary" onclick="injectCmServerScriptsDraft()">Insérer dans le brouillon CM ouvert</button>`
+    +`<span id="cm-scripts-feedback" class="note" role="status" aria-live="polite"></span></div>`
+    +`<div class="cm-scripts-output"><label for="cm-scripts-ini"><b>Bloc <code>csp_extra_options.ini</code> généré</b> (${activeCount}/3 script${activeCount>1?'s':''} sélectionné${activeCount>1?'s':''})</label>`
+    +`<textarea id="cm-scripts-ini" class="admin-input cm-scripts-textarea" rows="12" readonly onclick="this.select()">${esc(ini||'; Aucun script sélectionné.\n')}</textarea>`
+    +`<p class="cm-warning" style="margin:10px 0 0"><b>À faire côté serveur :</b> collez ce bloc dans le fichier <code>cfg/csp_extra_options.ini</code> (ou dans les <i>Extra options CSP</i> Content Manager) de votre serveur Assetto Corsa, en conservant vos autres sections éventuelles, puis <b>rechargez / redémarrez le serveur</b> pour que les scripts prennent effet.</p></div>`
+    +`</div></section>`;
+}
+function refreshCmScriptsDom(){
+  const host=document.getElementById('cm-scripts-section');
+  if(!host){render();return;}
+  host.outerHTML=renderCmScriptsCatalog();
+}
+function openCmServerScripts(){
+  cmScriptsPanelOpen=true;
+  if(!CM_SERVER_SCRIPTS.some(s=>cmScriptsSelected[s.id]!==false)){
+    cmScriptsSelected={rollingstart:true,telemetry:true,cleanliness:true};
+  }
+  refreshCmScriptsDom();
+}
+function toggleCmServerScript(id){
+  if(!CM_SERVER_SCRIPTS.some(s=>s.id===id))return;
+  cmScriptsPanelOpen=true;
+  cmScriptsSelected[id]=!(cmScriptsSelected[id]!==false);
+  refreshCmScriptsDom();
+}
+function activateAllCmServerScripts(){
+  cmScriptsPanelOpen=true;
+  cmScriptsSelected={rollingstart:true,telemetry:true,cleanliness:true};
+  refreshCmScriptsDom();
+  const fb=document.getElementById('cm-scripts-feedback');
+  if(fb)fb.textContent='Bloc généré avec les 3 scripts.';
+}
+async function copyCmServerScriptsIni(){
+  const ta=document.getElementById('cm-scripts-ini'),fb=document.getElementById('cm-scripts-feedback');
+  const text=ta?ta.value:buildCmServerScriptsIni(cmScriptsSelected);
+  if(ta){ta.focus();ta.select();}
+  try{
+    if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);}
+    else if(document.execCommand){document.execCommand('copy');}
+    if(fb)fb.textContent='Bloc csp_extra_options.ini copié dans le presse-papiers.';
+  }catch(_){
+    if(fb)fb.textContent=' Texte sélectionné : utilisez Ctrl+C pour copier.';
+  }
+}
+function injectCmServerScriptsDraft(){
+  const fb=document.getElementById('cm-scripts-feedback');
+  const cspInput=document.querySelector('#cm-server-result [data-cm-csp]');
+  if(!cspInput){
+    if(fb)fb.textContent='Charge d’abord un préréglage via « Consulter » ci-dessus, ou copie directement le bloc dans csp_extra_options.ini.';
+    return;
+  }
+  const chosen=CM_SERVER_SCRIPTS.filter(s=>cmScriptsSelected[s.id]!==false);
+  if(!chosen.length){if(fb)fb.textContent='Sélectionne au moins un script à insérer.';return;}
+  const block=buildCmServerScriptsIni(cmScriptsSelected);
+  const replacedSections=new Set(chosen.map(s=>s.section.toUpperCase()));
+  const existing=String(cspInput.value||'').replace(/\r\n?/g,'\n');
+  const kept=[];let skip=false;
+  for(const line of existing.split('\n')){
+    const m=line.match(/^\s*\[([^\]]+)\]\s*$/);
+    if(m){skip=replacedSections.has(m[1].trim().toUpperCase());}
+    if(!skip)kept.push(line);
+  }
+  const prefix=kept.join('\n').trim();
+  cspInput.value=(prefix?prefix+'\n\n':'')+block;
+  if(fb)fb.textContent='Bloc inséré dans le brouillon Extra options CSP ci-dessous (non enregistré tant que tu ne confirmes pas).';
+}
 function renderServersAdmin(){
-  return `<div class="cm-dashboard"><div class="cm-intro"><div><span class="cm-kicker">GESTION LOCALE · ASSETTO CORSA</span><h2>Serveurs Content Manager</h2><p>Consulte les préréglages et prépare tes changements en brouillon.</p></div><span class="cm-badge">EXPÉRIMENTAL</span></div><div class="cm-dashboard-grid"><section class="cm-card"><span class="cm-step">01 / CONFIGURATION</span><h3>Choisir un serveur</h3><p>Charge son préréglage pour modifier le circuit, les séances et les options.</p><div class="cm-actions"><label for="cm-server-select" class="cm-sr-only">Serveur sélectionné</label><select id="cm-server-select" onchange="cmPresetRequest++;document.getElementById('cm-server-result').textContent=''"><option value="local1">Serveur CM 1</option><option value="local2">Serveur CM 2</option></select><button type="button" class="btn" onclick="loadCmPreset()">Consulter</button></div></section><section class="cm-card"><span class="cm-step">02 / CONTRÔLE</span><h3>État des serveurs</h3><p>Vérifie les deux instances avant toute commande.</p><button type="button" class="btn secondary" onclick="loadCmStatus()">Vérifier l’état des serveurs</button><div id="cm-server-status" class="cm-status" role="status">État non vérifié</div><div class="cm-actions"><button type="button" class="btn secondary" onclick="cmControl('start')">Démarrer le serveur sélectionné</button><button type="button" class="btn secondary" onclick="cmControl('stop')">Arrêter le serveur sélectionné</button></div></section></div><p class="cm-warning"><b>Prudence :</b> lancement direct acServer expérimental, potentiellement différent de CM ; arrêt forcé du processus identifié. Vérifie l’état après chaque commande. L’enregistrement nécessite une confirmation et une sauvegarde.</p><div id="cm-server-result"></div></div>`;
+  return `<div class="cm-dashboard"><div class="cm-intro"><div><span class="cm-kicker">GESTION LOCALE · ASSETTO CORSA</span><h2>Serveurs Content Manager</h2><p>Consulte les préréglages et prépare tes changements en brouillon.</p></div><span class="cm-badge">EXPÉRIMENTAL</span></div><div class="cm-dashboard-grid"><section class="cm-card"><span class="cm-step">01 / CONFIGURATION</span><h3>Choisir un serveur</h3><p>Charge son préréglage pour modifier le circuit, les séances et les options.</p><div class="cm-actions"><label for="cm-server-select" class="cm-sr-only">Serveur sélectionné</label><select id="cm-server-select" onchange="cmPresetRequest++;document.getElementById('cm-server-result').textContent=''"><option value="local1">Serveur CM 1</option><option value="local2">Serveur CM 2</option></select><button type="button" class="btn" onclick="loadCmPreset()">Consulter</button></div></section><section class="cm-card"><span class="cm-step">02 / CONTRÔLE</span><h3>État des serveurs</h3><p>Vérifie les deux instances avant toute commande.</p><button type="button" class="btn secondary" onclick="loadCmStatus()">Vérifier l’état des serveurs</button><div id="cm-server-status" class="cm-status" role="status">État non vérifié</div><div class="cm-actions"><button type="button" class="btn secondary" onclick="cmControl('start')">Démarrer le serveur sélectionné</button><button type="button" class="btn secondary" onclick="cmControl('stop')">Arrêter le serveur sélectionné</button></div></section></div>${renderCmScriptsCatalog()}<p class="cm-warning"><b>Prudence :</b> lancement direct acServer expérimental, potentiellement différent de CM ; arrêt forcé du processus identifié. Vérifie l’état après chaque commande. L’enregistrement nécessite une confirmation et une sauvegarde.</p><div id="cm-server-result"></div></div>`;
 }
 let cmStatusRequest=0;
 async function loadCmStatus(){

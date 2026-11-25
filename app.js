@@ -1656,8 +1656,10 @@ app.get(['/healthz','/health'], (_req, res) => {
   res.set('Cache-Control','no-store');
   res.status(200).json({ ok:true, service:'gdsp-frontend' });
 });
-// Script CSP public : version suivie dans le dépôt, sans configuration ni secret.
-app.get('/csp/rolling_start.lua',(_req,res)=>{res.set('Cache-Control','no-cache');res.type('text/plain').sendFile(path.join(ROOT,'csp','rolling_start.lua'));});
+// Scripts CSP publics : versions suivies dans le dépôt, sans configuration secrète.
+app.get('/csp/rolling_start.lua',(_req,res)=>{res.set('Cache-Control','no-cache');res.type('text/plain; charset=utf-8').sendFile(path.join(ROOT,'csp','rolling_start.lua'));});
+app.get('/csp/rollingstart.lua',(_req,res)=>{res.set('Cache-Control','no-cache');res.type('text/plain; charset=utf-8').sendFile(path.join(ROOT,'csp','rollingstart.lua'));});
+app.get('/csp/cleanliness.lua',(_req,res)=>{res.set('Cache-Control','no-cache');res.type('text/plain; charset=utf-8').sendFile(path.join(ROOT,'csp','cleanliness.lua'));});
 // Entrée historique conservée, non destinée à l'indexation.
 app.get('/admin',(_req,res)=>{res.set('X-Robots-Tag','noindex, follow');res.set('Cache-Control','no-store');res.type('html').send(getIndex());});
 app.use(express.static(ROOT,{dotfiles:'deny',etag:true,maxAge:'1h',setHeaders(res,filePath){
