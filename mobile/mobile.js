@@ -219,7 +219,7 @@
       }
       if(version===serial)content.innerHTML=html;
     }catch(e){if(version===serial)content.innerHTML=fail(navigator.onLine===false?'Tu es hors ligne. Les données de course nécessitent une connexion.':e.message);}
-    finally{if(version===serial&&view&&view[1]==='live')liveTimer=setTimeout(()=>show(true),10000);}
+    finally{if(version===serial){if(view&&view[1]==='live')liveTimer=setTimeout(()=>show(true),10000);if(background!==true){if(window.scrollTo)window.scrollTo(0,0);try{content.focus({preventScroll:true});}catch(_){}}}}
   }
   window.addEventListener('hashchange',show);
   window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;if(location.hash==='#more')show();});
