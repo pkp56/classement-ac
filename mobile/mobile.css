@@ -18,3 +18,4 @@ body{-webkit-tap-highlight-color:transparent}
 .hero h1,.section-title h2,.page-title,.panel h2{font-weight:800}
 .bottom-nav,.event-subnav{left:50%;right:auto;transform:translateX(-50%);width:min(100%,740px)}
 .global-driver-name{min-width:0}.global-driver-name small{overflow-wrap:anywhere}
+.driver-search select{min-height:46px;width:100%;padding:10px 12px;border:1px solid #bba98c;background:#fffdf7;color:var(--ink);font:16px system-ui}
