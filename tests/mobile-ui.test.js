@@ -35,7 +35,7 @@ test('mobile : accueil, choix événement, données distinctes et live',async()=
   await tick();assert.match(b.content.innerHTML,/La passion de la course/);assert.match(b.content.innerHTML,/Coupe/);assert.doesNotMatch(b.content.innerHTML,/>Old</);
   b.sandbox.location.hash='#event=cup';await b.listeners.hashchange();assert.match(b.content.innerHTML,/Bienvenue/);assert.match(b.content.innerHTML,/Alice/);assert.equal(b.nav[1].attrs['aria-current'],'page');
   b.sandbox.location.hash='#live';await b.listeners.hashchange();assert.match(b.content.innerHTML,/Direct indisponible/);
-  assert.deepEqual(calls,['/api/events','/api/events/cup','/api/live/status']);
+  assert.deepEqual(calls,['/api/events','/api/events/cup','/api/live/config','/api/live/status']);
 });
 test('mobile : archives visibles et vues événement sans cadre intégré',async()=>{
   const b=browser(async url=>url==='/api/events'?reply({events:[
@@ -99,6 +99,25 @@ test('télémétrie mobile : session obligatoire et synthèse protégée sans ca
   b.sandbox.location.hash='#service=telemetry';await b.listeners.hashchange();
   assert.match(b.content.innerHTML,/Connecte-toi/);assert.equal(reads,0);
   authenticated=true;await b.listeners.hashchange();assert.equal(reads,1);assert.match(b.content.innerHTML,/Alfa &lt;GT&gt;/);assert.match(b.content.innerHTML,/1:33.200/);assert.match(b.content.innerHTML,/2.3 L/);assert.doesNotMatch(b.content.innerHTML,/<iframe/);
+});
+test('direct mobile : sélecteur de serveur CM1/CM2 transmis aux requêtes',async()=>{
+  const urls=[];
+  const b=browser(async url=>{
+    urls.push(url);
+    if(url==='/api/live/config')return reply({localSources:[{id:'local1',name:'Serveur CM 1'},{id:'local2',name:'Serveur CM 2'}],httpSources:[]});
+    if(url.startsWith('/api/live/snapshot')){const two=url.includes('local2');return reply({status:{status:'online'},server:{name:two?'CM2':'CM1',track:'Spa'},session:{},cars:[],events:[]});}
+    return reply({events:[]});
+  });
+  await tick();
+  b.sandbox.location.hash='#service=live';await b.listeners.hashchange();
+  assert.match(b.content.innerHTML,/data-live-source/);assert.match(b.content.innerHTML,/Serveur CM 2/);assert.match(b.content.innerHTML,/CM1/);
+  assert.ok(urls.includes('/api/live/snapshot')); // aucune source forcée par défaut
+  const select={value:'local2',matches:sel=>sel==='[data-live-source]'};
+  await b.listeners['content:change']({target:select});
+  await tick();await tick();await tick();await tick(); // le listener change n'attend pas show()
+  assert.ok(urls.includes('/api/live/snapshot?source=local2'));
+  b.sandbox.location.hash='#live';await b.listeners.hashchange();
+  assert.match(b.content.innerHTML,/data-live-source/); // sélecteur aussi dans l'onglet Direct
 });
 test('mobile : erreur de réseau visible, aucune donnée ancienne présentée',async()=>{
   const b=browser(async()=>{throw Error('offline')});b.sandbox.navigator.onLine=false;await tick();

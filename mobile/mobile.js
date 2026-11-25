@@ -7,6 +7,25 @@
   const readable=value=>text(value).replace(/[_-]+/g,' ').trim();
   const skinUrl=(data,car,skin)=>{const valid=s=>typeof s==='string'&&s.length>0&&s.length<=128&&s===s.trim()&&!/[\\/\0<>:"|?*]/.test(s)&&!/^\.+$/.test(s)&&!/[. ]$/.test(s);const server=data?.ahEntrantsServer||data?.ahServer;return server&&valid(car)&&valid(skin)?'/api/ah-skin-preview?'+new URLSearchParams({server,model:car,skin}):'';};
   const kindLabel=kind=>({championship:'Championnat',cup:'Cup',endurance:'Endurance',open:'Open',fiesta:'Fiesta',trackday:'Trackday',archive:'Archive'})[kind]||'Événement';
+  // Sélection de serveur du direct (CM1/CM2/…) — même notion de source que le live PC.
+  const liveSourceStorage='gdsp_live_source';let liveSourceMemory='';
+  const validLiveSource=v=>typeof v==='string'&&/^[a-z0-9_-]{1,32}$/i.test(v)?v:'';
+  function liveSource(){try{return validLiveSource(localStorage.getItem(liveSourceStorage))||liveSourceMemory;}catch(_){return liveSourceMemory;}}
+  function setLiveSource(v){liveSourceMemory=validLiveSource(v);try{localStorage.setItem(liveSourceStorage,liveSourceMemory);}catch(_){}}
+  const liveUrl=(path,source)=>path+(source?'?source='+encodeURIComponent(source):'');
+  function sourceOptions(cfg){
+    const local=Array.isArray(cfg?.localSources)?cfg.localSources.filter(x=>x&&text(String(x.id))):[];
+    const remote=Array.isArray(cfg?.httpSources)?cfg.httpSources.filter(x=>x&&x.index!=null):[];
+    if(local.length<2&&!remote.length)return null;
+    return [{id:'',name:'Source automatique'}]
+      .concat(local.map(s=>({id:String(s.id),name:text(s.name)||String(s.id)})))
+      .concat(remote.map(s=>({id:String(s.index),name:(text(s.name)||'Serveur')+' · '+String(s.url||'').replace(/^https?:\/\//,'')})));
+  }
+  function sourceSelectHtml(cfg,current){
+    const options=sourceOptions(cfg);if(!options)return '';
+    const known=options.some(o=>o.id===current);const selected=known?current:'';
+    return `<label class="driver-search live-source">Serveur suivi<select data-live-source>${options.map(o=>`<option value="${esc(o.id)}"${o.id===selected?' selected':''}>${esc(o.name)}</option>`).join('')}</select></label>`;
+  }
   // Mêmes règles que le catalogue PC : le backend peut conserver des
   // tombstones et recréer un ancien doublon Lola. Ne pas les présenter actifs.
   function isDeletedEvent(ev,deleted={}){
@@ -75,11 +94,11 @@
       +(services.length?`<section class="panel"><h2>Véhicules de service</h2><p class="muted">Ces inscriptions sont conservées mais ne sont pas comptées comme pilotes : ${services.map(e=>esc(e.name)+' ('+esc(entrantRoles.serviceRole(e))+')').join(', ')}. Les résultats et classements restent inchangés.</p></section>`:'')
 ;
   }
-  function liveView(data){
+  function liveView(data,selector,source){
     const status=data?.status||{},server=data?.server||{};
     const cars=(Array.isArray(data?.cars)?data.cars:[]).filter(c=>c&&c.connected===true);
     const rows=cars.map(c=>`<div class="result-row"><span class="position">${esc(c.position??'—')}</span><div class="result-person"><b>${esc(c.name||'Pilote')}</b><small>${esc(c.team||c.model||'')} · ${esc(c.laps??0)} tours${c.inPit?' · stands':''}</small><small>Dernier : ${esc(c.lastLap||'—')} · Meilleur : ${esc(c.bestLap||'—')}</small></div><div class="score"><small>${esc(c.gap==='leader'?'Leader':c.gap||'—')}</small></div></div>`).join('');
-    return `<a class="back" href="#live">← Retour au direct</a><div class="eyebrow">En piste</div><h1 class="page-title">Live timing</h1><section class="panel"><span class="pill">${esc(status.status||'État indisponible')}</span><h2>${esc(server.name||'Serveur GDSP')}</h2><p class="muted">${esc(server.track||'Circuit non communiqué')} · Actualisation toutes les 10 secondes</p>${rows||'<p>Aucune voiture connectée pour le moment.</p>'}<button class="btn secondary" type="button" data-retry>Actualiser</button></section><p class="muted">Cette vue présente l’instantané principal. Les cartes, archives et outils avancés restent sur le site complet.</p><a class="more-link" href="/live-timing" target="_blank" rel="noopener noreferrer">Ouvrir le live complet ↗</a>`;
+    return `<a class="back" href="#live">← Retour au direct</a><div class="eyebrow">En piste</div><h1 class="page-title">Live timing</h1>${selector||''}<section class="panel"><span class="pill">${esc(status.status||'État indisponible')}</span><h2>${esc(server.name||'Serveur GDSP')}</h2><p class="muted">${esc(server.track||'Circuit non communiqué')} · Actualisation toutes les 10 secondes</p>${rows||'<p>Aucune voiture connectée pour le moment.</p>'}<button class="btn secondary" type="button" data-retry>Actualiser</button></section><p class="muted">Cette vue présente l’instantané principal. Les cartes, archives et outils avancés restent sur le site complet.</p><a class="more-link" href="${esc(liveUrl('/live-timing',source))}" target="_blank" rel="noopener noreferrer">Ouvrir le live complet ↗</a>`;
   }
   function telemetryView(summary){
     const cars=Array.isArray(summary?.cars)?summary.cars:[];
@@ -191,7 +210,8 @@
         const update=await updatePanel();
         html=`<a class="back" href="#more">← Retour à Plus</a><div class="eyebrow">Administration sécurisée</div><h1 class="page-title">Administration</h1><section class="panel"><div class="eyebrow">Serveur</div><h2>Mise à jour du PC serveur</h2>${update}</section><section class="panel"><h2>Outils complets</h2><p>Les outils complets d’administration ne sont pas encore adaptés au mobile. Ils s’ouvrent séparément, sans cadre intégré.</p><a class="btn" href="/admin" target="_blank" rel="noopener noreferrer">Ouvrir l’administration complète ↗</a></section>`;
       }else if(view&&view[1]==='live'){
-        html=liveView(await request('/api/live/snapshot'));
+        const source=liveSource(),cfg=await request('/api/live/config').catch(()=>null);
+        html=liveView(await request(liveUrl('/api/live/snapshot',source)),sourceSelectHtml(cfg,source),source);
       }else if(view&&view[1]==='telemetry'){
         const session=await window.gdspAuth.session();
         if(!session.authenticated)html='<a class="back" href="#more">← Retour à Plus</a><h1 class="page-title">Télémétrie</h1><section class="panel"><p>Connecte-toi avec ton compte administrateur dans Plus pour consulter la télémétrie.</p><a class="btn" href="#more">Se connecter →</a></section>';
@@ -211,9 +231,10 @@
         const archived=archives.length?`<section class="archive-list"><div class="section-title"><h2>Archives</h2></div><div class="cards">${archives.map(eventCard).join('')}</div></section>`:'';
         html=tab==='home'?`<section class="hero"><div class="eyebrow">Gentleman Drivers Project</div><h1>La passion de la course, partout.</h1><p>Les événements, les pilotes et le direct GDSP réunis dans votre poche.</p><div class="hero-actions"><a class="btn" href="#events">Voir les événements</a><a class="btn secondary" href="#live">Suivre le direct</a></div></section><div class="section-title"><h2>À la une</h2><a href="#events">Tout voir →</a></div><div class="cards">${events.slice(0,3).map(eventCard).join('')||'<div class="panel">Aucun événement actif pour le moment.</div>'}</div>`:`<div class="eyebrow">La communauté en piste</div><h1 class="page-title">Événements</h1><p class="muted">Sélectionne un événement pour retrouver ses informations et ses engagés.</p><div class="cards">${cards}</div>${archived}`;
       }else if(tab==='live'){
-        const data=await request('/api/live/status');
+        const source=liveSource(),cfg=await request('/api/live/config').catch(()=>null);
+        const data=await request(liveUrl('/api/live/status',source));
         const state=data?.status?.status||'indisponible',server=text(data?.server?.name)||'Serveur GDSP';
-        html=`<div class="eyebrow">En piste</div><h1 class="page-title">Le direct</h1><section class="panel"><span class="pill">${esc(data.enabled?'État : '+state:'Direct indisponible')}</span><h2>${esc(server)}</h2><p>Retrouve les temps et les positions dans le direct complet.</p><a class="btn" href="#service=live">Ouvrir le live timing →</a></section>`;
+        html=`<div class="eyebrow">En piste</div><h1 class="page-title">Le direct</h1>${sourceSelectHtml(cfg,source)}<section class="panel"><span class="pill">${esc(data.enabled?'État : '+state:'Direct indisponible')}</span><h2>${esc(server)}</h2><p>Retrouve les temps et les positions dans le direct complet.</p><a class="btn" href="#service=live">Ouvrir le live timing →</a></section>`;
       }else{
         html=`<div class="eyebrow">Votre espace GDSP</div><h1 class="page-title">Plus</h1><section class="panel"><h2>Accès rapides</h2><a class="more-link" href="/">Site complet ↗</a><a class="more-link" href="#service=admin">Administration →</a><a class="more-link" href="#service=telemetry">Télémétrie →</a></section><section class="panel"><h2>Installer l’application</h2><p>Sur Android, utilise « Installer l’application » dans le menu du navigateur. Sur iPhone, touche Partager puis « Sur l’écran d’accueil ».</p>${installPrompt?'<button class="btn" type="button" data-install>Installer GDSP</button>':''}<p class="muted">Une connexion est nécessaire pour les données et le direct ; aucun résultat n’est conservé hors ligne.</p></section>`;
       }
@@ -251,6 +272,7 @@
     image.hidden=true;const note=image.parentElement?.querySelector('[data-image-missing]');if(note)note.hidden=false;
   },true);
   content.addEventListener('change',event=>{
+    if(event.target.matches?.('[data-live-source]')){setLiveSource(event.target.value);show();return;}
     const select=event.target.closest('[data-livery-select]');if(!select)return;
     const container=select.closest('.livery'),image=container?.querySelector('[data-livery-image]'),note=container?.querySelector('[data-image-missing]');
     if(image){image.hidden=false;if(note)note.hidden=true;image.src=select.value;image.alt=select.selectedOptions[0]?.textContent||'Livrée';}
