@@ -84,6 +84,13 @@ const CFG_DEFAULTS = Object.freeze({
   cutDisabledZones: '',
   scFallback: 'admin',
   safetyCarKey: 'safety',
+
+  // Pace car IA (optionnel) : le systeme de safety car humaine reste inchange.
+  aiPaceMode: 'off',
+  aiPaceName: 'Pace Car',
+  aiPaceKmh: 90,
+  aiPaceLeadM: 30,
+  aiPaceInLap: 1,
 });
 
 const PRESETS = Object.freeze([
@@ -343,6 +350,16 @@ function sanitizeConfig(input = {}) {
     .replace(/[\r\n\t"'`]/g, '')
     .trim()
     .slice(0, 23) || 'safety';
+
+  // Pace car IA : le systeme de safety car humaine reste inchange.
+  c.aiPaceMode = ['off', 'grid', 'any'].includes(c.aiPaceMode) ? c.aiPaceMode : 'off';
+  c.aiPaceName = String(c.aiPaceName || 'Pace Car')
+    .replace(/[\r\n\t"'`]/g, '')
+    .trim()
+    .slice(0, 23) || 'Pace Car';
+  c.aiPaceKmh = clamp(Math.round(numOr(c.aiPaceKmh, 90)), 30, 180);
+  c.aiPaceLeadM = clamp(Math.round(numOr(c.aiPaceLeadM, 30)), 10, 200);
+  c.aiPaceInLap = toInt01(c.aiPaceInLap, 1);
 
   return c;
 }

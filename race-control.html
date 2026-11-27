@@ -475,6 +475,45 @@
               </div>
             </div>
           </div>
+
+          <div class="card">
+            <h2>3 bis. Pace Car IA (optionnel)</h2>
+            <p class="hint" style="margin-bottom:10px">
+              Le système de safety car humaine ci-dessus reste inchangé. En plus, le script peut
+              <strong>piloter lui-même</strong> une voiture déjà présente sur la grille (voiture IA du serveur)
+              pendant le tour de formation, puis la renvoyer aux stands au drapeau vert.
+              Le serveur doit donc inscrire cette voiture dans sa liste d'entrées.
+            </p>
+            <div class="grid">
+              <div class="field">
+                <label for="aiPaceMode">Pace car IA</label>
+                <select id="aiPaceMode">
+                  <option value="off">Désactivé (safety car humaine uniquement)</option>
+                  <option value="grid">Voiture IA de la grille (recommandé)</option>
+                  <option value="any">N'importe quelle voiture correspondante</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="aiPaceName">Nom du pilote / ID de la voiture</label>
+                <input id="aiPaceName" type="text" maxlength="23" value="Pace Car" placeholder="Pace Car" />
+              </div>
+              <div class="field">
+                <label for="aiPaceKmh">Vitesse de consigne (km/h)</label>
+                <input id="aiPaceKmh" type="number" min="30" max="180" value="90" />
+              </div>
+              <div class="field">
+                <label for="aiPaceLeadM">Avance sur la tête de peloton (m)</label>
+                <input id="aiPaceLeadM" type="number" min="10" max="200" value="30" />
+              </div>
+              <div class="field">
+                <label for="aiPaceInLap">Après le drapeau vert</label>
+                <select id="aiPaceInLap">
+                  <option value="1">Rentre aux stands (recommandé)</option>
+                  <option value="0">Reste en piste</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="card">

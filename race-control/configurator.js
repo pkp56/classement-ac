@@ -17,6 +17,7 @@ const FIELD_IDS = [
   'cutPenaltyType', 'cutStopGoSec', 'cutSlowSec', 'cutServeLaps', 'cutEscPenalty', 'cutEscStopGoSec',
   'cutFinishTimeSec', 'cutTimePenaltySec', 'cutDisabledZones',
   'scFallback', 'safetyCarKey',
+  'aiPaceMode', 'aiPaceName', 'aiPaceKmh', 'aiPaceLeadM', 'aiPaceInLap',
 ];
 
 let presets = [];

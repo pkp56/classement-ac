@@ -30,3 +30,31 @@ commandes de lancement. Le MOTD `$CSP0:` est généré dans le navigateur par
 compression DEFLATE (API `CompressionStream`), avec limite de 2039 octets et
 copie désactivée au-delà. Le MOTD est une alternative au bloc CSP : vérifier
 au préalable la configuration et le message existants avant remplacement.
+
+## Pace car IA (optionnel, depuis GDSP-RS 1.2.0)
+
+Le système de safety car humaine (mots-clés `safetyCarKey`, limiteur `paceKmh`,
+`safetyCarKey`/`scFallback`) est **inchangé**. En plus, le script peut piloter
+lui-même une voiture de pace car pendant le tour de formation.
+
+- Le script ne crée jamais de voiture : le serveur doit inscrire la voiture de
+  pace car dans sa liste d'entrées (voiture IA du serveur). `aiPaceMode = 'grid'`
+  privilégie les voitures IA de la grille, `'any'` accepte n'importe quelle
+  voiture dont le nom de pilote ou l'ID contient `aiPaceName`.
+- Le pilotage repose sur l'autopilote du jeu : `physics.setCarAutopilot`,
+  `physics.setAITopSpeed`, `physics.setAIThrottleLimit`, `physics.setAIAggression`,
+  `physics.setAIPitStopRequest`. Tous les appels sont protégés par `pcall` : une
+  version de CSP qui ne les expose pas ne casse pas le départ lancé, le pace car
+  IA reste simplement inactif.
+- Le pace car IA est exclu du classement de formation : il ne prend pas la place
+  du leader, ne déclenche pas le vert et ne reçoit pas de pénalité de formation.
+- Après le drapeau vert, il rentre aux stands (`aiPaceInLap = 1`, recommandé) ou
+  reste en piste mais laisse filer le peloton (`0`).
+- Réglages : `aiPaceMode` (`off` par défaut), `aiPaceName` (`Pace Car`),
+  `aiPaceKmh` (90, borné 30–180), `aiPaceLeadM` (30, borné 10–200),
+  `aiPaceInLap` (1). Commande de secours en course : `!rs aipace off`,
+  `!rs aipace on [nom]`, `!rs aipace 90`.
+- Limite connue : sur DSP, seule la première voiture de l'index CSP est pilotée
+  par le client ; les appels `setCarAutopilot` sans index visent la voiture
+  locale. Le réglage reste donc à valider en conditions réelles multi-pilotes,
+  comme le reste du script.
