@@ -7,9 +7,11 @@
 --   * Track-Cut penalty engine: configurable cuts before penalty, per-corner enable/disable zones,
 --     Drive-Through or Stop & Go (real stationary hold), X-lap serve window -> 2nd penalty,
 --     and automatic Last-Lap / Finish time added to total race time
+--   * Optional AI pace car (aiPaceMode) driving a server AI car during the formation lap,
+--     alongside the unchanged human safety-car system (safetyCarKey / paceKmh)
 --   * Network sync via ac.OnlineEvent (<=175B packets) + IPC bridge to GDSP_RollingStart CM App
 
-local VERSION = 'GDSP-RS 1.1.1'
+local VERSION = 'GDSP-RS 1.2.0'
 local ORDER_MAX = 48
 local NONE = 255
 local SEND_INTERVAL = 0.25
@@ -135,6 +137,18 @@ local CFG_DEFAULTS = {
   cutDisabledZones = '',
   scFallback = 'admin',
   safetyCarKey = 'safety',
+
+  -- Pace car IA (optionnel) : le script pilote une voiture deja presente sur la grille
+  -- en autopilote CSP. Le systeme de safety car humaine reste inchange.
+  aiPaceMode = 'off',      -- off | grid (voiture IA deja sur la grille) | any (n'importe quelle voiture)
+  aiPaceName = 'Pace Car', -- nom du pilote / ID de voiture servant de pace car
+  aiPaceModel = 'dodge_monaco_police', -- ID du dossier voiture (entry_list MODEL=)
+  aiPaceKmh = 90,          -- vitesse de consigne du pace car IA (plafond si aiPaceFollow = 1)
+  aiPaceFollow = 1,        -- 1 = le pace car suit la vitesse reelle du peloton, 0 = vitesse fixe
+  aiPaceLeadM = 30,        -- avance du pace car sur la tete de peloton (m)
+  aiPaceInLap = 1,         -- 1 = rentre aux stands apres le vert, 0 = reste en piste
+  aiPaceDriver = 'local',  -- local = pilote par la voiture locale (seul cas fiable), remote = chaque client tente
+  aiPaceDryRun = 0,        -- 1 = detecte et journalise sans jamais prendre le controle (test sans risque)
 }
 
 -- Placeholder replaced optionally by HTTP script server if query params are used
@@ -288,6 +302,20 @@ local function sanitizeCfg(cfg)
   cfg.scFallback = normChoice(cfg.scFallback, SC_FALLBACK_CHOICES, 'admin')
   cfg.safetyCarKey = sanitizeSafetyCarKey(cfg.safetyCarKey)
 
+  cfg.aiPaceMode = normChoice(cfg.aiPaceMode, AI_PACE_MODE_CHOICES, 'off')
+  local apName = tostring(cfg.aiPaceName or 'Pace Car'):gsub('^%s+', ''):gsub('%s+$', '')
+  if apName == '' then apName = 'Pace Car' end
+  cfg.aiPaceName = apName:sub(1, 23)
+  cfg.aiPaceKmh = math.floor(clamp(tonumber(cfg.aiPaceKmh) or 90, 30, 180) + 0.5)
+  cfg.aiPaceFollow = (tonumber(cfg.aiPaceFollow) or 1) ~= 0 and 1 or 0
+  cfg.aiPaceDriver = (tostring(cfg.aiPaceDriver or 'local'):lower() == 'remote') and 'remote' or 'local'
+  cfg.aiPaceDryRun = (tonumber(cfg.aiPaceDryRun) or 0) ~= 0 and 1 or 0
+  cfg.aiPaceLeadM = math.floor(clamp(tonumber(cfg.aiPaceLeadM) or 30, 10, 200) + 0.5)
+  cfg.aiPaceInLap = (tonumber(cfg.aiPaceInLap) or 1) ~= 0 and 1 or 0
+  local model = tostring(cfg.aiPaceModel or ''):gsub('%s+$', '')
+  if model ~= '' and not model:match('^[%w_%-]+$') then model = '' end
+  cfg.aiPaceModel = model:sub(1, 120)
+
   return cfg
 end
 
@@ -341,6 +369,41 @@ local function isSafetyCarMatch(carId, driverName, customKey)
     end
   end
   return false
+end
+
+G_AI = {
+  carIndex = nil,   -- index CSP (0-based) de la voiture pilotee, nil si aucune
+  sessionId = nil,
+  announced = false,
+  mode = nil,       -- etat applique a la voiture, pour ne pas rappeler l'API chaque frame
+  topKmh = nil,
+  sentInLap = false,
+  gaveUp = false,   -- nom introuvable : on n'insiste plus pour cette session
+  lastGapM = nil,
+}
+
+local AI_PACE_MODE_CHOICES = { 'off', 'grid', 'any' }
+
+-- aiPaceCode : 2 bits de mode | 1 bit rentree aux stands | 5 bits vitesse (pas de 5 km/h depuis 30)
+-- Le nom (aiPaceName) et l'avance (aiPaceLeadM) restent locaux : ils ne servent que sur
+-- la machine qui pilote la voiture, et evitent de faire grossir le paquet reseau.
+-- aiPaceCode : 2 bits mode | 1 bit rentree | 1 bit suivi des pilotes | 4 bits vitesse
+function G_AI.packCode(c)
+  local mode = idxOf(AI_PACE_MODE_CHOICES, c.aiPaceMode, 0)
+  local kmhIdx = clamp(math.floor(((tonumber(c.aiPaceKmh) or 90) - 30) / 10 + 0.5), 0, 15)
+  local inLap = (c.aiPaceInLap == 1) and 1 or 0
+  local follow = (c.aiPaceFollow == 1) and 1 or 0
+  return mode + inLap * 4 + follow * 8 + kmhIdx * 16
+end
+
+function G_AI.unpackCode(code, base)
+  local c = copyCfg(base)
+  local v = tonumber(code) or 0
+  c.aiPaceMode = AI_PACE_MODE_CHOICES[(v % 4) + 1] or 'off'
+  c.aiPaceInLap = (math.floor(v / 4) % 2 == 1) and 1 or 0
+  c.aiPaceFollow = (math.floor(v / 8) % 2 == 1) and 1 or 0
+  c.aiPaceKmh = 30 + math.floor(v / 16) * 10
+  return c
 end
 
 local function packCfgFlags(c)
@@ -789,6 +852,8 @@ do
     fastPct = ac.StructItem.uint8(),
     slowKmh = ac.StructItem.uint8(),
     bunchM = ac.StructItem.uint8(),
+    aiPaceState = ac.StructItem.uint8(),
+    aiPaceModel = ac.StructItem.string(120),
 
     cmdSeq = ac.StructItem.int32(),
     cmdType = ac.StructItem.uint8(),
@@ -838,6 +903,8 @@ do
     cmdFastPct = ac.StructItem.uint8(),
     cmdSlowKmh = ac.StructItem.uint8(),
     cmdBunchM = ac.StructItem.uint8(),
+    cmdAiPaceCode = ac.StructItem.uint8(),
+    cmdAiPaceModel = ac.StructItem.string(120),
   }, true, ns)
   if okB and b then
     bridge = b
@@ -890,6 +957,8 @@ local function writeCfgToBridge(c)
   bridge.cutTimePenaltySec = c.cutTimePenaltySec
   bridge.cutDisabledZones = c.cutDisabledZones or ''
   bridge.safetyCarKey = c.safetyCarKey or 'safety'
+  bridge.aiPaceState = G_AI.packCode(c)
+  bridge.aiPaceModel = c.aiPaceModel or ''
 end
 
 local function readCfgFromBridgeCmd()
@@ -937,6 +1006,8 @@ local function readCfgFromBridgeCmd()
   c.cutTimePenaltySec = bridge.cmdCutTimePenaltySec
   c.cutDisabledZones = bridge.cmdCutDisabledZones or ''
   c.safetyCarKey = bridge.cmdSafetyCarKey or 'safety'
+  c = G_AI.unpackCode(bridge.cmdAiPaceCode or 0, c)
+  if bridge.cmdAiPaceModel and bridge.cmdAiPaceModel ~= '' then c.aiPaceModel = bridge.cmdAiPaceModel end
   return sanitizeCfg(c)
 end
 
@@ -1257,6 +1328,8 @@ local function onCfgEvent(sender, d)
   nc.cutTimePenaltySec = d.cutTimePenaltySec
   nc.cutDisabledZones = d.cutDisabledZones or ''
   nc.safetyCarKey = d.safetyCarKey or 'safety'
+  nc = G_AI.unpackCode(d.aiPaceCode or 0, nc)
+  if d.aiPaceModel and d.aiPaceModel ~= '' then nc.aiPaceModel = d.aiPaceModel end
 
   cfg = sanitizeCfg(nc)
   cutZones = parseCutZones(cfg.cutDisabledZones)
@@ -1364,7 +1437,7 @@ do
       rowAlignTolM = ac.StructItem.uint8(),
       formationLaps = ac.StructItem.uint8(),
       shortDistanceM = ac.StructItem.uint16(),
-      shortSec = ac.StructItem.uint16(),
+      shortSec = ac.StructItem.uint8(),
       accelZoneStart = ac.StructItem.unorm16(),
       greenLineSpline = ac.StructItem.unorm16(),
       oneToGoSpline = ac.StructItem.unorm16(),
@@ -1386,14 +1459,15 @@ do
       cutSlowSec = ac.StructItem.uint8(),
       cutServeLaps = ac.StructItem.uint8(),
       cutEscStopGoSec = ac.StructItem.uint8(),
-      cutFinishTimeSec = ac.StructItem.uint16(),
+      cutFinishTimeSec = ac.StructItem.uint8(),
       cutTimePenaltySec = ac.StructItem.uint8(),
-      cutDisabledZones = ac.StructItem.string(80),
+      cutDisabledZones = ac.StructItem.string(48),
       safetyCarKey = ac.StructItem.string(24),
       fastKmh = ac.StructItem.uint8(),
       fastPct = ac.StructItem.uint8(),
       slowKmh = ac.StructItem.uint8(),
       bunchM = ac.StructItem.uint8(),
+      aiPaceCode = ac.StructItem.uint8(),
     }, onCfgEvent)
   end)
   if ok2 then sendCfgEvt, accessCfgEvt = s2, a2 end
@@ -1471,6 +1545,8 @@ local function flushOutbox()
     p.cutTimePenaltySec = cfg.cutTimePenaltySec
     p.cutDisabledZones = cfg.cutDisabledZones or ''
     p.safetyCarKey = cfg.safetyCarKey or 'safety'
+    p.aiPaceCode = G_AI.packCode(cfg)
+    p.aiPaceModel = cfg.aiPaceModel or ''
     if sendCfgEvt(nil, true) then
       outboxCfgDirty = false
       lastSendAt = uiTime
@@ -1632,6 +1708,7 @@ local function resetAll()
   stewardRecords = {}
   designatedStewardSid = nil
   lastLapSeen = -1
+  G_AI.reset()
   if lastOverrideFlag ~= 0 then
     lastOverrideFlag = 0
     pcall(function() physics.overrideRacingFlag(ac.FlagType.None) end)
@@ -1659,6 +1736,156 @@ end
 
 local function paceSpline()
   return frac(S.s0 + paceDistM() / trackLen())
+end
+
+-- ── Pace Car IA (optionnel) ───────────────────────────────────────────────────
+-- Le script ne peut pas creer de voiture : le serveur doit avoir une voiture de
+-- pace car sur la grille (voiture IA du serveur, ou n'importe quelle voiture si
+-- aiPaceMode = 'any'). Des qu'elle est designee, CSP prend le controle de sa
+-- conduite via l'autopilote du jeu, et le script regle sa vitesse de consigne.
+-- Le systeme de safety car humaine (safetyCarKey / paceKmh) n'est pas modifie.
+--
+-- Tout est regroupe dans une seule table : le script principal est deja au plus
+-- pres de la limite Lua de 200 variables locales.
+
+function G_AI.active()
+  return cfg.aiPaceMode ~= 'off'
+end
+
+-- La voiture de pace car doit rester hors du classement du depart lance.
+function G_AI.isOurCar(id)
+  return id ~= nil and G_AI.sessionId ~= nil and id == G_AI.sessionId
+end
+
+function G_AI.find(cars)
+  local q = tostring(cfg.aiPaceName or ''):lower():gsub('^%s+', ''):gsub('%s+$', '')
+  -- Modele attendu (entry_list MODEL=) : evite de piloter une voiture de pilote
+  -- qui porterait par hasard le meme nom.
+  local wantModel = tostring(cfg.aiPaceModel or ''):lower():gsub('%s+$', '')
+  if q == '' and wantModel == '' then return nil end
+  local firstMatch = nil
+  for _, c in pairs(cars) do
+    local dn = tostring(ac.getDriverName(c.index) or ''):lower()
+    local cid = safeCarId(c):lower()
+    local modelOk = wantModel == '' or cid == wantModel or cid:find(wantModel, 1, true) ~= nil
+    if not modelOk then
+      -- repli : certaines versions exposent le modele via le nom de voiture
+      local cname = ''
+      pcall(function() cname = tostring(ac.getCarName and ac.getCarName(c.index) or ''):lower() end)
+      modelOk = cname:find(wantModel, 1, true) ~= nil
+    end
+    if not modelOk then dn = '' ; cid = '' end
+    if (q == '' or dn:find(q, 1, true) or cid:find(q, 1, true)) then
+      -- une voiture IA du serveur (ou avec un level IA) : la plus logique a piloter
+      if c.isAIControlled or (tonumber(c.aiLevel) or 0) > 0 then
+        return c
+      end
+      if not firstMatch then firstMatch = c end
+    end
+  end
+  return firstMatch
+end
+
+-- Applique l'autopilote et la vitesse de consigne a la voiture de pace car.
+-- Le script ne peut piloter de facon fiable QUE la voiture locale (index 0).
+-- physics.setCarAutopilot() n'accepte pas d'index de voiture : l'appeler pour
+-- une autre voiture mettrait en autopilote la voiture du joueur, ce qui est
+-- dangereux en course. On ne prend donc le controle que si la pace car EST
+-- notre voiture locale.
+function G_AI.isLocalCar(car)
+  local me = ac.getCar(0)
+  return car ~= nil and me ~= nil and car.index == me.index
+end
+
+-- Peut-on prendre le controle pour cette voiture ?
+function G_AI.canDrive(car)
+  if not car then return false, 'aucune voiture' end
+  if cfg.aiPaceDriver ~= 'remote' and not G_AI.isLocalCar(car) then
+    return false, 'pas la voiture locale'
+  end
+  return true
+end
+
+function G_AI.drive(car, kmh)
+  if not car then return false end
+  if cfg.aiPaceDryRun == 1 then return false end
+
+  -- Cas 1 : la voiture est deja conduite par l'IA du jeu (place AI=fixed sur un
+  -- serveur qui gere les IA, ou voiture IA de la grille). L'IA roule deja : on
+  -- ne prend AUCUN controle, on bride seulement la vitesse. Tous ces appels
+  -- prennent un index de voiture, donc ils ne peuvent pas toucher une autre
+  -- voiture, meme lancee depuis un client qui ne conduit pas la pace car.
+  local isAi = car.isAIControlled or (tonumber(car.aiLevel) or 0) > 0
+  if isAi then
+    local staleAi = not G_AI.lastApplyAt or (uiTime - G_AI.lastApplyAt) >= 1.0
+    if G_AI.mode == 'ai' and G_AI.topKmh == kmh and not staleAi then return true end
+    local okAi = pcall(function()
+      physics.setAITopSpeed(car.index, kmh)
+      physics.setAIThrottleLimit(car.index, 1.0)
+      physics.setAIAggression(car.index, 0.5)
+    end)
+    if okAi then
+      if G_AI.mode ~= 'ai' then
+        G_AI.mode = 'ai'
+        safeLog(string.format('pace car IA : voiture IA %d bridee a %d km/h, aucun autopilote force', car.index, kmh))
+      end
+      G_AI.topKmh = kmh
+      G_AI.lastApplyAt = uiTime
+    end
+    return okAi
+  end
+
+  -- Cas 2 : voiture de joueur. physics.setCarAutopilot() n'a pas d'index : on ne
+  -- peut piloter que notre propre voiture, sinon on mettrait en autopilote la
+  -- voiture du joueur. On refuse donc tout le reste.
+  local can, why = G_AI.canDrive(car)
+  if not can then
+    if not G_AI.warned then
+      G_AI.warned = true
+      safeLog(string.format('pace car IA : pilotage du client non applique (%s) — voiture %d, joueur %d',
+        why, car.index, (ac.getCar(0) and ac.getCar(0).index) or -1))
+    end
+    return false
+  end
+  -- Rafraichissement periodique : si CSP relache l'autopilote (reset, sortie de
+  -- piste, rechargement de la voiture), on le reprend sans attendre un changement.
+  local stale = not G_AI.lastApplyAt or (uiTime - G_AI.lastApplyAt) >= 1.0
+  if G_AI.mode == 'drive' and G_AI.topKmh == kmh and not stale then return true end
+  local ok = pcall(function()
+    physics.setCarAutopilot(true, false)
+    physics.setAITopSpeed(car.index, kmh)
+    physics.setAIThrottleLimit(car.index, 1.0)
+    physics.setAIAggression(car.index, 0.5)
+  end)
+  if ok then
+    G_AI.mode = 'drive'
+    G_AI.topKmh = kmh
+    G_AI.lastApplyAt = uiTime
+  end
+  return ok
+end
+
+-- Rend la main : la voiture de pace car repasse en pilotage normal.
+function G_AI.release(car)
+  if G_AI.mode ~= 'drive' then return end
+  -- Voiture de reference pour l'appel sans index : la notre si connue, sinon la
+  -- voiture du joueur (dont on restaure ainsi l'autopilote a l'etat normal).
+  local ref = car or (G_AI.carIndex and ac.getCar(G_AI.carIndex)) or ac.getCar(0)
+  pcall(function()
+    physics.setCarAutopilot(false, true)
+    if ref then physics.setAIPitStopRequest(ref.index, false) end
+  end)
+  G_AI.mode = 'released'
+  G_AI.topKmh = nil
+end
+
+function G_AI.reset()
+  if G_AI.mode == 'drive' then G_AI.release(nil) end
+  G_AI.carIndex, G_AI.sessionId, G_AI.announced = nil, nil, false
+  G_AI.mode, G_AI.topKmh = nil, nil
+  G_AI.sentInLap, G_AI.gaveUp, G_AI.lastGapM = false, false, nil
+  G_AI.lastApplyAt = nil
+  G_AI.warned = false
 end
 
 -- Depart lance (startLength = full) :
@@ -1705,6 +1932,125 @@ local function activeLeader(cars)
     end
   end
   return nil, nil
+end
+
+-- Vitesse de consigne du pace car IA.
+-- aiPaceFollow = 1 : le pace car prend la vitesse REELLE du leader du peloton
+-- (celle que les pilotes roulent pendant la formation) ; aiPaceKmh ne sert alors
+-- que de plafond de securite. aiPaceFollow = 0 : vitesse fixe.
+function G_AI.targetKmh(cars, car)
+  local lead = activeLeader(cars)
+  local leadKmh = (lead and not G_AI.isOurCar(lead.sessionID)) and (tonumber(lead.speedKmh) or 0) or nil
+  local cap = cfg.aiPaceKmh
+  if cfg.aiPaceFollow ~= 1 then return cap, false end
+  if not leadKmh or leadKmh < 5 then
+    -- peloton encore arrete : le pace car garde une allure de formation douce
+    return math.min(cap, 40), true
+  end
+  -- on suit le peloton sans jamais depasser le plafond choisi dans Race Control
+  return math.min(cap, math.max(25, leadKmh + 6)), true
+end
+
+-- Distance (m) entre le pace car IA et la voiture de tete du peloton.
+function G_AI.gapToLeader(cars, car)
+  if not car then return 0 end
+  local leadCar, leadId = activeLeader(cars)
+  if not leadCar or G_AI.isOurCar(leadId) then return 0 end
+  local tr = carTrackDist[leadId]
+  local leadD = tr and tr.distM or 0
+  local myD = carTrackDist[car.sessionID] and carTrackDist[car.sessionID].distM or leadD
+  return myD - leadD
+end
+
+-- Place la voiture de pace car devant la tete de peloton (utilise si elle est
+-- restee sur la grille : au depart lance, le pace car doit etre devant).
+-- Retourne true si le placement a pu etre applique.
+function G_AI.placeAhead(cars, car)
+  if not car then return false end
+  local leadCar = activeLeader(cars)
+  if not leadCar or G_AI.isOurCar(leadCar.sessionID) then return false end
+  local len = trackLen()
+  local targetS = frac(leadCar.splinePosition + math.max(10, cfg.aiPaceLeadM) / len)
+  local ok, pos, dir = pcall(function()
+    local p = ac.trackCoordinateToWorld(vec3(0, 0, targetS))
+    local pAhead = ac.trackCoordinateToWorld(vec3(0, 0, frac(targetS + 5 / len)))
+    return p, (pAhead - p):normalize()
+  end)
+  if not ok or not pos or not dir then return false end
+  return pcall(physics.setCarPosition, car.index, pos, dir)
+end
+
+-- ── Controle du pace car IA ──────────────────────────────────────────────────
+-- Cycle : grille -> roulage (vitesse de consigne) -> rentre aux stands apres le vert.
+-- Ne fait rien tant qu'aucune voiture ne correspond a aiPaceName.
+function G_AI.update(cars)
+  if not G_AI.active() or not isRollingSessionActive() then
+    if G_AI.mode == 'drive' then G_AI.release(G_AI.sessionId and cars[G_AI.sessionId] or nil) end
+    return
+  end
+
+  if S.phase == PHASE_GREEN then
+    -- Vert donne : le pace car doit s'ecarter du chemin.
+    local car = G_AI.sessionId and cars[G_AI.sessionId] or nil
+    if G_AI.mode == 'drive' and car then
+      if cfg.aiPaceInLap == 1 and not G_AI.sentInLap then
+        G_AI.sentInLap = true
+        pcall(physics.setAIPitStopRequest, car.index, true)
+        pcall(physics.setAITopSpeed, car.index, cfg.fastKmh)
+        pcall(function() physics.setAIThrottleLimit(car.index, 1.0) end)
+        safeLog('pace car IA : rentre aux stands')
+      elseif cfg.aiPaceInLap == 0 then
+        -- Reste en piste mais laisse filer le peloton.
+        pcall(physics.setAITopSpeed, car.index, cfg.fastKmh)
+      end
+    end
+    return
+  end
+
+  local car = G_AI.find(cars)
+  if not car then
+    if not G_AI.gaveUp and uiTime > 1.0 then
+      G_AI.gaveUp = true
+      safeLog(string.format("pace car IA : aucune voiture ne correspond a '%s' (mode %s), pilotage IA inactif",
+        tostring(cfg.aiPaceName), tostring(cfg.aiPaceMode)))
+    end
+    return
+  end
+
+  if G_AI.sessionId ~= car.sessionID then
+    G_AI.sessionId, G_AI.carIndex = car.sessionID, car.index
+    G_AI.sentInLap, G_AI.mode, G_AI.topKmh = false, nil, nil
+    local meIdx = (ac.getCar(0) and ac.getCar(0).index) or -1
+    local role
+    if cfg.aiPaceDryRun == 1 then role = 'DRY-RUN, aucun controle applique'
+    elseif G_AI.isLocalCar(car) then role = 'pilote par ce client (voiture locale)'
+    else role = string.format('voiture distante (%d), pilotage delegue au client qui la conduit', car.index) end
+    safeLog(string.format('pace car IA designe : %s (index %d, session %d, joueur local %d) — %s',
+      tostring(ac.getDriverName(car.index)), car.index, car.sessionID, meIdx, role))
+    if not G_AI.announced then
+      G_AI.announced = true
+      pcall(ac.setMessage, 'PACE CAR IA', 'Pilotage automatique de ' .. tostring(cfg.aiPaceName), 'info', 5)
+    end
+  end
+
+  -- Phase de grille : le pace car IA attend sagement le top depart.
+  if S.phase == PHASE_IDLE then
+    if G_AI.mode == 'drive' then G_AI.release(car) end
+    return
+  end
+
+  -- Formation / READY / CAUTION : le pace car roule devant le peloton.
+  local kmh, following = G_AI.targetKmh(cars, car)
+  G_AI.following = following
+  local gap = G_AI.gapToLeader(cars, car)
+  if gap < math.max(12, cfg.aiPaceLeadM * 0.5) then
+    -- trop pres : le pace car accelere legerement pour recreuser l'ecart
+    kmh = math.min(cfg.aiPaceKmh + 12, kmh + 10)
+  end
+  if not G_AI.drive(car, math.floor(kmh + 0.5)) then
+    G_AI.mode = nil
+  end
+  G_AI.lastGapM = gap
 end
 
 -- Palier courant du depart lance : 'fast' -> 'slow' -> 'wait'
@@ -2519,7 +2865,7 @@ local function processBridgeCommands()
 end
 
 -- ── Movable & Resizable Built-in HUD Layout (single table to preserve LuaJIT 200-local limit) ──
-local hudUi = {
+G_HUD = {
   DEFAULTS = {
     bannerX = -1, bannerY = 0.04, bannerScale = 1.0,
     cutsX = 0.012, cutsY = 0.945, cutsScale = 1.0,
@@ -2544,45 +2890,45 @@ local hudUi = {
 }
 pcall(function()
   if ac.storage then
-    hudUi.store = ac.storage({
-      bannerX = hudUi.DEFAULTS.bannerX,
-      bannerY = hudUi.DEFAULTS.bannerY,
-      bannerScale = hudUi.DEFAULTS.bannerScale,
-      cutsX = hudUi.DEFAULTS.cutsX,
-      cutsY = hudUi.DEFAULTS.cutsY,
-      cutsScale = hudUi.DEFAULTS.cutsScale,
-      pelotonX = hudUi.DEFAULTS.pelotonX,
-      pelotonY = hudUi.DEFAULTS.pelotonY,
-      pelotonScale = hudUi.DEFAULTS.pelotonScale,
-      locked = hudUi.DEFAULTS.locked,
+    G_HUD.store = ac.storage({
+      bannerX = G_HUD.DEFAULTS.bannerX,
+      bannerY = G_HUD.DEFAULTS.bannerY,
+      bannerScale = G_HUD.DEFAULTS.bannerScale,
+      cutsX = G_HUD.DEFAULTS.cutsX,
+      cutsY = G_HUD.DEFAULTS.cutsY,
+      cutsScale = G_HUD.DEFAULTS.cutsScale,
+      pelotonX = G_HUD.DEFAULTS.pelotonX,
+      pelotonY = G_HUD.DEFAULTS.pelotonY,
+      pelotonScale = G_HUD.DEFAULTS.pelotonScale,
+      locked = G_HUD.DEFAULTS.locked,
     }, 'gdsp_rs_hud_')
   end
 end)
 
-function hudUi.get(k)
-  if hudUi.store ~= nil and hudUi.store[k] ~= nil then
-    return hudUi.store[k]
+function G_HUD.get(k)
+  if G_HUD.store ~= nil and G_HUD.store[k] ~= nil then
+    return G_HUD.store[k]
   end
-  return hudUi.mem[k]
+  return G_HUD.mem[k]
 end
 
-function hudUi.set(k, v)
-  hudUi.mem[k] = v
-  if hudUi.store ~= nil then
-    pcall(function() hudUi.store[k] = v end)
+function G_HUD.set(k, v)
+  G_HUD.mem[k] = v
+  if G_HUD.store ~= nil then
+    pcall(function() G_HUD.store[k] = v end)
   end
 end
 
-function hudUi.reset(onlyId)
+function G_HUD.reset(onlyId)
   local keys = onlyId
     and { onlyId .. 'X', onlyId .. 'Y', onlyId .. 'Scale' }
     or { 'bannerX', 'bannerY', 'bannerScale', 'cutsX', 'cutsY', 'cutsScale', 'pelotonX', 'pelotonY', 'pelotonScale', 'locked' }
   for _, k in ipairs(keys) do
-    hudUi.set(k, hudUi.DEFAULTS[k])
+    G_HUD.set(k, G_HUD.DEFAULTS[k])
   end
 end
 
-function hudUi.readMouse()
+function G_HUD.readMouse()
   local mpos, mdown, mwheel = nil, false, 0
   if ui and ui.mousePos then
     local ok, p = pcall(ui.mousePos)
@@ -2620,18 +2966,18 @@ local function handleChatCommand(msg)
   if trimmed:match('^!rshud') then
     local hcmd = trimmed:match('^!rshud%s+(.+)$') or 'reset'
     if hcmd == 'reset' then
-      hudUi.reset(nil)
+      G_HUD.reset(nil)
     elseif hcmd == 'lock' then
-      hudUi.set('locked', true)
+      G_HUD.set('locked', true)
     elseif hcmd == 'unlock' then
-      hudUi.set('locked', false)
+      G_HUD.set('locked', false)
     else
       local scVal = tonumber(hcmd:match('^scale%s+([%d%.]+)$'))
       if scVal then
         scVal = clamp(scVal, 0.55, 2.50)
-        hudUi.set('bannerScale', scVal)
-        hudUi.set('cutsScale', scVal)
-        hudUi.set('pelotonScale', scVal)
+        G_HUD.set('bannerScale', scVal)
+        G_HUD.set('cutsScale', scVal)
+        G_HUD.set('pelotonScale', scVal)
       end
     end
     return true
@@ -2697,6 +3043,32 @@ local function handleChatCommand(msg)
     local limVal = cmd:match('^limiter%s+(%a+)$')
     if limVal == 'limiter' or limVal == 'hard' or limVal == 'off' then
       local nc = copyCfg(cfg); nc.limiterMode = limVal; broadcastCfg(nc)
+    end
+    -- Pace car IA : !rs aipace off | !rs aipace on [nom] | !rs aipace 90
+    local aiVal = cmd:match('^aipace%s+(.*)$')
+    if aiVal then
+      local nc = copyCfg(cfg)
+      local arg = aiVal:match('^%s*(.-)%s*$')
+      local modeArg, rest = arg:match('^(%a+)%s*(.*)$')
+      local speedArg = tonumber(modeArg)
+      if modeArg == 'off' then
+        nc.aiPaceMode = 'off'
+      elseif modeArg == 'on' or modeArg == 'any' then
+        nc.aiPaceMode = 'any'
+        if rest ~= '' then nc.aiPaceName = rest end
+      elseif modeArg == 'grid' then
+        nc.aiPaceMode = 'grid'
+        if rest ~= '' then nc.aiPaceName = rest end
+      elseif speedArg then
+        nc.aiPaceMode = nc.aiPaceMode == 'off' and 'any' or nc.aiPaceMode
+        nc.aiPaceKmh = speedArg
+      else
+        return true
+      end
+      broadcastCfg(nc)
+      G_AI.gaveUp = false
+      pcall(ac.setMessage, 'PACE CAR IA', tostring(nc.aiPaceMode) .. ' — ' .. tostring(nc.aiPaceName) .. ' @ ' .. tostring(nc.aiPaceKmh) .. ' km/h', 'info', 4)
+      return true
     end
     local stewTarget = cmd:match('^steward%s+(.+)$')
     if stewTarget then
@@ -2844,6 +3216,7 @@ function script.update(dt)
         checkLightsOut(cars, now)
       end
       controlFormation(cars, rank)
+      G_AI.update(cars)
       updateLocalFormation(cars, dt)
     else
       if localState.limiterActive then
@@ -2861,17 +3234,17 @@ function script.update(dt)
 end
 
 -- ── Built-In Fallback HUD (for drivers without the CM Lua App) ────────────────
-function hudUi.drawCentered(txt, sz, cx, y, col)
+function G_HUD.drawCentered(txt, sz, cx, y, col)
   local w = ui.measureDWriteText and ui.measureDWriteText(txt, sz).x or (#txt * sz * 0.52)
   ui.dwriteDrawText(txt, sz, vec2(cx - w / 2, y), col)
 end
 
-function hudUi.computeWidgetBox(id, baseW, baseH, win, mpos, mdown, mwheel, justPressed)
-  local sc = clamp(tonumber(hudUi.get(id .. 'Scale')) or 1.0, 0.55, 2.50)
+function G_HUD.computeWidgetBox(id, baseW, baseH, win, mpos, mdown, mwheel, justPressed)
+  local sc = clamp(tonumber(G_HUD.get(id .. 'Scale')) or 1.0, 0.55, 2.50)
   local w = math.min(baseW * sc, math.max(60, win.x - 16))
   local h = math.min(baseH * sc, math.max(24, win.y - 16))
-  local nx = tonumber(hudUi.get(id .. 'X'))
-  local ny = tonumber(hudUi.get(id .. 'Y'))
+  local nx = tonumber(G_HUD.get(id .. 'X'))
+  local ny = tonumber(G_HUD.get(id .. 'Y'))
   local x = (not nx or nx < 0) and ((win.x - w) * 0.5) or (nx * win.x)
   local y = (ny or 0.04) * win.y
   local maxX = math.max(4, win.x - w - 4)
@@ -2880,7 +3253,7 @@ function hudUi.computeWidgetBox(id, baseW, baseH, win, mpos, mdown, mwheel, just
   y = clamp(y, 4, maxY)
 
   local hovered = false
-  local locked = hudUi.get('locked') == true
+  local locked = G_HUD.get('locked') == true
   if mpos and not locked then
     local mx, my = mpos.x, mpos.y
     local btnSz = clamp(16 * (win.y / 1080), 13, 22)
@@ -2894,21 +3267,21 @@ function hudUi.computeWidgetBox(id, baseW, baseH, win, mpos, mdown, mwheel, just
     local inBar = (my >= btnY and my <= btnY + btnSz and mx >= resetX and mx <= plusX + btnSz)
     hovered = inBody or inBar
 
-    if justPressed and hovered and not hudUi.drag.activeId then
+    if justPressed and hovered and not G_HUD.drag.activeId then
       if my >= btnY and my <= btnY + btnSz then
         if mx >= plusX and mx <= plusX + btnSz then
           sc = clamp(sc + 0.12, 0.55, 2.50)
-          hudUi.set(id .. 'Scale', sc)
+          G_HUD.set(id .. 'Scale', sc)
           return x, y, math.min(baseW * sc, win.x - 16), math.min(baseH * sc, win.y - 16), sc, true
         elseif mx >= minusX and mx <= minusX + btnSz then
           sc = clamp(sc - 0.12, 0.55, 2.50)
-          hudUi.set(id .. 'Scale', sc)
+          G_HUD.set(id .. 'Scale', sc)
           return x, y, math.min(baseW * sc, win.x - 16), math.min(baseH * sc, win.y - 16), sc, true
         elseif mx >= resetX and mx <= resetX + btnSz then
-          hudUi.reset(id)
-          sc = clamp(tonumber(hudUi.get(id .. 'Scale')) or 1.0, 0.55, 2.50)
-          local rnx = tonumber(hudUi.get(id .. 'X'))
-          local rny = tonumber(hudUi.get(id .. 'Y'))
+          G_HUD.reset(id)
+          sc = clamp(tonumber(G_HUD.get(id .. 'Scale')) or 1.0, 0.55, 2.50)
+          local rnx = tonumber(G_HUD.get(id .. 'X'))
+          local rny = tonumber(G_HUD.get(id .. 'Y'))
           local rw = math.min(baseW * sc, math.max(60, win.x - 16))
           local rh = math.min(baseH * sc, math.max(24, win.y - 16))
           local rx = (not rnx or rnx < 0) and ((win.x - rw) * 0.5) or (rnx * win.x)
@@ -2919,38 +3292,38 @@ function hudUi.computeWidgetBox(id, baseW, baseH, win, mpos, mdown, mwheel, just
 
       if inBody then
         if mx >= x + w - gripSz and my >= y + h - gripSz then
-          hudUi.drag.activeId = id
-          hudUi.drag.mode = 'resize'
-          hudUi.drag.startMx = mx
-          hudUi.drag.startMy = my
-          hudUi.drag.startScale = sc
+          G_HUD.drag.activeId = id
+          G_HUD.drag.mode = 'resize'
+          G_HUD.drag.startMx = mx
+          G_HUD.drag.startMy = my
+          G_HUD.drag.startScale = sc
         else
-          hudUi.drag.activeId = id
-          hudUi.drag.mode = 'move'
-          hudUi.drag.offX = mx - x
-          hudUi.drag.offY = my - y
+          G_HUD.drag.activeId = id
+          G_HUD.drag.mode = 'move'
+          G_HUD.drag.offX = mx - x
+          G_HUD.drag.offY = my - y
         end
       end
-    elseif hudUi.drag.activeId == id and mdown then
-      if hudUi.drag.mode == 'move' then
-        x = clamp(mx - hudUi.drag.offX, 4, maxX)
-        y = clamp(my - hudUi.drag.offY, 4, maxY)
-        hudUi.set(id .. 'X', x / math.max(1, win.x))
-        hudUi.set(id .. 'Y', y / math.max(1, win.y))
-      elseif hudUi.drag.mode == 'resize' then
-        local dw = (mx - hudUi.drag.startMx) / math.max(40, baseW)
-        local dh = (my - hudUi.drag.startMy) / math.max(24, baseH)
+    elseif G_HUD.drag.activeId == id and mdown then
+      if G_HUD.drag.mode == 'move' then
+        x = clamp(mx - G_HUD.drag.offX, 4, maxX)
+        y = clamp(my - G_HUD.drag.offY, 4, maxY)
+        G_HUD.set(id .. 'X', x / math.max(1, win.x))
+        G_HUD.set(id .. 'Y', y / math.max(1, win.y))
+      elseif G_HUD.drag.mode == 'resize' then
+        local dw = (mx - G_HUD.drag.startMx) / math.max(40, baseW)
+        local dh = (my - G_HUD.drag.startMy) / math.max(24, baseH)
         -- droite/bas = grandit, gauche/haut = rapetisse (les deux sens)
-        sc = clamp(hudUi.drag.startScale + dw + dh, 0.55, 2.50)
-        hudUi.set(id .. 'Scale', sc)
+        sc = clamp(G_HUD.drag.startScale + dw + dh, 0.55, 2.50)
+        G_HUD.set(id .. 'Scale', sc)
         w = math.min(baseW * sc, math.max(60, win.x - 16))
         h = math.min(baseH * sc, math.max(24, win.y - 16))
         x = clamp(x, 4, math.max(4, win.x - w - 4))
         y = clamp(y, 4, math.max(4, win.y - h - 4))
       end
-    elseif hovered and mwheel ~= 0 and not hudUi.drag.activeId then
+    elseif hovered and mwheel ~= 0 and not G_HUD.drag.activeId then
       sc = clamp(sc + (mwheel > 0 and 0.08 or -0.08), 0.55, 2.50)
-      hudUi.set(id .. 'Scale', sc)
+      G_HUD.set(id .. 'Scale', sc)
       w = math.min(baseW * sc, math.max(60, win.x - 16))
       h = math.min(baseH * sc, math.max(24, win.y - 16))
     end
@@ -2959,9 +3332,9 @@ function hudUi.computeWidgetBox(id, baseW, baseH, win, mpos, mdown, mwheel, just
   return x, y, w, h, sc, hovered
 end
 
-function hudUi.drawControls(id, x, y, w, h, win, hovered)
-  if hudUi.get('locked') == true then return end
-  if not hovered and hudUi.drag.activeId ~= id then return end
+function G_HUD.drawControls(id, x, y, w, h, win, hovered)
+  if G_HUD.get('locked') == true then return end
+  if not hovered and G_HUD.drag.activeId ~= id then return end
   local goldCol = rgbm(0.85, 0.64, 0.28, 0.92)
   local bgCol = rgbm(0.05, 0.14, 0.18, 0.92)
   if ui.drawRect then
@@ -2993,7 +3366,7 @@ function script.drawUI()
     if debugOn then
       ui.dwriteDrawText(string.format('RS start=%d phase=%d cuts=%d/%d pen=%s timeAdd=%ds',
         cfg.enabled, S.phase, pen.cuts, cfg.cutMaxBeforePenalty, pen.active and pen.active.kind or 'none', pen.totalTimePenaltySec),
-        13, vec2(12, 28), hudUi.COL_AMBER)
+        13, vec2(12, 28), G_HUD.COL_AMBER)
     end
 
     if not isAnySystemActive() then return end
@@ -3007,12 +3380,12 @@ function script.drawUI()
       return
     end
 
-    local mpos, mdown, mwheel = hudUi.readMouse()
+    local mpos, mdown, mwheel = G_HUD.readMouse()
     if not mdown then
-      hudUi.drag.activeId = nil
-      hudUi.drag.mode = nil
+      G_HUD.drag.activeId = nil
+      G_HUD.drag.mode = nil
     end
-    local justPressed = mdown and not hudUi.drag.prevDown
+    local justPressed = mdown and not G_HUD.drag.prevDown
 
     local k = win.y / 1080
     local showGreen = cfg.showStartBanner == 1 and cfg.enabled == 1 and S.phase == PHASE_GREEN and (clock() - S.tStart) < 4500
@@ -3035,7 +3408,7 @@ function script.drawUI()
       local penH = pen.active and 80 or ((pen.note and uiTime < pen.note.untilT) and 42 or 0)
       local gapH = (mainH > 0 and penH > 0) and 6 or 0
       local baseBW, baseBH = 380 * k, (mainH + gapH + penH) * k
-      local bx, by, bw, bh, bSc, bHov = hudUi.computeWidgetBox('banner', baseBW, math.max(30 * k, baseBH), win, mpos, mdown, mwheel, justPressed)
+      local bx, by, bw, bh, bSc, bHov = G_HUD.computeWidgetBox('banner', baseBW, math.max(30 * k, baseBH), win, mpos, mdown, mwheel, justPressed)
       -- le contenu suit la largeur réelle du cadre : rien ne dépasse, rien n'est rogné
       local kb = bw / 380 -- echelle commune largeur/hauteur : contenu = cadre (k * sc)
       local cx = bx + bw * 0.5
@@ -3044,10 +3417,10 @@ function script.drawUI()
 
       if showGreen then
         ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 56 * kb), rgbm(0.04, 0.22, 0.10, 0.95), 8 * kb)
-        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 17 * kb), hudUi.COL_GREEN, 8 * kb)
-        hudUi.drawCentered('GREEN FLAG — EN COURSE', 11 * kb, cx, cy + 2.5 * kb, hudUi.COL_DARK)
-        hudUi.drawCentered('DRAPEAU VERT — EN COURSE', 16 * kb, cx, cy + 20 * kb, hudUi.COL_WHITE)
-        hudUi.drawCentered('Limiteur coupé · Compteur personnel actif', 9 * kb, cx, cy + 41 * kb, hudUi.COL_GREEN)
+        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 17 * kb), G_HUD.COL_GREEN, 8 * kb)
+        G_HUD.drawCentered('GREEN FLAG — EN COURSE', 11 * kb, cx, cy + 2.5 * kb, G_HUD.COL_DARK)
+        G_HUD.drawCentered('DRAPEAU VERT — EN COURSE', 16 * kb, cx, cy + 20 * kb, G_HUD.COL_WHITE)
+        G_HUD.drawCentered('Limiteur coupé · Compteur personnel actif', 9 * kb, cx, cy + 41 * kb, G_HUD.COL_GREEN)
         cy = cy + 60 * kb
       elseif showFormation then
         local title = (S.phase == PHASE_READY or localState.inAccelZone)
@@ -3058,26 +3431,26 @@ function script.drawUI()
                      slow = 'REGROUPEMENT — 80 km/h',
                      wait = 'VERT AU PASSAGE DE LA LIGNE DU LEADER' })[RS.stage.stage] or title
         end
-        local bgHeader = localState.inAccelZone and hudUi.COL_GREEN or hudUi.COL_GOLD
-        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + formH * kb), hudUi.COL_TEAL, 8 * kb)
-        ui.drawRect(vec2(bx, cy), vec2(bx + bw, cy + formH * kb), hudUi.COL_GOLD, 8 * kb, 1.5)
+        local bgHeader = localState.inAccelZone and G_HUD.COL_GREEN or G_HUD.COL_GOLD
+        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + formH * kb), G_HUD.COL_TEAL, 8 * kb)
+        ui.drawRect(vec2(bx, cy), vec2(bx + bw, cy + formH * kb), G_HUD.COL_GOLD, 8 * kb, 1.5)
         ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 24 * kb), bgHeader, 8 * kb)
-        hudUi.drawCentered(title, 14 * kb, cx, cy + 5 * kb, hudUi.COL_DARK)
+        G_HUD.drawCentered(title, 14 * kb, cx, cy + 5 * kb, G_HUD.COL_DARK)
 
         local laneLabel = localState.myLane == 1 and 'FILE GAUCHE' or (localState.myLane == 2 and 'FILE DROITE' or 'FILE INDIENNE')
         local followTxt = localState.targetName and ('SUIVRE: ' .. localState.targetName) or 'VOUS MENEZ'
-        hudUi.drawCentered(string.format('P%d  |  %s  |  %s', localState.mySlot, laneLabel, followTxt), 11 * kb, cx, cy + 30 * kb, hudUi.COL_WHITE)
+        G_HUD.drawCentered(string.format('P%d  |  %s  |  %s', localState.mySlot, laneLabel, followTxt), 11 * kb, cx, cy + 30 * kb, G_HUD.COL_WHITE)
 
         local speedTxt = string.format('%d / %d km/h%s  |  Green: %d m',
           math.floor((me and me.speedKmh or 0) + 0.5),
           math.floor(localState.allowedKmh + 0.5),
           localState.limiterActive and ' [LIM]' or '',
           math.floor(localState.distRemainingM + 0.5))
-        hudUi.drawCentered(speedTxt, 12 * kb, cx, cy + 46 * kb, (localState.speedWarn or localState.passWarn) and hudUi.COL_RED or hudUi.COL_AMBER)
+        G_HUD.drawCentered(speedTxt, 12 * kb, cx, cy + 46 * kb, (localState.speedWarn or localState.passWarn) and G_HUD.COL_RED or G_HUD.COL_AMBER)
 
         if warn then
-          ui.drawRectFilled(vec2(bx + 6 * kb, cy + 70 * kb), vec2(bx + bw - 6 * kb, cy + 96 * kb), hudUi.COL_RED, 6 * kb)
-          hudUi.drawCentered(warn, 12 * kb, cx, cy + 76 * kb, hudUi.COL_WHITE)
+          ui.drawRectFilled(vec2(bx + 6 * kb, cy + 70 * kb), vec2(bx + bw - 6 * kb, cy + 96 * kb), G_HUD.COL_RED, 6 * kb)
+          G_HUD.drawCentered(warn, 12 * kb, cx, cy + 76 * kb, G_HUD.COL_WHITE)
         end
         cy = cy + formH * kb
       end
@@ -3091,31 +3464,31 @@ function script.drawUI()
         local hdrTxt = isSG and 'STOP & GO OBLIGATOIRE' or 'DRIVE-THROUGH OBLIGATOIRE'
         if nQ > 0 then hdrTxt = hdrTxt .. '  (+' .. nQ .. ' EN ATTENTE)' end
         ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 80 * kb), rgbm(0.30, 0.05, 0.05, 0.95), 8 * kb)
-        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 17 * kb), hudUi.COL_RED, 8 * kb)
-        hudUi.drawCentered(hdrTxt, 11 * kb, cx, cy + 2.5 * kb, hudUi.COL_WHITE)
+        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 17 * kb), G_HUD.COL_RED, 8 * kb)
+        G_HUD.drawCentered(hdrTxt, 11 * kb, cx, cy + 2.5 * kb, G_HUD.COL_WHITE)
         if isSG then
           local left = math.max(0, pen.active.holdSec - pen.active.holdElapsed)
-          hudUi.drawCentered(string.format('STOP & GO (%ds)', pen.active.holdSec), 15 * kb, cx, cy + 20 * kb, hudUi.COL_WHITE)
-          hudUi.drawCentered(string.format('ARRET EN COURS : %.1fs RESTANT — RESTEZ IMMOBILE', left), 9 * kb, cx, cy + 37 * kb, hudUi.COL_WHITE)
+          G_HUD.drawCentered(string.format('STOP & GO (%ds)', pen.active.holdSec), 15 * kb, cx, cy + 20 * kb, G_HUD.COL_WHITE)
+          G_HUD.drawCentered(string.format('ARRET EN COURS : %.1fs RESTANT — RESTEZ IMMOBILE', left), 9 * kb, cx, cy + 37 * kb, G_HUD.COL_WHITE)
           local frac = clamp(pen.active.holdElapsed / math.max(0.1, pen.active.holdSec), 0, 1)
           ui.drawRectFilled(vec2(bx + 10 * kb, cy + 48 * kb), vec2(bx + bw - 10 * kb, cy + 53 * kb), rgbm(0.2, 0.2, 0.2, 0.8), 3 * kb)
-          ui.drawRectFilled(vec2(bx + 10 * kb, cy + 48 * kb), vec2(bx + 10 * kb + (bw - 20 * kb) * frac, cy + 53 * kb), hudUi.COL_GREEN, 3 * kb)
+          ui.drawRectFilled(vec2(bx + 10 * kb, cy + 48 * kb), vec2(bx + 10 * kb + (bw - 20 * kb) * frac, cy + 53 * kb), G_HUD.COL_GREEN, 3 * kb)
         else
-          hudUi.drawCentered(string.format('DRIVE-THROUGH — %d TOUR(S) RESTANT(S)', lapsLeft), 14 * kb, cx, cy + 22 * kb, hudUi.COL_WHITE)
+          G_HUD.drawCentered(string.format('DRIVE-THROUGH — %d TOUR(S) RESTANT(S)', lapsLeft), 14 * kb, cx, cy + 22 * kb, G_HUD.COL_WHITE)
         end
         local ESC_LBL = { stop_and_go = 'Stop & Go', drive_through = 'Drive-through', teleport_pits = 'Retour aux stands', black_flag = 'Drapeau noir', time_penalty = '+temps' }
         local escTxt = 'Sinon : ' .. (ESC_LBL[pen.active.escKind] or 'pénalité') .. ' — délai : ' .. lapsLeft .. ' tour(s)'
-        ui.drawRectFilled(vec2(bx + 6 * kb, cy + 60 * kb), vec2(bx + bw - 6 * kb, cy + 75 * kb), hudUi.COL_RED, 5 * kb)
-        hudUi.drawCentered(escTxt, 9 * kb, cx, cy + 64 * kb, hudUi.COL_WHITE)
+        ui.drawRectFilled(vec2(bx + 6 * kb, cy + 60 * kb), vec2(bx + bw - 6 * kb, cy + 75 * kb), G_HUD.COL_RED, 5 * kb)
+        G_HUD.drawCentered(escTxt, 9 * kb, cx, cy + 64 * kb, G_HUD.COL_WHITE)
         cy = cy + 84 * kb
       elseif pen.note and uiTime < pen.note.untilT then
-        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 42 * kb), hudUi.COL_AMBER, 8 * kb)
-        hudUi.drawCentered(pen.note.title .. ' — ' .. pen.note.why, 15 * kb, cx, cy + 11 * kb, hudUi.COL_DARK)
+        ui.drawRectFilled(vec2(bx, cy), vec2(bx + bw, cy + 42 * kb), G_HUD.COL_AMBER, 8 * kb)
+        G_HUD.drawCentered(pen.note.title .. ' — ' .. pen.note.why, 15 * kb, cx, cy + 11 * kb, G_HUD.COL_DARK)
       end
 
       if ui.popClipRect then pcall(ui.popClipRect) end
       -- boutons R - + et cadre : dessines hors du clip, sinon ils sont coupes en haut
-      hudUi.drawControls('banner', bx, by, bw, bh, win, bHov)
+      G_HUD.drawControls('banner', bx, by, bw, bh, win, bHov)
     end
 
     local showCutsWidget = (isCutSessionActive() or pen.totalTimePenaltySec > 0 or pen.active ~= nil)
@@ -3148,16 +3521,16 @@ function script.drawUI()
         local maxShown = math.min(#gridRows, 6)
         if maxShown > 0 then
           local basePW, basePH = 360 * k, (24 + maxShown * 18) * k
-          local px, py, pw, ph, pSc, pHov = hudUi.computeWidgetBox('peloton', basePW, basePH, win, mpos, mdown, mwheel, justPressed)
+          local px, py, pw, ph, pSc, pHov = G_HUD.computeWidgetBox('peloton', basePW, basePH, win, mpos, mdown, mwheel, justPressed)
           local kp = k * pSc
           ui.drawRectFilled(vec2(px, py), vec2(px + pw, py + ph), rgbm(0.06, 0.16, 0.20, 0.88), 6 * kp)
-          ui.drawRectFilled(vec2(px, py), vec2(px + pw, py + 20 * kp), hudUi.COL_GOLD, 6 * kp)
-          ui.dwriteDrawText('CUTS & PENALITES PELOTON — ' .. tostring(pelotonRoleLabel or 'SAFETY CAR'), 11 * kp, vec2(px + 8 * kp, py + 4 * kp), hudUi.COL_DARK)
+          ui.drawRectFilled(vec2(px, py), vec2(px + pw, py + 20 * kp), G_HUD.COL_GOLD, 6 * kp)
+          ui.dwriteDrawText('CUTS & PENALITES PELOTON — ' .. tostring(pelotonRoleLabel or 'SAFETY CAR'), 11 * kp, vec2(px + 8 * kp, py + 4 * kp), G_HUD.COL_DARK)
           for j = 1, maxShown do
             ui.dwriteDrawText(gridRows[j].txt, 12 * kp, vec2(px + 8 * kp, py + (20 + (j - 1) * 18) * kp),
-              gridRows[j].alert and hudUi.COL_RED or hudUi.COL_WHITE)
+              gridRows[j].alert and G_HUD.COL_RED or G_HUD.COL_WHITE)
           end
-          hudUi.drawControls('peloton', px, py, pw, ph, win, pHov)
+          G_HUD.drawControls('peloton', px, py, pw, ph, win, pHov)
         end
       end
 
@@ -3192,7 +3565,7 @@ function script.drawUI()
         local baseCW = math.max(124 * k, 18 * k + (showCount and (rawBaseW + rawDotsW + rawTimeW) or 0), rawPenW)
         local baseCH = rowH + penRowH
 
-        local cx0, cy0, cw, ch, cSc, cHov = hudUi.computeWidgetBox('cuts', baseCW, baseCH, win, mpos, mdown, mwheel, justPressed)
+        local cx0, cy0, cw, ch, cSc, cHov = G_HUD.computeWidgetBox('cuts', baseCW, baseCH, win, mpos, mdown, mwheel, justPressed)
         local kc = cw / math.max(1, baseCW)
         ui.drawRectFilled(vec2(cx0, cy0), vec2(cx0 + cw, cy0 + ch), rgbm(0.06, 0.16, 0.20, 0.78), 6 * kc)
         if ui.pushClipRect then pcall(ui.pushClipRect, vec2(cx0, cy0), vec2(cx0 + cw, cy0 + ch)) end
@@ -3200,8 +3573,8 @@ function script.drawUI()
         if showCount then
           local fzC = 12 * kc
           local rowMid = cy0 + rowH * kc * 0.5
-          local cutColor = (pen.active or pen.disqualified) and hudUi.COL_RED
-            or ((quota > 0 and pen.cutsSincePenalty >= quota) and hudUi.COL_AMBER or rgbm(0.96, 0.93, 0.85, 0.90))
+          local cutColor = (pen.active or pen.disqualified) and G_HUD.COL_RED
+            or ((quota > 0 and pen.cutsSincePenalty >= quota) and G_HUD.COL_AMBER or rgbm(0.96, 0.93, 0.85, 0.90))
           ui.dwriteDrawText(baseTxt, fzC, vec2(cx0 + 8 * kc, rowMid - fzC * 0.6), cutColor)
           if dotCount > 0 and ui.drawCircleFilled then
             local filledN = math.min(pen.cutsSincePenalty, dotCount)
@@ -3209,29 +3582,29 @@ function script.drawUI()
             local startX = cx0 + 8 * kc + textW + 10 * kc
             for d = 1, dotCount do
               local dCol = (d <= filledN)
-                and ((filledN >= dotCount) and hudUi.COL_RED or hudUi.COL_AMBER)
+                and ((filledN >= dotCount) and G_HUD.COL_RED or G_HUD.COL_AMBER)
                 or rgbm(0.96, 0.93, 0.85, 0.22)
               ui.drawCircleFilled(vec2(startX + (d - 1) * 10 * kc, rowMid), 3 * kc, dCol)
             end
           end
           if timeTxt ~= '' then
             local tw = rawTimeW * kc
-            ui.dwriteDrawText(timeTxt, fzC, vec2(cx0 + cw - tw + 4 * kc, rowMid - fzC * 0.6), hudUi.COL_AMBER)
+            ui.dwriteDrawText(timeTxt, fzC, vec2(cx0 + cw - tw + 4 * kc, rowMid - fzC * 0.6), G_HUD.COL_AMBER)
           end
         end
 
         if penTxt then
           local py0 = cy0 + rowH * kc
-          ui.drawRectFilled(vec2(cx0 + 4 * kc, py0 + 2 * kc), vec2(cx0 + cw - 4 * kc, py0 + penRowH * kc - 2 * kc), hudUi.COL_RED, 4 * kc)
+          ui.drawRectFilled(vec2(cx0 + 4 * kc, py0 + 2 * kc), vec2(cx0 + cw - 4 * kc, py0 + penRowH * kc - 2 * kc), G_HUD.COL_RED, 4 * kc)
           local fzP = 11 * kc
-          ui.dwriteDrawText(penTxt, fzP, vec2(cx0 + 8 * kc, py0 + (penRowH * kc - fzP) * 0.5), hudUi.COL_WHITE)
+          ui.dwriteDrawText(penTxt, fzP, vec2(cx0 + 8 * kc, py0 + (penRowH * kc - fzP) * 0.5), G_HUD.COL_WHITE)
         end
 
         if ui.popClipRect then pcall(ui.popClipRect) end
       end
     end
 
-    hudUi.drag.prevDown = mdown
+    G_HUD.drag.prevDown = mdown
   end)()
 end
 
@@ -3243,8 +3616,8 @@ function script.draw3D()
       return
     end
     local p = ac.trackCoordinateToWorld(vec3(0, 0, paceSpline()))
-    render.debugArrow(p + vec3(0, 10, 0), p + vec3(0, 1.6, 0), 1.2, hudUi.COL_AMBER)
-    render.debugText(p + vec3(0, 11.5, 0), string.format('PACE %d KM/H', cfg.paceKmh), hudUi.COL_AMBER, 1.4)
+    render.debugArrow(p + vec3(0, 10, 0), p + vec3(0, 1.6, 0), 1.2, G_HUD.COL_AMBER)
+    render.debugText(p + vec3(0, 11.5, 0), string.format('PACE %d KM/H', cfg.paceKmh), G_HUD.COL_AMBER, 1.4)
   end)()
 end
 
@@ -3268,7 +3641,7 @@ if GDSP_RS_TEST then
     desiredHudFlag = function() return getDesiredHudFlag(clock()) end,
     canViewPelotonCuts = canViewPelotonCuts,
     designatedStewardSid = function() return designatedStewardSid end,
-    hudLayout = function() return hudUi.mem end,
+    hudLayout = function() return G_HUD.mem end,
     handleChatCommand = handleChatCommand,
     startFormation = startFormation,
     triggerGreen = triggerGreen,

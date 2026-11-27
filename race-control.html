@@ -475,6 +475,131 @@
               </div>
             </div>
           </div>
+
+          <div class="card">
+            <h2>3 bis. Pace Car IA (optionnel)</h2>
+            <p class="hint" style="margin-bottom:10px">
+              Le système de safety car humaine ci-dessus reste inchangé. En plus, le script peut
+              <strong>piloter lui-même</strong> une voiture déjà présente sur la grille (voiture IA du serveur)
+              pendant le tour de formation, puis la renvoyer aux stands au drapeau vert.
+              Le serveur doit donc inscrire cette voiture dans sa liste d'entrées.
+            </p>
+            <div class="grid">
+              <div class="field">
+                <label for="aiPaceMode">Pace car IA</label>
+                <select id="aiPaceMode">
+                  <option value="off">Désactivé (safety car humaine uniquement)</option>
+                  <option value="grid">Voiture IA de la grille (recommandé)</option>
+                  <option value="any">N'importe quelle voiture correspondante</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="aiPaceName">Nom à reconnaître en piste</label>
+                <input id="aiPaceName" type="text" maxlength="23" value="Pace Car" placeholder="Pace Car" />
+              </div>
+              <div class="field">
+                <label for="aiPaceKmh">Vitesse de consigne (km/h)</label>
+                <input id="aiPaceKmh" type="number" min="30" max="180" value="90" />
+              </div>
+              <div class="field">
+                <label for="aiPaceLeadM">Avance sur la tête de peloton (m)</label>
+                <input id="aiPaceLeadM" type="number" min="10" max="200" value="30" />
+              </div>
+              <div class="field">
+                <label for="aiPaceInLap">Après le drapeau vert</label>
+                <select id="aiPaceInLap">
+                  <option value="1">Rentre aux stands (recommandé)</option>
+                  <option value="0">Reste en piste</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="aiPaceFollow">Vitesse du pace car</label>
+                <select id="aiPaceFollow">
+                  <option value="1">Suivre la vitesse réelle des pilotes (recommandé)</option>
+                  <option value="0">Vitesse fixe</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="aiPaceDriver">Qui pilote la pace car</label>
+                <select id="aiPaceDriver">
+                  <option value="local">La voiture locale (recommandé, seul cas fiable)</option>
+                  <option value="remote">Chaque client tente de piloter (expérimental)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="aiPaceDryRun">Mode test (aucun pilotage)</label>
+                <select id="aiPaceDryRun">
+                  <option value="0">Non — pilotage actif</option>
+                  <option value="1">Oui — détecte et journalise seulement</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="aiPaceModel">Modèle de voiture (dossier <code>content/cars</code>)</label>
+                <input id="aiPaceModel" type="text" maxlength="120" list="aiPaceModelList"
+                  value="dodge_monaco_police" placeholder="ex. dodge_monaco_police" />
+                <datalist id="aiPaceModelList"></datalist>
+              </div>
+              <div class="field">
+                <label for="aiPaceSkin">Skin (facultatif)</label>
+                <input id="aiPaceSkin" type="text" maxlength="120" list="aiPaceSkinList"
+                  placeholder="skin par défaut" />
+                <datalist id="aiPaceSkinList"></datalist>
+              </div>
+            </div>
+            <p class="hint" style="margin-top:10px">
+              <b>Livrer la voiture au serveur :</b> ajoute une place
+              <code>entry_list.ini</code> pour cette voiture. Les fichiers du serveur ne sont pas
+              modifiés automatiquement : le bloc ci-dessous est à coller par l'administrateur.
+            </p>
+            <div class="grid">
+              <div class="field">
+                <label for="aiPaceSlot">Numéro de place <code>[CAR_xx]</code></label>
+                <input id="aiPaceSlot" type="number" min="0" max="999" value="0" />
+              </div>
+              <div class="field">
+                <label for="aiPaceDriver">Nom affiché du pilote</label>
+                <input id="aiPaceDriver" type="text" maxlength="40" value="Pace Car" />
+              </div>
+              <div class="field">
+                <label>&nbsp;</label>
+                <button type="button" class="btn secondary" id="aiPaceInventoryBtn" onclick="loadPaceCarInventory()">
+                  Charger les voitures du serveur
+                </button>
+              </div>
+            </div>
+            <p class="hint" id="aiPaceInventoryStatus"></p>
+
+            <div class="out-head">
+              <span class="badge">1 / entry_list.ini</span>
+              <button class="btn btn-gold btn-sm" type="button" id="copyAiPaceEntryBtn" onclick="copyPaceCarEntry()">
+                Copier la place [CAR_xx]
+              </button>
+            </div>
+            <p class="hint" style="margin:6px 0">
+              À coller à la fin de <code>entry_list.ini</code> du serveur, après avoir arrêté le serveur
+              et fermé Content Manager. La voiture doit exister dans <code>content/cars/</code>.
+            </p>
+            <textarea id="aiPaceEntryOut" rows="10" readonly spellcheck="false"
+              style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px"></textarea>
+
+            <div class="out-head" style="margin-top:14px">
+              <span class="badge">2 / csp_extra_options.ini</span>
+              <button class="btn btn-gold btn-sm" type="button" id="copyAiPaceCspBtn" onclick="copyPaceCarCsp()">
+                Copier les options CSP
+              </button>
+            </div>
+            <p class="hint" style="margin:6px 0">
+              À ajouter dans <code>cfg/csp_extra_options.ini</code> (ou les <i>Extra options</i> de
+              Content Manager), en conservant vos autres sections. Redémarre ensuite le serveur.
+            </p>
+            <textarea id="aiPaceCspOut" rows="7" readonly spellcheck="false"
+              style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px"></textarea>
+
+            <details style="margin-top:10px">
+              <summary style="cursor:pointer">Marche à suivre détaillée</summary>
+              <pre id="aiPaceNotes" style="white-space:pre-wrap;font-size:12px;margin-top:8px"></pre>
+            </details>
+          </div>
         </div>
 
         <div class="card">
@@ -529,6 +654,7 @@
     </div>
   </div>
   <script src="/race-control/encoder.js"></script>
+  <script src="/race-control/pace-car.js"></script>
   <script src="/race-control/configurator.js"></script>
 </body>
 </html>

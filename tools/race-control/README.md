@@ -30,3 +30,119 @@ commandes de lancement. Le MOTD `$CSP0:` est généré dans le navigateur par
 compression DEFLATE (API `CompressionStream`), avec limite de 2039 octets et
 copie désactivée au-delà. Le MOTD est une alternative au bloc CSP : vérifier
 au préalable la configuration et le message existants avant remplacement.
+
+## Pace car IA (optionnel, depuis GDSP-RS 1.2.0)
+
+Le système de safety car humaine (mots-clés `safetyCarKey`, limiteur `paceKmh`,
+`safetyCarKey`/`scFallback`) est **inchangé**. En plus, le script peut piloter
+lui-même une voiture de pace car pendant le tour de formation.
+
+- Le script ne crée jamais de voiture : le serveur doit inscrire la voiture de
+  pace car dans sa liste d'entrées (voiture IA du serveur). `aiPaceMode = 'grid'`
+  privilégie les voitures IA de la grille, `'any'` accepte n'importe quelle
+  voiture dont le nom de pilote ou l'ID contient `aiPaceName`.
+- Le pilotage repose sur l'autopilote du jeu : `physics.setCarAutopilot`,
+  `physics.setAITopSpeed`, `physics.setAIThrottleLimit`, `physics.setAIAggression`,
+  `physics.setAIPitStopRequest`. Tous les appels sont protégés par `pcall` : une
+  version de CSP qui ne les expose pas ne casse pas le départ lancé, le pace car
+  IA reste simplement inactif.
+- Le pace car IA est exclu du classement de formation : il ne prend pas la place
+  du leader, ne déclenche pas le vert et ne reçoit pas de pénalité de formation.
+- Après le drapeau vert, il rentre aux stands (`aiPaceInLap = 1`, recommandé) ou
+  reste en piste mais laisse filer le peloton (`0`).
+- Réglages : `aiPaceMode` (`off` par défaut), `aiPaceName` (`Pace Car`),
+  `aiPaceModel` (`dodge_monaco_police`), `aiPaceFollow` (1), `aiPaceKmh`
+  (90, borné 30–180), `aiPaceLeadM` (30, borné 10–200), `aiPaceInLap` (1).
+  Commande de secours en course : `!rs aipace off`, `!rs aipace on [nom]`,
+  `!rs aipace 90`.
+
+### Vitesse : suivre les pilotes (par défaut)
+
+`aiPaceFollow = 1` : le pace car prend la vitesse **réelle du leader** du
+peloton (celle que roulent les pilotes pendant la formation) et ne la dépasse
+jamais de plus de 6 km/h. `aiPaceKmh` sert alors uniquement de **plafond de
+sécurité** réglé depuis Race Control. Si le peloton est encore arrêté, le pace
+car garde une allure de formation douce (40 km/h maximum). `aiPaceFollow = 0`
+revient à une vitesse fixe.
+
+### Modèle de voiture et livraison depuis Race Control
+
+La section « 3 bis. Pace Car IA » du configurateur propose :
+
+- un champ **Modèle de voiture** (ID du dossier `content/cars`), accessible
+  aussi en liste avec le bouton **Charger les voitures du serveur** : ce bouton
+  lit l'inventaire déjà exposé par l'API administrateur
+  (`/api/server-manager/inventory`, protégée par la connexion admin) et remplit
+  la liste des modèles et des skins disponibles ;
+- un champ **Skin** facultatif (les options CSP du type `skin/option` sont
+  ramenées à l'identifiant de skin seul) ;
+- un numéro de place `[CAR_xx]` et un nom de pilote affiché ;
+- **deux blocs séparés à copier**, jamais mélangés : d'abord la place
+  `[CAR_xx]` pour `entry_list.ini`, puis les options CSP pour
+  `csp_extra_options.ini`, et une marche à suivre repliable. Aucun commentaire
+  `#` n'est inséré dans ces blocs : ce format n'est pas garanti comme
+  commentaire dans les fichiers INI lus par le serveur AC.
+
+**Aucun fichier serveur n'est modifié automatiquement** : le bloc est copié
+puis collé par l'administrateur, ce qui évite d'altérer une grille de course ou
+une configuration existante sans relecture. `aiPaceModel` sert aussi de critère
+de sélection dans le script : il évite de piloter par erreur une voiture de
+pilote portant le même nom que la pace car.
+- Limite connue : sur DSP, seule la première voiture de l'index CSP est pilotée
+  par le client ; les appels `setCarAutopilot` sans index visent la voiture
+  locale. Le réglage reste donc à valider en conditions réelles multi-pilotes,
+  comme le reste du script.
+
+### Tester le pace car IA sans risque
+
+**Étape 1 — vérifier que la voiture est autorisée sur le serveur**
+
+La place `[CAR_xx]` de la pace car ne sert à rien si `MODEL=` n'apparaît pas dans
+`CARS=` de `server_cfg.ini` : le serveur l'ignore sans message. Chercher les
+fichiers du serveur (ils ne sont pas dans le dépôt) :
+
+```bat
+dir /s /b "%USERPROFILE%\Documents\Assetto Corsa\cfg\presets\entry_list.ini"
+findstr /i /c:"CARS=" "...\presets\SERVER_00\server_cfg.ini"
+```
+
+**Étape 2 — validation de la détection, sans aucun pilotage**
+
+Mettre `aiPaceDryRun=1`. Le script détecte la pace car et écrit dans le log CSP
+(`[GDSP-RS]`) la voiture trouvée, son index, l'index du joueur local et le rôle
+attendu. **Aucun appel à l'autopilote n'est fait.** C'est le moyen de vérifier
+toute la détection en course réelle sans aucun risque pour les voitures.
+
+**Étape 3 — pilotage**
+
+`aiPaceDryRun=0`. Le script ne prend le contrôle que si la pace car est **la
+voiture locale** (index 0), seul cas fiable : `physics.setCarAutopilot()` n'accepte
+pas d'index de voiture, et l'appeler pour une autre voiture mettrait en
+autopilote la voiture du joueur. Si la pace car est distante, le log l'indique et
+rien n'est appliqué. `aiPaceDriver=remote` force l'essai sur tous les clients ;
+c'est expérimental et à réserver à un serveur isolé.
+
+**Étape 4 — arrêt d'urgence**
+
+`!rs aipace off` coupe le pilotage immédiatement, sans redémarrage.
+
+### Faire conduire la pace car par une IA, sans prendre de place de pilote
+
+Le bloc `entry_list.ini` généré contient désormais `AI=fixed`. Deux cas, très
+différents :
+
+| Serveur | `AI=fixed` | Résultat |
+| --- | --- | --- |
+| AssettoServer et dérivés | reconnu | l'IA du jeu conduit la voiture en permanence ; aucun joueur ne peut prendre la place |
+| Serveur Kunos (Content Manager) | **ignoré** | aucune voiture IA ne peut exister en ligne ; la place reste vide |
+
+Le serveur Kunos ne sait pas créer de voiture conduite par l'IA : c'est une
+fonction du serveur, pas du script. Aucun script client CSP ne peut créer une
+voiture sans joueur sur un serveur Kunos. Le circuit doit en plus fournir une
+ligne IA (`ai/` du circuit), sinon l'IA ne peut pas rouler.
+
+Quand la voiture est déjà conduite par l'IA du jeu, le script ne prend **aucun**
+contrôle : il bride seulement la vitesse avec des appels indexés
+(`setAITopSpeed`, `setAIThrottleLimit`, `setAIAggression`), qui ne peuvent pas
+toucher une autre voiture. `setCarAutopilot` reste réservé au cas où la pace car
+est la voiture du joueur local.
