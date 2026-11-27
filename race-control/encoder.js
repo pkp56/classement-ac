@@ -10,6 +10,7 @@ const PENALTY_KINDS = ['off', 'warn', 'slow_cut', 'drive_through', 'stop_and_go'
 const ESCALATION_KINDS = ['none', 'drive_through', 'stop_and_go', 'teleport_pits', 'black_flag', 'time_penalty'];
 const CUT_PENALTY_KINDS = ['warn', 'slow_cut', 'drive_through', 'stop_and_go', 'teleport_pits', 'time_penalty'];
 const SC_FALLBACK_MODES = ['admin', 'p1', 'off'];
+const AI_PACE_MODEL_DEFAULT = 'dodge_monaco_police';
 
 const CFG_DEFAULTS = Object.freeze({
   // Rolling start / Start mode
@@ -88,7 +89,9 @@ const CFG_DEFAULTS = Object.freeze({
   // Pace car IA (optionnel) : le systeme de safety car humaine reste inchange.
   aiPaceMode: 'off',
   aiPaceName: 'Pace Car',
+  aiPaceModel: 'dodge_monaco_police',
   aiPaceKmh: 90,
+  aiPaceFollow: 1,
   aiPaceLeadM: 30,
   aiPaceInLap: 1,
 });
@@ -358,6 +361,11 @@ function sanitizeConfig(input = {}) {
     .trim()
     .slice(0, 23) || 'Pace Car';
   c.aiPaceKmh = clamp(Math.round(numOr(c.aiPaceKmh, 90)), 30, 180);
+  c.aiPaceFollow = toInt01(c.aiPaceFollow, 1);
+  c.aiPaceModel = (() => {
+    const v = String(c.aiPaceModel || '').replace(/[\r\n\t"'`]/g, '').trim().slice(0, 120);
+    return /^[a-zA-Z0-9_-]+$/.test(v) ? v : AI_PACE_MODEL_DEFAULT;
+  })();
   c.aiPaceLeadM = clamp(Math.round(numOr(c.aiPaceLeadM, 30)), 10, 200);
   c.aiPaceInLap = toInt01(c.aiPaceInLap, 1);
 

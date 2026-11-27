@@ -512,7 +512,56 @@
                   <option value="0">Reste en piste</option>
                 </select>
               </div>
+              <div class="field">
+                <label for="aiPaceFollow">Vitesse du pace car</label>
+                <select id="aiPaceFollow">
+                  <option value="1">Suivre la vitesse réelle des pilotes (recommandé)</option>
+                  <option value="0">Vitesse fixe</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="aiPaceModel">Modèle de voiture (dossier <code>content/cars</code>)</label>
+                <input id="aiPaceModel" type="text" maxlength="120" list="aiPaceModelList"
+                  value="dodge_monaco_police" placeholder="ex. dodge_monaco_police" />
+                <datalist id="aiPaceModelList"></datalist>
+              </div>
+              <div class="field">
+                <label for="aiPaceSkin">Skin (facultatif)</label>
+                <input id="aiPaceSkin" type="text" maxlength="120" list="aiPaceSkinList"
+                  placeholder="skin par défaut" />
+                <datalist id="aiPaceSkinList"></datalist>
+              </div>
             </div>
+            <p class="hint" style="margin-top:10px">
+              <b>Livrer la voiture au serveur :</b> ajoute une place
+              <code>entry_list.ini</code> pour cette voiture. Les fichiers du serveur ne sont pas
+              modifiés automatiquement : le bloc ci-dessous est à coller par l'administrateur.
+            </p>
+            <div class="grid">
+              <div class="field">
+                <label for="aiPaceSlot">Numéro de place <code>[CAR_xx]</code></label>
+                <input id="aiPaceSlot" type="number" min="0" max="999" value="0" />
+              </div>
+              <div class="field">
+                <label for="aiPaceDriver">Nom affiché du pilote</label>
+                <input id="aiPaceDriver" type="text" maxlength="40" value="Pace Car" />
+              </div>
+              <div class="field">
+                <label>&nbsp;</label>
+                <button type="button" class="btn secondary" id="aiPaceInventoryBtn" onclick="loadPaceCarInventory()">
+                  Charger les voitures du serveur
+                </button>
+              </div>
+            </div>
+            <p class="hint" id="aiPaceInventoryStatus"></p>
+            <div class="out-head">
+              <span class="badge">Livraison serveur</span>
+              <button class="btn btn-gold btn-sm" type="button" id="copyAiPaceBtn" onclick="copyPaceCarDelivery()">
+                Copier le bloc à coller
+              </button>
+            </div>
+            <textarea id="aiPaceOut" rows="18" readonly spellcheck="false"
+              style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px"></textarea>
           </div>
         </div>
 
@@ -568,6 +617,7 @@
     </div>
   </div>
   <script src="/race-control/encoder.js"></script>
+  <script src="/race-control/pace-car.js"></script>
   <script src="/race-control/configurator.js"></script>
 </body>
 </html>

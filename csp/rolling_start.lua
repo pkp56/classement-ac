@@ -142,7 +142,9 @@ local CFG_DEFAULTS = {
   -- en autopilote CSP. Le systeme de safety car humaine reste inchange.
   aiPaceMode = 'off',      -- off | grid (voiture IA deja sur la grille) | any (n'importe quelle voiture)
   aiPaceName = 'Pace Car', -- nom du pilote / ID de voiture servant de pace car
-  aiPaceKmh = 90,          -- vitesse de consigne du pace car IA
+  aiPaceModel = 'dodge_monaco_police', -- ID du dossier voiture (entry_list MODEL=)
+  aiPaceKmh = 90,          -- vitesse de consigne du pace car IA (plafond si aiPaceFollow = 1)
+  aiPaceFollow = 1,        -- 1 = le pace car suit la vitesse reelle du peloton, 0 = vitesse fixe
   aiPaceLeadM = 30,        -- avance du pace car sur la tete de peloton (m)
   aiPaceInLap = 1,         -- 1 = rentre aux stands apres le vert, 0 = reste en piste
 }
@@ -303,8 +305,12 @@ local function sanitizeCfg(cfg)
   if apName == '' then apName = 'Pace Car' end
   cfg.aiPaceName = apName:sub(1, 23)
   cfg.aiPaceKmh = math.floor(clamp(tonumber(cfg.aiPaceKmh) or 90, 30, 180) + 0.5)
+  cfg.aiPaceFollow = (tonumber(cfg.aiPaceFollow) or 1) ~= 0 and 1 or 0
   cfg.aiPaceLeadM = math.floor(clamp(tonumber(cfg.aiPaceLeadM) or 30, 10, 200) + 0.5)
   cfg.aiPaceInLap = (tonumber(cfg.aiPaceInLap) or 1) ~= 0 and 1 or 0
+  local model = tostring(cfg.aiPaceModel or ''):gsub('%s+$', '')
+  if model ~= '' and not model:match('^[%w_%-]+$') then model = '' end
+  cfg.aiPaceModel = model:sub(1, 120)
 
   return cfg
 end
@@ -377,11 +383,13 @@ local AI_PACE_MODE_CHOICES = { 'off', 'grid', 'any' }
 -- aiPaceCode : 2 bits de mode | 1 bit rentree aux stands | 5 bits vitesse (pas de 5 km/h depuis 30)
 -- Le nom (aiPaceName) et l'avance (aiPaceLeadM) restent locaux : ils ne servent que sur
 -- la machine qui pilote la voiture, et evitent de faire grossir le paquet reseau.
+-- aiPaceCode : 2 bits mode | 1 bit rentree | 1 bit suivi des pilotes | 4 bits vitesse
 function G_AI.packCode(c)
   local mode = idxOf(AI_PACE_MODE_CHOICES, c.aiPaceMode, 0)
-  local kmhIdx = clamp(math.floor(((tonumber(c.aiPaceKmh) or 90) - 30) / 5 + 0.5), 0, 31)
+  local kmhIdx = clamp(math.floor(((tonumber(c.aiPaceKmh) or 90) - 30) / 10 + 0.5), 0, 15)
   local inLap = (c.aiPaceInLap == 1) and 1 or 0
-  return mode + inLap * 4 + kmhIdx * 8
+  local follow = (c.aiPaceFollow == 1) and 1 or 0
+  return mode + inLap * 4 + follow * 8 + kmhIdx * 16
 end
 
 function G_AI.unpackCode(code, base)
@@ -389,7 +397,8 @@ function G_AI.unpackCode(code, base)
   local v = tonumber(code) or 0
   c.aiPaceMode = AI_PACE_MODE_CHOICES[(v % 4) + 1] or 'off'
   c.aiPaceInLap = (math.floor(v / 4) % 2 == 1) and 1 or 0
-  c.aiPaceKmh = 30 + math.floor(v / 8) * 5
+  c.aiPaceFollow = (math.floor(v / 8) % 2 == 1) and 1 or 0
+  c.aiPaceKmh = 30 + math.floor(v / 16) * 10
   return c
 end
 
@@ -840,6 +849,7 @@ do
     slowKmh = ac.StructItem.uint8(),
     bunchM = ac.StructItem.uint8(),
     aiPaceState = ac.StructItem.uint8(),
+    aiPaceModel = ac.StructItem.string(120),
 
     cmdSeq = ac.StructItem.int32(),
     cmdType = ac.StructItem.uint8(),
@@ -890,6 +900,7 @@ do
     cmdSlowKmh = ac.StructItem.uint8(),
     cmdBunchM = ac.StructItem.uint8(),
     cmdAiPaceCode = ac.StructItem.uint8(),
+    cmdAiPaceModel = ac.StructItem.string(120),
   }, true, ns)
   if okB and b then
     bridge = b
@@ -943,6 +954,7 @@ local function writeCfgToBridge(c)
   bridge.cutDisabledZones = c.cutDisabledZones or ''
   bridge.safetyCarKey = c.safetyCarKey or 'safety'
   bridge.aiPaceState = G_AI.packCode(c)
+  bridge.aiPaceModel = c.aiPaceModel or ''
 end
 
 local function readCfgFromBridgeCmd()
@@ -991,6 +1003,7 @@ local function readCfgFromBridgeCmd()
   c.cutDisabledZones = bridge.cmdCutDisabledZones or ''
   c.safetyCarKey = bridge.cmdSafetyCarKey or 'safety'
   c = G_AI.unpackCode(bridge.cmdAiPaceCode or 0, c)
+  if bridge.cmdAiPaceModel and bridge.cmdAiPaceModel ~= '' then c.aiPaceModel = bridge.cmdAiPaceModel end
   return sanitizeCfg(c)
 end
 
@@ -1312,6 +1325,7 @@ local function onCfgEvent(sender, d)
   nc.cutDisabledZones = d.cutDisabledZones or ''
   nc.safetyCarKey = d.safetyCarKey or 'safety'
   nc = G_AI.unpackCode(d.aiPaceCode or 0, nc)
+  if d.aiPaceModel and d.aiPaceModel ~= '' then nc.aiPaceModel = d.aiPaceModel end
 
   cfg = sanitizeCfg(nc)
   cutZones = parseCutZones(cfg.cutDisabledZones)
@@ -1419,7 +1433,7 @@ do
       rowAlignTolM = ac.StructItem.uint8(),
       formationLaps = ac.StructItem.uint8(),
       shortDistanceM = ac.StructItem.uint16(),
-      shortSec = ac.StructItem.uint16(),
+      shortSec = ac.StructItem.uint8(),
       accelZoneStart = ac.StructItem.unorm16(),
       greenLineSpline = ac.StructItem.unorm16(),
       oneToGoSpline = ac.StructItem.unorm16(),
@@ -1441,9 +1455,9 @@ do
       cutSlowSec = ac.StructItem.uint8(),
       cutServeLaps = ac.StructItem.uint8(),
       cutEscStopGoSec = ac.StructItem.uint8(),
-      cutFinishTimeSec = ac.StructItem.uint16(),
+      cutFinishTimeSec = ac.StructItem.uint8(),
       cutTimePenaltySec = ac.StructItem.uint8(),
-      cutDisabledZones = ac.StructItem.string(80),
+      cutDisabledZones = ac.StructItem.string(48),
       safetyCarKey = ac.StructItem.string(24),
       fastKmh = ac.StructItem.uint8(),
       fastPct = ac.StructItem.uint8(),
@@ -1528,6 +1542,7 @@ local function flushOutbox()
     p.cutDisabledZones = cfg.cutDisabledZones or ''
     p.safetyCarKey = cfg.safetyCarKey or 'safety'
     p.aiPaceCode = G_AI.packCode(cfg)
+    p.aiPaceModel = cfg.aiPaceModel or ''
     if sendCfgEvt(nil, true) then
       outboxCfgDirty = false
       lastSendAt = uiTime
@@ -1740,12 +1755,23 @@ end
 
 function G_AI.find(cars)
   local q = tostring(cfg.aiPaceName or ''):lower():gsub('^%s+', ''):gsub('%s+$', '')
-  if q == '' then return nil end
+  -- Modele attendu (entry_list MODEL=) : evite de piloter une voiture de pilote
+  -- qui porterait par hasard le meme nom.
+  local wantModel = tostring(cfg.aiPaceModel or ''):lower():gsub('%s+$', '')
+  if q == '' and wantModel == '' then return nil end
   local firstMatch = nil
   for _, c in pairs(cars) do
     local dn = tostring(ac.getDriverName(c.index) or ''):lower()
     local cid = safeCarId(c):lower()
-    if dn:find(q, 1, true) or cid:find(q, 1, true) then
+    local modelOk = wantModel == '' or cid == wantModel or cid:find(wantModel, 1, true) ~= nil
+    if not modelOk then
+      -- repli : certaines versions exposent le modele via le nom de voiture
+      local cname = ''
+      pcall(function() cname = tostring(ac.getCarName and ac.getCarName(c.index) or ''):lower() end)
+      modelOk = cname:find(wantModel, 1, true) ~= nil
+    end
+    if not modelOk then dn = '' ; cid = '' end
+    if (q == '' or dn:find(q, 1, true) or cid:find(q, 1, true)) then
       -- une voiture IA du serveur (ou avec un level IA) : la plus logique a piloter
       if c.isAIControlled or (tonumber(c.aiLevel) or 0) > 0 then
         return c
@@ -1845,6 +1871,23 @@ local function activeLeader(cars)
   return nil, nil
 end
 
+-- Vitesse de consigne du pace car IA.
+-- aiPaceFollow = 1 : le pace car prend la vitesse REELLE du leader du peloton
+-- (celle que les pilotes roulent pendant la formation) ; aiPaceKmh ne sert alors
+-- que de plafond de securite. aiPaceFollow = 0 : vitesse fixe.
+function G_AI.targetKmh(cars, car)
+  local lead = activeLeader(cars)
+  local leadKmh = (lead and not G_AI.isOurCar(lead.sessionID)) and (tonumber(lead.speedKmh) or 0) or nil
+  local cap = cfg.aiPaceKmh
+  if cfg.aiPaceFollow ~= 1 then return cap, false end
+  if not leadKmh or leadKmh < 5 then
+    -- peloton encore arrete : le pace car garde une allure de formation douce
+    return math.min(cap, 40), true
+  end
+  -- on suit le peloton sans jamais depasser le plafond choisi dans Race Control
+  return math.min(cap, math.max(25, leadKmh + 6)), true
+end
+
 -- Distance (m) entre le pace car IA et la voiture de tete du peloton.
 function G_AI.gapToLeader(cars, car)
   if not car then return 0 end
@@ -1929,13 +1972,8 @@ function G_AI.update(cars)
   end
 
   -- Formation / READY / CAUTION : le pace car roule devant le peloton.
-  local kmh = cfg.aiPaceKmh
-  local lead = activeLeader(cars)
-  if cfg.startLength == 'full' and lead and not G_AI.isOurCar(lead.sessionID) then
-    -- Paliers du depart lance : on suit la vitesse du leader pour rester hors de
-    -- portee sans distancer le peloton.
-    kmh = math.max(40, math.min(cfg.aiPaceKmh, lead.speedKmh + 8))
-  end
+  local kmh, following = G_AI.targetKmh(cars, car)
+  G_AI.following = following
   local gap = G_AI.gapToLeader(cars, car)
   if gap < math.max(12, cfg.aiPaceLeadM * 0.5) then
     -- trop pres : le pace car accelere legerement pour recreuser l'ecart

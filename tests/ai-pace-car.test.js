@@ -46,7 +46,9 @@ test('Le systeme de safety car humaine est inchange (cle, fallback, vitesse pace
   assert.match(luaSrc, /paceKmh = 90/);
   // Le pace car IA est exclu du classement du depart, pas la safety car humaine.
   assert.match(luaSrc, /function G_AI\.isOurCar\(id\)/);
-  assert.match(luaSrc, /if cfg\.startLength == 'full' and lead and not G_AI\.isOurCar\(lead\.sessionID\) then/);
+  // La vitesse suit desormais le peloton : le pace car ne prend pas la tete du classement.
+  assert.match(luaSrc, /function G_AI\.targetKmh\(cars, car\)/);
+  assert.match(luaSrc, /lead and not G_AI\.isOurCar\(lead\.sessionID\)/);
 });
 
 test('Le pilotage IA utilise uniquement les API CSP verifiees', () => {
@@ -129,4 +131,114 @@ test('Le configurateur expose les champs du pace car IA', () => {
   for (const id of ['aiPaceMode', 'aiPaceName', 'aiPaceKmh', 'aiPaceLeadM', 'aiPaceInLap']) {
     assert.match(configurator, new RegExp("'" + id + "'"), id + ' absent de FIELD_IDS');
   }
+});
+
+test('La vitesse du pace car suit les pilotes et respecte le plafond choisi', () => {
+  // Mode suivi : la consigne part de la vitesse reelle du leader, plafonnee.
+  assert.match(luaSrc, /cfg\.aiPaceFollow = \(tonumber\(cfg\.aiPaceFollow\) or 1\) ~= 0 and 1 or 0/);
+  assert.match(luaSrc, /function G_AI\.targetKmh\(cars, car\)/);
+  assert.match(luaSrc, /return math\.min\(cap, math\.max\(25, leadKmh \+ 6\)\), true/);
+  // Peloton arrete : allure de formation douce, jamais au-dela du plafond.
+  assert.match(luaSrc, /return math\.min\(cap, 40\), true/);
+  // Mode vitesse fixe conserve.
+  assert.match(luaSrc, /if cfg\.aiPaceFollow ~= 1 then return cap, false end/);
+});
+
+test('Le modele de voiture sert de critere de selection sans casser le nom', () => {
+  assert.match(luaSrc, /aiPaceModel = 'dodge_monaco_police'/);
+  assert.match(luaSrc, /local wantModel = tostring\(cfg\.aiPaceModel or ''\):lower\(\):gsub\('%s\+\$', ''\)/);
+  // Un modele renseigne filtre les candidats ; un nom vide n'empeche pas la selection.
+  assert.match(luaSrc, /if not modelOk then dn = '' ; cid = '' end/);
+});
+
+test('Le paquet de configuration reseau reste sous la limite CSP de 175 octets', () => {
+  const sizes = { uint8: 1, int8: 1, uint16: 2, int16: 2, uint32: 4, int32: 4, float: 4, double: 8, boolean: 1, unorm8: 1, unorm16: 2 };
+  const end = luaSrc.indexOf('onCfgEvent)');
+  const start = luaSrc.lastIndexOf('local ok2', end);
+  const chunk = luaSrc.slice(start, end);
+  let total = 0;
+  for (const m of chunk.matchAll(/(\w+) = ac\.StructItem\.(\w+)\(([0-9]*)\)/g)) {
+    const [, , type, len] = m;
+    total += type === 'string' ? Number(len) + 1 : (sizes[type] ?? 4);
+  }
+  assert.ok(total <= 175, `paquet de configuration trop gros : ${total} octets`);
+  assert.ok(total > 0, 'aucun champ detecte');
+});
+
+test('Livraison : le bloc entry_list est genere et les identifiants sont valides', () => {
+  const paceCar = require('../race-control/pace-car.js');
+
+  const block = paceCar.buildEntryBlock({ model: 'dodge_monaco_police', driverName: 'Pace Car' }, { slot: 12 });
+  assert.equal(block.valid, true);
+  assert.match(block.text, /^\[CAR_12\]\nMODEL=dodge_monaco_police\n/);
+  assert.match(block.text, /\nDRIVERNAME=Pace Car\n/);
+  assert.match(block.text, /\nGUID=\n/);
+  assert.match(block.text, /\nBALLAST=0\n/);
+
+  // Identifiant de voiture invalide : refuse, jamais injecte dans le fichier.
+  const bad = paceCar.buildEntryBlock({ model: '../../etc/passwd' });
+  assert.equal(bad.valid, false);
+  assert.match(bad.error, /invalide/i);
+
+  // Le skin avec options CSP est ramene a l'identifiant seul.
+  assert.equal(paceCar.skinId('gdsp_livery/carbon'), 'gdsp_livery');
+  const withSkin = paceCar.buildEntryBlock({ model: 'mini_cooper', skin: 'livery_1/carbon' });
+  assert.match(withSkin.text, /\nSKIN=livery_1\n/);
+});
+
+test('Livraison : les options CSP reprennent le modele et le nom du pace car', () => {
+  const paceCar = require('../race-control/pace-car.js');
+  const opts = paceCar.buildCspOptions({ model: 'dodge_monaco_police', driverName: 'Safety Car' });
+  assert.match(opts, /aiPaceMode=grid/);
+  assert.match(opts, /aiPaceName=Safety Car/);
+  assert.match(opts, /aiPaceModel=dodge_monaco_police/);
+  // Le nom est borne a ce que le script Lua accepte.
+  const longName = paceCar.buildCspOptions({ model: 'x_car', driverName: 'A'.repeat(80) });
+  assert.match(longName, /^aiPaceName=A{23}$/m, 'nom tronque a 23 caracteres comme cote Lua');
+});
+
+test('Livraison : l inventaire du serveur alimente la liste des modeles', () => {
+  const paceCar = require('../race-control/pace-car.js');
+  const choices = paceCar.carChoicesFromInventory({
+    cars: [
+      { id: 'ks_porsche_911', skins: ['a', 'b'] },
+      { id: 'dodge_monaco_police', skins: ['default'] },
+      { id: 'invalide espace', skins: [] },
+    ],
+  });
+  assert.deepEqual(choices.map(c => c.id).sort(), ['dodge_monaco_police', 'ks_porsche_911']);
+  assert.equal(choices.find(c => c.id === 'ks_porsche_911').skins.length, 2);
+  // Reponse vide ou erronee : liste vide, pas de plantage.
+  assert.deepEqual(paceCar.carChoicesFromInventory(null), []);
+  assert.deepEqual(paceCar.carChoicesFromInventory({}), []);
+});
+
+test('Livraison : le bloc et les instructions designent la meme place', () => {
+  const paceCar = require('../race-control/pace-car.js');
+  const block = paceCar.buildEntryBlock({ model: 'dodge_monaco_police' }, { slot: 7 });
+  const notes = paceCar.buildDeliveryNotes({ model: 'dodge_monaco_police' }, { slot: 7 });
+  assert.match(block.text, /^\[CAR_7\]/);
+  assert.match(notes.text, /\[CAR_7\]/);
+  assert.doesNotMatch(notes.text, /\[CAR_0\]/);
+  // Les instructions rappellent les deux fichiers a modifier.
+  assert.match(notes.text, /entry_list\.ini/);
+  assert.match(notes.text, /csp_extra_options\.ini/);
+});
+
+test('Le configurateur genere le bloc a livrer, avec la place choisie', () => {
+  const html = fs.readFileSync(path.join(root, 'race-control.html'), 'utf8');
+  // La section de livraison et son bouton doivent exister, et pace-car.js etre charge.
+  assert.match(html, /id="aiPaceOut"/);
+  assert.match(html, /id="copyAiPaceBtn"/);
+  assert.match(html, /id="aiPaceInventoryBtn"/);
+  assert.match(html, /<script src="\/race-control\/pace-car\.js"><\/script>/);
+  // pace-car.js doit etre charge avant le configurateur qui l'utilise.
+  const order = [html.indexOf('pace-car.js'), html.indexOf('configurator.js')];
+  assert.ok(order[0] > 0 && order[0] < order[1], 'pace-car.js doit preceder configurator.js');
+
+  // Le configurateur rebranche bien l'inventaire admin deja existant.
+  const configurator = fs.readFileSync(path.join(root, 'race-control', 'configurator.js'), 'utf8');
+  assert.match(configurator, /fetch\('\/api\/server-manager\/inventory'/);
+  assert.match(configurator, /credentials: 'same-origin'/);
+  assert.match(configurator, /carChoicesFromInventory/);
 });

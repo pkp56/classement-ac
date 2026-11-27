@@ -18,6 +18,7 @@ const FIELD_IDS = [
   'cutFinishTimeSec', 'cutTimePenaltySec', 'cutDisabledZones',
   'scFallback', 'safetyCarKey',
   'aiPaceMode', 'aiPaceName', 'aiPaceKmh', 'aiPaceLeadM', 'aiPaceInLap',
+  'aiPaceFollow', 'aiPaceModel', 'aiPaceSkin',
 ];
 
 let presets = [];
@@ -246,6 +247,7 @@ function generateOutputs() {
     error.textContent = e.message;
   }
   updateMotd(output.value, generation);
+  try { renderPaceCarDelivery(); } catch { /* section optionnelle */ }
 }
 
 function renderPresets() {
@@ -264,6 +266,93 @@ function renderPresets() {
     });
     bar.appendChild(btn);
   }
+}
+
+// ── Livraison de la voiture pace car ─────────────────────────────────────────
+// Le configurateur ne modifie jamais les fichiers serveur : il prepare un bloc
+// [CAR_xx] et les options CSP a coller par l'administrateur.
+let aiPaceInventoryCars = [];
+
+function aiPaceDeliveryInput() {
+  return {
+    model: ($('aiPaceModel') && $('aiPaceModel').value) || '',
+    skin: ($('aiPaceSkin') && $('aiPaceSkin').value) || '',
+    driverName: ($('aiPaceDriver') && $('aiPaceDriver').value) || 'Pace Car',
+  };
+}
+
+function renderPaceCarDelivery() {
+  const out = $('aiPaceOut');
+  if (!out || !window.GDSPPaceCar) return;
+  const input = aiPaceDeliveryInput();
+  const slot = Number(($('aiPaceSlot') && $('aiPaceSlot').value) || 0);
+  const block = window.GDSPPaceCar.buildEntryBlock(input, { slot });
+  if (!block.valid) {
+    out.value = block.error;
+    return;
+  }
+  const csp = window.GDSPPaceCar.buildCspOptions(input);
+  const notes = window.GDSPPaceCar.buildDeliveryNotes(input, { slot });
+  out.value = [
+    '# ── À coller dans entry_list.ini (serveur AC) ──',
+    block.text.trimEnd(),
+    '',
+    '# ── À ajouter dans csp_extra_options.ini ──',
+    csp.trimEnd(),
+    '',
+    '# ── Marche à suivre ──',
+    notes.text,
+  ].join('\n');
+  // la valeur du modèle sert aussi de critère de sélection côté script
+  if ($('aiPaceName') && ($('aiPaceName').value || '') !== (input.driverName || 'Pace Car')) {
+    $('aiPaceName').value = (input.driverName || 'Pace Car').slice(0, 23);
+  }
+}
+
+async function loadPaceCarInventory() {
+  const status = $('aiPaceInventoryStatus');
+  if (status) status.textContent = 'Chargement des voitures installées…';
+  try {
+    const res = await fetch('/api/server-manager/inventory', { credentials: 'same-origin' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Inventaire indisponible.');
+    aiPaceInventoryCars = window.GDSPPaceCar.carChoicesFromInventory(data);
+    const list = $('aiPaceModelList');
+    if (list) {
+      list.replaceChildren();
+      for (const car of aiPaceInventoryCars) {
+        const opt = document.createElement('option');
+        opt.value = car.id;
+        if (car.skins.length) opt.label = car.id + ' · ' + car.skins.length + ' skin(s)';
+        list.appendChild(opt);
+      }
+    }
+    if (status) {
+      status.textContent = aiPaceInventoryCars.length
+        ? `${aiPaceInventoryCars.length} voiture(s) disponible(s) sur le serveur. Choisis le modèle dans la liste.`
+        : 'Le serveur ne renvoie aucune voiture : saisie manuelle possible.';
+    }
+    applyInventorySkins();
+  } catch (e) {
+    if (status) status.textContent = e.message + ' — la saisie manuelle de l\'ID reste possible.';
+  }
+}
+
+function applyInventorySkins() {
+  const model = window.GDSPPaceCar.sanitizeModel(($('aiPaceModel') && $('aiPaceModel').value) || '');
+  const list = $('aiPaceSkinList');
+  const car = aiPaceInventoryCars.find(c => c.id === model);
+  if (!list) return;
+  list.replaceChildren();
+  if (car) for (const skin of car.skins) {
+    const opt = document.createElement('option');
+    opt.value = skin;
+    list.appendChild(opt);
+  }
+}
+
+async function copyPaceCarDelivery() {
+  await copyText('aiPaceOut', 'copyAiPaceBtn');
 }
 
 async function copyText(elId, btnId) {
@@ -311,6 +400,18 @@ async function init() {
     renderZonesList();
     generateOutputs();
   });
+
+  for (const id of ['aiPaceModel', 'aiPaceSkin', 'aiPaceDriver', 'aiPaceSlot']) {
+    const el = $(id);
+    if (!el) continue;
+    el.addEventListener('input', () => {
+      if (id === 'aiPaceModel') applyInventorySkins();
+      renderPaceCarDelivery();
+      scheduleGenerate();
+    });
+  }
+  if ($('copyAiPaceBtn')) $('copyAiPaceBtn').addEventListener('click', copyPaceCarDelivery);
+  try { renderPaceCarDelivery(); } catch { /* livraison optionnelle : ne bloque pas l'INI */ }
 
   $('copyIniBtn').addEventListener('click', () => copyText('iniOut', 'copyIniBtn'));
   $('copyMotdBtn').addEventListener('click', () => { if (!$('copyMotdBtn').disabled) copyText('motdOut', 'copyMotdBtn'); });
