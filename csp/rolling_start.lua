@@ -147,6 +147,8 @@ local CFG_DEFAULTS = {
   aiPaceFollow = 1,        -- 1 = le pace car suit la vitesse reelle du peloton, 0 = vitesse fixe
   aiPaceLeadM = 30,        -- avance du pace car sur la tete de peloton (m)
   aiPaceInLap = 1,         -- 1 = rentre aux stands apres le vert, 0 = reste en piste
+  aiPaceDriver = 'local',  -- local = pilote par la voiture locale (seul cas fiable), remote = chaque client tente
+  aiPaceDryRun = 0,        -- 1 = detecte et journalise sans jamais prendre le controle (test sans risque)
 }
 
 -- Placeholder replaced optionally by HTTP script server if query params are used
@@ -306,6 +308,8 @@ local function sanitizeCfg(cfg)
   cfg.aiPaceName = apName:sub(1, 23)
   cfg.aiPaceKmh = math.floor(clamp(tonumber(cfg.aiPaceKmh) or 90, 30, 180) + 0.5)
   cfg.aiPaceFollow = (tonumber(cfg.aiPaceFollow) or 1) ~= 0 and 1 or 0
+  cfg.aiPaceDriver = (tostring(cfg.aiPaceDriver or 'local'):lower() == 'remote') and 'remote' or 'local'
+  cfg.aiPaceDryRun = (tonumber(cfg.aiPaceDryRun) or 0) ~= 0 and 1 or 0
   cfg.aiPaceLeadM = math.floor(clamp(tonumber(cfg.aiPaceLeadM) or 30, 10, 200) + 0.5)
   cfg.aiPaceInLap = (tonumber(cfg.aiPaceInLap) or 1) ~= 0 and 1 or 0
   local model = tostring(cfg.aiPaceModel or ''):gsub('%s+$', '')
@@ -1783,8 +1787,37 @@ function G_AI.find(cars)
 end
 
 -- Applique l'autopilote et la vitesse de consigne a la voiture de pace car.
+-- Le script ne peut piloter de facon fiable QUE la voiture locale (index 0).
+-- physics.setCarAutopilot() n'accepte pas d'index de voiture : l'appeler pour
+-- une autre voiture mettrait en autopilote la voiture du joueur, ce qui est
+-- dangereux en course. On ne prend donc le controle que si la pace car EST
+-- notre voiture locale.
+function G_AI.isLocalCar(car)
+  local me = ac.getCar(0)
+  return car ~= nil and me ~= nil and car.index == me.index
+end
+
+-- Peut-on prendre le controle pour cette voiture ?
+function G_AI.canDrive(car)
+  if not car then return false, 'aucune voiture' end
+  if cfg.aiPaceDryRun == 1 then return false, 'dry-run' end
+  if cfg.aiPaceDriver ~= 'remote' and not G_AI.isLocalCar(car) then
+    return false, 'pas la voiture locale'
+  end
+  return true
+end
+
 function G_AI.drive(car, kmh)
   if not car then return false end
+  local can, why = G_AI.canDrive(car)
+  if not can then
+    if not G_AI.warned then
+      G_AI.warned = true
+      safeLog(string.format('pace car IA : pilotage du client non applique (%s) — voiture %d, joueur %d',
+        why, car.index, (ac.getCar(0) and ac.getCar(0).index) or -1))
+    end
+    return false
+  end
   -- Rafraichissement periodique : si CSP relache l'autopilote (reset, sortie de
   -- piste, rechargement de la voiture), on le reprend sans attendre un changement.
   local stale = not G_AI.lastApplyAt or (uiTime - G_AI.lastApplyAt) >= 1.0
@@ -1823,6 +1856,7 @@ function G_AI.reset()
   G_AI.mode, G_AI.topKmh = nil, nil
   G_AI.sentInLap, G_AI.gaveUp, G_AI.lastGapM = false, false, nil
   G_AI.lastApplyAt = nil
+  G_AI.warned = false
 end
 
 -- Depart lance (startLength = full) :
@@ -1957,8 +1991,13 @@ function G_AI.update(cars)
   if G_AI.sessionId ~= car.sessionID then
     G_AI.sessionId, G_AI.carIndex = car.sessionID, car.index
     G_AI.sentInLap, G_AI.mode, G_AI.topKmh = false, nil, nil
-    safeLog(string.format('pace car IA designe : %s (index %d, session %d)',
-      tostring(ac.getDriverName(car.index)), car.index, car.sessionID))
+    local meIdx = (ac.getCar(0) and ac.getCar(0).index) or -1
+    local role
+    if cfg.aiPaceDryRun == 1 then role = 'DRY-RUN, aucun controle applique'
+    elseif G_AI.isLocalCar(car) then role = 'pilote par ce client (voiture locale)'
+    else role = string.format('voiture distante (%d), pilotage delegue au client qui la conduit', car.index) end
+    safeLog(string.format('pace car IA designe : %s (index %d, session %d, joueur local %d) — %s',
+      tostring(ac.getDriverName(car.index)), car.index, car.sessionID, meIdx, role))
     if not G_AI.announced then
       G_AI.announced = true
       pcall(ac.setMessage, 'PACE CAR IA', 'Pilotage automatique de ' .. tostring(cfg.aiPaceName), 'info', 5)

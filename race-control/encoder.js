@@ -94,6 +94,8 @@ const CFG_DEFAULTS = Object.freeze({
   aiPaceFollow: 1,
   aiPaceLeadM: 30,
   aiPaceInLap: 1,
+  aiPaceDriver: 'local',
+  aiPaceDryRun: 0,
 });
 
 const PRESETS = Object.freeze([
@@ -368,6 +370,8 @@ function sanitizeConfig(input = {}) {
   })();
   c.aiPaceLeadM = clamp(Math.round(numOr(c.aiPaceLeadM, 30)), 10, 200);
   c.aiPaceInLap = toInt01(c.aiPaceInLap, 1);
+  c.aiPaceDriver = c.aiPaceDriver === 'remote' ? 'remote' : 'local';
+  c.aiPaceDryRun = toInt01(c.aiPaceDryRun, 0);
 
   return c;
 }

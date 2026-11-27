@@ -274,3 +274,33 @@ test('Livraison : les deux fichiers sont separes et jamais melanges', () => {
   assert.equal(bad.entry, '');
   assert.equal(bad.csp, '');
 });
+
+test('Garde-fou : le script ne pilote que sa propre voiture, jamais celle d un autre', () => {
+  // physics.setCarAutopilot() n'a pas d'index : piloter une voiture distante
+  // mettrait en autopilote la voiture du joueur. La protection doit rester.
+  assert.match(luaSrc, /function G_AI\.isLocalCar\(car\)/);
+  assert.match(luaSrc, /return car ~= nil and me ~= nil and car\.index == me\.index/);
+  assert.match(luaSrc, /function G_AI\.canDrive\(car\)/);
+  assert.match(luaSrc, /if cfg\.aiPaceDriver ~= 'remote' and not G_AI\.isLocalCar\(car\) then\s*\n\s*return false, 'pas la voiture locale'/);
+  // Le refus doit etre journalise une seule fois, avec les index pour diagnostiquer.
+  assert.match(luaSrc, /pace car IA : pilotage du client non applique \(%s\)/);
+});
+
+test('Mode dry-run : detection et journalisation sans aucun pilotage', () => {
+  assert.match(luaSrc, /aiPaceDryRun = 0,/);
+  assert.match(luaSrc, /cfg\.aiPaceDryRun = \(tonumber\(cfg\.aiPaceDryRun\) or 0\) ~= 0 and 1 or 0/);
+  // En dry-run, canDrive refuse AVANT tout appel a l'autopilote.
+  assert.match(luaSrc, /if cfg\.aiPaceDryRun == 1 then return false, 'dry-run' end/);
+  // Le log annonce clairement le role, pour savoir qui doit piloter.
+  assert.match(luaSrc, /DRY-RUN, aucun controle applique/);
+  assert.match(luaSrc, /pilote par ce client \(voiture locale\)/);
+  assert.match(luaSrc, /pilotage delegue au client qui la conduit/);
+});
+
+test('Le configurateur expose le choix du pilote et le mode test', () => {
+  const html = fs.readFileSync(path.join(root, 'race-control.html'), 'utf8');
+  assert.match(html, /id="aiPaceDriver"/);
+  assert.match(html, /id="aiPaceDryRun"/);
+  assert.match(html, /La voiture locale \(recommandé, seul cas fiable\)/);
+  assert.match(html, /détecte et journalise seulement/);
+});

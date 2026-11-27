@@ -92,3 +92,42 @@ pilote portant le même nom que la pace car.
   par le client ; les appels `setCarAutopilot` sans index visent la voiture
   locale. Le réglage reste donc à valider en conditions réelles multi-pilotes,
   comme le reste du script.
+
+### Tester le pace car IA sans risque
+
+**Étape 1 — vérifier que la voiture est autorisée sur le serveur**
+
+La place `[CAR_xx]` de la pace car ne sert à rien si `MODEL=` n'apparaît pas dans
+`CARS=` de `server_cfg.ini` : le serveur l'ignore sans message. Chercher les
+fichiers du serveur (ils ne sont pas dans le dépôt) :
+
+```bat
+dir /s /b "%USERPROFILE%\Documents\Assetto Corsa\cfg\presets\entry_list.ini"
+findstr /i /c:"CARS=" "...\presets\SERVER_00\server_cfg.ini"
+```
+
+**Étape 2 — validation de la détection, sans aucun pilotage**
+
+Mettre `aiPaceDryRun=1`. Le script détecte la pace car et écrit dans le log CSP
+(`[GDSP-RS]`) la voiture trouvée, son index, l'index du joueur local et le rôle
+attendu. **Aucun appel à l'autopilote n'est fait.** C'est le moyen de vérifier
+toute la détection en course réelle sans aucun risque pour les voitures.
+
+**Étape 3 — pilotage**
+
+`aiPaceDryRun=0`. Le script ne prend le contrôle que si la pace car est **la
+voiture locale** (index 0), seul cas fiable : `physics.setCarAutopilot()` n'accepte
+pas d'index de voiture, et l'appeler pour une autre voiture mettrait en
+autopilote la voiture du joueur. Si la pace car est distante, le log l'indique et
+rien n'est appliqué. `aiPaceDriver=remote` force l'essai sur tous les clients ;
+c'est expérimental et à réserver à un serveur isolé.
+
+**Étape 4 — arrêt d'urgence**
+
+`!rs aipace off` coupe le pilotage immédiatement, sans redémarrage.
+
+Concrètement, en l'état, la pace car IA est utilisable quand la voiture de pace
+car est celle du client qui l'héberge (par exemple une session de test où
+l'organisateur conduit la pace car). Pour une pace car conduite par le serveur
+alors qu'un autre joueur pilote, l'API CSP actuelle ne fournit pas de moyen
+fiable depuis un script en ligne.

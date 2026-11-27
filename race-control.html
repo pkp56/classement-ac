@@ -520,6 +520,20 @@
                 </select>
               </div>
               <div class="field">
+                <label for="aiPaceDriver">Qui pilote la pace car</label>
+                <select id="aiPaceDriver">
+                  <option value="local">La voiture locale (recommandé, seul cas fiable)</option>
+                  <option value="remote">Chaque client tente de piloter (expérimental)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="aiPaceDryRun">Mode test (aucun pilotage)</label>
+                <select id="aiPaceDryRun">
+                  <option value="0">Non — pilotage actif</option>
+                  <option value="1">Oui — détecte et journalise seulement</option>
+                </select>
+              </div>
+              <div class="field">
                 <label for="aiPaceModel">Modèle de voiture (dossier <code>content/cars</code>)</label>
                 <input id="aiPaceModel" type="text" maxlength="120" list="aiPaceModelList"
                   value="dodge_monaco_police" placeholder="ex. dodge_monaco_police" />
