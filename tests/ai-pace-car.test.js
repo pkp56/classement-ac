@@ -228,8 +228,11 @@ test('Livraison : le bloc et les instructions designent la meme place', () => {
 test('Le configurateur genere le bloc a livrer, avec la place choisie', () => {
   const html = fs.readFileSync(path.join(root, 'race-control.html'), 'utf8');
   // La section de livraison et son bouton doivent exister, et pace-car.js etre charge.
-  assert.match(html, /id="aiPaceOut"/);
-  assert.match(html, /id="copyAiPaceBtn"/);
+  // Deux blocs separes : entry_list.ini d'un cote, csp_extra_options.ini de l'autre.
+  assert.match(html, /id="aiPaceEntryOut"/);
+  assert.match(html, /id="aiPaceCspOut"/);
+  assert.match(html, /id="copyAiPaceEntryBtn"/);
+  assert.match(html, /id="copyAiPaceCspBtn"/);
   assert.match(html, /id="aiPaceInventoryBtn"/);
   assert.match(html, /<script src="\/race-control\/pace-car\.js"><\/script>/);
   // pace-car.js doit etre charge avant le configurateur qui l'utilise.
@@ -241,4 +244,33 @@ test('Le configurateur genere le bloc a livrer, avec la place choisie', () => {
   assert.match(configurator, /fetch\('\/api\/server-manager\/inventory'/);
   assert.match(configurator, /credentials: 'same-origin'/);
   assert.match(configurator, /carChoicesFromInventory/);
+});
+
+test('Livraison : aucun commentaire dans les blocs destines aux INI du serveur', () => {
+  const paceCar = require('../race-control/pace-car.js');
+  const d = paceCar.buildDelivery({ model: 'dodge_monaco_police', driverName: 'Pace Car' }, { slot: 4 });
+  // Un '#' colle dans entry_list.ini ou csp_extra_options.ini peut casser la lecture serveur.
+  assert.doesNotMatch(d.entry, /#/, 'pas de commentaire dans le bloc entry_list');
+  assert.doesNotMatch(d.csp, /#/, 'pas de commentaire dans le bloc CSP');
+  // Le bloc entry commence par son en-tete de place.
+  assert.match(d.entry, /^\[CAR_4\]\nMODEL=dodge_monaco_police\n/);
+  assert.match(d.csp, /^\[SCRIPT_1\]\nSCRIPT=/);
+});
+
+test('Livraison : les deux fichiers sont separes et jamais melanges', () => {
+  const paceCar = require('../race-control/pace-car.js');
+  const d = paceCar.buildDelivery({ model: 'ks_porsche_911', driverName: 'Safety' }, { slot: 9 });
+  // Le bloc entry_list ne doit contenir aucune option CSP...
+  assert.doesNotMatch(d.entry, /aiPace|SCRIPT_1|\[SCRIPT/);
+  // ...et le bloc CSP ne doit contenir aucune place de grille.
+  assert.doesNotMatch(d.csp, /CAR_|DRIVERNAME|BALLAST|MODEL=/);
+  // Les instructions renvoient vers les deux fichiers, dans le bon ordre.
+  assert.match(d.notes, /entry_list\.ini/);
+  assert.match(d.notes, /csp_extra_options\.ini/);
+  assert.equal(d.slot, 9);
+  // Un modele invalide ne produit aucun bloc partiel.
+  const bad = paceCar.buildDelivery({ model: 'pas bon' });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.entry, '');
+  assert.equal(bad.csp, '');
 });

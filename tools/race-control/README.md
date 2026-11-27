@@ -77,8 +77,11 @@ La section « 3 bis. Pace Car IA » du configurateur propose :
 - un champ **Skin** facultatif (les options CSP du type `skin/option` sont
   ramenées à l'identifiant de skin seul) ;
 - un numéro de place `[CAR_xx]` et un nom de pilote affiché ;
-- un bloc **« Copier le bloc à coller »** qui produit le `[CAR_xx]` complet pour
-  `entry_list.ini`, les options CSP correspondantes, et la marche à suivre.
+- **deux blocs séparés à copier**, jamais mélangés : d'abord la place
+  `[CAR_xx]` pour `entry_list.ini`, puis les options CSP pour
+  `csp_extra_options.ini`, et une marche à suivre repliable. Aucun commentaire
+  `#` n'est inséré dans ces blocs : ce format n'est pas garanti comme
+  commentaire dans les fichiers INI lus par le serveur AC.
 
 **Aucun fichier serveur n'est modifié automatiquement** : le bloc est copié
 puis collé par l'administrateur, ce qui évite d'altérer une grille de course ou

@@ -494,7 +494,7 @@
                 </select>
               </div>
               <div class="field">
-                <label for="aiPaceName">Nom du pilote / ID de la voiture</label>
+                <label for="aiPaceName">Nom à reconnaître en piste</label>
                 <input id="aiPaceName" type="text" maxlength="23" value="Pace Car" placeholder="Pace Car" />
               </div>
               <div class="field">
@@ -554,14 +554,37 @@
               </div>
             </div>
             <p class="hint" id="aiPaceInventoryStatus"></p>
+
             <div class="out-head">
-              <span class="badge">Livraison serveur</span>
-              <button class="btn btn-gold btn-sm" type="button" id="copyAiPaceBtn" onclick="copyPaceCarDelivery()">
-                Copier le bloc à coller
+              <span class="badge">1 / entry_list.ini</span>
+              <button class="btn btn-gold btn-sm" type="button" id="copyAiPaceEntryBtn" onclick="copyPaceCarEntry()">
+                Copier la place [CAR_xx]
               </button>
             </div>
-            <textarea id="aiPaceOut" rows="18" readonly spellcheck="false"
+            <p class="hint" style="margin:6px 0">
+              À coller à la fin de <code>entry_list.ini</code> du serveur, après avoir arrêté le serveur
+              et fermé Content Manager. La voiture doit exister dans <code>content/cars/</code>.
+            </p>
+            <textarea id="aiPaceEntryOut" rows="10" readonly spellcheck="false"
               style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px"></textarea>
+
+            <div class="out-head" style="margin-top:14px">
+              <span class="badge">2 / csp_extra_options.ini</span>
+              <button class="btn btn-gold btn-sm" type="button" id="copyAiPaceCspBtn" onclick="copyPaceCarCsp()">
+                Copier les options CSP
+              </button>
+            </div>
+            <p class="hint" style="margin:6px 0">
+              À ajouter dans <code>cfg/csp_extra_options.ini</code> (ou les <i>Extra options</i> de
+              Content Manager), en conservant vos autres sections. Redémarre ensuite le serveur.
+            </p>
+            <textarea id="aiPaceCspOut" rows="7" readonly spellcheck="false"
+              style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px"></textarea>
+
+            <details style="margin-top:10px">
+              <summary style="cursor:pointer">Marche à suivre détaillée</summary>
+              <pre id="aiPaceNotes" style="white-space:pre-wrap;font-size:12px;margin-top:8px"></pre>
+            </details>
           </div>
         </div>
 

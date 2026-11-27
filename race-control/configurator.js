@@ -282,31 +282,22 @@ function aiPaceDeliveryInput() {
 }
 
 function renderPaceCarDelivery() {
-  const out = $('aiPaceOut');
-  if (!out || !window.GDSPPaceCar) return;
+  const entryOut = $('aiPaceEntryOut'), cspOut = $('aiPaceCspOut');
+  const notesOut = $('aiPaceNotes');
+  if ((!entryOut && !cspOut) || !window.GDSPPaceCar) return;
   const input = aiPaceDeliveryInput();
   const slot = Number(($('aiPaceSlot') && $('aiPaceSlot').value) || 0);
-  const block = window.GDSPPaceCar.buildEntryBlock(input, { slot });
-  if (!block.valid) {
-    out.value = block.error;
+  const delivery = window.GDSPPaceCar.buildDelivery(input, { slot });
+  if (!delivery.ok) {
+    if (entryOut) entryOut.value = delivery.error;
+    if (cspOut) cspOut.value = '';
+    if (notesOut) notesOut.textContent = '';
     return;
   }
-  const csp = window.GDSPPaceCar.buildCspOptions(input);
-  const notes = window.GDSPPaceCar.buildDeliveryNotes(input, { slot });
-  out.value = [
-    '# ── À coller dans entry_list.ini (serveur AC) ──',
-    block.text.trimEnd(),
-    '',
-    '# ── À ajouter dans csp_extra_options.ini ──',
-    csp.trimEnd(),
-    '',
-    '# ── Marche à suivre ──',
-    notes.text,
-  ].join('\n');
-  // la valeur du modèle sert aussi de critère de sélection côté script
-  if ($('aiPaceName') && ($('aiPaceName').value || '') !== (input.driverName || 'Pace Car')) {
-    $('aiPaceName').value = (input.driverName || 'Pace Car').slice(0, 23);
-  }
+  // Deux zones separees : un bloc colle dans le mauvais fichier INI casse le serveur.
+  if (entryOut) entryOut.value = delivery.entry;
+  if (cspOut) cspOut.value = delivery.csp;
+  if (notesOut) notesOut.textContent = delivery.notes;
 }
 
 async function loadPaceCarInventory() {
@@ -351,8 +342,12 @@ function applyInventorySkins() {
   }
 }
 
-async function copyPaceCarDelivery() {
-  await copyText('aiPaceOut', 'copyAiPaceBtn');
+async function copyPaceCarEntry() {
+  await copyText('aiPaceEntryOut', 'copyAiPaceEntryBtn');
+}
+
+async function copyPaceCarCsp() {
+  await copyText('aiPaceCspOut', 'copyAiPaceCspBtn');
 }
 
 async function copyText(elId, btnId) {
@@ -410,7 +405,8 @@ async function init() {
       scheduleGenerate();
     });
   }
-  if ($('copyAiPaceBtn')) $('copyAiPaceBtn').addEventListener('click', copyPaceCarDelivery);
+  if ($('copyAiPaceEntryBtn')) $('copyAiPaceEntryBtn').addEventListener('click', copyPaceCarEntry);
+  if ($('copyAiPaceCspBtn')) $('copyAiPaceCspBtn').addEventListener('click', copyPaceCarCsp);
   try { renderPaceCarDelivery(); } catch { /* livraison optionnelle : ne bloque pas l'INI */ }
 
   $('copyIniBtn').addEventListener('click', () => copyText('iniOut', 'copyIniBtn'));

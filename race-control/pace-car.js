@@ -97,6 +97,8 @@ function buildCspOptions(input = {}) {
     .replace(/[\r\n\t]/g, ' ')
     .trim()
     .slice(0, 23) || AI_PACE_DEFAULTS.driverName;
+  // Aucune ligne de commentaire ici : ce bloc est destine a etre colle dans un
+  // fichier INI du serveur AC, ou un '#' n'est pas garanti comme commentaire.
   return [
     '[SCRIPT_1]',
     'SCRIPT=https://gdsp.duckdns.org/csp/rolling_start.lua',
@@ -104,6 +106,27 @@ function buildCspOptions(input = {}) {
     `aiPaceName=${driverName}`,
     `aiPaceModel=${model}`,
   ].join('\n') + '\n';
+}
+
+/**
+ * Bloc complete de livraison en DEUX parties separees : l'une pour
+ * entry_list.ini, l'autre pour csp_extra_options.ini. Melanger les deux dans un
+ * seul bloc copie poussait l'administrateur a coller les options CSP dans le
+ * mauvais fichier.
+ */
+function buildDelivery(input = {}, options = {}) {
+  const block = buildEntryBlock(input, options);
+  if (!block.valid) return { ok: false, error: block.error, entry: '', csp: '', notes: '' };
+  const csp = buildCspOptions(input);
+  const notes = buildDeliveryNotes(input, options);
+  return {
+    ok: true,
+    entry: block.text,
+    csp,
+    notes: notes.text,
+    slot: block.slot,
+    model: block.model,
+  };
 }
 
 /**
@@ -147,6 +170,7 @@ const GDSPPaceCar = {
   AI_PACE_DEFAULTS,
   buildEntryBlock,
   buildCspOptions,
+  buildDelivery,
   buildDeliveryNotes,
   carChoicesFromInventory,
   sanitizeModel,
