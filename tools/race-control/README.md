@@ -126,8 +126,23 @@ c'est expérimental et à réserver à un serveur isolé.
 
 `!rs aipace off` coupe le pilotage immédiatement, sans redémarrage.
 
-Concrètement, en l'état, la pace car IA est utilisable quand la voiture de pace
-car est celle du client qui l'héberge (par exemple une session de test où
-l'organisateur conduit la pace car). Pour une pace car conduite par le serveur
-alors qu'un autre joueur pilote, l'API CSP actuelle ne fournit pas de moyen
-fiable depuis un script en ligne.
+### Faire conduire la pace car par une IA, sans prendre de place de pilote
+
+Le bloc `entry_list.ini` généré contient désormais `AI=fixed`. Deux cas, très
+différents :
+
+| Serveur | `AI=fixed` | Résultat |
+| --- | --- | --- |
+| AssettoServer et dérivés | reconnu | l'IA du jeu conduit la voiture en permanence ; aucun joueur ne peut prendre la place |
+| Serveur Kunos (Content Manager) | **ignoré** | aucune voiture IA ne peut exister en ligne ; la place reste vide |
+
+Le serveur Kunos ne sait pas créer de voiture conduite par l'IA : c'est une
+fonction du serveur, pas du script. Aucun script client CSP ne peut créer une
+voiture sans joueur sur un serveur Kunos. Le circuit doit en plus fournir une
+ligne IA (`ai/` du circuit), sinon l'IA ne peut pas rouler.
+
+Quand la voiture est déjà conduite par l'IA du jeu, le script ne prend **aucun**
+contrôle : il bride seulement la vitesse avec des appels indexés
+(`setAITopSpeed`, `setAIThrottleLimit`, `setAIAggression`), qui ne peuvent pas
+toucher une autre voiture. `setCarAutopilot` reste réservé au cas où la pace car
+est la voiture du joueur local.

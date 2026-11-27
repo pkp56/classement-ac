@@ -1800,7 +1800,6 @@ end
 -- Peut-on prendre le controle pour cette voiture ?
 function G_AI.canDrive(car)
   if not car then return false, 'aucune voiture' end
-  if cfg.aiPaceDryRun == 1 then return false, 'dry-run' end
   if cfg.aiPaceDriver ~= 'remote' and not G_AI.isLocalCar(car) then
     return false, 'pas la voiture locale'
   end
@@ -1809,6 +1808,36 @@ end
 
 function G_AI.drive(car, kmh)
   if not car then return false end
+  if cfg.aiPaceDryRun == 1 then return false end
+
+  -- Cas 1 : la voiture est deja conduite par l'IA du jeu (place AI=fixed sur un
+  -- serveur qui gere les IA, ou voiture IA de la grille). L'IA roule deja : on
+  -- ne prend AUCUN controle, on bride seulement la vitesse. Tous ces appels
+  -- prennent un index de voiture, donc ils ne peuvent pas toucher une autre
+  -- voiture, meme lancee depuis un client qui ne conduit pas la pace car.
+  local isAi = car.isAIControlled or (tonumber(car.aiLevel) or 0) > 0
+  if isAi then
+    local staleAi = not G_AI.lastApplyAt or (uiTime - G_AI.lastApplyAt) >= 1.0
+    if G_AI.mode == 'ai' and G_AI.topKmh == kmh and not staleAi then return true end
+    local okAi = pcall(function()
+      physics.setAITopSpeed(car.index, kmh)
+      physics.setAIThrottleLimit(car.index, 1.0)
+      physics.setAIAggression(car.index, 0.5)
+    end)
+    if okAi then
+      if G_AI.mode ~= 'ai' then
+        G_AI.mode = 'ai'
+        safeLog(string.format('pace car IA : voiture IA %d bridee a %d km/h, aucun autopilote force', car.index, kmh))
+      end
+      G_AI.topKmh = kmh
+      G_AI.lastApplyAt = uiTime
+    end
+    return okAi
+  end
+
+  -- Cas 2 : voiture de joueur. physics.setCarAutopilot() n'a pas d'index : on ne
+  -- peut piloter que notre propre voiture, sinon on mettrait en autopilote la
+  -- voiture du joueur. On refuse donc tout le reste.
   local can, why = G_AI.canDrive(car)
   if not can then
     if not G_AI.warned then

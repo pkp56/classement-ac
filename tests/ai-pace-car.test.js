@@ -289,8 +289,8 @@ test('Garde-fou : le script ne pilote que sa propre voiture, jamais celle d un a
 test('Mode dry-run : detection et journalisation sans aucun pilotage', () => {
   assert.match(luaSrc, /aiPaceDryRun = 0,/);
   assert.match(luaSrc, /cfg\.aiPaceDryRun = \(tonumber\(cfg\.aiPaceDryRun\) or 0\) ~= 0 and 1 or 0/);
-  // En dry-run, canDrive refuse AVANT tout appel a l'autopilote.
-  assert.match(luaSrc, /if cfg\.aiPaceDryRun == 1 then return false, 'dry-run' end/);
+  // En dry-run, drive() retourne AVANT tout appel a l'autopilote ou a l'IA.
+  assert.match(luaSrc, /if cfg\.aiPaceDryRun == 1 then return false end/);
   // Le log annonce clairement le role, pour savoir qui doit piloter.
   assert.match(luaSrc, /DRY-RUN, aucun controle applique/);
   assert.match(luaSrc, /pilote par ce client \(voiture locale\)/);
@@ -303,4 +303,31 @@ test('Le configurateur expose le choix du pilote et le mode test', () => {
   assert.match(html, /id="aiPaceDryRun"/);
   assert.match(html, /La voiture locale \(recommandé, seul cas fiable\)/);
   assert.match(html, /détecte et journalise seulement/);
+});
+
+test('Livraison : AI=fixed present et avertissement serveur Kunos explicite', () => {
+  const PC = require(path.join(root, 'race-control/pace-car.js'));
+  const bloc = PC.buildEntryBlock({ model: 'dodge_monaco_police' }, { slot: 18 });
+  assert.match(bloc.text, /^AI=fixed$/m);
+  // L'avertissement doit dire clairement que le Kunos ignore le champ.
+  assert.ok(bloc.warnings.some((w) => /Kunos/.test(w) && /ignoree|ignorée/.test(w)));
+  const sansAi = PC.buildEntryBlock({ model: 'dodge_monaco_police', aiFixed: false }, { slot: 18 });
+  assert.match(sansAi.text, /^AI=none$/m);
+  const notes = PC.buildDelivery({ model: 'dodge_monaco_police' }, { slot: 18 }).notes;
+  assert.match(notes, /AssettoServer/);
+  assert.match(notes, /ligne IA/);
+});
+
+test('Garde-fou : une voiture IA est bridee par des appels indexes, sans autopilote', () => {
+  // Cas sur : la voiture est deja conduite par l'IA du jeu. Tous les appels
+  // prennent un index de voiture, donc on ne peut pas toucher une autre voiture.
+  assert.match(luaSrc, /local isAi = car\.isAIControlled or \(tonumber\(car\.aiLevel\) or 0\) > 0/);
+  assert.match(luaSrc, /if isAi then/);
+  assert.match(luaSrc, /voiture IA %d bridee a %d km\/h, aucun autopilote force/);
+  // Le cas voiture de joueur garde le refus pour les voitures distantes.
+  assert.match(luaSrc, /pas la voiture locale/);
+  // setCarAutopilot ne doit etre APPELE qu'aux deux endroits du cas voiture
+  // locale (prise et relachement), jamais ailleurs. Les commentaires ne comptent pas.
+  const appels = luaSrc.split('\n').filter((l) => /^\s*physics\.setCarAutopilot\(/.test(l));
+  assert.equal(appels.length, 2);
 });

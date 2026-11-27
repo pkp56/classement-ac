@@ -72,6 +72,11 @@ function buildEntryBlock(input = {}, options = {}) {
     .slice(0, 40) || AI_PACE_DEFAULTS.team;
   const skin = skinId(rawSkin);
 
+  // AI=fixed : la voiture doit etre conduite par l'IA du jeu et personne ne peut
+  // prendre la place. Reconnu par les serveurs derives d'AssettoServer ; ignore
+  // (mais sans danger) par le serveur Kunos, qui ne sait pas creer de voiture IA.
+  const aiField = input.aiFixed === false ? 'AI=none' : 'AI=fixed';
+
   const text = [
     `[CAR_${slot}]`,
     `MODEL=${model}`,
@@ -82,9 +87,17 @@ function buildEntryBlock(input = {}, options = {}) {
     'GUID=',
     'BALLAST=0',
     'RESTRICTOR=0',
+    aiField,
   ].join('\n') + '\n';
 
-  return { text, slot, model, valid: true, error: null };
+  const warnings = [];
+  if (input.aiFixed === false) {
+    warnings.push("Sans AI=fixed, aucun joueur n'occupe la place : la voiture restera immobile au depart.");
+  } else {
+    warnings.push("AI=fixed n'est pris en compte que par les serveurs derives d'AssettoServer. Sur le serveur Kunos (Content Manager), cette ligne est ignoree : la voiture n'apparaitra pas.");
+  }
+
+  return { text, slot, model, valid: true, error: null, warnings };
 }
 
 /**
@@ -144,6 +157,14 @@ function buildDeliveryNotes(input = {}, options = {}) {
       `4. Renumérote si besoin : la place doit rester libre ([CAR_${slot}] ici).`,
       '5. Ajoute les options CSP dans csp_extra_options.ini, puis redémarre le serveur.',
       '6. Lance une session d’essai : le pace car doit rouler devant le peloton.',
+      '',
+      'IMPORTANT — AI=fixed :',
+      "  • Sur un serveur dérivé d'AssettoServer (trafic IA), la voiture est conduite",
+      "    par l'IA du jeu et personne ne peut prendre la place.",
+      "  • Sur le serveur Kunos lancé par Content Manager, le champ AI= est ignoré :",
+      "    aucune voiture IA ne peut exister en ligne. Le pace car restera immobile.",
+      "  • Le circuit doit avoir une ligne IA (dossier ai/ du circuit), sinon l'IA ne",
+      '    peut pas rouler même avec AI=fixed.',
     ].join('\n'),
     model,
     slot,
