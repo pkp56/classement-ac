@@ -2,7 +2,7 @@
 
 Application distincte de GDSP et d'ACSM, développée pour couvrir progressivement des fonctions comparables. Elle ne contient pas de code ACSM Premium. Elle écoute uniquement sur `127.0.0.1:8780`, ne se connecte à aucun serveur et n'écrit aucun fichier serveur. Ne pas publier son port sur Internet. Pas d'authentification dans ce prototype.
 
-Lancer depuis la racine du dépôt : `node standalone-manager/server.js`, puis ouvrir `http://127.0.0.1:8780` sur le même PC. Arrêter avec Ctrl+C. `GDSP_MANAGER_PORT` permet de changer uniquement le port de l'interface du prototype, pas ceux des serveurs AC. Le formulaire télécharge un JSON de planification dans le navigateur : il n'est ni importable ni exécutable à ce stade et aucun setup, grille ou session n'est appliqué.
+Lancer depuis la racine du dépôt : `node tools/standalone-manager/server.js`, puis ouvrir `http://127.0.0.1:8780` sur le même PC. Arrêter avec Ctrl+C. `GDSP_MANAGER_PORT` permet de changer uniquement le port de l'interface du prototype, pas ceux des serveurs AC. Le formulaire télécharge un JSON de planification dans le navigateur : il n'est ni importable ni exécutable à ce stade et aucun setup, grille ou session n'est appliqué.
 
 ## Périmètre et jalons
 
