@@ -212,3 +212,7 @@ GDSP-Backups/
 .env.local
 *.tmp
 *.orig
+
+# Produit privé GDSP Race Manager : construit ici, poussé dans son propre dépôt.
+# Ne JAMAIS committer dans classement-ac (dépôt public MIT).
+/gdsp-race-manager/
