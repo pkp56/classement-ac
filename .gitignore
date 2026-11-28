@@ -207,3 +207,8 @@ GDSP-Backups/
 
 # Demandes et état privés de la tâche de mise à jour depuis le mobile
 /data/mobile-updates/
+
+# Fichiers de travail locaux
+.env.local
+*.tmp
+*.orig
